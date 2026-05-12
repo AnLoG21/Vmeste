@@ -1,16 +1,22 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Q
-from rest_framework import permissions, serializers, status, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from catalog.models import Service
+from notifications.models import InAppNotification
 
 from .models import AvailabilitySlot, Booking, ProviderStaff
 from .serializers import AvailabilitySlotSerializer, BookingSerializer, ProviderStaffSerializer
 
 User = get_user_model()
+
+
+def _staff_display_name(u: User) -> str:
+    parts = [p for p in (u.first_name, u.last_name) if p]
+    return " ".join(parts).strip() or u.username
 
 
 class ProviderStaffViewSet(viewsets.ModelViewSet):
@@ -23,12 +29,55 @@ class ProviderStaffViewSet(viewsets.ModelViewSet):
             return ProviderStaff.objects.filter(provider=user).select_related("staff", "provider")
         return ProviderStaff.objects.filter(staff=user).select_related("staff", "provider")
 
+    @action(detail=True, methods=["post"], url_path="accept-invite")
+    def accept_invite(self, request, pk=None):
+        link = self.get_object()
+        if link.staff_id != request.user.id:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if link.invitation_status != ProviderStaff.InvitationStatus.PENDING:
+            return Response({"detail": "Нет ожидающего приглашения."}, status=status.HTTP_400_BAD_REQUEST)
+        staff_user = link.staff
+        if staff_user.role == User.Role.CLIENT:
+            staff_user.role = User.Role.STAFF
+            staff_user.save(update_fields=["role"])
+        link.invitation_status = ProviderStaff.InvitationStatus.ACCEPTED
+        link.is_active = True
+        link.save(update_fields=["invitation_status", "is_active"])
+        InAppNotification.objects.create(
+            user=link.provider,
+            kind=InAppNotification.Kind.STAFF_INVITE_ACCEPTED,
+            payload={
+                "staff_link_id": link.id,
+                "staff_name": _staff_display_name(staff_user),
+                "organization_name": getattr(link.provider, "organization_name", "") or "",
+            },
+        )
+        ser = self.get_serializer(link)
+        return Response(ser.data)
+
+    @action(detail=True, methods=["post"], url_path="reject-invite")
+    def reject_invite(self, request, pk=None):
+        link = self.get_object()
+        if link.staff_id != request.user.id:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if link.invitation_status != ProviderStaff.InvitationStatus.PENDING:
+            return Response({"detail": "Нет ожидающего приглашения."}, status=status.HTTP_400_BAD_REQUEST)
+        link.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     def create(self, request, *args, **kwargs):
         if request.user.role != "provider":
             return Response(status=status.HTTP_403_FORBIDDEN)
-        email = (request.data.get("invite_email") or "").strip()
-        username = (request.data.get("invite_username") or "").strip()
-        display_name = (request.data.get("display_name") or "").strip()
+        identifier = (request.data.get("invite_identifier") or "").strip()
+        if identifier:
+            if "@" in identifier:
+                email, username = identifier, ""
+            else:
+                email, username = "", identifier
+        else:
+            email = (request.data.get("invite_email") or "").strip()
+            username = (request.data.get("invite_username") or "").strip()
+        display_name = (request.data.get("display_name") or "").strip() or ""
         if not email and not username:
             return Response(
                 {"detail": "Укажи email или логин сотрудника."},
@@ -45,15 +94,35 @@ class ProviderStaffViewSet(viewsets.ModelViewSet):
                 {"detail": "Пользователь с таким email или логином не найден."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if staff_user.role not in ("staff", "client"):
-            staff_user.role = "staff"
-            staff_user.save(update_fields=["role"])
-        if ProviderStaff.objects.filter(provider=request.user, staff=staff_user).exists():
-            return Response({"detail": "Этот сотрудник уже привязан."}, status=status.HTTP_400_BAD_REQUEST)
+        if staff_user.role not in (User.Role.STAFF, User.Role.CLIENT):
+            return Response(
+                {"detail": "Можно приглашать только пользователей с ролью «клиент» или «сотрудник»."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        existing = ProviderStaff.objects.filter(provider=request.user, staff=staff_user).first()
+        if existing:
+            if existing.invitation_status == ProviderStaff.InvitationStatus.PENDING:
+                return Response({"detail": "Приглашение уже отправлено."}, status=status.HTTP_400_BAD_REQUEST)
+            if (
+                existing.invitation_status == ProviderStaff.InvitationStatus.ACCEPTED
+                and existing.is_active
+            ):
+                return Response({"detail": "Этот сотрудник уже привязан."}, status=status.HTTP_400_BAD_REQUEST)
+            if (
+                existing.invitation_status == ProviderStaff.InvitationStatus.ACCEPTED
+                and not existing.is_active
+            ):
+                existing.invitation_status = ProviderStaff.InvitationStatus.PENDING
+                existing.is_active = False
+                existing.save(update_fields=["invitation_status", "is_active"])
+                ser = self.get_serializer(existing)
+                return Response(ser.data, status=status.HTTP_200_OK)
         link = ProviderStaff.objects.create(
             provider=request.user,
             staff=staff_user,
             display_name=display_name,
+            invitation_status=ProviderStaff.InvitationStatus.PENDING,
+            is_active=False,
         )
         ser = self.get_serializer(link)
         return Response(ser.data, status=status.HTTP_201_CREATED)

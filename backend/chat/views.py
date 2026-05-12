@@ -1,12 +1,16 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import Max, Prefetch
+from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from booking.models import ProviderStaff
+from booking.serializers import ProviderStaffSerializer
+from notifications.models import InAppNotification
 
 from .models import Conversation, ConversationMember, Message
 from .serializers import ConversationSerializer, MessageSerializer
@@ -69,7 +73,28 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
                 if u and u.id != request.user.id:
                     ConversationMember.objects.get_or_create(conversation=conv, user=u)
         conv = self.get_queryset().get(pk=conv.pk)
-        return Response(ConversationSerializer(conv).data, status=status.HTTP_201_CREATED)
+        return Response(
+            ConversationSerializer(conv, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="mark-read")
+    def mark_read(self, request, pk=None):
+        conv = self.get_object()
+        mid = request.data.get("message_id")
+        if mid is None:
+            mid = Message.objects.filter(conversation=conv).aggregate(m=Max("id"))["m"]
+        mem = ConversationMember.objects.filter(conversation=conv, user=request.user).first()
+        if not mem:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if mid is not None:
+            mid = int(mid)
+            cur = mem.last_read_message_id or 0
+            mem.last_read_message_id = max(cur, mid)
+            mem.save(update_fields=["last_read_message_id"])
+        User.objects.filter(pk=request.user.id).update(last_seen_at=timezone.now())
+        mem.refresh_from_db()
+        return Response({"ok": True, "last_read_message_id": mem.last_read_message_id})
 
     @action(detail=False, methods=["post"], url_path="create-direct")
     def create_direct(self, request):
@@ -82,9 +107,28 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         if not staff_user:
             return Response({"detail": "Пользователь не найден."}, status=status.HTTP_400_BAD_REQUEST)
         if not ProviderStaff.objects.filter(
-            provider=request.user, staff=staff_user, is_active=True
+            provider=request.user,
+            staff=staff_user,
+            is_active=True,
+            invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
         ).exists():
             return Response({"detail": "Сотрудник не найден."}, status=status.HTTP_400_BAD_REQUEST)
+        candidates = (
+            Conversation.objects.filter(
+                is_group=False,
+                is_saved_messages=False,
+                is_client_correspondence=False,
+                organization=request.user,
+            )
+            .prefetch_related("members")
+        )
+        for c in candidates:
+            user_ids = {m.user_id for m in c.members.all()}
+            if user_ids == {request.user.id, staff_user.id}:
+                return Response(
+                    ConversationSerializer(c, context={"request": request}).data,
+                    status=status.HTTP_200_OK,
+                )
         with transaction.atomic():
             conv = Conversation.objects.create(
                 title="",
@@ -96,13 +140,44 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             ConversationMember.objects.create(conversation=conv, user=request.user)
             ConversationMember.objects.create(conversation=conv, user=staff_user)
         conv = self.get_queryset().get(pk=conv.pk)
-        return Response(ConversationSerializer(conv).data, status=status.HTTP_201_CREATED)
+        return Response(
+            ConversationSerializer(conv, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class MessageViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
     http_method_names = ["get", "post", "head", "options"]
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        cid = self.request.query_params.get("conversation")
+        peer_rid = 0
+        if cid:
+            try:
+                conv = (
+                    Conversation.objects.filter(pk=int(cid), members__user=self.request.user)
+                    .prefetch_related("members")
+                    .distinct()
+                    .get()
+                )
+                others = [m for m in conv.members.all() if m.user_id != self.request.user.id]
+                if len(others) == 1:
+                    peer_rid = others[0].last_read_message_id or 0
+                elif conv.is_saved_messages:
+                    # Один участник — ты; для исходящих «просмотр» = твой last_read в этом чате.
+                    me_m = next(
+                        (m for m in conv.members.all() if m.user_id == self.request.user.id),
+                        None,
+                    )
+                    if me_m is not None:
+                        peer_rid = me_m.last_read_message_id or 0
+            except (Conversation.DoesNotExist, ValueError, TypeError):
+                pass
+        ctx["peer_last_read_message_id"] = peer_rid
+        return ctx
 
     def get_queryset(self):
         cid = self.request.query_params.get("conversation")
@@ -121,3 +196,41 @@ class MessageViewSet(viewsets.ModelViewSet):
         if not Conversation.objects.filter(pk=conv_id, members__user=self.request.user).exists():
             raise PermissionDenied()
         serializer.save(sender=self.request.user)
+        User.objects.filter(pk=self.request.user.id).update(last_seen_at=timezone.now())
+
+
+class ChatActivitySummaryView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        pending = []
+        if user.role in (User.Role.STAFF, User.Role.CLIENT):
+            qs = ProviderStaff.objects.filter(
+                staff=user,
+                invitation_status=ProviderStaff.InvitationStatus.PENDING,
+            ).select_related("provider")
+            pending = ProviderStaffSerializer(qs, many=True, context={"request": request}).data
+        notes = list(
+            InAppNotification.objects.filter(user=user, read=False).order_by("-created_at")[:40]
+        )
+        notif_data = [
+            {
+                "id": n.id,
+                "kind": n.kind,
+                "payload": n.payload,
+                "created_at": n.created_at.isoformat(),
+            }
+            for n in notes
+        ]
+        unread_n = InAppNotification.objects.filter(user=user, read=False).count()
+        pending_n = len(pending)
+        return Response(
+            {
+                "pending_staff_invites": pending,
+                "notifications": notif_data,
+                "unread_notification_count": unread_n,
+                "pending_invite_count": pending_n,
+                "badge_count": unread_n + pending_n,
+            }
+        )

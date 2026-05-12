@@ -10,6 +10,7 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
     staff_username = serializers.CharField(source="staff.username", read_only=True)
     staff_email = serializers.EmailField(source="staff.email", read_only=True)
     staff_user = serializers.SerializerMethodField(read_only=True)
+    provider_user = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ProviderStaff
@@ -22,10 +23,29 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
             "display_name",
             "job_title",
             "is_active",
+            "invitation_status",
             "permissions",
             "staff_user",
+            "provider_user",
         ]
-        read_only_fields = ["provider", "staff_username", "staff_email", "staff_user"]
+        read_only_fields = [
+            "provider",
+            "staff_username",
+            "staff_email",
+            "staff_user",
+            "provider_user",
+            "invitation_status",
+        ]
+
+    def get_provider_user(self, obj):
+        p = obj.provider
+        return {
+            "id": p.id,
+            "username": p.username,
+            "first_name": p.first_name or "",
+            "last_name": p.last_name or "",
+            "organization_name": getattr(p, "organization_name", "") or "",
+        }
 
     def get_staff_user(self, obj):
         return {
@@ -34,6 +54,7 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
             "email": obj.staff.email,
             "first_name": obj.staff.first_name,
             "last_name": obj.staff.last_name,
+            "patronymic": getattr(obj.staff, "patronymic", "") or "",
         }
 
 

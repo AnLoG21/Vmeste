@@ -58,6 +58,11 @@ class Booking(models.Model):
 
 
 class ProviderStaff(models.Model):
+    class InvitationStatus(models.TextChoices):
+        PENDING = "pending", "Ожидает подтверждения"
+        ACCEPTED = "accepted", "Принято"
+        REJECTED = "rejected", "Отклонено"
+
     provider = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="staff_links"
     )
@@ -67,6 +72,11 @@ class ProviderStaff(models.Model):
     display_name = models.CharField(max_length=120, blank=True)
     job_title = models.CharField(max_length=120, blank=True)
     is_active = models.BooleanField(default=True)
+    invitation_status = models.CharField(
+        max_length=20,
+        choices=InvitationStatus.choices,
+        default=InvitationStatus.ACCEPTED,
+    )
     permissions = models.JSONField(blank=True, default=default_staff_permissions)
 
     class Meta:

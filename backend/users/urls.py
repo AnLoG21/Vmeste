@@ -4,6 +4,7 @@ from .views import (
     ChangeEmailView,
     ChangePasswordView,
     MeView,
+    PresencePingView,
     ResendVerificationView,
     RolesView,
     SpheresView,
@@ -18,6 +19,7 @@ urlpatterns = [
     path("verify-email/", VerifyEmailView.as_view(), name="user-verify-email"),
     path("resend-verification/", ResendVerificationView.as_view(), name="user-resend-verification"),
     path("me/", MeView.as_view(), name="user-me"),
+    path("presence/ping/", PresencePingView.as_view(), name="user-presence-ping"),
     path("change-password/", ChangePasswordView.as_view(), name="user-change-password"),
     path("change-email/", ChangeEmailView.as_view(), name="user-change-email"),
 ]

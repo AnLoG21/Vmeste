@@ -26,6 +26,7 @@ class ConversationMember(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="conversations"
     )
     joined_at = models.DateTimeField(auto_now_add=True)
+    last_read_message_id = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
         unique_together = [("conversation", "user")]

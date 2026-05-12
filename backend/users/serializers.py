@@ -20,6 +20,11 @@ class UserSerializer(serializers.ModelSerializer):
             "phone",
             "organization_name",
             "organization_address",
+            "organization_entrance",
+            "organization_floor",
+            "organization_apartment",
+            "organization_intercom",
+            "organization_address_extra",
             "organization_latitude",
             "organization_longitude",
             "provider_sphere",
@@ -64,16 +69,21 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         if attrs["password"] != attrs.pop("password_confirm", None):
             raise serializers.ValidationError({"password_confirm": "Пароли не совпадают."})
         validate_password(attrs["password"])
-        attrs.pop("organization_address_details", None)
-        attrs.pop("entrance", None)
-        attrs.pop("apartment", None)
-        attrs.pop("intercom", None)
-        attrs.pop("floor", None)
         return attrs
 
     def create(self, validated_data):
         pwd = validated_data.pop("password")
+        extra = validated_data.pop("organization_address_details", "") or ""
+        entrance = validated_data.pop("entrance", "") or ""
+        floor = validated_data.pop("floor", "") or ""
+        apartment = validated_data.pop("apartment", "") or ""
+        intercom = validated_data.pop("intercom", "") or ""
         user = User(**validated_data)
+        user.organization_entrance = entrance
+        user.organization_floor = floor
+        user.organization_apartment = apartment
+        user.organization_intercom = intercom
+        user.organization_address_extra = extra
         user.set_password(pwd)
         if settings.SKIP_EMAIL_VERIFICATION:
             user.email_verified = True

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import logoMain from "./assets/logo-main.png";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
@@ -16,7 +17,672 @@ const CHAT_WALL_OPTIONS = [
   { label: "Море", value: "linear-gradient(160deg,#b8dfe9,#6aa6b8)" },
 ];
 const APP_THEME_KEY = "vmeste_theme_v1";
+const CHAT_RECEIPTS_KEY = "vmeste_chat_receipts_v1";
 const chatNotifyStorageKey = (id) => `vmeste_chat_notify_v1_${id}`;
+const CHAT_PINS_STORAGE_KEY = "vmeste_chat_pins_v1";
+const MAX_PINNED_CHATS = 5;
+
+function loadReceiptsPref() {
+  try {
+    const raw = localStorage.getItem(CHAT_RECEIPTS_KEY);
+    const p = raw ? JSON.parse(raw) : {};
+    return p.mode === "classic" ? "classic" : "stickers";
+  } catch {
+    return "stickers";
+  }
+}
+
+function formatLastSeenLabel(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `был(а) ${d.toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`;
+}
+
+function getOrgDmPeerMember(conversation, myUserId) {
+  if (!conversation?.members || conversation.members.length !== 2) return null;
+  if (conversation.is_group || conversation.is_saved_messages || conversation.is_client_correspondence) return null;
+  return conversation.members.find((m) => Number(m.user) !== Number(myUserId)) || null;
+}
+
+function MessageReceiptIcon({ mode, viewed }) {
+  if (mode === "classic") {
+    return (
+      <span className={`tg-msg-receipt tg-msg-receipt--classic${viewed ? " tg-msg-receipt--seen" : ""}`} aria-hidden="true">
+        ✓✓
+      </span>
+    );
+  }
+  return (
+    <span className="tg-msg-receipt tg-msg-receipt--stickers" title={viewed ? "Просмотрено" : "Не просмотрено"} aria-hidden="true">
+      {viewed ? "🐵" : "🙈"}
+    </span>
+  );
+}
+
+/** Имя полностью + первая буква фамилии с точкой + отчество целиком (если есть). Иначе логин. */
+function formatStaffClientName(userLike) {
+  if (!userLike) return "";
+  const fn = String(userLike.first_name || "").trim();
+  const ln = String(userLike.last_name || "").trim();
+  const pat = String(userLike.patronymic || "").trim();
+  const parts = [];
+  if (fn) parts.push(fn);
+  if (ln) {
+    const ch = ln[0];
+    parts.push(ch ? `${ch.toUpperCase()}.` : ln);
+  }
+  if (pat) parts.push(pat);
+  const s = parts.join(" ").trim();
+  return s || String(userLike.username || "").trim();
+}
+
+/** Фамилия имя отчество (полные), для списка сотрудников. */
+function formatStaffFullName(userLike) {
+  if (!userLike) return "";
+  const ln = String(userLike.last_name || "").trim();
+  const fn = String(userLike.first_name || "").trim();
+  const pat = String(userLike.patronymic || "").trim();
+  const s = [ln, fn, pat].filter(Boolean).join(" ").trim();
+  return s || String(userLike.username || "").trim();
+}
+
+/** Заголовок личного чата: имя и фамилия полностью. */
+function formatChatPeerFullName(userLike) {
+  if (!userLike) return "";
+  const fn = String(userLike.first_name || "").trim();
+  const ln = String(userLike.last_name || "").trim();
+  const s = [fn, ln].filter(Boolean).join(" ").trim();
+  return s || formatStaffClientName(userLike);
+}
+
+function formatMessageSenderLine(m) {
+  if (!m) return "";
+  const fn = String(m.sender_first_name || "").trim();
+  const ln = String(m.sender_last_name || "").trim();
+  const s = [fn, ln].filter(Boolean).join(" ").trim();
+  if (s) return s;
+  return formatStaffClientName({
+    first_name: m.sender_first_name,
+    last_name: m.sender_last_name,
+    patronymic: m.sender_patronymic,
+    username: m.sender_username,
+  });
+}
+
+function conversationOrgDirectPeerTitle(conversation, myUserId) {
+  if (!conversation || conversation.is_group || conversation.is_saved_messages || conversation.is_client_correspondence)
+    return "";
+  const members = conversation.members || [];
+  if (members.length !== 2) return "";
+  const other = members.find((m) => Number(m.user) !== Number(myUserId));
+  if (!other) return "";
+  return formatChatPeerFullName({
+    first_name: other.first_name,
+    last_name: other.last_name,
+    patronymic: other.patronymic,
+    username: other.username,
+  });
+}
+
+/** Имя в списке по умолчанию: собеседник (имя фамилия) или заголовок чата. */
+function defaultChatListNameForConversation(conversation, myUserId) {
+  if (!conversation) return "";
+  if (conversation.is_saved_messages) return "Избранное";
+  const peer = conversationOrgDirectPeerTitle(conversation, myUserId);
+  if (peer) return peer;
+  return conversation.title || `Чат #${conversation.id ?? ""}`;
+}
+
+function messageCalendarDayKey(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function formatMessageDayDividerRu(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function formatRuMatchCount(n) {
+  const x = Math.abs(Number(n)) || 0;
+  if (x === 0) return "Нет совпадений";
+  const m10 = x % 10;
+  const m100 = x % 100;
+  if (m10 === 1 && m100 !== 11) return `${x} совпадение`;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return `${x} совпадения`;
+  return `${x} совпадений`;
+}
+
+function loadChatPinsFromStorage() {
+  try {
+    const raw = localStorage.getItem(CHAT_PINS_STORAGE_KEY);
+    const p = raw ? JSON.parse(raw) : {};
+    const clip = (arr) =>
+      Array.isArray(arr)
+        ? arr.map(Number).filter((n) => Number.isFinite(n) && n > 0).slice(0, MAX_PINNED_CHATS)
+        : [];
+    return { org: clip(p.org), clients: clip(p.clients) };
+  } catch {
+    return { org: [], clients: [] };
+  }
+}
+
+const ADDR_COUNTRY_SEGMENTS = new Set([
+  "russia",
+  "россия",
+  "russian federation",
+  "российская федерация",
+]);
+
+function trimAddrSeg(s) {
+  if (s == null || s === "") return "";
+  return String(s).trim().replace(/\s+/g, " ");
+}
+
+function dedupeAddrSegments(parts) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of parts) {
+    const seg = trimAddrSeg(raw);
+    if (!seg) continue;
+    const k = seg.toLowerCase();
+    if (ADDR_COUNTRY_SEGMENTS.has(k)) continue;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(seg);
+  }
+  return out;
+}
+
+function looksLikeHouseSegment(s) {
+  const t = trimAddrSeg(s).toLowerCase();
+  if (!t) return false;
+  if (/^д\.?\s*\d/.test(t)) return true;
+  if (/^дом\s+\d/.test(t)) return true;
+  if (/^стр\.?\s*\d/.test(t)) return true;
+  if (/^корп\.?\s*\d/.test(t)) return true;
+  if (/^к\.?\s*\d/.test(t)) return true;
+  if (/^\d+[а-яa-z]?\s+к\.?\s*\d/.test(t)) return true;
+  if (/^\d+[а-яa-z]?\s+к\d/.test(t)) return true;
+  if (/^\d{1,5}[а-яa-z]?$/.test(t)) return true;
+  return false;
+}
+
+function looksLikeStreetSegment(s) {
+  const t = trimAddrSeg(s);
+  if (!t || looksLikeHouseSegment(t)) return false;
+  const low = t.toLowerCase();
+  if (
+    /\b(ул\.?|улиц|просп\.?|пр-т|переул|пр-д|линия|шоссе|наб\.?|бульв|туп\.?|аллея|пл\.?|проезд|микрорайон|мкрн?|квартал|набережн|бульвар|ш\.|тупик|спуск|снт|днп|тер\.?|вал|кольцо)\b/i.test(
+      t
+    )
+  )
+    return true;
+  if (/^\d+-[яьюеёаио]\s/i.test(low) || /^\d+-я\s/i.test(low)) return true;
+  if (/\bлиния\b/i.test(low)) return true;
+  return false;
+}
+
+/** Город/субъект без явных признаков улицы (чтобы не принять «Иваново» за улицу рядом с «5»). */
+function looksLikeAdminOnlySegment(s) {
+  const st = trimAddrSeg(s);
+  const t = st.toLowerCase();
+  if (!t) return false;
+  if (/область|край|округ|республик|автономн|федеральн|\bао\b|обл\.?$/.test(t)) return true;
+  if (/^(г\.|г\s|пос\.|пгт|с\.|село|дер\.|деревня|п\.|станица|х\.|хутор)\s/i.test(st)) return true;
+  const compact = t.replace(/\./g, "").replace(/\s+/g, " ").trim();
+  if (
+    /^(москва|moscow|санктпетербург|санкт-петербург|stpetersburg|saintpetersburg|saint petersburg|севастополь|байконур|bajkonur|спб|spb)$/i.test(
+      compact
+    )
+  )
+    return true;
+  return false;
+}
+
+/** Убирает хвост «Moscow, Russia» после «улица, дом» (часто в ответе геокодера). */
+function stripTrailingAdminSegmentsFromAddress(parts) {
+  const p = [...parts];
+  while (p.length > 1) {
+    const last = p[p.length - 1];
+    const k = trimAddrSeg(last).toLowerCase();
+    if (ADDR_COUNTRY_SEGMENTS.has(k) || looksLikeAdminOnlySegment(last)) p.pop();
+    else break;
+  }
+  return p;
+}
+
+/** Если в цепочке уже есть улица или дом — убираем ведущий «город/субъект» (дубль с хвостом). */
+function stripLeadingAdminWhenStreetOrHousePresent(parts) {
+  const p = [...parts];
+  const hasStreetOrHouse = p.some((s) => looksLikeStreetSegment(s) || looksLikeHouseSegment(s));
+  if (!hasStreetOrHouse) return p;
+  while (p.length > 1 && looksLikeAdminOnlySegment(p[0])) p.shift();
+  return p;
+}
+
+function addrSegNormKey(s) {
+  return trimAddrSeg(s)
+    .toLowerCase()
+    .replace(/[.,']/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Частые англоязычные сегменты OSM/Яндекс → русские подписи (публичный Photon `lang=ru` не даёт). */
+const ADDR_EN_TO_RU = {
+  moscow: "Москва",
+  "saint petersburg": "Санкт-Петербург",
+  saintpetersburg: "Санкт-Петербург",
+  "st petersburg": "Санкт-Петербург",
+  stpetersburg: "Санкт-Петербург",
+  novosibirsk: "Новосибирск",
+  yekaterinburg: "Екатеринбург",
+  ekaterinburg: "Екатеринбург",
+  "nizhny novgorod": "Нижний Новгород",
+  kazan: "Казань",
+  chelyabinsk: "Челябинск",
+  omsk: "Омск",
+  samara: "Самара",
+  "rostov-on-don": "Ростов-на-Дону",
+  "rostov on don": "Ростов-на-Дону",
+  ufa: "Уфа",
+  krasnoyarsk: "Красноярск",
+  perm: "Пермь",
+  voronezh: "Воронеж",
+  volgograd: "Волгоград",
+  krasnodar: "Краснодар",
+  saratov: "Саратов",
+  tyumen: "Тюмень",
+  tolyatti: "Тольятти",
+  togliatti: "Тольятти",
+  izhevsk: "Ижевск",
+  barnaul: "Барнаул",
+  irkutsk: "Иркутск",
+  ulyanovsk: "Ульяновск",
+  khabarovsk: "Хабаровск",
+  yaroslavl: "Ярославль",
+  vladivostok: "Владивосток",
+  makhachkala: "Махачкала",
+  tomsk: "Томск",
+  orenburg: "Оренбург",
+  kemerovo: "Кемерово",
+  astrakhan: "Астрахань",
+  penza: "Пенза",
+  lipetsk: "Липецк",
+  kirov: "Киров",
+  cheboksary: "Чебоксары",
+  kaliningrad: "Калининград",
+  tula: "Тула",
+  kursk: "Курск",
+  sochi: "Сочи",
+  sevastopol: "Севастополь",
+  baikonur: "Байконур",
+  bajkonur: "Байконур",
+  spb: "Санкт-Петербург",
+};
+
+const ADDR_EN_OBLAST_KRAI = {
+  moscow: "Московская область",
+  leningrad: "Ленинградская область",
+  sverdlovsk: "Свердловская область",
+  chelyabinsk: "Челябинская область",
+  novosibirsk: "Новосибирская область",
+  samara: "Самарская область",
+  rostov: "Ростовская область",
+  krasnodar: "Краснодарский край",
+  krasnoyarsk: "Красноярский край",
+  perm: "Пермский край",
+  primorsky: "Приморский край",
+  khabarovsk: "Хабаровский край",
+  stavropol: "Ставропольский край",
+  irkutsk: "Иркутская область",
+  voronezh: "Воронежская область",
+  "nizhny novgorod": "Нижегородская область",
+};
+
+function translateAddrSegToRu(seg) {
+  const t = trimAddrSeg(seg);
+  if (!t) return t;
+  if (/[а-яё]/i.test(t)) return t;
+
+  const key = addrSegNormKey(t);
+  if (ADDR_EN_TO_RU[key]) return ADDR_EN_TO_RU[key];
+
+  const ob = t.match(/^(.+?)\s+(oblast|krai)$/i);
+  if (ob) {
+    const base = addrSegNormKey(ob[1]);
+    const ru = ADDR_EN_OBLAST_KRAI[base];
+    if (ru) return ru;
+  }
+
+  const ao = t.match(/^(.+?)\s+autonomous okrug$/i);
+  if (ao) {
+    const b = addrSegNormKey(ao[1]);
+    if (b === "chukotka") return "Чукотский автономный округ";
+    if (b === "yamalo-nenets" || b === "yamalonenets") return "Ямало-Ненецкий автономный округ";
+    if (b === "khanty-mansi" || b === "khantymansi") return "Ханты-Мансийский автономный округ — Югра";
+    if (b === "nenets") return "Ненецкий автономный округ";
+  }
+
+  return t;
+}
+
+/** Латинские названия улиц из OSM (без кириллицы в сегменте) — типовые замены. */
+function translateLatinStreetToken(seg) {
+  const t = trimAddrSeg(seg);
+  if (!t || /[а-яё]/i.test(t)) return t;
+  const low = t.toLowerCase();
+  if (/\bsevernaya\b/i.test(low) && /\bliniya\b/i.test(low)) return t.replace(/\b9-ya\b/gi, "9-я").replace(/\bsevernaya\b/gi, "Северная").replace(/\bliniya\b/gi, "линия");
+  if (/\bliniya\b/i.test(low)) return t.replace(/\b(\d+)-ya\b/gi, "$1-я").replace(/\bliniya\b/gi, "линия");
+  if (/\bulitsa\b|\bstreet\b|\bprospekt\b|\bavenue\b|\bpereulok\b|\bshosse\b/i.test(t))
+    return t
+      .replace(/\bulitsa\b/gi, "улица")
+      .replace(/\bstreet\b/gi, "ул.")
+      .replace(/\bprospekt\b/gi, "проспект")
+      .replace(/\bavenue\b/gi, "проспект")
+      .replace(/\bpereulok\b/gi, "переулок")
+      .replace(/\bshosse\b/gi, "шоссе")
+      .replace(/\bnaberezhnaya\b/gi, "набережная");
+  return t;
+}
+
+function composePipeTailFromDetails({ entrance, floor, apartment, intercom, extra }) {
+  const details = [];
+  if (entrance) details.push(`подъезд ${entrance}`);
+  if (floor) details.push(`этаж ${floor}`);
+  if (apartment) details.push(`кв. ${apartment}`);
+  if (intercom) details.push(`домофон ${intercom}`);
+  if (extra) details.push(extra);
+  return details.join(", ");
+}
+
+/** Разбор хвоста после « | » при загрузке организации/старых филиалов. */
+function parseAddressDetailsPipeTail(tail) {
+  const out = { entrance: "", floor: "", apartment: "", intercom: "", extraDetails: "" };
+  const s = tail == null ? "" : String(tail).trim();
+  if (!s) return out;
+  const parts = s.split(",").map(trimAddrSeg).filter(Boolean);
+  const extra = [];
+  let matchedStructured = false;
+  for (const p of parts) {
+    if (/^подъезд\s+/i.test(p)) {
+      out.entrance = p.replace(/^подъезд\s+/i, "").trim();
+      matchedStructured = true;
+    } else if (/^этаж\s+/i.test(p)) {
+      out.floor = p.replace(/^этаж\s+/i, "").trim();
+      matchedStructured = true;
+    } else if (/^кв\.?\s+/i.test(p)) {
+      out.apartment = p.replace(/^кв\.?\s+/i, "").trim();
+      matchedStructured = true;
+    } else if (/^домофон\s+/i.test(p)) {
+      out.intercom = p.replace(/^домофон\s+/i, "").trim();
+      matchedStructured = true;
+    } else extra.push(p);
+  }
+  out.extraDetails = matchedStructured ? extra.join(", ") : parts.join(", ");
+  return out;
+}
+
+/** Один сегмент «улица, Moscow» от геокодера → два сегмента. */
+function splitMixedScriptCommaSegment(seg) {
+  const t = trimAddrSeg(seg);
+  if (!t.includes(",")) return [t];
+  const hasCyr = /[а-яё]/i.test(t);
+  const hasLat = /[a-z]/i.test(t);
+  if (!hasCyr || !hasLat) return [t];
+  return t.split(",").map(trimAddrSeg).filter(Boolean);
+}
+
+function finalizeAddressSuggestionFromParts(parts) {
+  const flat = parts.flatMap((s) => splitMixedScriptCommaSegment(s));
+  let p = dedupeAddrSegments(flat).filter(Boolean);
+  p = p.map((s) => translateAddrSegToRu(s));
+  p = p.map((s) => translateLatinStreetToken(s));
+  p = stripTrailingAdminSegmentsFromAddress(p);
+  p = stripLeadingAdminWhenStreetOrHousePresent(p);
+  return shortenAddressToStreetHouse(p);
+}
+
+function composeBranchDisplay(br) {
+  if (!br) return "";
+  const tail = composePipeTailFromDetails({
+    entrance: br.entrance,
+    floor: br.floor,
+    apartment: br.apartment,
+    intercom: br.intercom,
+    extra: br.address_details,
+  });
+  const base = br.address || "";
+  return tail ? `${base} | ${tail}` : base;
+}
+
+function parseBranchRecordForForm(br) {
+  const raw = String(br.address || "").trim();
+  const sep = " | ";
+  const idx = raw.indexOf(sep);
+  const base = idx >= 0 ? raw.slice(0, idx).trim() : raw;
+  const tail = idx >= 0 ? raw.slice(idx + sep.length).trim() : "";
+  const fromApi = {
+    entrance: br.entrance || "",
+    floor: br.floor || "",
+    apartment: br.apartment || "",
+    intercom: br.intercom || "",
+    address_details: br.address_details || "",
+  };
+  const hasCol =
+    fromApi.entrance || fromApi.floor || fromApi.apartment || fromApi.intercom || fromApi.address_details;
+  if (!hasCol && tail) {
+    const p = parseAddressDetailsPipeTail(tail);
+    return {
+      title: br.title || "",
+      address: base,
+      latitude: String(br.latitude ?? ""),
+      longitude: String(br.longitude ?? ""),
+      entrance: p.entrance,
+      floor: p.floor,
+      apartment: p.apartment,
+      intercom: p.intercom,
+      address_details: p.extraDetails,
+    };
+  }
+  return {
+    title: br.title || "",
+    address: base,
+    latitude: String(br.latitude ?? ""),
+    longitude: String(br.longitude ?? ""),
+    ...fromApi,
+  };
+}
+
+function emptyLocationFormState() {
+  return {
+    title: "",
+    address: "",
+    latitude: "55.751244",
+    longitude: "37.618423",
+    entrance: "",
+    floor: "",
+    apartment: "",
+    intercom: "",
+    address_details: "",
+  };
+}
+
+/**
+ * Короткая подпись для подсказок: «улица, дом», если хвост распознан;
+ * иначе полная цепочка (регион, город, …).
+ */
+function shortenAddressToStreetHouse(segments) {
+  const p = dedupeAddrSegments(segments).filter(Boolean);
+  if (p.length === 0) return "";
+  if (p.length === 1) return p[0];
+
+  const last = p[p.length - 1];
+  if (!looksLikeHouseSegment(last)) return p.join(", ");
+
+  const prev = p[p.length - 2];
+
+  if (p.length >= 3) {
+    if (looksLikeStreetSegment(prev)) return `${prev}, ${last}`;
+    if (!looksLikeAdminOnlySegment(prev)) return `${prev}, ${last}`;
+    if (p.length >= 4) {
+      const st = p[p.length - 3];
+      if (looksLikeStreetSegment(st) || !looksLikeAdminOnlySegment(st)) return `${st}, ${last}`;
+    }
+    return p.join(", ");
+  }
+
+  if (looksLikeStreetSegment(prev)) return `${prev}, ${last}`;
+  return p.join(", ");
+}
+
+/** Запятые перед лат. городом/страной после кириллицы или цифры — иначе сегмент с кириллицей не проходит EN→RU. */
+function insertCommasBeforeLatinAdminRun(text) {
+  let s = String(text || "").trim();
+  if (!s) return s;
+  s = s.replace(/\s*,\s*/g, ", ");
+  const admins =
+    "Moscow Oblast|Leningrad Oblast|Moscow|Saint Petersburg|St\\. Petersburg|St Petersburg|Sankt-Petersburg|Russia|Russian Federation";
+  s = s.replace(new RegExp(`([\\u0400-\\u04FF0-9])(\\s+)(${admins})\\b`, "gi"), "$1, $3");
+  s = s.replace(/\b(Moscow)\s*,\s*(Moscow)\b/gi, "$1, $2");
+  s = s.replace(/\b(Moscow)\s*,\s*(Russia)\b/gi, "$1, $2");
+  return s;
+}
+
+function mergeStructuredOrgPartsFromMe(m) {
+  if (!m) return { entrance: "", floor: "", apartment: "", intercom: "", extra: "" };
+  let entrance = String(m.organization_entrance || "").trim();
+  let floor = String(m.organization_floor || "").trim();
+  let apartment = String(m.organization_apartment || "").trim();
+  let intercom = String(m.organization_intercom || "").trim();
+  let extra = String(m.organization_address_extra || "").trim();
+
+  const parsed = parseAddressDetailsPipeTail(extra);
+  const parsedHas = parsed.entrance || parsed.floor || parsed.apartment || parsed.intercom;
+  if (parsedHas) {
+    entrance = entrance || parsed.entrance;
+    floor = floor || parsed.floor;
+    apartment = apartment || parsed.apartment;
+    intercom = intercom || parsed.intercom;
+    extra = parsed.extraDetails || "";
+  }
+  return { entrance, floor, apartment, intercom, extra };
+}
+
+/** Убирает страну и дубли; хвостовые «Moscow»; переводит EN→RU; по возможности «улица, дом». */
+function simplifyCommaAddressLine(text) {
+  if (!text || typeof text !== "string") return "";
+  const prepared = insertCommasBeforeLatinAdminRun(insertCommasBeforeLatinAdminRun(text));
+  const raw = prepared.split(",").map((x) => trimAddrSeg(x)).filter(Boolean);
+  return finalizeAddressSuggestionFromParts(raw);
+}
+
+/** Строка адреса организации для отображения (отдельные поля API + старый формат «база | хвост»). */
+function composeOrgDisplayFromMe(m) {
+  if (!m) return "";
+  const merged = mergeStructuredOrgPartsFromMe(m);
+  const hasStructured =
+    merged.entrance || merged.floor || merged.apartment || merged.intercom || merged.extra;
+
+  const rawAddr = String(m.organization_address || "").trim();
+  const sep = " | ";
+  const splitIdx = rawAddr.indexOf(sep);
+  const baseRaw = splitIdx >= 0 ? rawAddr.slice(0, splitIdx).trim() : rawAddr;
+
+  if (!hasStructured && rawAddr.includes(sep)) {
+    return simplifyCommaAddressLine(rawAddr);
+  }
+  const baseSource = hasStructured && splitIdx >= 0 ? baseRaw : rawAddr;
+  const base = simplifyCommaAddressLine(baseSource);
+  const tail = composePipeTailFromDetails({
+    entrance: merged.entrance,
+    floor: merged.floor,
+    apartment: merged.apartment,
+    intercom: merged.intercom,
+    extra: merged.extra,
+  });
+  return tail ? `${base} | ${tail}` : base;
+}
+
+function formatPhotonHousePart(p) {
+  const hn = trimAddrSeg(p.housenumber);
+  let extra = trimAddrSeg(p.block || p.building || "");
+  if (extra) {
+    if (!/^к/i.test(extra) && !/^корп/i.test(extra) && !/^стр/i.test(extra) && !/^с\.\d/i.test(extra.replace(/\s/g, ""))) {
+      const compact = extra.replace(/\s/g, "");
+      if (/^\d+[а-яa-z]?$/i.test(compact)) extra = `к${compact}`;
+    } else {
+      extra = extra
+        .replace(/^корп(?:ус)?\.?\s*/i, "к")
+        .replace(/^к\.?\s*/i, "к")
+        .replace(/\s+/g, "");
+    }
+  }
+  if (hn && extra) return `${hn} ${extra}`.replace(/\s+/g, " ").trim();
+  if (hn) return hn;
+  return extra;
+}
+
+/** Подсказка Photon: субъект/район → населённый пункт → улица → дом (без страны, без дублей). */
+function mapPhotonFeatureToSuggestion(feature) {
+  const coords = feature?.geometry?.coordinates;
+  if (!Array.isArray(coords) || coords.length < 2) return null;
+  const lon = Number(coords[0]);
+  const lat = Number(coords[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const p = feature.properties || {};
+
+  const primaryLocality = translateAddrSegToRu(
+    trimAddrSeg(p.city || p.town || p.village || p.municipality || p.locality || "")
+  );
+  const innerRaw = [p.suburb, p.district, p.neighbourhood, p.quarter, p.hamlet]
+    .map((x) => translateLatinStreetToken(translateAddrSegToRu(trimAddrSeg(x))))
+    .filter(Boolean);
+  const innerLocals = dedupeAddrSegments(innerRaw).filter(
+    (x) => !primaryLocality || x.toLowerCase() !== primaryLocality.toLowerCase()
+  );
+
+  const adminChain = dedupeAddrSegments(
+    [
+      translateLatinStreetToken(translateAddrSegToRu(trimAddrSeg(p.state))),
+      translateLatinStreetToken(translateAddrSegToRu(trimAddrSeg(p.county))),
+      primaryLocality,
+      ...innerLocals,
+    ].filter(Boolean)
+  );
+
+  let streetLine = translateLatinStreetToken(translateAddrSegToRu(trimAddrSeg(p.street)));
+  const nm = translateLatinStreetToken(translateAddrSegToRu(trimAddrSeg(p.name)));
+  if (!streetLine && nm && (p.type === "street" || p.osm_key === "highway")) {
+    streetLine = nm;
+  }
+  const housePart = formatPhotonHousePart(p);
+
+  const ordered = [...adminChain];
+  if (streetLine) ordered.push(streetLine);
+  if (housePart) ordered.push(housePart);
+  if (!streetLine && !housePart && nm && !adminChain.some((a) => a.toLowerCase() === nm.toLowerCase())) {
+    ordered.push(nm);
+  }
+
+  const value = finalizeAddressSuggestionFromParts(ordered);
+  if (!value) return null;
+
+  const cityRaw = primaryLocality || innerLocals[0] || trimAddrSeg(p.state) || "";
+  const city = translateAddrSegToRu(cityRaw);
+
+  return {
+    value,
+    full: value,
+    lat,
+    lon,
+    city,
+  };
+}
 
 const emptyRegisterForm = {
   username: "",
@@ -39,6 +705,23 @@ const emptyRegisterForm = {
   organization_latitude: "55.751244",
   organization_longitude: "37.618423",
 };
+
+function buildIntervalPopoverFixedStyle(anchorEl) {
+  if (!anchorEl || typeof window === "undefined") return null;
+  const r = anchorEl.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const maxW = Math.min(300, Math.max(248, vw - 24));
+  return {
+    position: "fixed",
+    top: `${Math.round(r.bottom + 8)}px`,
+    left: `${Math.round(r.left + r.width / 2)}px`,
+    width: `${maxW}px`,
+    maxWidth: "calc(100vw - 16px)",
+    transform: "translateX(-50%)",
+    zIndex: 9000,
+    boxSizing: "border-box",
+  };
+}
 
 export default function App() {
   const [authMode, setAuthMode] = useState("login");
@@ -110,18 +793,65 @@ export default function App() {
   const [selectedIntervalId, setSelectedIntervalId] = useState(null);
   const [dragIntervalId, setDragIntervalId] = useState(null);
   const [intervalPopoverId, setIntervalPopoverId] = useState(null);
+  const intervalPopoverAnchorRef = useRef(null);
+  const [intervalPopoverFixedStyle, setIntervalPopoverFixedStyle] = useState(null);
+  const closeIntervalPopover = useCallback(() => {
+    setIntervalPopoverId(null);
+    setIntervalPopoverFixedStyle(null);
+    intervalPopoverAnchorRef.current = null;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (intervalPopoverId == null) return undefined;
+    const tick = () => {
+      const el = intervalPopoverAnchorRef.current;
+      if (el?.isConnected) setIntervalPopoverFixedStyle(buildIntervalPopoverFixedStyle(el));
+    };
+    tick();
+    window.addEventListener("resize", tick);
+    window.addEventListener("scroll", tick, true);
+    return () => {
+      window.removeEventListener("resize", tick);
+      window.removeEventListener("scroll", tick, true);
+    };
+  }, [intervalPopoverId]);
+
+  useEffect(() => {
+    if (intervalPopoverId == null) return undefined;
+    const onDown = (ev) => {
+      const anchor = intervalPopoverAnchorRef.current;
+      const pop = document.querySelector(".template-popover--portal");
+      if (anchor?.contains(ev.target)) return;
+      if (pop?.contains(ev.target)) return;
+      closeIntervalPopover();
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [intervalPopoverId, closeIntervalPopover]);
+
   const [orgStaff, setOrgStaff] = useState([]);
-  const [staffInviteForm, setStaffInviteForm] = useState({ invite_email: "", invite_username: "", display_name: "" });
+  const [staffInviteForm, setStaffInviteForm] = useState({ invite_identifier: "" });
   const [staffInviteStatus, setStaffInviteStatus] = useState("");
+  const [staffPermsOpenId, setStaffPermsOpenId] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [selectedChatId, setSelectedChatId] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [chatStatus, setChatStatus] = useState("");
-  const [chatSettingsOpen, setChatSettingsOpen] = useState(false);
+  /** id чата для модалки оформления (открывается из ⋮ в списке, без смены выбранного чата). */
+  const [chatSettingsForId, setChatSettingsForId] = useState(null);
+  const [chatReceiptsSettingsOpen, setChatReceiptsSettingsOpen] = useState(false);
+  const [chatPins, setChatPins] = useState(() => loadChatPinsFromStorage());
+  const [chatDragPinConvId, setChatDragPinConvId] = useState(null);
+  const [chatAttachMenuOpen, setChatAttachMenuOpen] = useState(false);
+  const [chatMsgSearchOpen, setChatMsgSearchOpen] = useState(false);
+  const [chatMsgSearchQuery, setChatMsgSearchQuery] = useState("");
+  const [chatMsgSearchActiveIdx, setChatMsgSearchActiveIdx] = useState(0);
+  const tgAttachMenuRef = useRef(null);
+  const tgMsgSearchWrapRef = useRef(null);
+  const chatMsgSearchInputRef = useRef(null);
   const [chatSettingsTitle, setChatSettingsTitle] = useState("");
   const [groupForm, setGroupForm] = useState({ title: "", staff_ids: [] });
-  const [directStaffId, setDirectStaffId] = useState("");
   const [chatFabOpen, setChatFabOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ first_name: "", last_name: "", patronymic: "", phone: "" });
   const [passwordForm, setPasswordForm] = useState({ old_password: "", new_password: "", new_password_confirm: "" });
@@ -131,6 +861,11 @@ export default function App() {
     address: "",
     latitude: "55.751244",
     longitude: "37.618423",
+    entrance: "",
+    floor: "",
+    apartment: "",
+    intercom: "",
+    address_details: "",
   });
   const mapRef = useRef(null);
   const placemarkRef = useRef(null);
@@ -172,8 +907,9 @@ export default function App() {
   const [customColorPickerOpen, setCustomColorPickerOpen] = useState(false);
   const [chatSettingsNotify, setChatSettingsNotify] = useState("all");
   const [chatSettingsMuteUntil, setChatSettingsMuteUntil] = useState("");
-  const [chatMemberNames, setChatMemberNames] = useState({});
   const [incomingToasts, setIncomingToasts] = useState([]);
+  const [chatActivity, setChatActivity] = useState(null);
+  const [chatReceiptsMode, setChatReceiptsMode] = useState(() => loadReceiptsPref());
   const currentViewRef = useRef(currentView);
   const meRef = useRef(me);
   const lastConvMsgDigestRef = useRef({});
@@ -206,6 +942,36 @@ export default function App() {
 
   const canManageOrgSettings =
     me?.role === "provider" || (me?.role === "staff" && Boolean(staffEffectivePerms.can_delegate_permissions));
+
+  const orgActiveStaffIdsKey = useMemo(
+    () =>
+      orgStaff
+        .filter((l) => l.is_active && Number(l.staff) !== Number(me?.id))
+        .map((l) => Number(l.staff))
+        .sort((a, b) => a - b)
+        .join(","),
+    [orgStaff, me?.id],
+  );
+
+  useEffect(() => {
+    if (!accessToken || currentView !== "chats" || me?.role !== "provider" || !orgActiveStaffIdsKey) return;
+    const ids = orgActiveStaffIdsKey.split(",").map(Number).filter(Boolean);
+    if (!ids.length) return;
+    let cancelled = false;
+    (async () => {
+      for (const sid of ids) {
+        if (cancelled) break;
+        await authFetch(`${API_URL}/chat/conversations/create-direct/`, {
+          method: "POST",
+          body: JSON.stringify({ staff_id: sid }),
+        });
+      }
+      if (!cancelled) loadChats();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, currentView, me?.role, orgActiveStaffIdsKey]);
 
   function showIntervalToast(message) {
     if (intervalToastTimerRef.current) clearTimeout(intervalToastTimerRef.current);
@@ -242,11 +1008,26 @@ export default function App() {
   }, [accessToken]);
 
   useEffect(() => {
+    if (!accessToken) return;
+    loadChatActivity();
+    const id = setInterval(loadChatActivity, 12000);
+    return () => clearInterval(id);
+  }, [accessToken, me?.id]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    const ping = () => authFetch(`${API_URL}/users/presence/ping/`, { method: "POST", body: "{}" });
+    ping();
+    const id = setInterval(ping, 35000);
+    return () => clearInterval(id);
+  }, [accessToken]);
+
+  useEffect(() => {
     if (accessToken && me?.role === "provider") loadSellerData();
   }, [accessToken, me]);
 
   useEffect(() => {
-    if (!accessToken || currentView !== "organization") return;
+    if (!accessToken || (currentView !== "organization" && currentView !== "staff")) return;
     if (me?.role === "provider") loadSellerData();
     else if (me?.role === "staff" && staffEffectivePerms.can_delegate_permissions) loadStaffWorkspace();
   }, [accessToken, currentView, me?.role, staffEffectivePerms.can_delegate_permissions]);
@@ -267,6 +1048,11 @@ export default function App() {
       });
     }
     if (me?.role === "staff") loadStaffWorkspace();
+    const iv = setInterval(() => {
+      if (me?.role === "provider") loadChats();
+      else if (me?.role === "staff") loadStaffWorkspace();
+    }, 12000);
+    return () => clearInterval(iv);
   }, [accessToken, currentView, me?.role]);
 
   useEffect(() => {
@@ -274,7 +1060,18 @@ export default function App() {
     let cancelled = false;
     async function tick() {
       const res = await authFetch(`${API_URL}/chat/messages/?conversation=${selectedChatId}`);
-      if (!cancelled && res.ok) setChatMessages(await res.json());
+      if (!cancelled && res.ok) {
+        const msgs = await res.json();
+        setChatMessages(msgs);
+        const last = msgs.length ? msgs[msgs.length - 1] : null;
+        if (last) {
+          await authFetch(`${API_URL}/chat/conversations/${selectedChatId}/mark-read/`, {
+            method: "POST",
+            body: JSON.stringify({ message_id: last.id }),
+          });
+          loadChats();
+        }
+      }
     }
     tick();
     const id = setInterval(tick, 5000);
@@ -297,34 +1094,68 @@ export default function App() {
 
   function syncOrgAddressFormFromMe() {
     if (!me || me.role !== "provider") return;
+    const merged = mergeStructuredOrgPartsFromMe(me);
+    const hasApiStructured =
+      String(me.organization_entrance || "").trim() ||
+      String(me.organization_floor || "").trim() ||
+      String(me.organization_apartment || "").trim() ||
+      String(me.organization_intercom || "").trim() ||
+      String(me.organization_address_extra || "").trim();
+
     const raw = me.organization_address || "";
     const sep = " | ";
     const splitIdx = raw.indexOf(sep);
-    const base = splitIdx >= 0 ? raw.slice(0, splitIdx).trim() : raw.trim();
-    const tail = splitIdx >= 0 ? raw.slice(splitIdx + sep.length).trim() : "";
+    const baseFromRaw = splitIdx >= 0 ? raw.slice(0, splitIdx).trim() : raw.trim();
+    const tailFromRaw = splitIdx >= 0 ? raw.slice(splitIdx + sep.length).trim() : "";
+
+    if (hasApiStructured) {
+      const addrSource = splitIdx >= 0 ? baseFromRaw : String(me.organization_address || "").trim();
+      setOrgAddressForm((prev) => ({
+        ...prev,
+        organization_name: me.organization_name || "",
+        organization_address: simplifyCommaAddressLine(addrSource) || addrSource || prev.organization_address,
+        entrance: merged.entrance,
+        floor: merged.floor,
+        apartment: merged.apartment,
+        intercom: merged.intercom,
+        organization_address_details: merged.extra,
+        organization_latitude: String(me.organization_latitude ?? prev.organization_latitude ?? "55.751244"),
+        organization_longitude: String(me.organization_longitude ?? prev.organization_longitude ?? "37.618423"),
+      }));
+      return;
+    }
+
+    const parsed = parseAddressDetailsPipeTail(tailFromRaw);
     setOrgAddressForm((prev) => ({
       ...prev,
       organization_name: me.organization_name || "",
-      organization_address: base || prev.organization_address,
-      organization_address_details: tail,
-      entrance: "",
-      floor: "",
-      apartment: "",
-      intercom: "",
-      organization_latitude: me.organization_latitude || prev.organization_latitude || "55.751244",
-      organization_longitude: me.organization_longitude || prev.organization_longitude || "37.618423",
+      organization_address: simplifyCommaAddressLine(baseFromRaw) || baseFromRaw || prev.organization_address,
+      entrance: parsed.entrance,
+      floor: parsed.floor,
+      apartment: parsed.apartment,
+      intercom: parsed.intercom,
+      organization_address_details: parsed.extraDetails,
+      organization_latitude: String(me.organization_latitude ?? prev.organization_latitude ?? "55.751244"),
+      organization_longitude: String(me.organization_longitude ?? prev.organization_longitude ?? "37.618423"),
     }));
   }
 
   useEffect(() => {
+    if (orgMainEditOpen) return;
     syncOrgAddressFormFromMe();
   }, [
+    orgMainEditOpen,
     me?.id,
     me?.role,
     me?.organization_address,
     me?.organization_name,
     me?.organization_latitude,
     me?.organization_longitude,
+    me?.organization_entrance,
+    me?.organization_floor,
+    me?.organization_apartment,
+    me?.organization_intercom,
+    me?.organization_address_extra,
   ]);
 
   useEffect(() => {
@@ -350,17 +1181,16 @@ export default function App() {
   }, [conversations]);
 
   useEffect(() => {
-    if (!chatSettingsOpen || !selectedChatId) return;
-    const p = chatLocalPrefs[selectedChatId] || {};
-    const sel = conversations.find((x) => x.id === selectedChatId);
-    const fallback = sel?.is_saved_messages ? "Избранное" : sel?.title || `Чат #${selectedChatId}`;
+    if (chatSettingsForId == null) return;
+    const p = chatLocalPrefs[chatSettingsForId] || {};
+    const sel = conversations.find((x) => x.id === chatSettingsForId);
+    const fallback = defaultChatListNameForConversation(sel, me?.id);
     setChatSettingsTitle(p.title || fallback);
     setChatSettingsAvatar(p.avatarDataUrl || "");
     setChatSettingsWallpaper(p.wallpaper || "#dfe9e2");
-    setChatMemberNames(p.memberNames && typeof p.memberNames === "object" ? p.memberNames : {});
     let notify = "all";
     try {
-      const raw = localStorage.getItem(chatNotifyStorageKey(selectedChatId));
+      const raw = localStorage.getItem(chatNotifyStorageKey(chatSettingsForId));
       const st = raw ? JSON.parse(raw) : {};
       if (st.muted) notify = "off";
       else if (st.mutedUntil && Date.now() < Number(st.mutedUntil)) notify = "1h";
@@ -368,7 +1198,49 @@ export default function App() {
       // ignore
     }
     setChatSettingsNotify(notify);
-  }, [chatSettingsOpen, selectedChatId, conversations, chatLocalPrefs]);
+    // Только при смене чата: иначе polling conversations / chatLocalPrefs сбрасывает ввод в поле «Имя».
+  }, [chatSettingsForId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHAT_PINS_STORAGE_KEY, JSON.stringify(chatPins));
+    } catch {
+      // ignore
+    }
+  }, [chatPins]);
+
+  useEffect(() => {
+    if (!conversations.length) return;
+    const ids = new Set(conversations.map((c) => Number(c.id)));
+    setChatPins((prev) => {
+      const org = (prev.org || []).filter((id) => ids.has(Number(id)));
+      const clients = (prev.clients || []).filter((id) => ids.has(Number(id)));
+      if (org.length === (prev.org || []).length && clients.length === (prev.clients || []).length) return prev;
+      return { org, clients };
+    });
+  }, [conversations]);
+
+  useEffect(() => {
+    if (!chatAttachMenuOpen) return;
+    function onDoc(e) {
+      if (tgAttachMenuRef.current?.contains(e.target)) return;
+      setChatAttachMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc, true);
+    return () => document.removeEventListener("mousedown", onDoc, true);
+  }, [chatAttachMenuOpen]);
+
+  useEffect(() => {
+    if (!chatMsgSearchOpen) return;
+    function onDoc(e) {
+      if (tgMsgSearchWrapRef.current?.contains(e.target)) return;
+      setChatMsgSearchOpen(false);
+      setChatMsgSearchQuery("");
+      setChatMsgSearchActiveIdx(0);
+    }
+    document.addEventListener("mousedown", onDoc, true);
+    return () => document.removeEventListener("mousedown", onDoc, true);
+  }, [chatMsgSearchOpen]);
 
   useEffect(() => {
     if (!customColorPickerOpen) return;
@@ -392,12 +1264,13 @@ export default function App() {
     meRef.current = me;
   }, [me]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     try {
       localStorage.setItem(APP_THEME_KEY, appTheme);
     } catch {
       // ignore
     }
+    document.documentElement.setAttribute("data-theme", appTheme);
     document.body.classList.toggle("theme-dark", appTheme === "dark");
   }, [appTheme]);
 
@@ -439,6 +1312,8 @@ export default function App() {
               // ignore
             }
             if (c.is_saved_messages) return "Избранное";
+            const peer = conversationOrgDirectPeerTitle(c, myId);
+            if (peer) return peer;
             return c.title || `Чат #${c.id}`;
           })();
           const text = (c.last_message?.text || "").slice(0, 140);
@@ -490,15 +1365,9 @@ export default function App() {
       setSelectedIntervalId(null);
     }
     if (intervalPopoverId && !savedIntervals.some((x) => x.id === intervalPopoverId)) {
-      setIntervalPopoverId(null);
+      closeIntervalPopover();
     }
-  }, [savedIntervals, selectedIntervalId, intervalPopoverId]);
-
-  useEffect(() => {
-    if (authMode === "register" && form.role === "provider" && registerStep === 2) {
-      detectCityByGeolocation();
-    }
-  }, [authMode, form.role, registerStep]);
+  }, [savedIntervals, selectedIntervalId, intervalPopoverId, closeIntervalPopover]);
 
   async function loadRoles() {
     const response = await fetch(`${API_URL}/users/roles/`);
@@ -610,7 +1479,7 @@ export default function App() {
     setStatus("Сохраняем...");
     const payload = {
       ...form,
-      organization_address: composeAddressWithDetails(form.organization_address, form),
+      organization_address: simplifyCommaAddressLine(form.organization_address.trim()) || form.organization_address.trim(),
     };
     const response = await fetch(`${API_URL}/users/register/`, {
       method: "POST",
@@ -662,7 +1531,9 @@ export default function App() {
             ...prev,
             organization_latitude: lat.toFixed(6),
             organization_longitude: lon.toFixed(6),
-            organization_address: shortAddress || result?.display_name || prev.organization_address,
+            organization_address: simplifyCommaAddressLine(
+              shortAddress || result?.display_name || prev.organization_address
+            ),
           }));
           if (city) setDetectedCity(city);
         });
@@ -693,7 +1564,9 @@ export default function App() {
     const first = data[0];
     const lat = Number(first.lat);
     const lon = Number(first.lon);
-    const normalizedAddress = buildShortAddress(first.address) || first.display_name || addressValue;
+    const normalizedAddress = simplifyCommaAddressLine(
+      buildShortAddress(first.address) || first.display_name || addressValue
+    );
     const city = getCity(first.address);
     setForm((prev) => ({
       ...prev,
@@ -749,28 +1622,6 @@ export default function App() {
   }
 
   /** Подсказки при вводе: Photon (разрешён для autocomplete). Nominatim с клиента для autocomplete запрещён политикой OSM. */
-  function mapPhotonFeatureToSuggestion(feature) {
-    const coords = feature?.geometry?.coordinates;
-    if (!Array.isArray(coords) || coords.length < 2) return null;
-    const lon = Number(coords[0]);
-    const lat = Number(coords[1]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    const p = feature.properties || {};
-    const streetHouse = [p.street, p.housenumber].filter(Boolean).join(", ");
-    const locality = p.city || p.town || p.village || p.district || "";
-    const name = p.name && p.name !== p.street ? p.name : "";
-    const head = streetHouse || name || locality || p.country || "";
-    const tail = [locality && head !== locality ? locality : null, p.state, p.country].filter(Boolean);
-    const value = [head, ...tail].filter(Boolean).join(", ") || head;
-    if (!value) return null;
-    return {
-      value,
-      full: value,
-      lat,
-      lon,
-      city: locality || "",
-    };
-  }
 
   async function photonSuggestSearch(q, limit = 10) {
     const trimmed = (q || "").trim();
@@ -781,7 +1632,10 @@ export default function App() {
     });
     try {
       const response = await fetch(`https://photon.komoot.io/api/?${params}`, {
-        headers: { Accept: "application/json" },
+        headers: {
+          Accept: "application/json",
+          "Accept-Language": "ru-RU, ru;q=0.9, en;q=0.8",
+        },
       });
       if (!response.ok) return [];
       const data = await response.json();
@@ -803,7 +1657,7 @@ export default function App() {
 
   function mapNominatimToSuggestions(data) {
     return data.map((item) => ({
-      value: buildShortAddress(item.address) || item.display_name,
+      value: simplifyCommaAddressLine(buildShortAddress(item.address) || item.display_name || ""),
       full: item.display_name,
       lat: Number(item.lat),
       lon: Number(item.lon),
@@ -929,18 +1783,19 @@ export default function App() {
         const objs = geoObjectsToArray(coll);
         for (const obj of objs) {
           const label = geocodeResultLabel(obj);
-          if (!label || seenLines.has(label)) continue;
+          const display = simplifyCommaAddressLine(label);
+          if (!display || seenLines.has(display.toLowerCase())) continue;
           const pos = geocodeResultCoords(obj);
           if (!pos) continue;
-          seenLines.add(label);
+          seenLines.add(display.toLowerCase());
           let locCity = cityHint || "";
           if (!locCity && typeof obj.getLocalities === "function") {
             const loc = obj.getLocalities();
             if (Array.isArray(loc) && loc.length) [locCity] = loc;
           }
           items.push({
-            value: label,
-            full: label,
+            value: display,
+            full: display,
             lat: pos.lat,
             lon: pos.lon,
             city: locCity || "",
@@ -954,6 +1809,70 @@ export default function App() {
     }
 
     return items.length ? items : null;
+  }
+
+  /**
+   * Подсказки Яндекс.Карт через Geosuggest (ymaps.suggest) — как в поиске на карте.
+   * Нужен ключ VITE_YANDEX_SUGGEST_API_KEY и подключение скрипта с suggest_apikey (см. main.jsx).
+   * Координаты подтягиваются отдельным геокодированием по полю value подсказки.
+   */
+  async function yandexMapsNativeSuggestItems(trimmed, cityHint) {
+    if (!import.meta.env.VITE_YANDEX_SUGGEST_API_KEY) return null;
+    const ymaps = window.ymaps;
+    if (!ymaps || !trimmed || typeof ymaps.suggest !== "function") return null;
+    try {
+      await ymapsReadyPromise(ymaps);
+    } catch {
+      return null;
+    }
+
+    const q = cityHint ? `${cityHint}, ${trimmed}` : trimmed;
+    let raw;
+    try {
+      raw = await ymaps.suggest(q, { results: 10 });
+    } catch {
+      return null;
+    }
+    if (!Array.isArray(raw) || !raw.length) return null;
+
+    const rows = await Promise.all(
+      raw.slice(0, 10).map(async (it) => {
+        const geoQuery = String(it.value || it.displayName || "").trim();
+        if (!geoQuery) return null;
+        try {
+          const res = await ymapsGeocodePromise(ymaps, geoQuery, { results: 1 });
+          const objs = geoObjectsToArray(res?.geoObjects);
+          const obj = objs[0];
+          if (!obj) return null;
+          const pos = geocodeResultCoords(obj);
+          if (!pos) return null;
+          const display = simplifyCommaAddressLine(
+            (it.displayName && String(it.displayName).trim()) || geocodeResultLabel(obj) || geoQuery
+          );
+          if (!display) return null;
+          let locCity = cityHint || "";
+          if (!locCity && typeof obj.getLocalities === "function") {
+            const loc = obj.getLocalities();
+            if (Array.isArray(loc) && loc.length) [locCity] = loc;
+          }
+          return { value: display, full: display, lat: pos.lat, lon: pos.lon, city: locCity || "" };
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    const out = [];
+    const seen = new Set();
+    for (const row of rows) {
+      if (!row) continue;
+      const k = row.value.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(row);
+      if (out.length >= 8) break;
+    }
+    return out.length ? out : null;
   }
 
   function ensureCityHintFromGeo() {
@@ -1004,18 +1923,29 @@ export default function App() {
         return items;
       }
 
-      const yaPromise = window.ymaps
-        ? Promise.race([
-            yandexGeocodeSuggestItems(trimmed, cityHint).then((list) => (list && list.length ? list : [])),
-            new Promise((resolve) => {
-              setTimeout(() => resolve([]), YANDEX_SUGGEST_CAP_MS);
-            }),
-          ])
-        : Promise.resolve([]);
+      /** Без ключей Яндекса подсказки только через Photon (komoot) — бесплатно для типичного объёма. */
+      const yandexAutocompleteEnabled = Boolean(
+        import.meta.env.VITE_YANDEX_SUGGEST_API_KEY || import.meta.env.VITE_YANDEX_MAPS_API_KEY
+      );
+
+      const yaPromise =
+        window.ymaps && yandexAutocompleteEnabled
+          ? Promise.race([
+              (async () => {
+                const fromSuggest = await yandexMapsNativeSuggestItems(trimmed, cityHint);
+                if (fromSuggest?.length) return fromSuggest;
+                const fromGeocode = await yandexGeocodeSuggestItems(trimmed, cityHint);
+                return fromGeocode && fromGeocode.length ? fromGeocode : [];
+              })(),
+              new Promise((resolve) => {
+                setTimeout(() => resolve([]), YANDEX_SUGGEST_CAP_MS);
+              }),
+            ])
+          : Promise.resolve([]);
 
       const [yaItems, photonItems] = await Promise.all([yaPromise, loadPhotonSuggestionItems()]);
       if (suggestRequestSeqRef.current !== seq) return;
-      setAddressSuggestions(yaItems.length ? yaItems : photonItems);
+      setAddressSuggestions(photonItems.length ? photonItems : yaItems);
     } catch (_error) {
       if (suggestRequestSeqRef.current === seq) setAddressSuggestions([]);
     }
@@ -1031,9 +1961,10 @@ export default function App() {
 
   function pickSuggestion(item) {
     const ymaps = window.ymaps;
+    const line = simplifyCommaAddressLine(String(item.value || "").trim()) || String(item.value || "").trim();
     setForm((prev) => ({
       ...prev,
-      organization_address: item.value,
+      organization_address: line,
       organization_latitude: item.lat.toFixed(6),
       organization_longitude: item.lon.toFixed(6),
     }));
@@ -1085,7 +2016,9 @@ export default function App() {
             ...p,
             organization_latitude: plat.toFixed(6),
             organization_longitude: plon.toFixed(6),
-            organization_address: shortAddress || result?.display_name || p.organization_address,
+            organization_address: simplifyCommaAddressLine(
+              shortAddress || result?.display_name || p.organization_address
+            ),
           }));
           if (city) setDetectedCity(city);
         });
@@ -1166,11 +2099,12 @@ export default function App() {
         reverseGeocodeByCoords(plat, plon).then((result) => {
           const shortAddress = buildShortAddress(result?.address);
           const city = getCity(result?.address);
-          setLocationForm((p) => ({
-            ...p,
+          const addr = simplifyCommaAddressLine(shortAddress || result?.display_name || prev.address);
+          setLocationForm((prev) => ({
+            ...prev,
             latitude: plat.toFixed(6),
             longitude: plon.toFixed(6),
-            address: shortAddress || result?.display_name || p.address,
+            address: addr,
           }));
           if (city) setDetectedCity(city);
         });
@@ -1200,11 +2134,12 @@ export default function App() {
         reverseGeocodeByCoords(plat, plon).then((result) => {
           const shortAddress = buildShortAddress(result?.address);
           const city = getCity(result?.address);
-          setLocationForm((p) => ({
-            ...p,
+          const addr = simplifyCommaAddressLine(shortAddress || result?.display_name || prev.address);
+          setLocationForm((prev) => ({
+            ...prev,
             latitude: plat.toFixed(6),
             longitude: plon.toFixed(6),
-            address: shortAddress || result?.display_name || p.address,
+            address: addr,
           }));
           if (city) setDetectedCity(city);
         });
@@ -1238,6 +2173,11 @@ export default function App() {
       address: item.value,
       latitude: item.lat.toFixed(6),
       longitude: item.lon.toFixed(6),
+      entrance: "",
+      floor: "",
+      apartment: "",
+      intercom: "",
+      address_details: "",
     }));
     if (item.city) setDetectedCity(item.city);
     setAddressSuggestions([]);
@@ -1263,9 +2203,10 @@ export default function App() {
 
   function pickProfileSuggestion(item) {
     const ymaps = window.ymaps;
+    const line = simplifyCommaAddressLine(String(item.value || "").trim()) || String(item.value || "").trim();
     setOrgAddressForm((prev) => ({
       ...prev,
-      organization_address: item.value,
+      organization_address: line,
       organization_latitude: item.lat.toFixed(6),
       organization_longitude: item.lon.toFixed(6),
     }));
@@ -1299,7 +2240,9 @@ export default function App() {
     const first = data[0];
     const lat = Number(first.lat);
     const lon = Number(first.lon);
-    const normalizedAddress = buildShortAddress(first.address) || first.display_name || addressValue;
+    const normalizedAddress = simplifyCommaAddressLine(
+      buildShortAddress(first.address) || first.display_name || addressValue
+    );
     const city = getCity(first.address);
     setOrgAddressForm((prev) => ({
       ...prev,
@@ -1378,13 +2321,14 @@ export default function App() {
   }
 
   function composeAddressWithDetails(baseAddress, sourceForm = form) {
-    const details = [];
-    if (sourceForm.entrance) details.push(`подъезд ${sourceForm.entrance}`);
-    if (sourceForm.floor) details.push(`этаж ${sourceForm.floor}`);
-    if (sourceForm.apartment) details.push(`кв. ${sourceForm.apartment}`);
-    if (sourceForm.intercom) details.push(`домофон ${sourceForm.intercom}`);
-    if (sourceForm.organization_address_details) details.push(sourceForm.organization_address_details);
-    return [baseAddress, details.length ? details.join(", ") : ""].filter(Boolean).join(" | ");
+    const tail = composePipeTailFromDetails({
+      entrance: sourceForm.entrance,
+      floor: sourceForm.floor,
+      apartment: sourceForm.apartment,
+      intercom: sourceForm.intercom,
+      extra: sourceForm.organization_address_details,
+    });
+    return tail ? `${baseAddress} | ${tail}` : baseAddress;
   }
 
   async function loadSellerData() {
@@ -1499,13 +2443,101 @@ export default function App() {
     if (res.ok) setConversations(await res.json());
   }
 
+  function togglePinChatForFolder(convId, folder) {
+    const n = Number(convId);
+    const key = folder === "clients" ? "clients" : "org";
+    setChatPins((prev) => {
+      const list = [...(prev[key] || [])].map(Number);
+      const i = list.indexOf(n);
+      if (i >= 0) {
+        list.splice(i, 1);
+        return { ...prev, [key]: list };
+      }
+      if (list.length >= MAX_PINNED_CHATS) {
+        queueMicrotask(() => setChatStatus(`Не больше ${MAX_PINNED_CHATS} закреплённых чатов.`));
+        return prev;
+      }
+      return { ...prev, [key]: [...list, n] };
+    });
+  }
+
+  function reorderPinnedChats(folder, draggedId, targetId) {
+    const a = Number(draggedId);
+    const b = Number(targetId);
+    if (!a || !b || a === b) return;
+    const key = folder === "clients" ? "clients" : "org";
+    setChatPins((prev) => {
+      const list = [...(prev[key] || [])].map(Number);
+      const fi = list.indexOf(a);
+      const ti = list.indexOf(b);
+      if (fi < 0 || ti < 0) return prev;
+      list.splice(fi, 1);
+      list.splice(ti, 0, a);
+      return { ...prev, [key]: list };
+    });
+  }
+
+  function scrollChatToMessageId(mid) {
+    const el = document.getElementById(`tg-msg-${mid}`);
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+
+  async function loadChatActivity() {
+    const res = await authFetch(`${API_URL}/chat/activity/`);
+    if (res.ok) setChatActivity(await res.json());
+  }
+
+  async function acceptStaffInvite(linkId) {
+    const res = await authFetch(`${API_URL}/booking/staff/${linkId}/accept-invite/`, { method: "POST", body: "{}" });
+    if (!res.ok) {
+      setChatStatus("Не удалось принять приглашение.");
+      return;
+    }
+    setChatStatus("");
+    loadChatActivity();
+    loadMe();
+    if (me?.role === "provider") loadSellerData();
+    else loadStaffWorkspace();
+  }
+
+  async function rejectStaffInvite(linkId) {
+    const res = await authFetch(`${API_URL}/booking/staff/${linkId}/reject-invite/`, { method: "POST", body: "{}" });
+    if (!res.ok) {
+      setChatStatus("Не удалось отклонить приглашение.");
+      return;
+    }
+    setChatStatus("");
+    loadChatActivity();
+    loadMe();
+    if (me?.role === "provider") loadSellerData();
+    else loadStaffWorkspace();
+  }
+
+  async function markInAppNotificationsRead(ids) {
+    if (!ids?.length) return;
+    await authFetch(`${API_URL}/notifications/in-app/mark-read/`, {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    });
+    loadChatActivity();
+  }
+
+  function persistChatReceiptsMode(mode) {
+    setChatReceiptsMode(mode);
+    try {
+      localStorage.setItem(CHAT_RECEIPTS_KEY, JSON.stringify({ mode }));
+    } catch {
+      // ignore
+    }
+  }
+
   async function inviteStaff(event) {
     event.preventDefault();
     setStaffInviteStatus("Добавляем...");
-    const body = { display_name: staffInviteForm.display_name || "" };
-    if (staffInviteForm.invite_email.trim()) body.invite_email = staffInviteForm.invite_email.trim();
-    if (staffInviteForm.invite_username.trim()) body.invite_username = staffInviteForm.invite_username.trim();
-    if (!body.invite_email && !body.invite_username) {
+    const body = {};
+    const idf = (staffInviteForm.invite_identifier || "").trim();
+    if (idf) body.invite_identifier = idf;
+    if (!body.invite_identifier) {
       setStaffInviteStatus("Укажи email или логин сотрудника.");
       return;
     }
@@ -1519,9 +2551,10 @@ export default function App() {
       setStaffInviteStatus(msg || "Не удалось добавить сотрудника.");
       return;
     }
-    setStaffInviteStatus("Сотрудник добавлен.");
-    setStaffInviteForm({ invite_email: "", invite_username: "", display_name: "" });
+    setStaffInviteStatus("Приглашение отправлено. Сотрудник увидит запрос в чатах.");
+    setStaffInviteForm({ invite_identifier: "" });
     loadSellerData();
+    loadChatActivity();
   }
 
   async function deactivateStaff(linkId) {
@@ -1553,7 +2586,7 @@ export default function App() {
 
   async function createOrgGroup(event) {
     event.preventDefault();
-    setChatStatus("Создаём группу...");
+    setChatStatus("");
     const staffIds = groupForm.staff_ids.map(Number);
     const response = await authFetch(`${API_URL}/chat/conversations/create-group/`, {
       method: "POST",
@@ -1564,19 +2597,18 @@ export default function App() {
       setChatStatus(err.detail || "Ошибка создания группы.");
       return;
     }
-    setChatStatus("Группа создана.");
+    setChatStatus("");
     setGroupForm({ title: "", staff_ids: [] });
     setChatFabOpen(false);
     loadChats();
   }
 
-  async function createDirectChat(event) {
-    event.preventDefault();
-    if (!directStaffId) return setChatStatus("Выбери сотрудника.");
-    setChatStatus("Создаём чат...");
+  async function openDirectChatWithStaff(staffId) {
+    if (!staffId) return;
+    setChatStatus("");
     const response = await authFetch(`${API_URL}/chat/conversations/create-direct/`, {
       method: "POST",
-      body: JSON.stringify({ staff_id: Number(directStaffId) }),
+      body: JSON.stringify({ staff_id: Number(staffId) }),
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
@@ -1584,11 +2616,9 @@ export default function App() {
       return;
     }
     const conv = await response.json();
-    setChatStatus("Чат создан.");
-    setDirectStaffId("");
-    setChatFabOpen(false);
     await loadChats();
     setSelectedChatId(conv.id);
+    setChatFabOpen(false);
   }
 
   function displayConversationTitle(conversation) {
@@ -1596,6 +2626,8 @@ export default function App() {
     if (conversation.is_saved_messages) return "Избранное";
     const local = chatLocalPrefs[conversation.id];
     if (local?.title?.trim()) return local.title.trim();
+    const peer = conversationOrgDirectPeerTitle(conversation, me?.id);
+    if (peer) return peer;
     return conversation.title || `Чат #${conversation.id ?? ""}`;
   }
 
@@ -1646,14 +2678,25 @@ export default function App() {
     setChatInput("");
     setChatStatus("");
     const res = await authFetch(`${API_URL}/chat/messages/?conversation=${selectedChatId}`);
-    if (res.ok) setChatMessages(await res.json());
+    if (res.ok) {
+      const msgs = await res.json();
+      setChatMessages(msgs);
+      const last = msgs.length ? msgs[msgs.length - 1] : null;
+      if (last) {
+        await authFetch(`${API_URL}/chat/conversations/${selectedChatId}/mark-read/`, {
+          method: "POST",
+          body: JSON.stringify({ message_id: last.id }),
+        });
+        loadChats();
+      }
+    }
   }
 
   function persistChatVisualSettings() {
-    if (!selectedChatId) return;
+    if (chatSettingsForId == null) return;
     let prev = {};
     try {
-      prev = JSON.parse(localStorage.getItem(chatPrefsStorageKey(selectedChatId)) || "{}");
+      prev = JSON.parse(localStorage.getItem(chatPrefsStorageKey(chatSettingsForId)) || "{}");
     } catch {
       prev = {};
     }
@@ -1664,11 +2707,10 @@ export default function App() {
     else delete next.avatarDataUrl;
     if (chatSettingsWallpaper) next.wallpaper = chatSettingsWallpaper;
     else delete next.wallpaper;
-    if (chatMemberNames && Object.keys(chatMemberNames).length) next.memberNames = chatMemberNames;
-    else delete next.memberNames;
+    delete next.memberNames;
     try {
-      localStorage.setItem(chatPrefsStorageKey(selectedChatId), JSON.stringify(next));
-      setChatLocalPrefs((p) => ({ ...p, [selectedChatId]: next }));
+      localStorage.setItem(chatPrefsStorageKey(chatSettingsForId), JSON.stringify(next));
+      setChatLocalPrefs((p) => ({ ...p, [chatSettingsForId]: next }));
     } catch (_e) {
       setChatStatus("Не удалось сохранить настройки (лимит хранилища браузера).");
       return;
@@ -1679,30 +2721,30 @@ export default function App() {
     else if (chatSettingsNotify === "2h") notify.mutedUntil = Date.now() + 7200000;
     else if (chatSettingsNotify === "8h") notify.mutedUntil = Date.now() + 28800000;
     try {
-      if (Object.keys(notify).length) localStorage.setItem(chatNotifyStorageKey(selectedChatId), JSON.stringify(notify));
-      else localStorage.removeItem(chatNotifyStorageKey(selectedChatId));
+      if (Object.keys(notify).length) localStorage.setItem(chatNotifyStorageKey(chatSettingsForId), JSON.stringify(notify));
+      else localStorage.removeItem(chatNotifyStorageKey(chatSettingsForId));
     } catch {
       // ignore
     }
-    setChatSettingsOpen(false);
+    setChatSettingsForId(null);
     setChatStatus("");
     setCustomColorPickerOpen(false);
   }
 
   function clearChatVisualSettings() {
-    if (!selectedChatId) return;
-    localStorage.removeItem(chatNotifyStorageKey(selectedChatId));
-    localStorage.removeItem(chatPrefsStorageKey(selectedChatId));
+    if (chatSettingsForId == null) return;
+    localStorage.removeItem(chatNotifyStorageKey(chatSettingsForId));
+    localStorage.removeItem(chatPrefsStorageKey(chatSettingsForId));
     setChatLocalPrefs((prev) => {
       const copy = { ...prev };
-      delete copy[selectedChatId];
+      delete copy[chatSettingsForId];
       return copy;
     });
-    const sel = conversations.find((c) => c.id === selectedChatId);
-    setChatSettingsTitle(sel?.is_saved_messages ? "Избранное" : sel?.title || `Чат #${selectedChatId}`);
+    const sel = conversations.find((c) => c.id === chatSettingsForId);
+    setChatSettingsTitle(defaultChatListNameForConversation(sel, me?.id));
     setChatSettingsAvatar("");
     setChatSettingsWallpaper("#dfe9e2");
-    setChatSettingsOpen(false);
+    setChatSettingsForId(null);
   }
 
   function toggleGroupStaff(id) {
@@ -1956,13 +2998,18 @@ export default function App() {
 
   async function saveProviderOrganization(event) {
     event.preventDefault();
-    setProfileOrgStatus("Сохраняем адрес...");
-    const composed = composeAddressWithDetails(orgAddressForm.organization_address, orgAddressForm);
     const response = await authFetch(`${API_URL}/users/me/`, {
       method: "PATCH",
       body: JSON.stringify({
         organization_name: orgAddressForm.organization_name,
-        organization_address: composed,
+        organization_address:
+          simplifyCommaAddressLine((orgAddressForm.organization_address || "").trim()) ||
+          (orgAddressForm.organization_address || "").trim(),
+        organization_entrance: (orgAddressForm.entrance || "").trim(),
+        organization_floor: (orgAddressForm.floor || "").trim(),
+        organization_apartment: (orgAddressForm.apartment || "").trim(),
+        organization_intercom: (orgAddressForm.intercom || "").trim(),
+        organization_address_extra: (orgAddressForm.organization_address_details || "").trim(),
         organization_latitude: orgAddressForm.organization_latitude,
         organization_longitude: orgAddressForm.organization_longitude,
       }),
@@ -2004,7 +3051,9 @@ export default function App() {
       ...prev,
       latitude: lat.toFixed(6),
       longitude: lon.toFixed(6),
-      address: buildShortAddress(first.address) || first.display_name || prev.address,
+      address: simplifyCommaAddressLine(
+        buildShortAddress(first.address) || first.display_name || prev.address
+      ),
     }));
     const city = getCity(first.address);
     if (city) setDetectedCity(city);
@@ -2029,9 +3078,14 @@ export default function App() {
       method: "POST",
       body: JSON.stringify({
         title: locationForm.title,
-        address: locationForm.address,
+        address: locationForm.address.trim(),
         latitude: Number(locationForm.latitude),
         longitude: Number(locationForm.longitude),
+        entrance: (locationForm.entrance || "").trim(),
+        floor: (locationForm.floor || "").trim(),
+        apartment: (locationForm.apartment || "").trim(),
+        intercom: (locationForm.intercom || "").trim(),
+        address_details: (locationForm.address_details || "").trim(),
       }),
     });
     if (!response.ok) {
@@ -2039,7 +3093,7 @@ export default function App() {
       setBranchGeoStatus(err.detail || Object.values(err).flat().find(Boolean) || "Не удалось добавить филиал.");
       return;
     }
-    setLocationForm({ title: "", address: "", latitude: "55.751244", longitude: "37.618423" });
+    setLocationForm(emptyLocationFormState());
     setBranchGeoStatus("Филиал добавлен.");
     setOrgBranchAddOpen(false);
     destroyBranchAddMap();
@@ -2057,6 +3111,11 @@ export default function App() {
         address: locationForm.address.trim(),
         latitude: Number(locationForm.latitude),
         longitude: Number(locationForm.longitude),
+        entrance: (locationForm.entrance || "").trim(),
+        floor: (locationForm.floor || "").trim(),
+        apartment: (locationForm.apartment || "").trim(),
+        intercom: (locationForm.intercom || "").trim(),
+        address_details: (locationForm.address_details || "").trim(),
       }),
     });
     if (!response.ok) {
@@ -2224,9 +3283,16 @@ export default function App() {
                 key={template.id}
                 className={`template-chip ${selectedIntervalId === template.id ? "active" : ""}`}
                 draggable
-                onClick={() => {
+                onClick={(e) => {
                   setSelectedIntervalId(template.id);
-                  setIntervalPopoverId((prev) => (prev === template.id ? null : template.id));
+                  if (intervalPopoverId === template.id) {
+                    closeIntervalPopover();
+                    return;
+                  }
+                  const chip = e.currentTarget;
+                  intervalPopoverAnchorRef.current = chip;
+                  setIntervalPopoverFixedStyle(buildIntervalPopoverFixedStyle(chip));
+                  setIntervalPopoverId(template.id);
                 }}
                 onDragStart={() => {
                   setDragIntervalId(template.id);
@@ -2241,28 +3307,12 @@ export default function App() {
                     e.stopPropagation();
                     setSavedIntervals((prev) => prev.filter((x) => x.id !== template.id));
                     if (selectedIntervalId === template.id) setSelectedIntervalId(null);
-                    if (intervalPopoverId === template.id) setIntervalPopoverId(null);
+                    if (intervalPopoverId === template.id) closeIntervalPopover();
                   }}
                   aria-label="Удалить сохранённый интервал"
                 >
                   ×
                 </button>
-                {intervalPopoverId === template.id && (
-                  <div className="template-popover" onClick={(e) => e.stopPropagation()}>
-                    <button type="button" className="small-btn" onClick={() => { setSelectedIntervalId(template.id); setIntervalPopoverId(null); }}>
-                      Выбрать
-                    </button>
-                    <button type="button" className="small-btn" onClick={() => { applyIntervalByPattern("daily", template); setIntervalPopoverId(null); }}>
-                      Применить на каждый день
-                    </button>
-                    <button type="button" className="small-btn" onClick={() => { applyIntervalByPattern("workweek", template); setIntervalPopoverId(null); }}>
-                      Применить на рабочую неделю
-                    </button>
-                    <button type="button" className="small-btn" onClick={() => { applyIntervalByPattern("weekend", template); setIntervalPopoverId(null); }}>
-                      Применить на выходные
-                    </button>
-                  </div>
-                )}
               </div>
             ))}
           </div>
@@ -2346,6 +3396,36 @@ export default function App() {
             );
           })}
         </div>
+        {intervalPopoverId != null &&
+          intervalPopoverFixedStyle &&
+          typeof document !== "undefined" &&
+          (() => {
+            const popTemplate = savedIntervals.find((t) => t.id === intervalPopoverId);
+            if (!popTemplate) return null;
+            return createPortal(
+              <div
+                className="template-popover template-popover--portal"
+                style={intervalPopoverFixedStyle}
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-label="Действия с интервалом"
+              >
+                <button type="button" className="small-btn" onClick={() => { setSelectedIntervalId(popTemplate.id); closeIntervalPopover(); }}>
+                  Выбрать
+                </button>
+                <button type="button" className="small-btn" onClick={() => { applyIntervalByPattern("daily", popTemplate); closeIntervalPopover(); }}>
+                  Применить на каждый день
+                </button>
+                <button type="button" className="small-btn" onClick={() => { applyIntervalByPattern("workweek", popTemplate); closeIntervalPopover(); }}>
+                  Применить на рабочую неделю
+                </button>
+                <button type="button" className="small-btn" onClick={() => { applyIntervalByPattern("weekend", popTemplate); closeIntervalPopover(); }}>
+                  Применить на выходные
+                </button>
+              </div>,
+              document.body
+            );
+          })()}
       </section>
     );
   }
@@ -2403,14 +3483,47 @@ export default function App() {
     );
   }
 
+  const chatsTabUnreadChatsCount = useMemo(
+    () => conversations.filter((c) => (Number(c.unread_message_count) || 0) > 0).length,
+    [conversations],
+  );
+
+  const orgFolderUnreadChatsCount = useMemo(
+    () =>
+      conversations.filter((c) => !c.is_client_correspondence && (Number(c.unread_message_count) || 0) > 0).length,
+    [conversations],
+  );
+
+  const clientsFolderUnreadChatsCount = useMemo(
+    () =>
+      conversations.filter((c) => c.is_client_correspondence && (Number(c.unread_message_count) || 0) > 0).length,
+    [conversations],
+  );
+
   const filteredSidebarChats = useMemo(() => {
-    let list = conversations.filter((c) => (chatFolder === "clients" ? c.is_client_correspondence : !c.is_client_correspondence));
+    const folder = chatFolder;
+    let list = conversations.filter((c) => (folder === "clients" ? c.is_client_correspondence : !c.is_client_correspondence));
     const q = chatSearchQuery.trim().toLowerCase();
     if (q) {
       list = list.filter((c) => displayConversationTitle(c).toLowerCase().includes(q));
     }
-    return list;
-  }, [conversations, chatFolder, chatSearchQuery, chatLocalPrefs]);
+    const pins = folder === "clients" ? chatPins.clients : chatPins.org;
+    const pinSet = new Set(pins.map(Number));
+    const lastTs = (c) => {
+      const t = c.last_message?.created_at;
+      if (!t) return 0;
+      const x = new Date(t).getTime();
+      return Number.isNaN(x) ? 0 : x;
+    };
+    const pinnedList = pins.map((id) => list.find((c) => Number(c.id) === Number(id))).filter(Boolean);
+    const unpinned = list.filter((c) => !pinSet.has(Number(c.id)));
+    unpinned.sort((a, b) => {
+      const d = lastTs(b) - lastTs(a);
+      if (d !== 0) return d;
+      return Number(b.id) - Number(a.id);
+    });
+    return [...pinnedList, ...unpinned];
+  }, [conversations, chatFolder, chatSearchQuery, chatLocalPrefs, chatPins]);
 
   function renderGeneralSettings() {
     return (
@@ -2457,7 +3570,7 @@ export default function App() {
       <section className="card profile-card">
         <h2>Организация</h2>
         {me?.role === "staff" && staffEffectivePerms.can_delegate_permissions && (
-          <p className="muted">Адрес организации и филиалы настраивает руководитель. Здесь вы можете вести команду, должности и права доступа.</p>
+          <p className="muted">Адрес организации и филиалы настраивает руководитель. Команду, должности и права — в разделе «Сотрудники».</p>
         )}
         {me?.role === "provider" && (
           <>
@@ -2465,9 +3578,9 @@ export default function App() {
             {!orgMainEditOpen ? (
               <div className="org-main-display">
                 <p className="org-display-line"><strong>{orgAddressForm.organization_name || "—"}</strong></p>
-                <p className="org-display-line">{me?.organization_address || "Адрес не указан."}</p>
+                <p className="org-display-line">{composeOrgDisplayFromMe(me) || "Адрес не указан."}</p>
                 <div id="profile-address-map" className="map-box" />
-                <button type="button" className="ghost-btn" onClick={() => setOrgMainEditOpen(true)}>Изменить</button>
+                <button type="button" className="ghost-btn" onClick={() => { syncOrgAddressFormFromMe(); setOrgMainEditOpen(true); }}>Изменить</button>
                 <p className="status">{profileOrgStatus}</p>
               </div>
             ) : (
@@ -2541,7 +3654,7 @@ export default function App() {
                   if (next) {
                     setSelectedOrgBranchId(null);
                     setOrgBranchEditOpen(false);
-                    setLocationForm({ title: "", address: "", latitude: "55.751244", longitude: "37.618423" });
+                    setLocationForm(emptyLocationFormState());
                     setBranchGeoStatus("");
                     setAddressSuggestions([]);
                   }
@@ -2579,6 +3692,17 @@ export default function App() {
                 )}
                 <button type="button" className="ghost-btn" onClick={geocodeBranchAddress}>Найти адрес на карте</button>
                 <div id="branch-add-map" className="map-box" />
+                <div className="address-details-grid">
+                  <input placeholder="Подъезд" value={locationForm.entrance} onChange={(e) => setLocationForm({ ...locationForm, entrance: e.target.value })} />
+                  <input placeholder="Этаж" value={locationForm.floor} onChange={(e) => setLocationForm({ ...locationForm, floor: e.target.value })} />
+                  <input placeholder="Квартира/офис" value={locationForm.apartment} onChange={(e) => setLocationForm({ ...locationForm, apartment: e.target.value })} />
+                  <input placeholder="Домофон" value={locationForm.intercom} onChange={(e) => setLocationForm({ ...locationForm, intercom: e.target.value })} />
+                </div>
+                <input
+                  placeholder="Доп. ориентир (необязательно)"
+                  value={locationForm.address_details}
+                  onChange={(e) => setLocationForm({ ...locationForm, address_details: e.target.value })}
+                />
                 <button type="submit">Сохранить филиал</button>
               </form>
             )}
@@ -2596,7 +3720,7 @@ export default function App() {
                     }}
                   >
                     <span className="org-branch-pick-title">{loc.title}</span>
-                    <span className="org-branch-pick-addr muted">{loc.address}</span>
+                    <span className="org-branch-pick-addr muted">{composeBranchDisplay(loc)}</span>
                   </button>
                 </li>
               ))}
@@ -2608,7 +3732,7 @@ export default function App() {
               return (
                 <div className="org-branch-detail">
                   <h4>{br.title}</h4>
-                  <p className="org-branch-detail-addr">{br.address}</p>
+                  <p className="org-branch-detail-addr">{composeBranchDisplay(br)}</p>
                   {!orgBranchEditOpen ? (
                     <>
                       <div id="branch-detail-map" className="map-box" />
@@ -2619,12 +3743,7 @@ export default function App() {
                           onClick={() => {
                             setAddressSuggestions([]);
                             setOrgBranchEditOpen(true);
-                            setLocationForm({
-                              title: br.title,
-                              address: br.address,
-                              latitude: String(br.latitude),
-                              longitude: String(br.longitude),
-                            });
+                            setLocationForm(parseBranchRecordForForm(br));
                           }}
                         >
                           Изменить
@@ -2660,6 +3779,17 @@ export default function App() {
                       )}
                       <button type="button" className="ghost-btn" onClick={geocodeBranchAddress}>Найти адрес на карте</button>
                       <div id="branch-edit-map" className="map-box" />
+                      <div className="address-details-grid">
+                        <input placeholder="Подъезд" value={locationForm.entrance} onChange={(e) => setLocationForm({ ...locationForm, entrance: e.target.value })} />
+                        <input placeholder="Этаж" value={locationForm.floor} onChange={(e) => setLocationForm({ ...locationForm, floor: e.target.value })} />
+                        <input placeholder="Квартира/офис" value={locationForm.apartment} onChange={(e) => setLocationForm({ ...locationForm, apartment: e.target.value })} />
+                        <input placeholder="Домофон" value={locationForm.intercom} onChange={(e) => setLocationForm({ ...locationForm, intercom: e.target.value })} />
+                      </div>
+                      <input
+                        placeholder="Доп. ориентир (необязательно)"
+                        value={locationForm.address_details}
+                        onChange={(e) => setLocationForm({ ...locationForm, address_details: e.target.value })}
+                      />
                       <div className="row-2">
                         <button type="submit">Сохранить</button>
                         <button
@@ -2667,12 +3797,7 @@ export default function App() {
                           className="ghost-btn"
                           onClick={() => {
                             setOrgBranchEditOpen(false);
-                            setLocationForm({
-                              title: br.title,
-                              address: br.address,
-                              latitude: String(br.latitude),
-                              longitude: String(br.longitude),
-                            });
+                            setLocationForm(parseBranchRecordForForm(br));
                           }}
                         >
                           Отмена
@@ -2686,14 +3811,28 @@ export default function App() {
             <p className="status">{branchGeoStatus}</p>
           </>
         )}
+      </section>
+    );
+  }
 
-        <h3>Сотрудники и права</h3>
-        <p className="muted">Руководитель настраивает всё. Сотрудник с правом «Может настраивать права других» видит этот блок и может менять права коллег.</p>
+  function renderStaffManagement() {
+    if (!canManageOrgSettings) return null;
+    return (
+      <section className="card profile-card">
+        <h2>Сотрудники</h2>
+        {me?.role === "staff" && staffEffectivePerms.can_delegate_permissions && (
+          <p className="muted">Адрес организации и филиалы настраивает руководитель в разделе «Организация». Здесь — команда, должности и права доступа.</p>
+        )}
+        {me?.role === "provider" && (
+          <p className="muted">Руководитель настраивает всё. Сотрудник с правом «Может настраивать права других» видит этот раздел и может менять права коллег.</p>
+        )}
         {me?.role === "provider" && (
           <form onSubmit={inviteStaff} className="form">
-            <input type="email" placeholder="Email сотрудника" value={staffInviteForm.invite_email} onChange={(e) => setStaffInviteForm({ ...staffInviteForm, invite_email: e.target.value })} />
-            <input placeholder="Или логин сотрудника" value={staffInviteForm.invite_username} onChange={(e) => setStaffInviteForm({ ...staffInviteForm, invite_username: e.target.value })} />
-            <input placeholder="Как показывать клиентам (необязательно)" value={staffInviteForm.display_name} onChange={(e) => setStaffInviteForm({ ...staffInviteForm, display_name: e.target.value })} />
+            <input
+              placeholder="Email или логин сотрудника"
+              value={staffInviteForm.invite_identifier}
+              onChange={(e) => setStaffInviteForm({ ...staffInviteForm, invite_identifier: e.target.value })}
+            />
             <button type="submit">Добавить сотрудника</button>
           </form>
         )}
@@ -2717,44 +3856,64 @@ export default function App() {
               ["manage_staff", "Добавление сотрудников"],
               ["can_delegate_permissions", "Может настраивать права других"],
             ];
+            const rowName = formatStaffClientName(link.staff_user);
+            const permsOpen = staffPermsOpenId === link.id;
             return (
               <li key={link.id} className="staff-block">
                 <div className="staff-row">
                   <span>
-                    {link.display_name || link.staff_user?.username || `id ${link.staff}`}{" "}
-                    <span className="muted">({link.staff_user?.email || link.staff_user?.username}){link.is_active ? "" : " — отключён"}</span>
+                    {rowName}
+                    {link.invitation_status === "pending"
+                      ? " — ожидает подтверждения"
+                      : link.is_active
+                        ? ""
+                        : " — отключён"}
                   </span>
-                  {me?.role === "provider" && link.is_active && (
-                    <button type="button" className="small-btn ghost-btn" onClick={() => deactivateStaff(link.id)}>Отключить</button>
-                  )}
                 </div>
-                <div className="staff-job-row">
-                  <label className="muted small-label">Должность</label>
-                  <input
-                    className="job-title-input"
-                    placeholder="Например, администратор"
-                    defaultValue={link.job_title || ""}
-                    onBlur={(e) => {
-                      const v = e.target.value.trim();
-                      if (v !== (link.job_title || "").trim()) patchStaffMeta(link.id, { job_title: v });
-                    }}
-                  />
+                <div className="staff-job-deact-row">
+                  <div className="staff-job-col">
+                    <label className="muted small-label">Должность</label>
+                    <input
+                      className="job-title-input"
+                      placeholder="Например, администратор"
+                      defaultValue={link.job_title || ""}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v !== (link.job_title || "").trim()) patchStaffMeta(link.id, { job_title: v });
+                      }}
+                    />
+                  </div>
+                  {me?.role === "provider" && link.is_active && link.invitation_status !== "pending" && (
+                    <div className="staff-deact-cell">
+                      <button type="button" className="staff-deactivate-btn ghost-btn" onClick={() => deactivateStaff(link.id)}>
+                        Отключить
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {link.is_active && (me?.role === "provider" || staffEffectivePerms.can_delegate_permissions) && (
                   <div className="staff-perms">
-                    <div className="muted small-label">Права доступа</div>
-                    <div className="perm-grid">
-                      {permLabels.map(([key, label]) => (
-                        <label key={key} className="checkbox perm-item">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(permBase[key])}
-                            onChange={() => toggleStaffPermission(link, key)}
-                          />
-                          {label}
-                        </label>
-                      ))}
-                    </div>
+                    <button
+                      type="button"
+                      className="staff-perms-toggle muted small-label"
+                      onClick={() => setStaffPermsOpenId((id) => (id === link.id ? null : link.id))}
+                    >
+                      Права доступа{permsOpen ? " ▲" : " ▼"}
+                    </button>
+                    {permsOpen && (
+                      <div className="perm-grid">
+                        {permLabels.map(([key, label]) => (
+                          <label key={key} className="checkbox perm-item">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(permBase[key])}
+                              onChange={() => toggleStaffPermission(link, key)}
+                            />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </li>
@@ -2766,6 +3925,52 @@ export default function App() {
     );
   }
 
+  const selectedConv = useMemo(
+    () => conversations.find((c) => Number(c.id) === Number(selectedChatId)),
+    [conversations, selectedChatId],
+  );
+
+  const chatPeerPresenceLine = useMemo(() => {
+    if (!selectedConv?.org_direct_peer_status) return "";
+    const s = selectedConv.org_direct_peer_status;
+    if (s.is_online) return "в сети";
+    if (s.last_seen_at) return formatLastSeenLabel(s.last_seen_at);
+    return "не в сети";
+  }, [selectedConv]);
+
+  const chatMsgSearchHits = useMemo(() => {
+    const q = chatMsgSearchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return chatMessages.filter((m) => (m.text || "").toLowerCase().includes(q));
+  }, [chatMessages, chatMsgSearchQuery]);
+
+  useEffect(() => {
+    setChatMsgSearchActiveIdx((i) => {
+      if (!chatMsgSearchHits.length) return 0;
+      return Math.min(i, chatMsgSearchHits.length - 1);
+    });
+  }, [chatMsgSearchHits]);
+
+  useEffect(() => {
+    if (!chatMsgSearchOpen) return;
+    const hit = chatMsgSearchHits[chatMsgSearchActiveIdx];
+    if (!hit) return;
+    scrollChatToMessageId(hit.id);
+  }, [chatMsgSearchActiveIdx, chatMsgSearchHits, chatMsgSearchOpen]);
+
+  useEffect(() => {
+    if (chatMsgSearchOpen) {
+      requestAnimationFrame(() => chatMsgSearchInputRef.current?.focus());
+    }
+  }, [chatMsgSearchOpen]);
+
+  useEffect(() => {
+    if (!selectedChatId) {
+      setChatMsgSearchOpen(false);
+      setChatMsgSearchQuery("");
+      setChatMsgSearchActiveIdx(0);
+    }
+  }, [selectedChatId]);
   const activeChatWallpaper = selectedChatId ? chatLocalPrefs[selectedChatId]?.wallpaper : null;
   const tgMainStyle = activeChatWallpaper
     ? String(activeChatWallpaper).includes("gradient")
@@ -2773,7 +3978,7 @@ export default function App() {
       : { backgroundColor: activeChatWallpaper }
     : undefined;
   const tgMainDark = activeChatWallpaper === "#1e2a24";
-  const centeredWorkspace = accessToken && ["profile", "organization", "settings"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings"].includes(currentView);
 
   return (
     <div className={`page${accessToken ? " page-logged" : ""}`}>
@@ -2791,7 +3996,24 @@ export default function App() {
         <div>{verifyStatus && <p className="verify-note">{verifyStatus}</p>}</div>
         {accessToken && (
           <div className="menu-wrap">
-            <button className="menu-btn" onClick={() => setMenuOpen((v) => !v)}>Меню</button>
+            <div className="menu-btn-wrap">
+              <button
+                type="button"
+                className="menu-btn menu-btn--icon"
+                aria-label="Меню"
+                title="Меню"
+                onClick={() => setMenuOpen((v) => !v)}
+              >
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+                  <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" />
+                </svg>
+              </button>
+              {(chatActivity?.badge_count ?? 0) > 0 && (
+                <span className="menu-nav-badge" aria-hidden="true">
+                  {chatActivity.badge_count > 99 ? "99+" : chatActivity.badge_count}
+                </span>
+              )}
+            </div>
             {menuOpen && (
               <div className="menu-dropdown">
                 <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("profile"); setMenuOpen(false); }}>
@@ -2799,6 +4021,9 @@ export default function App() {
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
                   </span>
                   <span className="menu-item-label">Личный кабинет</span>
+                  {(chatActivity?.badge_count ?? 0) > 0 && (
+                    <span className="menu-item-badge">{chatActivity.badge_count > 99 ? "99+" : chatActivity.badge_count}</span>
+                  )}
                 </button>
                 <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("settings"); setMenuOpen(false); }}>
                   <span className="menu-item-icon" aria-hidden="true">
@@ -2806,6 +4031,14 @@ export default function App() {
                   </span>
                   <span className="menu-item-label">Настройки</span>
                 </button>
+                {canManageOrgSettings && (
+                  <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("staff"); setMenuOpen(false); }}>
+                    <span className="menu-item-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" /></svg>
+                    </span>
+                    <span className="menu-item-label">Сотрудники</span>
+                  </button>
+                )}
                 {canManageOrgSettings && (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("organization"); setMenuOpen(false); }}>
                     <span className="menu-item-icon" aria-hidden="true">
@@ -2837,7 +4070,23 @@ export default function App() {
           <button type="button" className={currentView === "bookings" ? "active" : ""} onClick={() => setCurrentView("bookings")}>Записи</button>
           <button type="button" className={currentView === "intervals" ? "active" : ""} onClick={() => setCurrentView("intervals")}>Календарь интервалов</button>
           <button type="button" className={currentView === "services" ? "active" : ""} onClick={() => setCurrentView("services")}>Услуги и категории</button>
-          <button type="button" className={currentView === "chats" ? "active" : ""} onClick={() => setCurrentView("chats")}>Чаты</button>
+          <button
+            type="button"
+            className={["app-subnav-chat", currentView === "chats" && "active"].filter(Boolean).join(" ")}
+            onClick={() => setCurrentView("chats")}
+          >
+            <span className="app-subnav-chat-inner" aria-hidden="true">
+              <svg className="app-subnav-chat-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
+              </svg>
+              <span>Чаты</span>
+            </span>
+            {chatsTabUnreadChatsCount > 0 && (
+              <span className="app-subnav-badge" aria-hidden="true">
+                {chatsTabUnreadChatsCount > 99 ? "99+" : chatsTabUnreadChatsCount}
+              </span>
+            )}
+          </button>
         </nav>
       )}
 
@@ -2847,7 +4096,23 @@ export default function App() {
             <button type="button" className={currentView === "bookings" ? "active" : ""} onClick={() => setCurrentView("bookings")}>Записи</button>
           )}
           {staffHasPerm("manage_chats") && (
-            <button type="button" className={currentView === "chats" ? "active" : ""} onClick={() => setCurrentView("chats")}>Чаты</button>
+            <button
+              type="button"
+              className={["app-subnav-chat", currentView === "chats" && "active"].filter(Boolean).join(" ")}
+              onClick={() => setCurrentView("chats")}
+            >
+              <span className="app-subnav-chat-inner" aria-hidden="true">
+                <svg className="app-subnav-chat-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
+                </svg>
+                <span>Чаты</span>
+              </span>
+              {chatsTabUnreadChatsCount > 0 && (
+                <span className="app-subnav-badge" aria-hidden="true">
+                  {chatsTabUnreadChatsCount > 99 ? "99+" : chatsTabUnreadChatsCount}
+                </span>
+              )}
+            </button>
           )}
         </nav>
       )}
@@ -2960,8 +4225,57 @@ export default function App() {
 
         {accessToken && currentView === "profile" && (
           <section className="card profile-card">
-            <h2>Личный кабинет</h2>
+            <div className="profile-title-row">
+              <h2 className="profile-title-h2">Личный кабинет</h2>
+              {(chatActivity?.badge_count ?? 0) > 0 && (
+                <span className="profile-title-badge" title="Есть уведомления">
+                  {chatActivity.badge_count > 99 ? "99+" : chatActivity.badge_count}
+                </span>
+              )}
+            </div>
             <p>Вы вошли как: <strong>{fullName}</strong></p>
+            {(me?.role === "client" || me?.role === "staff") && (chatActivity?.pending_staff_invites?.length ?? 0) > 0 && (
+              <div className="chat-invites-banner">
+                {chatActivity.pending_staff_invites.map((inv) => (
+                  <div key={inv.id} className="chat-invite-card">
+                    <p>
+                      Приглашение присоединиться к организации{" "}
+                      <strong>{inv.provider_user?.organization_name || inv.provider_user?.username || "—"}</strong>.
+                    </p>
+                    <div className="chat-invite-actions">
+                      <button type="button" className="invite-accept-btn" onClick={() => acceptStaffInvite(inv.id)}>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+                          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                        </svg>
+                        Подтвердить
+                      </button>
+                      <button type="button" className="invite-reject-btn" onClick={() => rejectStaffInvite(inv.id)}>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+                          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                        </svg>
+                        Отклонить
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {(chatActivity?.notifications?.length ?? 0) > 0 && (
+              <div className="chat-notif-banner">
+                {chatActivity.notifications.map((n) => (
+                  <div key={n.id} className="chat-notif-card">
+                    <p>
+                      {n.kind === "staff_invite_accepted"
+                        ? `Сотрудник ${n.payload?.staff_name || ""} принял приглашение.`
+                        : n.kind}
+                    </p>
+                    <button type="button" className="ghost-btn" onClick={() => markInAppNotificationsRead([n.id])}>
+                      Понятно
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <form onSubmit={updateProfile} className="form">
               <h3>Личная информация</h3>
               <input value={profileForm.last_name} onChange={(e) => setProfileForm({ ...profileForm, last_name: e.target.value })} placeholder="Фамилия" />
@@ -2994,13 +4308,13 @@ export default function App() {
 
         {accessToken && currentView === "settings" && renderGeneralSettings()}
         {accessToken && currentView === "organization" && canManageOrgSettings && renderOrganizationSettings()}
+        {accessToken && currentView === "staff" && canManageOrgSettings && renderStaffManagement()}
 
         {accessToken && me?.role === "provider" && currentView === "bookings" && renderBookingsBlock("Записи клиентов")}
         {accessToken && me?.role === "provider" && currentView === "intervals" && renderSlotCalendar(true)}
         {accessToken && me?.role === "staff" && currentView === "bookings" && staffHasPerm("manage_bookings") && renderBookingsBlock("Записи")}
         {accessToken && (me?.role === "provider" || me?.role === "staff") && currentView === "chats" && (
-          <section className="card full-width">
-            <h2>Чаты внутри организации</h2>
+          <section className="card full-width tg-chats-card">
             <div className="tg-body">
               <aside className="tg-sidebar">
                 <div className="tg-sidebar-head">
@@ -3020,30 +4334,20 @@ export default function App() {
                               required
                             />
                             <div className="staff-pick-grid">
-                              {orgStaff.filter((l) => l.is_active).map((link) => (
+                              {orgStaff
+                                .filter((l) => l.is_active && (l.invitation_status === "accepted" || !l.invitation_status))
+                                .map((link) => (
                                 <label key={link.id} className="checkbox">
                                   <input
                                     type="checkbox"
                                     checked={groupForm.staff_ids.includes(link.staff)}
                                     onChange={() => toggleGroupStaff(link.staff)}
                                   />
-                                  {link.display_name || link.staff_user?.username || `id ${link.staff}`}
+                                  {formatStaffFullName(link.staff_user) || `id ${link.staff}`}
                                 </label>
                               ))}
                             </div>
                             <button type="submit">Создать группу</button>
-                          </form>
-                          <form onSubmit={createDirectChat} className="form tg-popover-form">
-                            <div className="tg-popover-title">Личный чат</div>
-                            <select value={directStaffId} onChange={(e) => setDirectStaffId(e.target.value)} required>
-                              <option value="">Выбери сотрудника</option>
-                              {orgStaff.filter((l) => l.is_active).map((link) => (
-                                <option key={link.id} value={link.staff}>
-                                  {link.display_name || link.staff_user?.username}
-                                </option>
-                              ))}
-                            </select>
-                            <button type="submit">Начать чат</button>
                           </form>
                         </div>
                       )}
@@ -3058,76 +4362,310 @@ export default function App() {
                   onChange={(e) => setChatSearchQuery(e.target.value)}
                 />
                 <div className="tg-folder-tabs">
-                  <button type="button" className={chatFolder === "org" ? "active" : ""} onClick={() => setChatFolder("org")}>Организация</button>
-                  <button type="button" className={chatFolder === "clients" ? "active" : ""} onClick={() => setChatFolder("clients")}>Клиенты</button>
+                  <button type="button" className={chatFolder === "org" ? "active" : ""} onClick={() => setChatFolder("org")}>
+                    <span className="tg-folder-tab-label">Организация</span>
+                    {orgFolderUnreadChatsCount > 0 && (
+                      <span className="tg-folder-tab-badge">{orgFolderUnreadChatsCount > 99 ? "99+" : orgFolderUnreadChatsCount}</span>
+                    )}
+                  </button>
+                  <button type="button" className={chatFolder === "clients" ? "active" : ""} onClick={() => setChatFolder("clients")}>
+                    <span className="tg-folder-tab-label">Клиенты</span>
+                    {clientsFolderUnreadChatsCount > 0 && (
+                      <span className="tg-folder-tab-badge">{clientsFolderUnreadChatsCount > 99 ? "99+" : clientsFolderUnreadChatsCount}</span>
+                    )}
+                  </button>
                 </div>
-                {chatFolder === "org" && me?.role === "provider" && (
-                  <div className="tg-org-block">
-                    <div className="tg-org-label">Сотрудники</div>
-                    <div className="tg-org-chips">
-                      {orgStaff.filter((l) => l.is_active).map((link) => (
+                <div className="tg-chat-list">
+                  {filteredSidebarChats.map((c) => {
+                    const peerM = chatFolder === "org" ? getOrgDmPeerMember(c, me?.id) : null;
+                    const showPresenceDot = Boolean(peerM) && !c.is_group && !c.is_saved_messages && !c.is_client_correspondence;
+                    const pinsList = chatFolder === "clients" ? chatPins.clients : chatPins.org;
+                    const isPinned = pinsList.map(Number).includes(Number(c.id));
+                    const unreadN = Number(c.unread_message_count) || 0;
+                    return (
+                    <div
+                      key={c.id}
+                      draggable={isPinned}
+                      onDragStart={(e) => {
+                        if (!isPinned) {
+                          e.preventDefault();
+                          return;
+                        }
+                        setChatDragPinConvId(c.id);
+                        try {
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", String(c.id));
+                        } catch {
+                          // ignore
+                        }
+                      }}
+                      onDragEnd={() => setChatDragPinConvId(null)}
+                      onDragOver={(e) => {
+                        if (chatDragPinConvId != null && isPinned) e.preventDefault();
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (chatDragPinConvId == null || !isPinned) return;
+                        reorderPinnedChats(chatFolder, chatDragPinConvId, c.id);
+                        setChatDragPinConvId(null);
+                      }}
+                      className={[
+                        "tg-chat-item-row",
+                        selectedChatId === c.id && "active",
+                        c.is_saved_messages && "saved",
+                        unreadN > 0 && "tg-chat-item-row--unread",
+                        isPinned && "tg-chat-item-row--pinned",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
+                      <button
+                        type="button"
+                        className="tg-chat-item-main"
+                        onClick={() => setSelectedChatId(c.id)}
+                      >
+                        <span className="tg-avatar-wrap">
+                          <span className={`tg-avatar ${c.is_saved_messages ? "tg-avatar-saved" : ""}`}>
+                            {chatLocalPrefs[c.id]?.avatarDataUrl ? (
+                              <img src={chatLocalPrefs[c.id].avatarDataUrl} alt="" className="tg-avatar-img" />
+                            ) : (
+                              conversationAvatarLetter(c)
+                            )}
+                          </span>
+                          {showPresenceDot && (
+                            <span className={`tg-presence-dot ${peerM.is_online ? "tg-presence-dot--on" : "tg-presence-dot--off"}`} title={peerM.is_online ? "в сети" : "не в сети"} />
+                          )}
+                        </span>
+                        <span className="tg-chat-item-text">
+                          <span className="tg-chat-item-title">{displayConversationTitle(c)}</span>
+                          <span className="tg-chat-item-sub">
+                            {c.last_message?.text ? `${(c.last_message.text || "").slice(0, 42)}${(c.last_message.text || "").length > 42 ? "…" : ""}` : c.is_group ? "Группа" : c.is_saved_messages ? "Личный раздел" : "Нет сообщений"}
+                          </span>
+                        </span>
+                      </button>
+                      {unreadN > 0 && (
+                        <span className="tg-chat-unread-badge" aria-label={`Непрочитано сообщений: ${unreadN}`}>
+                          {unreadN > 99 ? "99+" : unreadN}
+                        </span>
+                      )}
+                      <div className="tg-chat-row-actions">
                         <button
-                          key={link.id}
                           type="button"
-                          className="tg-org-chip"
-                          onClick={() => {
-                            setDirectStaffId(String(link.staff));
-                            setChatFabOpen(true);
+                          className={["tg-chat-row-icon-btn", isPinned && "tg-chat-row-icon-btn--on"].filter(Boolean).join(" ")}
+                          aria-label={isPinned ? "Открепить" : "Закрепить"}
+                          title={isPinned ? "Открепить" : "Закрепить (до 5)"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            togglePinChatForFolder(c.id, chatFolder);
                           }}
                         >
-                          {link.display_name || link.staff_user?.username}
+                          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                            <path
+                              fill="currentColor"
+                              d="M16 12V4h-2V2h-4v2H8v8l-4 4v2h16v-2l-4-4zm-6 0V5h4v7h-4zm-2 9h8v2H8v-2z"
+                            />
+                          </svg>
                         </button>
-                      ))}
+                        <button
+                          type="button"
+                          className="tg-chat-row-icon-btn"
+                          aria-label="Настройки чата"
+                          title="Настройки чата"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setChatSettingsForId(c.id);
+                          }}
+                        >
+                          <span className="tg-chat-row-dots" aria-hidden="true">
+                            ⋯
+                          </span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
-                <div className="tg-chat-list">
-                  {filteredSidebarChats.map((c) => (
-                    <button
-                      type="button"
-                      key={c.id}
-                      className={`tg-chat-item ${selectedChatId === c.id ? "active" : ""} ${c.is_saved_messages ? "saved" : ""}`}
-                      onClick={() => setSelectedChatId(c.id)}
-                    >
-                      <span className={`tg-avatar ${c.is_saved_messages ? "tg-avatar-saved" : ""}`}>
-                        {chatLocalPrefs[c.id]?.avatarDataUrl ? (
-                          <img src={chatLocalPrefs[c.id].avatarDataUrl} alt="" className="tg-avatar-img" />
-                        ) : (
-                          conversationAvatarLetter(c)
-                        )}
-                      </span>
-                      <span className="tg-chat-item-text">
-                        <span className="tg-chat-item-title">{displayConversationTitle(c)}</span>
-                        <span className="tg-chat-item-sub">
-                          {c.last_message?.text ? `${(c.last_message.text || "").slice(0, 42)}${(c.last_message.text || "").length > 42 ? "…" : ""}` : c.is_group ? "Группа" : c.is_saved_messages ? "Личный раздел" : "Диалог"}
-                        </span>
-                      </span>
-                    </button>
-                  ))}
+                  );
+                  })}
                 </div>
                 {filteredSidebarChats.length === 0 && <p className="tg-empty">{chatFolder === "clients" ? "Пока нет чатов с клиентами — они появятся здесь автоматически." : "Нет чатов в этой папке."}</p>}
               </aside>
               <div className={`tg-main ${tgMainDark ? "tg-main--dark" : ""}`} style={tgMainStyle}>
                 <div className="tg-main-head">
-                  {selectedChatId ? displayConversationTitle(conversations.find((c) => c.id === selectedChatId)) : "Выбери чат"}
-                  {selectedChatId && (
-                    <button type="button" className="tg-gear" onClick={() => setChatSettingsOpen(true)}>⚙</button>
+                  {selectedChatId ? (
+                    <div className="tg-main-head-bar">
+                      <div className="tg-main-head-left">
+                        <div className="tg-attach-wrap" ref={tgAttachMenuRef}>
+                          <button
+                            type="button"
+                            className="tg-head-icon-btn"
+                            aria-label="Вложения"
+                            title="Вложения"
+                            onClick={() => setChatAttachMenuOpen((v) => !v)}
+                          >
+                            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                              <path
+                                fill="currentColor"
+                                d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S5 2.79 5 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"
+                              />
+                            </svg>
+                          </button>
+                          {chatAttachMenuOpen && (
+                            <div className="tg-attach-menu" role="menu">
+                              <button type="button" className="tg-attach-menu-item" onClick={() => { setChatStatus("Фото или видео — скоро"); setChatAttachMenuOpen(false); }}>
+                                Фото или видео
+                              </button>
+                              <button type="button" className="tg-attach-menu-item" onClick={() => { setChatStatus("Файл — скоро"); setChatAttachMenuOpen(false); }}>
+                                Файл
+                              </button>
+                              <button type="button" className="tg-attach-menu-item" onClick={() => { setChatStatus("Ссылка — скоро"); setChatAttachMenuOpen(false); }}>
+                                Ссылка
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="tg-main-head-center">
+                        <div className="tg-main-title">
+                          {displayConversationTitle(conversations.find((c) => c.id === selectedChatId))}
+                        </div>
+                        {chatPeerPresenceLine ? <div className="tg-main-head-presence">{chatPeerPresenceLine}</div> : null}
+                      </div>
+                      <div className="tg-main-head-right">
+                        <div className="tg-msg-search-wrap" ref={tgMsgSearchWrapRef}>
+                          <button
+                            type="button"
+                            className={["tg-head-icon-btn", chatMsgSearchOpen && "tg-head-icon-btn--on"].filter(Boolean).join(" ")}
+                            aria-label="Поиск в чате"
+                            aria-expanded={chatMsgSearchOpen}
+                            title="Поиск по сообщениям"
+                            onClick={() => {
+                              if (chatMsgSearchOpen) {
+                                setChatMsgSearchOpen(false);
+                                setChatMsgSearchQuery("");
+                                setChatMsgSearchActiveIdx(0);
+                              } else {
+                                setChatMsgSearchOpen(true);
+                              }
+                            }}
+                          >
+                            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                              <path
+                                fill="currentColor"
+                                d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
+                              />
+                            </svg>
+                          </button>
+                          {chatMsgSearchOpen && (
+                            <div className="tg-msg-search-panel" role="search">
+                              <input
+                                ref={chatMsgSearchInputRef}
+                                type="search"
+                                className="tg-msg-search-field"
+                                value={chatMsgSearchQuery}
+                                onChange={(e) => {
+                                  setChatMsgSearchQuery(e.target.value);
+                                  setChatMsgSearchActiveIdx(0);
+                                }}
+                                onKeyDown={(e) => {
+                                  const hits = chatMsgSearchHits;
+                                  if (!hits.length) return;
+                                  if (e.key === "ArrowDown") {
+                                    e.preventDefault();
+                                    setChatMsgSearchActiveIdx((i) => Math.min(hits.length - 1, i + 1));
+                                  } else if (e.key === "ArrowUp") {
+                                    e.preventDefault();
+                                    setChatMsgSearchActiveIdx((i) => Math.max(0, i - 1));
+                                  }
+                                }}
+                                placeholder="Поиск…"
+                                aria-autocomplete="list"
+                              />
+                              <div className="tg-msg-search-count" aria-live="polite">
+                                {chatMsgSearchQuery.trim()
+                                  ? formatRuMatchCount(chatMsgSearchHits.length)
+                                  : "Введите запрос"}
+                              </div>
+                              {chatMsgSearchQuery.trim() ? (
+                                <ul className="tg-msg-search-hits tg-msg-search-hits--panel" role="listbox">
+                                  {chatMsgSearchHits.map((m, i) => (
+                                    <li key={m.id} role="option" aria-selected={i === chatMsgSearchActiveIdx}>
+                                      <button
+                                        type="button"
+                                        className={["tg-msg-search-hit", i === chatMsgSearchActiveIdx && "tg-msg-search-hit--active"].filter(Boolean).join(" ")}
+                                        onClick={() => setChatMsgSearchActiveIdx(i)}
+                                      >
+                                        <span className="tg-msg-search-hit-date">
+                                          {new Date(m.created_at).toLocaleString("ru-RU", {
+                                            day: "numeric",
+                                            month: "long",
+                                            year: "numeric",
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}
+                                        </span>
+                                        <span className="tg-msg-search-hit-text">{m.text || "—"}</span>
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                              <p className="tg-msg-search-keys-hint muted">В поле поиска: ↑ ↓ — к совпадениям в чате</p>
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="tg-head-icon-btn"
+                          onClick={() => setChatReceiptsSettingsOpen(true)}
+                          aria-label="Прочтение сообщений"
+                          title="Прочтение сообщений"
+                        >
+                          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                            <path
+                              fill="currentColor"
+                              d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="tg-main-head-bar tg-main-head-bar--empty">
+                      <div className="tg-main-head-center">
+                        <span className="tg-main-title">Выбери чат</span>
+                      </div>
+                    </div>
                   )}
                 </div>
                 {selectedChatId ? (
                   <>
                     <div className="tg-messages">
-                      {chatMessages.map((m) => (
-                        <div key={m.id} className={`tg-msg ${Number(m.sender) === Number(me?.id) ? "tg-msg-own" : ""}`}>
-                          <div className="tg-msg-author">
-                            {chatMemberNames[m.sender] ??
-                              chatLocalPrefs[selectedChatId]?.memberNames?.[m.sender] ??
-                              m.sender_username}
-                          </div>
-                          <div className="tg-msg-text">{m.text}</div>
-                          <div className="tg-msg-time">{new Date(m.created_at).toLocaleString()}</div>
-                        </div>
-                      ))}
+                      {chatMessages.map((m, idx) => {
+                        const prev = chatMessages[idx - 1];
+                        const showDay =
+                          !prev || messageCalendarDayKey(prev.created_at) !== messageCalendarDayKey(m.created_at);
+                        return (
+                          <Fragment key={m.id}>
+                            {showDay && (
+                              <div className="tg-msg-day-sep" role="separator">
+                                <span className="tg-msg-day-chip">{formatMessageDayDividerRu(m.created_at)}</span>
+                              </div>
+                            )}
+                            <div id={`tg-msg-${m.id}`} className={`tg-msg ${Number(m.sender) === Number(me?.id) ? "tg-msg-own" : ""}`}>
+                              <div className="tg-msg-author">
+                                {formatMessageSenderLine(m) || m.sender_username}
+                              </div>
+                              <div className="tg-msg-text">{m.text}</div>
+                              <div className="tg-msg-meta">
+                                <div className="tg-msg-time">
+                                  {new Date(m.created_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+                                </div>
+                                {Number(m.sender) === Number(me?.id) && m.viewed_by_peer != null && (
+                                  <MessageReceiptIcon mode={chatReceiptsMode} viewed={Boolean(m.viewed_by_peer)} />
+                                )}
+                              </div>
+                            </div>
+                          </Fragment>
+                        );
+                      })}
                     </div>
                     <form onSubmit={sendChatMessage} className="tg-compose">
                       <input className="tg-compose-input" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Сообщение..." />
@@ -3144,22 +4682,79 @@ export default function App() {
                 ) : (
                   <div className="tg-empty">Выбери чат слева.</div>
                 )}
-                <p className="tg-status">{chatStatus}</p>
+                {chatStatus ? <p className="tg-status">{chatStatus}</p> : null}
               </div>
             </div>
-            {chatSettingsOpen && selectedChatId && (
+            {chatReceiptsSettingsOpen && (
               <div
                 className="modal-backdrop"
                 onClick={() => {
-                  setChatSettingsOpen(false);
+                  setChatReceiptsSettingsOpen(false);
+                }}
+              >
+                <div className="modal-card tg-settings-card" onClick={(e) => e.stopPropagation()}>
+                  <h3>Прочтение сообщений</h3>
+                  <p className="muted">Как показывать, просмотрел ли собеседник твоё сообщение (только для твоих исходящих).</p>
+                  <div className="form chat-receipts-settings">
+                    <label className="checkbox">
+                      <input
+                        type="radio"
+                        name="receipt-mode-chat"
+                        checked={chatReceiptsMode === "stickers"}
+                        onChange={() => persistChatReceiptsMode("stickers")}
+                      />
+                      Стикеры (обезьянки)
+                    </label>
+                    <label className="checkbox">
+                      <input
+                        type="radio"
+                        name="receipt-mode-chat"
+                        checked={chatReceiptsMode === "classic"}
+                        onChange={() => persistChatReceiptsMode("classic")}
+                      />
+                      Стандарт
+                    </label>
+                    <div className="chat-receipts-preview">
+                      <span className="muted small-label">Как будет в переписке</span>
+                      <div className="chat-receipts-preview-bubbles">
+                        <div className="chat-receipt-preview-msg tg-msg-own">
+                          <div className="tg-msg-text">Пример</div>
+                          <div className="tg-msg-meta">
+                            <span className="tg-msg-time">12:00</span>
+                            <MessageReceiptIcon mode={chatReceiptsMode} viewed={false} />
+                          </div>
+                        </div>
+                        <div className="chat-receipt-preview-msg tg-msg-own">
+                          <div className="tg-msg-text">Пример</div>
+                          <div className="tg-msg-meta">
+                            <span className="tg-msg-time">12:01</span>
+                            <MessageReceiptIcon mode={chatReceiptsMode} viewed />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="tg-settings-actions">
+                    <button type="button" className="primary" onClick={() => setChatReceiptsSettingsOpen(false)}>
+                      Готово
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {chatSettingsForId != null && (
+              <div
+                className="modal-backdrop"
+                onClick={() => {
+                  setChatSettingsForId(null);
                   setCustomColorPickerOpen(false);
                 }}
               >
                 <div className="modal-card tg-settings-card" onClick={(e) => e.stopPropagation()}>
                   <h3>Настройки чата</h3>
-                  <p className="muted">Как в Telegram: название, аватар и фон чата. Хранится в браузере на этом устройстве.</p>
+                  <p className="muted">Название в списке, аватар и фон чата. Хранится в браузере на этом устройстве.</p>
                   <label className="tg-settings-label">
-                    Название в списке
+                    Имя
                     <input value={chatSettingsTitle} onChange={(e) => setChatSettingsTitle(e.target.value)} />
                   </label>
                   <label className="tg-settings-label">
@@ -3231,25 +4826,6 @@ export default function App() {
                     <option value="2h">Заглушить на 2 часа</option>
                     <option value="8h">Заглушить на 8 часов</option>
                   </select>
-                  {(() => {
-                    const sel = conversations.find((x) => x.id === selectedChatId);
-                    if (!sel?.members?.length) return null;
-                    return (
-                      <div className="tg-members-block">
-                        <div className="tg-wall-label">Имена в чате (только у тебя)</div>
-                        {sel.members.map((mem) => (
-                          <div key={mem.id} className="tg-member-row">
-                            <span className="muted tg-member-login">{mem.username}</span>
-                            <input
-                              value={chatMemberNames[mem.user] ?? ""}
-                              placeholder={`${mem.first_name || ""} ${mem.last_name || ""}`.trim() || mem.username}
-                              onChange={(e) => setChatMemberNames((prev) => ({ ...prev, [mem.user]: e.target.value }))}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
                   <div className="tg-settings-actions">
                     <button type="button" className="primary" onClick={persistChatVisualSettings}>
                       Сохранить
@@ -3257,7 +4833,7 @@ export default function App() {
                     <button type="button" className="ghost-btn" onClick={clearChatVisualSettings}>
                       Сбросить оформление
                     </button>
-                    <button type="button" className="ghost-btn" onClick={() => setChatSettingsOpen(false)}>
+                    <button type="button" className="ghost-btn" onClick={() => setChatSettingsForId(null)}>
                       Закрыть
                     </button>
                   </div>

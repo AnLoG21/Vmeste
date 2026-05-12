@@ -4,9 +4,32 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
 BASE_DIR = Path(__file__).resolve().parent.parent
+_REPO_ROOT = BASE_DIR.parent
+
+# UTF-8: иначе на Windows пароль/комментарии в .env в другой кодировке дают ошибки при connect (UnicodeDecodeError в psycopg2).
+for _env_path in (_REPO_ROOT / ".env", BASE_DIR / ".env"):
+    if _env_path.is_file():
+        load_dotenv(_env_path, encoding="utf-8")
+        break
+else:
+    load_dotenv(encoding="utf-8")
+
+
+def _env_str(name: str, default: str = "") -> str:
+    """Строка из окружения в корректном Unicode (защита от битых байт в переменных Windows)."""
+    val = os.environ.get(name, default)
+    if val is None:
+        return default
+    if isinstance(val, bytes):
+        return val.decode("utf-8", errors="replace")
+    if not isinstance(val, str):
+        return str(val)
+    try:
+        val.encode("utf-8")
+        return val
+    except UnicodeEncodeError:
+        return val.encode("latin-1", errors="replace").decode("utf-8", errors="replace")
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-change-me")
 DEBUG = os.environ.get("DEBUG", "0") in ("1", "true", "True", "yes")
@@ -48,11 +71,11 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("POSTGRES_DB", "vmeste"),
-        "USER": os.environ.get("POSTGRES_USER", "vmeste_user"),
-        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "vmeste_pass"),
-        "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
-        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+        "NAME": _env_str("POSTGRES_DB", "vmeste"),
+        "USER": _env_str("POSTGRES_USER", "vmeste_user"),
+        "PASSWORD": _env_str("POSTGRES_PASSWORD", "vmeste_pass"),
+        "HOST": _env_str("POSTGRES_HOST", "localhost"),
+        "PORT": _env_str("POSTGRES_PORT", "5432"),
     }
 }
 

@@ -18,9 +18,15 @@ class User(AbstractUser):
     email_verification_token = models.CharField(max_length=64, blank=True)
     email_verified = models.BooleanField(default=False)
     organization_name = models.CharField(max_length=180, blank=True)
-    organization_address = models.CharField(max_length=255, blank=True)
+    organization_address = models.TextField(blank=True, default="")
+    organization_entrance = models.CharField(max_length=32, blank=True, default="")
+    organization_floor = models.CharField(max_length=32, blank=True, default="")
+    organization_apartment = models.CharField(max_length=64, blank=True, default="")
+    organization_intercom = models.CharField(max_length=64, blank=True, default="")
+    organization_address_extra = models.CharField(max_length=255, blank=True, default="")
     organization_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     organization_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     provider_sphere = models.CharField(
         max_length=30, choices=ProviderSphere.choices, blank=True
     )
+    last_seen_at = models.DateTimeField(null=True, blank=True)
