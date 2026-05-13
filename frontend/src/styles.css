@@ -3144,3 +3144,93 @@ body.theme-dark .tg-chat-search {
   background: var(--bg-page);
   color: var(--text);
 }
+
+/* Клиент: карта исполнителей и запись */
+.field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.client-discover-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.client-discover-top {
+  padding: 16px 16px 8px;
+}
+
+.client-discover-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.client-discover-title {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.client-discover-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e0c2a8;
+  font: inherit;
+}
+
+.client-discover-meta {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.client-discover-map {
+  width: 100%;
+  height: min(520px, 62vh);
+  min-height: 280px;
+}
+
+.client-discover-hint {
+  padding: 10px 16px 14px;
+  margin: 0;
+}
+
+.client-book-card h2 {
+  margin-top: 0;
+}
+
+.client-filters-modal {
+  max-width: 440px;
+}
+
+.client-filters-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.muted.small {
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+
+[data-theme="dark"] .client-discover-search,
+body.theme-dark .client-discover-search {
+  border-color: var(--border);
+  background: var(--bg-page);
+  color: var(--text);
+}
+
+[data-theme="dark"] .field-label,
+body.theme-dark .field-label {
+  color: var(--text-muted, #aaa);
+}

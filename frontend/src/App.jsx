@@ -753,9 +753,34 @@ export default function App() {
   const [bookings, setBookings] = useState([]);
   const [location, setLocation] = useState([]);
   const [allLocations, setAllLocations] = useState([]);
+  const allLocationsRef = useRef([]);
+  const [clientMapSearchInput, setClientMapSearchInput] = useState("");
+  const [clientDiscoverSearch, setClientDiscoverSearch] = useState("");
+  const [clientDiscoverFilters, setClientDiscoverFilters] = useState({
+    sphere: "",
+    min_price: "",
+    max_price: "",
+    slot_date_from: "",
+    slot_date_to: "",
+    time_from: "",
+    time_to: "",
+  });
+  const [clientFilterModalDraft, setClientFilterModalDraft] = useState({
+    sphere: "",
+    min_price: "",
+    max_price: "",
+    slot_date_from: "",
+    slot_date_to: "",
+    time_from: "",
+    time_to: "",
+  });
+  const [clientFiltersOpen, setClientFiltersOpen] = useState(false);
+  const clientDiscoverMapRef = useRef(null);
+  const clientMeBootstrappedRef = useRef(false);
   const [providerServices, setProviderServices] = useState([]);
   const [providerSlots, setProviderSlots] = useState([]);
   const [clientBookingForm, setClientBookingForm] = useState({
+    locationId: "",
     provider: "",
     slot: "",
     comment: "",
@@ -1253,8 +1278,90 @@ export default function App() {
   }, [customColorPickerOpen]);
 
   useEffect(() => {
-    if (accessToken && me?.role === "client") loadClientData();
-  }, [accessToken, me]);
+    const t = setTimeout(() => setClientDiscoverSearch(clientMapSearchInput), 420);
+    return () => clearTimeout(t);
+  }, [clientMapSearchInput]);
+
+  useEffect(() => {
+    if (!accessToken || !me || me.role !== "client") return;
+    if (!clientMeBootstrappedRef.current) {
+      clientMeBootstrappedRef.current = true;
+      setCurrentView("client_map");
+    }
+  }, [accessToken, me?.id, me?.role]);
+
+  useEffect(() => {
+    if (!accessToken || me?.role !== "client") return;
+    const p = new URLSearchParams();
+    const q = clientDiscoverSearch.trim();
+    if (q) p.set("search", q);
+    const f = clientDiscoverFilters;
+    if (f.sphere) p.set("sphere", f.sphere);
+    if (String(f.min_price).trim() !== "") p.set("min_price", String(f.min_price).trim());
+    if (String(f.max_price).trim() !== "") p.set("max_price", String(f.max_price).trim());
+    if (f.slot_date_from) p.set("slot_date_from", f.slot_date_from);
+    if (f.slot_date_to) p.set("slot_date_to", f.slot_date_to);
+    if (f.time_from) p.set("time_from", f.time_from);
+    if (f.time_to) p.set("time_to", f.time_to);
+    const qs = p.toString();
+    const url = qs ? `${API_URL}/locations/?${qs}` : `${API_URL}/locations/`;
+    let cancelled = false;
+    (async () => {
+      const locationsRes = await authFetch(url);
+      if (cancelled || !locationsRes.ok) return;
+      setAllLocations(await locationsRes.json());
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, me?.role, clientDiscoverSearch, clientDiscoverFilters]);
+
+  useEffect(() => {
+    if (!accessToken || me?.role !== "client") return;
+    let cancelled = false;
+    (async () => {
+      const bookingsRes = await authFetch(`${API_URL}/booking/`);
+      if (cancelled || !bookingsRes.ok) return;
+      setBookings(await bookingsRes.json());
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, me?.id, me?.role]);
+
+  useEffect(() => {
+    allLocationsRef.current = allLocations;
+  }, [allLocations]);
+
+  useEffect(() => {
+    if (currentView !== "client_map" || me?.role !== "client") {
+      destroyClientDiscoverMap();
+      return undefined;
+    }
+    const t = setTimeout(() => {
+      const ymaps = window.ymaps;
+      if (!ymaps || clientDiscoverMapRef.current) return;
+      if (!document.getElementById("client-discover-map")) return;
+      ymaps.ready(() => {
+        if (clientDiscoverMapRef.current) return;
+        clientDiscoverMapRef.current = new ymaps.Map("client-discover-map", {
+          center: [55.751244, 37.618423],
+          zoom: 10,
+          controls: ["zoomControl", "fullscreenControl", "geolocationControl"],
+        });
+        refreshClientDiscoverMapMarkers(allLocationsRef.current);
+      });
+    }, 280);
+    return () => {
+      clearTimeout(t);
+      destroyClientDiscoverMap();
+    };
+  }, [currentView, me?.role]);
+
+  useEffect(() => {
+    if (currentView !== "client_map" || me?.role !== "client" || !clientDiscoverMapRef.current) return;
+    refreshClientDiscoverMapMarkers(allLocations);
+  }, [allLocations, currentView, me?.role]);
 
   useEffect(() => {
     currentViewRef.current = currentView;
@@ -1466,6 +1573,7 @@ export default function App() {
     setAccessToken("");
     setRefreshToken("");
     setMe(null);
+    clientMeBootstrappedRef.current = false;
     setCurrentView("bookings");
     setAuthStatus("Вы вышли.");
   }
@@ -1991,6 +2099,58 @@ export default function App() {
       profileMapRef.current = null;
     }
     profilePlacemarkRef.current = null;
+  }
+
+  function destroyClientDiscoverMap() {
+    if (clientDiscoverMapRef.current) {
+      try {
+        clientDiscoverMapRef.current.destroy();
+      } catch (_e) {
+        // ignore
+      }
+      clientDiscoverMapRef.current = null;
+    }
+  }
+
+  function refreshClientDiscoverMapMarkers(locations) {
+    const ymaps = window.ymaps;
+    const map = clientDiscoverMapRef.current;
+    if (!ymaps || !map || !Array.isArray(locations)) return;
+    map.geoObjects.removeAll();
+    const coordsList = [];
+    for (const loc of locations) {
+      const lat = Number(loc.latitude);
+      const lon = Number(loc.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const title = (loc.organization_name && String(loc.organization_name).trim()) || loc.title || "Организация";
+      const hint = [title, loc.sphere_label].filter(Boolean).join(" · ");
+      const priceLine =
+        loc.min_service_price != null && loc.max_service_price != null
+          ? `<div>Услуги: от ${loc.min_service_price} до ${loc.max_service_price} ₽</div>`
+          : "";
+      const pm = new ymaps.Placemark(
+        [lat, lon],
+        {
+          balloonContentHeader: title,
+          balloonContentBody: `${loc.sphere_label ? `<p>${loc.sphere_label}</p>` : ""}<p>${loc.address || ""}</p>${priceLine}`,
+          hintContent: hint || title,
+        },
+        { preset: "islands#orangeDotIcon" },
+      );
+      pm.events.add("click", () => {
+        setCurrentView("client_book");
+        onClientLocationSelect(String(loc.id));
+      });
+      map.geoObjects.add(pm);
+      coordsList.push([lat, lon]);
+    }
+    if (coordsList.length === 1) {
+      map.setCenter(coordsList[0], 14);
+    } else if (coordsList.length > 1) {
+      map.setBounds(ymaps.util.bounds.fromPoints(coordsList), { checkZoomRange: true, zoomMargin: 52 });
+    } else {
+      map.setCenter([55.751244, 37.618423], 10);
+    }
   }
 
   function initProfileMapFromCoords(lat, lon) {
@@ -2755,12 +2915,8 @@ export default function App() {
     }));
   }
 
-  async function loadClientData() {
-    const [locationsRes, bookingsRes] = await Promise.all([
-      authFetch(`${API_URL}/locations/`),
-      authFetch(`${API_URL}/booking/`),
-    ]);
-    if (locationsRes.ok) setAllLocations(await locationsRes.json());
+  async function loadClientBookings() {
+    const bookingsRes = await authFetch(`${API_URL}/booking/`);
     if (bookingsRes.ok) setBookings(await bookingsRes.json());
   }
 
@@ -3142,12 +3298,19 @@ export default function App() {
     loadSellerData();
   }
 
-  async function onProviderChange(providerId) {
-    setClientBookingForm({ provider: providerId, slot: "", comment: "" });
-    if (!providerId) return;
+  async function onClientLocationSelect(locationId) {
+    const loc = allLocations.find((x) => String(x.id) === String(locationId));
+    if (!loc) {
+      setClientBookingForm((p) => ({ ...p, locationId: "", provider: "", slot: "" }));
+      setProviderServices([]);
+      setProviderSlots([]);
+      return;
+    }
+    const pid = String(loc.provider);
+    setClientBookingForm((p) => ({ ...p, locationId: String(loc.id), provider: pid, slot: "", comment: p.comment }));
     const [servicesRes, slotsRes] = await Promise.all([
-      authFetch(`${API_URL}/catalog/services/?provider=${providerId}`),
-      authFetch(`${API_URL}/booking/slots/?provider=${providerId}`),
+      authFetch(`${API_URL}/catalog/services/?provider=${encodeURIComponent(pid)}`),
+      authFetch(`${API_URL}/booking/slots/?provider=${encodeURIComponent(pid)}`),
     ]);
     if (servicesRes.ok) setProviderServices(await servicesRes.json());
     if (slotsRes.ok) setProviderSlots(await slotsRes.json());
@@ -3171,8 +3334,8 @@ export default function App() {
     });
     if (!response.ok) return setClientStatus("Не удалось создать запись.");
     setClientStatus("Запись создана.");
-    setClientBookingForm({ provider: "", slot: "", comment: "" });
-    loadClientData();
+    setClientBookingForm({ locationId: "", provider: "", slot: "", comment: "" });
+    loadClientBookings();
   }
 
   function renderBookingCalendar(title = "Записи") {
@@ -3983,7 +4146,7 @@ export default function App() {
   return (
     <div className={`page${accessToken ? " page-logged" : ""}`}>
       <header className="hero top-row">
-        <button type="button" className="brand-link brand-btn" onClick={() => setCurrentView("bookings")}>
+        <button type="button" className="brand-link brand-btn" onClick={() => setCurrentView(me?.role === "client" ? "client_map" : "bookings")}>
           <img
             src={logoMain}
             alt="Vmeste"
@@ -4063,6 +4226,20 @@ export default function App() {
         <div className="interval-toast" role="alert">
           {intervalToast}
         </div>
+      )}
+
+      {accessToken && me?.role === "client" && (
+        <nav className="app-subnav" aria-label="Разделы клиента">
+          <button type="button" className={currentView === "client_map" ? "active" : ""} onClick={() => setCurrentView("client_map")}>
+            Карта
+          </button>
+          <button type="button" className={currentView === "client_book" ? "active" : ""} onClick={() => setCurrentView("client_book")}>
+            Записаться
+          </button>
+          <button type="button" className={currentView === "bookings" ? "active" : ""} onClick={() => setCurrentView("bookings")}>
+            Мои записи
+          </button>
+        </nav>
       )}
 
       {accessToken && me?.role === "provider" && (
@@ -4905,33 +5082,231 @@ export default function App() {
           </div>
         )}
 
-        {accessToken && me?.role === "client" && (
-          <>
-            {currentView !== "bookings" && (
-              <section className="card profile-card">
-                <h2>Личный кабинет</h2>
-                <p>Вы вошли как: <strong>{fullName}</strong></p>
-                <button type="button" className="ghost-btn" onClick={() => setCurrentView("settings")}>Настройки</button>
-              </section>
-            )}
-            <section className="card">
-              <h2>Выбор точки и запись</h2>
-              <form onSubmit={createClientBooking} className="form">
-                <select value={clientBookingForm.provider} onChange={(e) => onProviderChange(e.target.value)} required>
-                  <option value="">Выбери организацию</option>
-                  {allLocations.map((item) => <option key={item.id} value={item.provider}>{item.title} - {item.address}</option>)}
+        {accessToken && me?.role === "client" && currentView === "client_map" && (
+          <section className="card full-width client-discover-card">
+            <div className="client-discover-top">
+              <div className="client-discover-title-row">
+                <h2 className="client-discover-title" id="client-map-title">
+                  Исполнители на карте
+                </h2>
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={() => {
+                    setClientFilterModalDraft({ ...clientDiscoverFilters });
+                    setClientFiltersOpen(true);
+                  }}
+                >
+                  Фильтры
+                </button>
+              </div>
+              <input
+                type="search"
+                className="client-discover-search"
+                placeholder="Название организации, сфера (например, парикмахерская), адрес…"
+                value={clientMapSearchInput}
+                onChange={(e) => setClientMapSearchInput(e.target.value)}
+                autoComplete="off"
+                aria-labelledby="client-map-title"
+              />
+              <p className="muted client-discover-meta">Найдено точек: {allLocations.length}</p>
+            </div>
+            <div id="client-discover-map" className="client-discover-map" role="application" aria-label="Карта точек записи" />
+            <p className="muted client-discover-hint">Нажми на метку, чтобы перейти к записи к этому исполнителю.</p>
+          </section>
+        )}
+
+        {accessToken && me?.role === "client" && currentView === "client_book" && (
+          <section className="card client-book-card">
+            <h2>Записаться</h2>
+            <p className="muted">
+              Список точек совпадает с фильтрами на вкладке «Карта». Можно выбрать организацию и свободное время.
+            </p>
+            <form onSubmit={createClientBooking} className="form">
+              <label className="field-label" htmlFor="client-book-location">Точка / организация</label>
+              <select
+                id="client-book-location"
+                value={clientBookingForm.locationId}
+                onChange={(e) => onClientLocationSelect(e.target.value)}
+                required
+              >
+                <option value="">Выбери точку</option>
+                {allLocations.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {[item.organization_name, item.title].filter(Boolean).join(" · ") || "Организация"} — {item.address}
+                  </option>
+                ))}
+              </select>
+              <label className="field-label" htmlFor="client-book-slot">Время приёма</label>
+              <select
+                id="client-book-slot"
+                value={clientBookingForm.slot}
+                onChange={(e) => setClientBookingForm({ ...clientBookingForm, slot: e.target.value })}
+                required
+              >
+                <option value="">Выбери время</option>
+                {providerSlots.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {new Date(item.starts_at).toLocaleString("ru-RU")}
+                  </option>
+                ))}
+              </select>
+              <input
+                placeholder="Комментарий к записи"
+                value={clientBookingForm.comment}
+                onChange={(e) => setClientBookingForm({ ...clientBookingForm, comment: e.target.value })}
+              />
+              <button type="submit">Подтвердить запись</button>
+            </form>
+            <p className="status">{clientStatus}</p>
+          </section>
+        )}
+
+        {accessToken && me?.role === "client" && currentView === "bookings" && renderBookingsBlock("Мои записи")}
+
+        {accessToken && me?.role === "client" && clientFiltersOpen && (
+          <div
+            className="modal-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="client-filters-title"
+            onClick={() => setClientFiltersOpen(false)}
+          >
+            <div className="modal-card client-filters-modal" onClick={(e) => e.stopPropagation()}>
+              <h3 id="client-filters-title">Фильтры</h3>
+              <div className="form">
+                <label className="field-label" htmlFor="client-filter-sphere">
+                  Сфера услуг
+                </label>
+                <select
+                  id="client-filter-sphere"
+                  value={clientFilterModalDraft.sphere}
+                  onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, sphere: e.target.value }))}
+                >
+                  <option value="">Любая</option>
+                  {sphereOptions.map((s) => (
+                    <option key={s.key} value={s.key}>
+                      {s.value}
+                    </option>
+                  ))}
                 </select>
-                <select value={clientBookingForm.slot} onChange={(e) => setClientBookingForm({ ...clientBookingForm, slot: e.target.value })} required>
-                  <option value="">Выбери время</option>
-                  {providerSlots.map((item) => <option key={item.id} value={item.id}>{new Date(item.starts_at).toLocaleString()}</option>)}
-                </select>
-                <input placeholder="Комментарий к записи" value={clientBookingForm.comment} onChange={(e) => setClientBookingForm({ ...clientBookingForm, comment: e.target.value })} />
-                <button type="submit">Записаться</button>
-              </form>
-              <p className="status">{clientStatus}</p>
-            </section>
-            {currentView === "bookings" && renderBookingsBlock("Мои записи")}
-          </>
+                <div className="row-2">
+                  <div>
+                    <label className="field-label" htmlFor="client-filter-minp">
+                      Цена от (₽)
+                    </label>
+                    <input
+                      id="client-filter-minp"
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="не важно"
+                      value={clientFilterModalDraft.min_price}
+                      onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, min_price: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label" htmlFor="client-filter-maxp">
+                      Цена до (₽)
+                    </label>
+                    <input
+                      id="client-filter-maxp"
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="не важно"
+                      value={clientFilterModalDraft.max_price}
+                      onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, max_price: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <p className="muted small">Учитывается диапазон цен активных услуг исполнителя.</p>
+                <div className="row-2">
+                  <div>
+                    <label className="field-label" htmlFor="client-filter-df">
+                      Дата слота с
+                    </label>
+                    <input
+                      id="client-filter-df"
+                      type="date"
+                      value={clientFilterModalDraft.slot_date_from}
+                      onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, slot_date_from: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label" htmlFor="client-filter-dt">
+                      Дата слота по
+                    </label>
+                    <input
+                      id="client-filter-dt"
+                      type="date"
+                      value={clientFilterModalDraft.slot_date_to}
+                      onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, slot_date_to: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="row-2">
+                  <div>
+                    <label className="field-label" htmlFor="client-filter-tf">
+                      Время с
+                    </label>
+                    <input
+                      id="client-filter-tf"
+                      type="time"
+                      value={clientFilterModalDraft.time_from}
+                      onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, time_from: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label" htmlFor="client-filter-tt">
+                      Время до
+                    </label>
+                    <input
+                      id="client-filter-tt"
+                      type="time"
+                      value={clientFilterModalDraft.time_to}
+                      onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, time_to: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <p className="muted small">Показываются только исполнители со свободным слотом в выбранных рамках даты и времени.</p>
+              </div>
+              <div className="client-filters-actions">
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={() => {
+                    const empty = {
+                      sphere: "",
+                      min_price: "",
+                      max_price: "",
+                      slot_date_from: "",
+                      slot_date_to: "",
+                      time_from: "",
+                      time_to: "",
+                    };
+                    setClientFilterModalDraft(empty);
+                    setClientDiscoverFilters(empty);
+                    setClientFiltersOpen(false);
+                  }}
+                >
+                  Сбросить всё
+                </button>
+                <button type="button" className="ghost-btn" onClick={() => setClientFiltersOpen(false)}>
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClientDiscoverFilters({ ...clientFilterModalDraft });
+                    setClientFiltersOpen(false);
+                  }}
+                >
+                  Применить
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
       <div className="incoming-toast-stack" aria-live="polite">

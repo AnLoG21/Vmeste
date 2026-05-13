@@ -42,7 +42,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
         if self.request.user.role == "staff":
             return qs.filter(Q(provider=self.request.user) | Q(provider__staff_links__staff=self.request.user)).distinct()
         if self.request.user.role == "client" and provider:
-            return qs.filter(provider_id=provider)
+            return qs.filter(provider_id=provider, is_active=True)
         return qs.none()
 
     def perform_create(self, serializer):

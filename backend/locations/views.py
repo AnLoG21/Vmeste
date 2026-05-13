@@ -1,25 +1,162 @@
-from django.db.models import Q
+from datetime import time
+
+from django.db.models import Exists, Max, Min, OuterRef, Q, Subquery
+from django.db.models.fields import DecimalField
+from django.utils.dateparse import parse_date
 from rest_framework import permissions, viewsets
 from rest_framework.exceptions import PermissionDenied as DRFPermissionDenied
 
-from booking.models import ProviderStaff
+from booking.models import AvailabilitySlot, ProviderStaff
+from catalog.models import Service
 
 from .models import ProviderLocation
-from .serializers import ProviderLocationSerializer
+from .serializers import ProviderLocationClientSerializer, ProviderLocationSerializer
+
+
+def _parse_time_hm(value):
+    if not value or not isinstance(value, str):
+        return None
+    s = value.strip()
+    if not s:
+        return None
+    parts = s.split(":")
+    if len(parts) < 2:
+        return None
+    try:
+        return time(int(parts[0]), int(parts[1]))
+    except ValueError:
+        return None
 
 
 class ProviderLocationViewSet(viewsets.ModelViewSet):
-    serializer_class = ProviderLocationSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        if getattr(self.request.user, "role", None) == "client":
+            return ProviderLocationClientSerializer
+        return ProviderLocationSerializer
 
     def get_queryset(self):
         user = self.request.user
-        if user.role == "provider":
-            return ProviderLocation.objects.filter(provider=user)
-        if user.role == "staff":
+        role = getattr(user, "role", None)
+
+        if role == "provider":
+            return ProviderLocation.objects.filter(provider=user).select_related("provider")
+
+        if role == "staff":
             ids = ProviderStaff.objects.filter(staff=user, is_active=True).values_list("provider_id", flat=True)
-            return ProviderLocation.objects.filter(provider_id__in=ids)
+            return ProviderLocation.objects.filter(provider_id__in=ids).select_related("provider")
+
+        if role == "client":
+            return self._client_discover_queryset()
+
         return ProviderLocation.objects.none()
+
+    def _client_discover_queryset(self):
+        request = self.request
+        min_sub = (
+            Service.objects.filter(provider_id=OuterRef("provider_id"), is_active=True)
+            .values("provider_id")
+            .annotate(m=Min("price"))
+            .values("m")[:1]
+        )
+        max_sub = (
+            Service.objects.filter(provider_id=OuterRef("provider_id"), is_active=True)
+            .values("provider_id")
+            .annotate(m=Max("price"))
+            .values("m")[:1]
+        )
+
+        qs = (
+            ProviderLocation.objects.select_related("provider")
+            .annotate(
+                min_service_price=Subquery(min_sub, output_field=DecimalField(max_digits=12, decimal_places=2)),
+                max_service_price=Subquery(max_sub, output_field=DecimalField(max_digits=12, decimal_places=2)),
+            )
+        )
+
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            from users.models import User
+
+            sphere_q = Q()
+            sl = search.lower()
+            for key, label in User.ProviderSphere.choices:
+                if sl in (label or "").lower():
+                    sphere_q |= Q(provider__provider_sphere=key)
+
+            qs = qs.filter(
+                Q(title__icontains=search)
+                | Q(address__icontains=search)
+                | Q(provider__organization_name__icontains=search)
+                | Q(provider__username__icontains=search)
+                | sphere_q
+            )
+
+        sphere = (request.query_params.get("sphere") or "").strip()
+        if sphere:
+            qs = qs.filter(provider__provider_sphere=sphere)
+
+        def _decimal_param(name):
+            raw = (request.query_params.get(name) or "").strip()
+            if raw == "":
+                return None
+            try:
+                from decimal import Decimal
+
+                return Decimal(raw)
+            except Exception:
+                return None
+
+        min_price = _decimal_param("min_price")
+        max_price = _decimal_param("max_price")
+        if min_price is not None or max_price is not None:
+            qs = qs.filter(min_service_price__isnull=False, max_service_price__isnull=False)
+        if min_price is not None and max_price is not None:
+            qs = qs.filter(min_service_price__lte=max_price, max_service_price__gte=min_price)
+        elif min_price is not None:
+            qs = qs.filter(max_service_price__gte=min_price)
+        elif max_price is not None:
+            qs = qs.filter(min_service_price__lte=max_price)
+
+        df = parse_date((request.query_params.get("slot_date_from") or "").strip() or "")
+        dt = parse_date((request.query_params.get("slot_date_to") or "").strip() or "")
+        t_from = _parse_time_hm(request.query_params.get("time_from") or "")
+        t_to = _parse_time_hm(request.query_params.get("time_to") or "")
+
+        if df or dt or t_from or t_to:
+            slot_q = AvailabilitySlot.objects.filter(provider_id=OuterRef("provider_id"), is_booked=False)
+            if df:
+                slot_q = slot_q.filter(starts_at__date__gte=df)
+            if dt:
+                slot_q = slot_q.filter(starts_at__date__lte=dt)
+            if t_from:
+                slot_q = slot_q.filter(starts_at__time__gte=t_from)
+            if t_to:
+                slot_q = slot_q.filter(starts_at__time__lte=t_to)
+            qs = qs.annotate(_has_slot=Exists(slot_q)).filter(_has_slot=True)
+
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        if request.user.role != "provider":
+            raise DRFPermissionDenied()
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if request.user.role != "provider":
+            raise DRFPermissionDenied()
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        if request.user.role != "provider":
+            raise DRFPermissionDenied()
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if request.user.role != "provider":
+            raise DRFPermissionDenied()
+        return super().destroy(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         if self.request.user.role != "provider":

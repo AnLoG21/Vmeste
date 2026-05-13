@@ -135,6 +135,11 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = AvailabilitySlot.objects.all().select_related("provider", "staff")
         provider = self.request.query_params.get("provider")
+        if self.request.user.role == "client":
+            if not provider:
+                return AvailabilitySlot.objects.none()
+            qs = qs.filter(provider_id=provider, is_booked=False)
+            return qs
         if provider:
             qs = qs.filter(provider_id=provider)
         if self.request.user.role == "provider":
