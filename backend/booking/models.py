@@ -8,6 +8,7 @@ def default_staff_permissions():
         "manage_intervals": False,
         "manage_services": False,
         "manage_chats": True,
+        "manage_client_chats": True,
         "manage_staff": False,
         "can_delegate_permissions": False,
     }
@@ -78,6 +79,12 @@ class ProviderStaff(models.Model):
         default=InvitationStatus.ACCEPTED,
     )
     permissions = models.JSONField(blank=True, default=default_staff_permissions)
+    assigned_services = models.ManyToManyField(
+        "catalog.Service", blank=True, related_name="staff_assignments"
+    )
+    assigned_categories = models.ManyToManyField(
+        "catalog.ServiceCategory", blank=True, related_name="staff_assignments"
+    )
 
     class Meta:
         unique_together = [("provider", "staff")]

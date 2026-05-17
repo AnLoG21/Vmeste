@@ -28,6 +28,9 @@ class UserSerializer(serializers.ModelSerializer):
             "organization_latitude",
             "organization_longitude",
             "provider_sphere",
+            "booking_confirm_message_default",
+            "booking_cancel_message_default",
+            "booking_done_message_default",
         ]
         read_only_fields = ["id", "username", "email", "role", "email_verified"]
 

@@ -8,6 +8,16 @@ class ServiceCategory(models.Model):
     )
     name = models.CharField(max_length=120)
     allow_subcategory_booking = models.BooleanField(default=True)
+    template_slug = models.CharField(max_length=80, blank=True, default="", db_index=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "template_slug"],
+                condition=models.Q(template_slug__gt=""),
+                name="uniq_provider_category_template_slug",
+            ),
+        ]
 
 
 class ServiceSubcategory(models.Model):
@@ -15,6 +25,16 @@ class ServiceSubcategory(models.Model):
         ServiceCategory, on_delete=models.CASCADE, related_name="subcategories"
     )
     name = models.CharField(max_length=120)
+    template_slug = models.CharField(max_length=80, blank=True, default="", db_index=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["category", "template_slug"],
+                condition=models.Q(template_slug__gt=""),
+                name="uniq_category_subcategory_template_slug",
+            ),
+        ]
 
 
 class Service(models.Model):
@@ -39,3 +59,13 @@ class Service(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
     duration_minutes = models.PositiveIntegerField(default=30)
     is_active = models.BooleanField(default=True)
+    template_slug = models.CharField(max_length=80, blank=True, default="", db_index=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "template_slug"],
+                condition=models.Q(template_slug__gt=""),
+                name="uniq_provider_service_template_slug",
+            ),
+        ]

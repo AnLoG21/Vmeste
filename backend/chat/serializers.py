@@ -4,6 +4,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from .models import Conversation, ConversationMember, Message
+from .services import message_preview_text
 
 ONLINE_WINDOW = timedelta(seconds=120)
 
@@ -13,6 +14,8 @@ class ConversationMemberSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source="user.first_name", read_only=True)
     last_name = serializers.CharField(source="user.last_name", read_only=True)
     patronymic = serializers.CharField(source="user.patronymic", read_only=True)
+    organization_name = serializers.CharField(source="user.organization_name", read_only=True)
+    role = serializers.CharField(source="user.role", read_only=True)
     last_seen_at = serializers.DateTimeField(source="user.last_seen_at", read_only=True)
     is_online = serializers.SerializerMethodField()
 
@@ -25,6 +28,8 @@ class ConversationMemberSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "patronymic",
+            "organization_name",
+            "role",
             "last_read_message_id",
             "last_seen_at",
             "is_online",
@@ -103,7 +108,8 @@ class ConversationSerializer(serializers.ModelSerializer):
             return None
         return {
             "id": m.id,
-            "text": (m.text or "")[:240],
+            "text": message_preview_text(m),
+            "kind": m.kind,
             "created_at": m.created_at,
             "sender_id": m.sender_id,
         }
@@ -125,6 +131,7 @@ class MessageSerializer(serializers.ModelSerializer):
     sender_last_name = serializers.CharField(source="sender.last_name", read_only=True)
     sender_patronymic = serializers.CharField(source="sender.patronymic", read_only=True)
     viewed_by_peer = serializers.SerializerMethodField()
+    display_text = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -132,7 +139,10 @@ class MessageSerializer(serializers.ModelSerializer):
             "id",
             "conversation",
             "sender",
+            "kind",
+            "payload",
             "text",
+            "display_text",
             "created_at",
             "sender_username",
             "sender_first_name",
@@ -143,6 +153,9 @@ class MessageSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "sender",
+            "kind",
+            "payload",
+            "display_text",
             "created_at",
             "sender_username",
             "sender_first_name",
@@ -150,6 +163,12 @@ class MessageSerializer(serializers.ModelSerializer):
             "sender_patronymic",
             "viewed_by_peer",
         ]
+
+    def get_display_text(self, obj):
+        if obj.kind == Message.Kind.REVIEW_REPLY:
+            payload = obj.payload or {}
+            return (payload.get("reply_text") or obj.text or "").strip()
+        return (obj.text or "").strip()
 
     def get_viewed_by_peer(self, obj):
         request = self.context.get("request")

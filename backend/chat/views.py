@@ -14,6 +14,7 @@ from notifications.models import InAppNotification
 
 from .models import Conversation, ConversationMember, Message
 from .serializers import ConversationSerializer, MessageSerializer
+from .services import get_or_create_client_conversation, staff_can_access_client_chats
 
 User = get_user_model()
 
@@ -145,6 +146,54 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @action(detail=False, methods=["post"], url_path="create-with-client")
+    def create_with_client(self, request):
+        """Чат организации с клиентом (папка «Клиенты»)."""
+        if request.user.role not in ("provider", "staff"):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        client_id = request.data.get("client_id")
+        if not client_id:
+            return Response({"detail": "client_id required"}, status=status.HTTP_400_BAD_REQUEST)
+        client_user = User.objects.filter(pk=client_id, role=User.Role.CLIENT).first()
+        if not client_user:
+            return Response({"detail": "Клиент не найден."}, status=status.HTTP_400_BAD_REQUEST)
+        if request.user.role == "provider":
+            provider = request.user
+        else:
+            link = ProviderStaff.objects.filter(
+                staff=request.user,
+                is_active=True,
+                invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+            ).first()
+            if not link:
+                return Response(status=status.HTTP_403_FORBIDDEN)
+            provider = link.provider
+        if not staff_can_access_client_chats(request.user, provider):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        conv, _ = get_or_create_client_conversation(provider, client_user)
+        conv = self.get_queryset().get(pk=conv.pk)
+        return Response(
+            ConversationSerializer(conv, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=["post"], url_path="create-with-provider")
+    def create_with_provider(self, request):
+        if request.user.role != User.Role.CLIENT:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        provider_id = request.data.get("provider_id")
+        if not provider_id:
+            return Response({"detail": "provider_id required"}, status=status.HTTP_400_BAD_REQUEST)
+        provider = User.objects.filter(pk=provider_id, role=User.Role.PROVIDER).first()
+        if not provider:
+            return Response({"detail": "Организация не найдена."}, status=status.HTTP_400_BAD_REQUEST)
+        conv, _ = get_or_create_client_conversation(provider, request.user)
+        conv = self.get_queryset().get(pk=conv.pk)
+        return Response(
+            ConversationSerializer(conv, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
 
 class MessageViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
@@ -223,14 +272,18 @@ class ChatActivitySummaryView(APIView):
             }
             for n in notes
         ]
+        from .services import count_unread_chat_messages
+
         unread_n = InAppNotification.objects.filter(user=user, read=False).count()
         pending_n = len(pending)
+        unread_chat = count_unread_chat_messages(user)
         return Response(
             {
                 "pending_staff_invites": pending,
                 "notifications": notif_data,
                 "unread_notification_count": unread_n,
                 "pending_invite_count": pending_n,
-                "badge_count": unread_n + pending_n,
+                "unread_chat_messages_count": unread_chat,
+                "badge_count": unread_n + pending_n + unread_chat,
             }
         )

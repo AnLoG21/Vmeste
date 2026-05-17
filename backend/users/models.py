@@ -30,3 +30,18 @@ class User(AbstractUser):
         max_length=30, choices=ProviderSphere.choices, blank=True
     )
     last_seen_at = models.DateTimeField(null=True, blank=True)
+    booking_confirm_message_default = models.TextField(
+        blank=True,
+        default="",
+        help_text="Сообщение клиенту при подтверждении записи.",
+    )
+    booking_cancel_message_default = models.TextField(
+        blank=True,
+        default="",
+        help_text="Сообщение клиенту при отмене записи организацией.",
+    )
+    booking_done_message_default = models.TextField(
+        blank=True,
+        default="",
+        help_text="Сообщение клиенту при отметке «услуга оказана».",
+    )

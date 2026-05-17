@@ -7,7 +7,27 @@ const NOMINATIM_HEADERS = { Accept: "application/json", "Accept-Language": "ru,r
 const BASE_URL = API_URL.replace("/api", "");
 const AUTH_URL = `${BASE_URL}/api/auth/token/`;
 const REFRESH_URL = `${BASE_URL}/api/auth/token/refresh/`;
-const INTERVALS_STORAGE_KEY = "vmeste_saved_intervals";
+function savedIntervalsStorageKey(providerId) {
+  if (!providerId) return null;
+  return `vmeste_saved_intervals_v2_${providerId}`;
+}
+
+function buildServiceDraftFromService(service) {
+  return {
+    price: String(service.price ?? 0),
+    duration_minutes: String(service.duration_minutes ?? 30),
+    is_active: Boolean(service.is_active),
+  };
+}
+
+function serviceDraftEqualsService(draft, service) {
+  if (!draft) return true;
+  return (
+    Number(draft.price) === Number(service.price) &&
+    Number(draft.duration_minutes) === Number(service.duration_minutes) &&
+    Boolean(draft.is_active) === Boolean(service.is_active)
+  );
+}
 const chatPrefsStorageKey = (id) => `vmeste_chat_prefs_v1_${id}`;
 const CHAT_WALL_OPTIONS = [
   { label: "Мята", value: "#dfe9e2" },
@@ -125,10 +145,24 @@ function conversationOrgDirectPeerTitle(conversation, myUserId) {
   });
 }
 
+function conversationClientCorrespondenceTitle(conversation, myUserId, myRole) {
+  if (!conversation?.is_client_correspondence) return "";
+  const other = (conversation.members || []).find((m) => Number(m.user) !== Number(myUserId));
+  if (!other) return "";
+  if (myRole === "client") {
+    const org = String(other.organization_name || "").trim();
+    if (org) return org;
+    return formatChatPeerFullName(other);
+  }
+  return formatChatPeerFullName(other);
+}
+
 /** Имя в списке по умолчанию: собеседник (имя фамилия) или заголовок чата. */
-function defaultChatListNameForConversation(conversation, myUserId) {
+function defaultChatListNameForConversation(conversation, myUserId, myRole) {
   if (!conversation) return "";
   if (conversation.is_saved_messages) return "Избранное";
+  const clientPeer = conversationClientCorrespondenceTitle(conversation, myUserId, myRole);
+  if (clientPeer) return clientPeer;
   const peer = conversationOrgDirectPeerTitle(conversation, myUserId);
   if (peer) return peer;
   return conversation.title || `Чат #${conversation.id ?? ""}`;
@@ -723,6 +757,603 @@ function buildIntervalPopoverFixedStyle(anchorEl) {
   };
 }
 
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function currentLocalMonthKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function isoMonthKey(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso).slice(0, 7);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function normalizeBookingsList(data) {
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.results)) return data.results;
+  return [];
+}
+
+function formatApiError(err, status) {
+  if (!err || typeof err !== "object") {
+    if (status === 500) return "Ошибка сервера. Попробуйте позже.";
+    return "";
+  }
+  if (typeof err.detail === "string") return err.detail;
+  const parts = [];
+  for (const val of Object.values(err)) {
+    if (typeof val === "string") parts.push(val);
+    else if (Array.isArray(val)) parts.push(...val.filter((x) => typeof x === "string"));
+  }
+  return parts.join(" ") || "";
+}
+
+function normalizeReviewsList(data) {
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.results)) return data.results;
+  return [];
+}
+
+function reviewImageUrl(path) {
+  if (!path) return "";
+  if (String(path).startsWith("http")) return path;
+  const base = BASE_URL.replace(/\/$/, "");
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function chatMessagePlainText(m) {
+  if (!m) return "";
+  if (m.kind === "review_reply" && m.payload) {
+    const p = m.payload;
+    return [p.review_text, p.reply_text].filter(Boolean).join(" ");
+  }
+  return (m.display_text || m.text || "").trim();
+}
+
+function renderChatMessageBody(m) {
+  if (m.kind === "review_reply" && m.payload) {
+    const p = m.payload;
+    const rating = Math.min(5, Math.max(0, Number(p.rating) || 0));
+    const photos = Array.isArray(p.photo_paths) ? p.photo_paths : [];
+    const replyText = (p.reply_text || m.display_text || m.text || "").trim();
+    return (
+      <div className="tg-msg-review-card">
+        <div className="tg-msg-review-head">
+          <span className="tg-msg-review-label">Отзыв</span>
+          {p.client_name ? <span className="tg-msg-review-client muted small">{p.client_name}</span> : null}
+        </div>
+        {rating > 0 ? (
+          <span className="review-stars tg-msg-review-stars" aria-label={`Оценка ${rating}`}>
+            {"★".repeat(rating)}
+            <span className="review-stars-empty">{"☆".repeat(5 - rating)}</span>
+          </span>
+        ) : null}
+        {p.review_text ? <p className="tg-msg-review-text">{p.review_text}</p> : null}
+        {photos.length > 0 ? (
+          <div className="tg-msg-review-photos review-photos">
+            {photos.map((src, i) => (
+              <a key={`${src}-${i}`} href={reviewImageUrl(src)} target="_blank" rel="noreferrer">
+                <img src={reviewImageUrl(src)} alt="" />
+              </a>
+            ))}
+          </div>
+        ) : null}
+        <div className="tg-msg-review-reply">
+          <strong>Ответ организации</strong>
+          {replyText ? <p>{replyText}</p> : null}
+        </div>
+      </div>
+    );
+  }
+  return <div className="tg-msg-text">{m.text}</div>;
+}
+
+function bookingSlotStatusModifier(status) {
+  if (status === "cancelled") return "booking-slot--cancelled";
+  if (status === "done") return "booking-slot--done";
+  return "";
+}
+
+const BOOKING_STATUS_LABELS = {
+  new: "Новая",
+  confirmed: "Подтверждена",
+  cancelled: "Отменена",
+  done: "Оказана",
+};
+
+function bookingStatusLabel(status) {
+  return BOOKING_STATUS_LABELS[status] || status || "";
+}
+
+function StarRating({ value, onChange }) {
+  return (
+    <div className="star-rating" role="group" aria-label="Оценка">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          className={["star-rating-btn", n <= value && "star-rating-btn--active"].filter(Boolean).join(" ")}
+          aria-label={`${n} из 5`}
+          aria-pressed={n <= value}
+          onClick={() => onChange(n)}
+        >
+          <span className="star-rating-icon" aria-hidden>★</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function formatTimeHm(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
+
+function clientWindowKey(w) {
+  return `${w.starts_at}|${w.ends_at}|${w.staff_id ?? ""}`;
+}
+
+const BOOKING_MESSAGE_DATE_TOKEN = "{date}";
+
+function parseBookingMessage(value) {
+  if (!value) return [""];
+  return value.split(/(\{date\})/g);
+}
+
+function serializeBookingEditor(root) {
+  if (!root) return "";
+  let out = "";
+  root.childNodes.forEach((node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      out += node.textContent || "";
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const el = node;
+    if (el.dataset?.bookingToken === "date") {
+      out += BOOKING_MESSAGE_DATE_TOKEN;
+      return;
+    }
+    if (el.tagName === "BR") {
+      out += "\n";
+      return;
+    }
+    out += serializeBookingEditor(el);
+  });
+  return out;
+}
+
+function resizeBookingEditor(el) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${Math.max(el.scrollHeight, 72)}px`;
+}
+
+function createBookingTokenElement() {
+  const wrap = document.createElement("span");
+  wrap.contentEditable = "false";
+  wrap.dataset.bookingToken = "date";
+  wrap.className = "booking-msg-token booking-msg-token--inline";
+  wrap.setAttribute("title", "Дата и время записи клиента");
+  wrap.innerHTML =
+    '<span class="booking-msg-token-grip" aria-hidden="true">⋮⋮</span> Дата и время записи <span class="booking-msg-token-remove" role="button" tabindex="0" aria-label="Убрать дату и время">×</span>';
+  return wrap;
+}
+
+function syncBookingEditorFromValue(root, value) {
+  if (!root) return;
+  root.innerHTML = "";
+  parseBookingMessage(value).forEach((part) => {
+    if (part === BOOKING_MESSAGE_DATE_TOKEN) {
+      root.appendChild(createBookingTokenElement());
+    } else if (part) {
+      root.appendChild(document.createTextNode(part));
+    }
+  });
+  resizeBookingEditor(root);
+}
+
+function insertBookingTokenAtSelection(root) {
+  if (!root) return;
+  root.focus();
+  const token = createBookingTokenElement();
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) {
+    root.appendChild(token);
+  } else {
+    const range = sel.getRangeAt(0);
+    if (!root.contains(range.commonAncestorContainer)) {
+      root.appendChild(token);
+    } else {
+      range.deleteContents();
+      range.insertNode(token);
+      range.setStartAfter(token);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }
+  resizeBookingEditor(root);
+}
+
+function BookingMsgDateToken({ onDragStart, onRemove, onClick, className = "" }) {
+  return (
+    <button
+      type="button"
+      draggable
+      className={["booking-msg-token", className].filter(Boolean).join(" ")}
+      onDragStart={onDragStart}
+      onClick={onClick}
+      title="Перетащите в текст или нажмите для вставки"
+    >
+      <span className="booking-msg-token-grip" aria-hidden="true">
+        ⋮⋮
+      </span>
+      Дата и время записи
+      {onRemove ? (
+        <span
+          role="button"
+          tabIndex={0}
+          className="booking-msg-token-remove"
+          aria-label="Убрать дату и время"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              onRemove();
+            }
+          }}
+        >
+          ×
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function BookingMessageField({ id, label, value, onChange, placeholder, highlighted }) {
+  const editorRef = useRef(null);
+  const syncingRef = useRef(false);
+  const isEmpty = !value.trim();
+
+  function onTokenDragStart(e) {
+    e.dataTransfer.setData("text/plain", BOOKING_MESSAGE_DATE_TOKEN);
+    e.dataTransfer.effectAllowed = "copy";
+  }
+
+  function emitFromEditor() {
+    const el = editorRef.current;
+    if (!el) return;
+    syncingRef.current = true;
+    onChange(serializeBookingEditor(el));
+    syncingRef.current = false;
+    resizeBookingEditor(el);
+  }
+
+  function insertToken() {
+    insertBookingTokenAtSelection(editorRef.current);
+    emitFromEditor();
+  }
+
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el || syncingRef.current) return;
+    if (serializeBookingEditor(el) !== value) {
+      syncBookingEditorFromValue(el, value);
+    }
+  }, [value]);
+
+  return (
+    <div className="booking-msg-field">
+      <label className="field-label" htmlFor={id}>
+        {label}
+      </label>
+      <div
+        id={id}
+        ref={editorRef}
+        role="textbox"
+        aria-multiline="true"
+        aria-label={label}
+        contentEditable
+        suppressContentEditableWarning
+        className={[
+          "booking-msg-composer",
+          "booking-msg-editor",
+          highlighted && "booking-msg-composer--highlight",
+          isEmpty && "booking-msg-editor--empty",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        data-placeholder={placeholder || ""}
+        onInput={emitFromEditor}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          if (e.dataTransfer.getData("text/plain") === BOOKING_MESSAGE_DATE_TOKEN) {
+            insertToken();
+          }
+        }}
+        onClick={(e) => {
+          const removeBtn = e.target.closest(".booking-msg-token-remove");
+          const token = e.target.closest("[data-booking-token='date']");
+          if (removeBtn && token) {
+            e.preventDefault();
+            token.remove();
+            emitFromEditor();
+          }
+        }}
+        onKeyDown={(e) => {
+          if (!(e.key === "Enter" || e.key === " ")) return;
+          const removeBtn = e.target.closest?.(".booking-msg-token-remove");
+          if (!removeBtn) return;
+          e.preventDefault();
+          removeBtn.closest("[data-booking-token]")?.remove();
+          emitFromEditor();
+        }}
+        onPaste={(e) => {
+          e.preventDefault();
+          const text = e.clipboardData.getData("text/plain");
+          document.execCommand("insertText", false, text);
+          emitFromEditor();
+        }}
+      />
+      <BookingMsgDateToken
+        className="booking-msg-token--palette"
+        onDragStart={onTokenDragStart}
+        onClick={insertToken}
+      />
+    </div>
+  );
+}
+
+function MiniDatePicker({ id, label, value, onChange, allowClear = false }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const today = todayIsoDate();
+  const parsed = value ? new Date(`${value}T12:00:00`) : null;
+  const initialMonth = parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date();
+  const [viewMonth, setViewMonth] = useState(
+    () => `${initialMonth.getFullYear()}-${String(initialMonth.getMonth() + 1).padStart(2, "0")}`,
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e) {
+      if (wrapRef.current?.contains(e.target)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc, true);
+    return () => document.removeEventListener("mousedown", onDoc, true);
+  }, [open]);
+
+  useEffect(() => {
+    if (!value) return;
+    const d = new Date(`${value}T12:00:00`);
+    if (!Number.isNaN(d.getTime())) {
+      setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+  }, [value]);
+
+  const [vy, vm] = viewMonth.split("-").map(Number);
+  const first = new Date(vy, vm - 1, 1);
+  const daysInMonth = new Date(vy, vm, 0).getDate();
+  const offset = (first.getDay() + 6) % 7;
+  const cells = [];
+  for (let i = 0; i < offset; i += 1) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d += 1) cells.push(d);
+
+  const displayLabel = value
+    ? new Date(`${value}T12:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })
+    : "Выбрать дату";
+
+  return (
+    <div className="mini-date-picker" ref={wrapRef}>
+      {label ? (
+        <label className="field-label" htmlFor={id}>
+          {label}
+        </label>
+      ) : null}
+      <button
+        id={id}
+        type="button"
+        className={`mini-date-picker-btn${value ? "" : " mini-date-picker-btn--empty"}`}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        {displayLabel}
+      </button>
+      {allowClear && value ? (
+        <button
+          type="button"
+          className="ghost-btn mini-date-picker-clear"
+          onClick={() => {
+            onChange("");
+            setOpen(false);
+          }}
+        >
+          Не учитывать дату
+        </button>
+      ) : null}
+      {open && (
+        <div className="mini-date-picker-popover" role="dialog" aria-label="Календарь">
+          <div className="mini-date-picker-nav">
+            <button
+              type="button"
+              className="ghost-btn mini-date-nav-btn"
+              onClick={() => {
+                const d = new Date(vy, vm - 2, 1);
+                setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+              }}
+            >
+              ‹
+            </button>
+            <span className="mini-date-picker-month">
+              {first.toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}
+            </span>
+            <button
+              type="button"
+              className="ghost-btn mini-date-nav-btn"
+              onClick={() => {
+                const d = new Date(vy, vm, 1);
+                setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+              }}
+            >
+              ›
+            </button>
+          </div>
+          <div className="mini-date-picker-weekdays">
+            {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((wd) => (
+              <span key={wd} className="mini-date-wd">
+                {wd}
+              </span>
+            ))}
+          </div>
+          <div className="mini-date-picker-grid">
+            {cells.map((day, idx) => {
+              if (!day) return <span key={`e-${idx}`} className="mini-date-cell mini-date-cell--empty" />;
+              const iso = `${vy}-${String(vm).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+              const isToday = iso === today;
+              const isSelected = iso === value;
+              return (
+                <button
+                  key={iso}
+                  type="button"
+                  className={[
+                    "mini-date-cell",
+                    isToday && "mini-date-cell--today",
+                    isSelected && "mini-date-cell--selected",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={() => {
+                    onChange(iso);
+                    setOpen(false);
+                  }}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StaffServicesAssignment({ link, categories, services, onSave }) {
+  const [treeOpen, setTreeOpen] = useState({});
+  const visibleServiceIds = new Set(services.map((s) => Number(s.id)));
+  const visibleCategoryIds = new Set(categories.map((c) => Number(c.id)));
+  const svcSet = new Set(
+    (link.assigned_service_ids || []).map(Number).filter((id) => visibleServiceIds.has(id)),
+  );
+  const catSet = new Set(
+    (link.assigned_category_ids || []).map(Number).filter((id) => visibleCategoryIds.has(id)),
+  );
+
+  function emit(nextSvc, nextCat) {
+    onSave(link.id, [...nextSvc], [...nextCat]);
+  }
+
+  function toggleCategory(catId) {
+    const catServices = services.filter((s) => Number(s.category) === Number(catId)).map((s) => Number(s.id));
+    const nextCat = new Set(catSet);
+    const nextSvc = new Set(svcSet);
+    if (nextCat.has(Number(catId))) {
+      nextCat.delete(Number(catId));
+      catServices.forEach((id) => nextSvc.delete(id));
+    } else {
+      nextCat.add(Number(catId));
+      catServices.forEach((id) => nextSvc.add(id));
+    }
+    emit(nextSvc, nextCat);
+  }
+
+  function toggleService(svc) {
+    const sid = Number(svc.id);
+    const cid = svc.category ? Number(svc.category) : null;
+    const nextSvc = new Set(svcSet);
+    const nextCat = new Set(catSet);
+    if (nextSvc.has(sid)) nextSvc.delete(sid);
+    else nextSvc.add(sid);
+    if (cid) {
+      const catServices = services.filter((s) => Number(s.category) === cid);
+      const allOn = catServices.length > 0 && catServices.every((s) => nextSvc.has(Number(s.id)));
+      if (allOn) nextCat.add(cid);
+      else nextCat.delete(cid);
+    }
+    emit(nextSvc, nextCat);
+  }
+
+  const uncategorized = services.filter((s) => !s.category);
+
+  return (
+    <div className="staff-services-tree">
+      {categories.map((cat) => {
+        const catServices = services.filter((s) => Number(s.category) === Number(cat.id));
+        const isOpen = treeOpen[cat.id] ?? true;
+        const catChecked = catSet.has(Number(cat.id));
+        return (
+          <div key={cat.id} className="staff-svc-cat">
+            <div className="staff-svc-cat-row">
+              <label className="checkbox staff-svc-check">
+                <input type="checkbox" checked={catChecked} onChange={() => toggleCategory(cat.id)} />
+              </label>
+              <button type="button" className="tree-toggle staff-svc-toggle" onClick={() => setTreeOpen((p) => ({ ...p, [cat.id]: !isOpen }))}>
+                {isOpen ? "▼" : "▶"} {cat.name}
+              </button>
+            </div>
+            {isOpen && (
+              <div className="staff-svc-children">
+                {catServices.map((srv) => (
+                  <label key={srv.id} className="checkbox staff-svc-item">
+                    <input type="checkbox" checked={svcSet.has(Number(srv.id))} onChange={() => toggleService(srv)} />
+                    {srv.name}
+                  </label>
+                ))}
+                {catServices.length === 0 && <p className="muted small">Нет услуг в категории</p>}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {uncategorized.length > 0 && (
+        <div className="staff-svc-cat">
+          <div className="staff-svc-cat-row">
+            <span className="muted small-label">Без категории</span>
+          </div>
+          <div className="staff-svc-children">
+            {uncategorized.map((srv) => (
+              <label key={srv.id} className="checkbox staff-svc-item">
+                <input type="checkbox" checked={svcSet.has(Number(srv.id))} onChange={() => toggleService(srv)} />
+                {srv.name}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+      {categories.length === 0 && uncategorized.length === 0 && (
+        <p className="muted small">В разделе «Услуги и категории» включите услуги (галочка «Оказываем»), чтобы назначать их сотрудникам.</p>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [authMode, setAuthMode] = useState("login");
   const [registerStep, setRegisterStep] = useState(1);
@@ -756,45 +1387,54 @@ export default function App() {
   const allLocationsRef = useRef([]);
   const [clientMapSearchInput, setClientMapSearchInput] = useState("");
   const [clientDiscoverSearch, setClientDiscoverSearch] = useState("");
-  const [clientDiscoverFilters, setClientDiscoverFilters] = useState({
+  const emptyClientFilters = () => ({
     sphere: "",
     min_price: "",
     max_price: "",
-    slot_date_from: "",
-    slot_date_to: "",
+    slot_date: "",
     time_from: "",
     time_to: "",
   });
-  const [clientFilterModalDraft, setClientFilterModalDraft] = useState({
-    sphere: "",
-    min_price: "",
-    max_price: "",
-    slot_date_from: "",
-    slot_date_to: "",
-    time_from: "",
-    time_to: "",
-  });
+  const clientDiscoverFiltersRef = useRef(emptyClientFilters());
+  const [clientDiscoverFilters, setClientDiscoverFilters] = useState(emptyClientFilters);
+  const [clientFilterModalDraft, setClientFilterModalDraft] = useState(emptyClientFilters);
   const [clientFiltersOpen, setClientFiltersOpen] = useState(false);
+  const [clientBookModalOpen, setClientBookModalOpen] = useState(false);
+  const [mapOrgPopup, setMapOrgPopup] = useState(null);
+  const [mapOrgSummary, setMapOrgSummary] = useState(null);
+  const [mapOrgReviewsOpen, setMapOrgReviewsOpen] = useState(false);
+  const [mapOrgReviews, setMapOrgReviews] = useState([]);
+  const [mapOrgReviewsOrdering, setMapOrgReviewsOrdering] = useState("-created_at");
+  const [orgBookingMessages, setOrgBookingMessages] = useState({ confirm: "", cancel: "", done: "" });
+  const [orgSettingsHighlight, setOrgSettingsHighlight] = useState("");
+  const [bookingMessageError, setBookingMessageError] = useState(null);
+  const [reviewModalBooking, setReviewModalBooking] = useState(null);
+  const [reviewForm, setReviewForm] = useState({ rating: 5, text: "" });
+  const [reviewSubmitError, setReviewSubmitError] = useState("");
+  const [providerReviews, setProviderReviews] = useState([]);
+  const [providerReviewsOrdering, setProviderReviewsOrdering] = useState("-created_at");
+  const [missedReviewsCount, setMissedReviewsCount] = useState(0);
+  const [myReviews, setMyReviews] = useState([]);
+  const [reviewReplyOpenId, setReviewReplyOpenId] = useState(null);
+  const [reviewReplyForms, setReviewReplyForms] = useState({});
+  const [reviewReplyFormError, setReviewReplyFormError] = useState("");
   const clientDiscoverMapRef = useRef(null);
   const clientMeBootstrappedRef = useRef(false);
   const [providerServices, setProviderServices] = useState([]);
-  const [providerSlots, setProviderSlots] = useState([]);
+  const [clientBookWindows, setClientBookWindows] = useState([]);
   const [clientBookingForm, setClientBookingForm] = useState({
     locationId: "",
     provider: "",
-    slot: "",
+    serviceId: "",
+    bookDate: "",
+    windowKey: "",
     comment: "",
   });
 
-  const [categoryForm, setCategoryForm] = useState({ name: "", allow_subcategory_booking: true });
-  const [serviceForm, setServiceForm] = useState({
-    category: "",
-    name: "",
-    price: "1000",
-    duration_minutes: "30",
-    is_active: true,
-  });
   const [categoryOpen, setCategoryOpen] = useState({});
+  const [subcategoryOpen, setSubcategoryOpen] = useState({});
+  const [catalogStatus, setCatalogStatus] = useState(null);
+  const [catalogSeeding, setCatalogSeeding] = useState(false);
   const [slotForm, setSlotForm] = useState({ starts_at: "", ends_at: "" });
   const [intervalForm, setIntervalForm] = useState({
     date: "",
@@ -804,17 +1444,12 @@ export default function App() {
     repeat_count: "1",
   });
   const [calendarMonth, setCalendarMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [bookingsMonth, setBookingsMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [bookingsMonth, setBookingsMonth] = useState(currentLocalMonthKey);
   const [intervalToast, setIntervalToast] = useState(null);
   const intervalToastTimerRef = useRef(null);
-  const [savedIntervals, setSavedIntervals] = useState(() => {
-    try {
-      const raw = localStorage.getItem(INTERVALS_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [savedIntervals, setSavedIntervals] = useState([]);
+  const [serviceDrafts, setServiceDrafts] = useState({});
+  const [serviceSavingAll, setServiceSavingAll] = useState(false);
   const [selectedIntervalId, setSelectedIntervalId] = useState(null);
   const [dragIntervalId, setDragIntervalId] = useState(null);
   const [intervalPopoverId, setIntervalPopoverId] = useState(null);
@@ -858,6 +1493,7 @@ export default function App() {
   const [staffInviteForm, setStaffInviteForm] = useState({ invite_identifier: "" });
   const [staffInviteStatus, setStaffInviteStatus] = useState("");
   const [staffPermsOpenId, setStaffPermsOpenId] = useState(null);
+  const [staffServicesOpenId, setStaffServicesOpenId] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [selectedChatId, setSelectedChatId] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
@@ -872,6 +1508,7 @@ export default function App() {
   const [chatMsgSearchOpen, setChatMsgSearchOpen] = useState(false);
   const [chatMsgSearchQuery, setChatMsgSearchQuery] = useState("");
   const [chatMsgSearchActiveIdx, setChatMsgSearchActiveIdx] = useState(0);
+  const menuWrapRef = useRef(null);
   const tgAttachMenuRef = useRef(null);
   const tgMsgSearchWrapRef = useRef(null);
   const chatMsgSearchInputRef = useRef(null);
@@ -951,6 +1588,7 @@ export default function App() {
       manage_intervals: false,
       manage_services: false,
       manage_chats: true,
+      manage_client_chats: true,
       manage_staff: false,
       can_delegate_permissions: false,
     };
@@ -959,10 +1597,29 @@ export default function App() {
     return { ...base, ...(link?.permissions || {}) };
   }, [me, orgStaff]);
 
+  useEffect(() => {
+    if (!me) return;
+    setOrgBookingMessages({
+      confirm: me.booking_confirm_message_default || "",
+      cancel: me.booking_cancel_message_default || "",
+      done: me.booking_done_message_default || "",
+    });
+  }, [me?.booking_confirm_message_default, me?.booking_cancel_message_default, me?.booking_done_message_default]);
+
   function staffHasPerm(key) {
     if (me?.role === "provider") return true;
     if (me?.role !== "staff") return false;
     return Boolean(staffEffectivePerms[key]);
+  }
+
+  function canManageBookings() {
+    if (me?.role === "provider") return true;
+    if (me?.role === "staff") return staffHasPerm("manage_bookings");
+    return false;
+  }
+
+  function canViewOrgReviews() {
+    return me?.role === "provider" || (me?.role === "staff" && staffHasPerm("manage_bookings"));
   }
 
   const canManageOrgSettings =
@@ -1040,6 +1697,24 @@ export default function App() {
   }, [accessToken, me?.id]);
 
   useEffect(() => {
+    if (!accessToken || !me?.role) return;
+    const refresh = () => {
+      if (me.role === "client" || me.role === "provider") loadChats();
+      else if (me.role === "staff" && staffHasPerm("manage_chats")) loadChats();
+    };
+    refresh();
+    const id = setInterval(refresh, 12000);
+    return () => clearInterval(id);
+  }, [accessToken, me?.role, me?.id, staffEffectivePerms.manage_chats]);
+
+  useEffect(() => {
+    if (!accessToken || !canViewOrgReviews()) return;
+    loadMissedReviewsCount();
+    const id = setInterval(loadMissedReviewsCount, 12000);
+    return () => clearInterval(id);
+  }, [accessToken, me?.role, me?.id]);
+
+  useEffect(() => {
     if (!accessToken) return;
     const ping = () => authFetch(`${API_URL}/users/presence/ping/`, { method: "POST", body: "{}" });
     ping();
@@ -1071,13 +1746,11 @@ export default function App() {
       }).then((d) => {
         if (Array.isArray(d)) setOrgStaff(d);
       });
+    } else if (me?.role === "staff") {
+      loadStaffWorkspace();
+    } else if (me?.role === "client") {
+      loadChats();
     }
-    if (me?.role === "staff") loadStaffWorkspace();
-    const iv = setInterval(() => {
-      if (me?.role === "provider") loadChats();
-      else if (me?.role === "staff") loadStaffWorkspace();
-    }, 12000);
-    return () => clearInterval(iv);
   }, [accessToken, currentView, me?.role]);
 
   useEffect(() => {
@@ -1246,6 +1919,16 @@ export default function App() {
   }, [conversations]);
 
   useEffect(() => {
+    if (!menuOpen) return;
+    function onDoc(e) {
+      if (menuWrapRef.current?.contains(e.target)) return;
+      setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc, true);
+    return () => document.removeEventListener("mousedown", onDoc, true);
+  }, [menuOpen]);
+
+  useEffect(() => {
     if (!chatAttachMenuOpen) return;
     function onDoc(e) {
       if (tgAttachMenuRef.current?.contains(e.target)) return;
@@ -1299,8 +1982,10 @@ export default function App() {
     if (f.sphere) p.set("sphere", f.sphere);
     if (String(f.min_price).trim() !== "") p.set("min_price", String(f.min_price).trim());
     if (String(f.max_price).trim() !== "") p.set("max_price", String(f.max_price).trim());
-    if (f.slot_date_from) p.set("slot_date_from", f.slot_date_from);
-    if (f.slot_date_to) p.set("slot_date_to", f.slot_date_to);
+    if (f.slot_date) {
+      p.set("slot_date_from", f.slot_date);
+      p.set("slot_date_to", f.slot_date);
+    }
     if (f.time_from) p.set("time_from", f.time_from);
     if (f.time_to) p.set("time_to", f.time_to);
     const qs = p.toString();
@@ -1322,7 +2007,7 @@ export default function App() {
     (async () => {
       const bookingsRes = await authFetch(`${API_URL}/booking/`);
       if (cancelled || !bookingsRes.ok) return;
-      setBookings(await bookingsRes.json());
+      setBookings(normalizeBookingsList(await bookingsRes.json()));
     })();
     return () => {
       cancelled = true;
@@ -1330,8 +2015,85 @@ export default function App() {
   }, [accessToken, me?.id, me?.role]);
 
   useEffect(() => {
+    if (!accessToken || me?.role !== "client") return;
+    loadMyReviews();
+  }, [accessToken, me?.role, me?.id]);
+
+  useEffect(() => {
+    if (!accessToken || currentView !== "reviews" || !canViewOrgReviews()) return;
+    loadProviderReviewsList(providerReviewsOrdering);
+    markReviewsSeen();
+  }, [accessToken, currentView, me?.role, providerReviewsOrdering, staffEffectivePerms]);
+
+  useEffect(() => {
+    if (!accessToken || currentView !== "services" || me?.role !== "provider") return;
+    loadCatalogStatus();
+  }, [accessToken, currentView, me?.role, me?.provider_sphere]);
+
+  useEffect(() => {
+    if (!accessToken || me?.role !== "provider") return;
+    if (currentView !== "intervals" && currentView !== "bookings") return;
+    reloadProviderSlots();
+    const id = setInterval(reloadProviderSlots, 15000);
+    return () => clearInterval(id);
+  }, [accessToken, me?.role, currentView]);
+
+  useEffect(() => {
+    if (!accessToken || currentView !== "bookings") return;
+    if (me?.role === "client") reloadBookingsList();
+    else if (me?.role === "provider") loadSellerData();
+    else if (me?.role === "staff" && staffHasPerm("manage_bookings")) reloadBookingsList();
+  }, [accessToken, currentView, me?.role, me?.id]);
+
+  useEffect(() => {
     allLocationsRef.current = allLocations;
   }, [allLocations]);
+
+  useEffect(() => {
+    clientDiscoverFiltersRef.current = clientDiscoverFilters;
+  }, [clientDiscoverFilters]);
+
+  useEffect(() => {
+    if (currentView === "client_book" && me?.role === "client" && clientDiscoverFilters.slot_date && !clientBookingForm.bookDate) {
+      setClientBookingForm((p) => ({ ...p, bookDate: clientDiscoverFilters.slot_date }));
+    }
+  }, [currentView, me?.role, clientDiscoverFilters.slot_date]);
+
+  useEffect(() => {
+    if (me?.role !== "client") return;
+    const { provider, serviceId, bookDate } = clientBookingForm;
+    if (!provider || !serviceId || !bookDate) {
+      setClientBookWindows([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const res = await authFetch(
+        `${API_URL}/booking/slots/available-windows/?provider=${encodeURIComponent(provider)}&service=${encodeURIComponent(serviceId)}&date=${encodeURIComponent(bookDate)}`,
+      );
+      if (cancelled) return;
+      if (res.ok) setClientBookWindows(await res.json());
+      else setClientBookWindows([]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [clientBookingForm.provider, clientBookingForm.serviceId, clientBookingForm.bookDate, me?.role]);
+
+  useEffect(() => {
+    const map = clientDiscoverMapRef.current;
+    if (!map || currentView !== "client_map" || me?.role !== "client") return;
+    const lockMap = Boolean(mapOrgPopup || clientBookModalOpen || clientFiltersOpen);
+    try {
+      if (lockMap) {
+        map.behaviors.disable(["drag", "scrollZoom", "dblClickZoom", "multiTouch"]);
+      } else {
+        map.behaviors.enable(["drag", "scrollZoom", "dblClickZoom", "multiTouch"]);
+      }
+    } catch {
+      // ignore
+    }
+  }, [mapOrgPopup, clientBookModalOpen, clientFiltersOpen, currentView, me?.role]);
 
   useEffect(() => {
     if (currentView !== "client_map" || me?.role !== "client") {
@@ -1383,7 +2145,9 @@ export default function App() {
 
   useEffect(() => {
     if (!accessToken || currentView === "chats") return;
-    const canPoll = me?.role === "provider" || (me?.role === "staff" && staffEffectivePerms.manage_chats);
+    const canPoll =
+      me?.role === "provider" ||
+      (me?.role === "staff" && (staffEffectivePerms.manage_chats || staffEffectivePerms.manage_client_chats));
     if (!canPoll) return;
     let cancelled = false;
     async function poll() {
@@ -1460,12 +2224,46 @@ export default function App() {
   }, [authMode, form.role, registerStep]);
 
   useEffect(() => {
+    if (me?.role !== "provider" || !me?.id) {
+      setSavedIntervals([]);
+      setSelectedIntervalId(null);
+      closeIntervalPopover();
+      return;
+    }
+    const key = savedIntervalsStorageKey(me.id);
     try {
-      localStorage.setItem(INTERVALS_STORAGE_KEY, JSON.stringify(savedIntervals));
+      const raw = localStorage.getItem(key);
+      setSavedIntervals(raw ? JSON.parse(raw) : []);
+    } catch {
+      setSavedIntervals([]);
+    }
+    setSelectedIntervalId(null);
+    closeIntervalPopover();
+  }, [me?.id, me?.role, closeIntervalPopover]);
+
+  useEffect(() => {
+    if (me?.role !== "provider" || !me?.id) return;
+    const key = savedIntervalsStorageKey(me.id);
+    try {
+      localStorage.setItem(key, JSON.stringify(savedIntervals));
     } catch {
       // Ignore storage quota/access errors.
     }
-  }, [savedIntervals]);
+  }, [savedIntervals, me?.id, me?.role]);
+
+  useEffect(() => {
+    if (currentView !== "services" || me?.role !== "provider") return;
+    setServiceDrafts((prev) => {
+      const next = { ...prev };
+      for (const s of services) {
+        if (!next[s.id]) next[s.id] = buildServiceDraftFromService(s);
+      }
+      for (const id of Object.keys(next)) {
+        if (!services.some((s) => String(s.id) === String(id))) delete next[id];
+      }
+      return next;
+    });
+  }, [services, currentView, me?.role]);
 
   useEffect(() => {
     if (selectedIntervalId && !savedIntervals.some((x) => x.id === selectedIntervalId)) {
@@ -1523,15 +2321,17 @@ export default function App() {
   }
 
   async function authFetch(url, options = {}) {
-    const doRequest = async (tokenValue) =>
-      fetch(url, {
-        ...options,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${tokenValue}`,
-          ...(options.headers || {}),
-        },
-      });
+    const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+    const doRequest = async (tokenValue) => {
+      const headers = {
+        Authorization: `Bearer ${tokenValue}`,
+        ...(options.headers || {}),
+      };
+      if (!isFormData && !headers["Content-Type"]) {
+        headers["Content-Type"] = "application/json";
+      }
+      return fetch(url, { ...options, headers });
+    };
 
     let response = await doRequest(accessToken);
     if (response.status !== 401) return response;
@@ -2138,8 +2938,9 @@ export default function App() {
         { preset: "islands#orangeDotIcon" },
       );
       pm.events.add("click", () => {
-        setCurrentView("client_book");
-        onClientLocationSelect(String(loc.id));
+        setMapOrgPopup(loc);
+        setMapOrgReviewsOpen(false);
+        loadMapOrgSummary(loc.provider);
       });
       map.geoObjects.add(pm);
       coordsList.push([lat, lon]);
@@ -2491,6 +3292,12 @@ export default function App() {
     return tail ? `${baseAddress} | ${tail}` : baseAddress;
   }
 
+  async function reloadProviderSlots() {
+    if (me?.role !== "provider") return;
+    const slotRes = await authFetch(`${API_URL}/booking/slots/`);
+    if (slotRes.ok) setSlots(await slotRes.json());
+  }
+
   async function loadSellerData() {
     const [catRes, servRes, slotRes, bookingRes, locRes, staffRes] = await Promise.all([
       authFetch(`${API_URL}/catalog/categories/`),
@@ -2503,7 +3310,7 @@ export default function App() {
     if (catRes.ok) setCategories(await catRes.json());
     if (servRes.ok) setServices(await servRes.json());
     if (slotRes.ok) setSlots(await slotRes.json());
-    if (bookingRes.ok) setBookings(await bookingRes.json());
+    if (bookingRes.ok) setBookings(normalizeBookingsList(await bookingRes.json()));
     if (locRes.ok) setLocation(await locRes.json());
     if (staffRes.ok) setOrgStaff(await staffRes.json());
   }
@@ -2590,12 +3397,20 @@ export default function App() {
   }, [currentView, me?.role, orgBranchAddOpen, locationForm.latitude, locationForm.longitude]);
 
   async function loadStaffWorkspace() {
-    const [staffRes, convRes] = await Promise.all([
+    const reqs = [
       authFetch(`${API_URL}/booking/staff/`),
       authFetch(`${API_URL}/chat/conversations/`),
-    ]);
-    if (staffRes.ok) setOrgStaff(await staffRes.json());
-    if (convRes.ok) setConversations(await convRes.json());
+      authFetch(`${API_URL}/booking/`),
+    ];
+    if (me?.role === "staff" && staffEffectivePerms.can_delegate_permissions) {
+      reqs.push(authFetch(`${API_URL}/catalog/categories/`), authFetch(`${API_URL}/catalog/services/`));
+    }
+    const results = await Promise.all(reqs);
+    if (results[0].ok) setOrgStaff(await results[0].json());
+    if (results[1].ok) setConversations(await results[1].json());
+    if (results[2].ok) setBookings(normalizeBookingsList(await results[2].json()));
+    if (results[3]?.ok) setCategories(await results[3].json());
+    if (results[4]?.ok) setServices(await results[4].json());
   }
 
   async function loadChats() {
@@ -2786,6 +3601,8 @@ export default function App() {
     if (conversation.is_saved_messages) return "Избранное";
     const local = chatLocalPrefs[conversation.id];
     if (local?.title?.trim()) return local.title.trim();
+    const clientPeer = conversationClientCorrespondenceTitle(conversation, me?.id, me?.role);
+    if (clientPeer) return clientPeer;
     const peer = conversationOrgDirectPeerTitle(conversation, me?.id);
     if (peer) return peer;
     return conversation.title || `Чат #${conversation.id ?? ""}`;
@@ -2806,6 +3623,23 @@ export default function App() {
       return;
     }
     setStaffInviteStatus("Права обновлены.");
+    if (me?.role === "provider") loadSellerData();
+    else loadStaffWorkspace();
+  }
+
+  async function patchStaffServiceAssignment(linkId, serviceIds, categoryIds) {
+    const response = await authFetch(`${API_URL}/booking/staff/${linkId}/`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        assigned_service_ids: serviceIds,
+        assigned_category_ids: categoryIds,
+      }),
+    });
+    if (!response.ok) {
+      setStaffInviteStatus("Не удалось сохранить услуги сотрудника.");
+      return;
+    }
+    setStaffInviteStatus("Услуги сотрудника обновлены.");
     if (me?.role === "provider") loadSellerData();
     else loadStaffWorkspace();
   }
@@ -2916,35 +3750,124 @@ export default function App() {
   }
 
   async function loadClientBookings() {
-    const bookingsRes = await authFetch(`${API_URL}/booking/`);
-    if (bookingsRes.ok) setBookings(await bookingsRes.json());
+    await reloadBookingsList();
   }
 
-  async function createCategory(event) {
-    event.preventDefault();
-    const response = await authFetch(`${API_URL}/catalog/categories/`, {
+  async function loadCatalogStatus() {
+    const res = await authFetch(`${API_URL}/catalog/seed-catalog/`);
+    if (res.ok) setCatalogStatus(await res.json());
+  }
+
+  async function seedProviderCatalog() {
+    if (!me?.provider_sphere) {
+      setSellerStatus("Укажите сферу услуг в настройках организации.");
+      return;
+    }
+    setCatalogSeeding(true);
+    setSellerStatus("");
+    const res = await authFetch(`${API_URL}/catalog/seed-catalog/`, {
       method: "POST",
-      body: JSON.stringify(categoryForm),
+      body: JSON.stringify({ sphere: me.provider_sphere }),
     });
-    if (!response.ok) return setSellerStatus("Ошибка при создании категории.");
-    setCategoryForm({ name: "", allow_subcategory_booking: true });
-    setSellerStatus("Категория создана.");
-    loadSellerData();
+    setCatalogSeeding(false);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setSellerStatus(formatApiError(err, res.status) || "Не удалось загрузить каталог.");
+      return;
+    }
+    const data = await res.json();
+    setCatalogStatus(data);
+    const created = data.stats?.services_created ?? 0;
+    setSellerStatus(
+      created > 0
+        ? `Каталог загружен: ${created} услуг. Включите нужные позиции и укажите цены.`
+        : "Каталог обновлён. Проверьте цены и включите нужные услуги.",
+    );
+    await loadSellerData();
+    const openCats = {};
+    const openSubs = {};
+    for (const c of categories) openCats[c.id] = true;
+    setCategoryOpen((prev) => ({ ...openCats, ...prev }));
+    setSubcategoryOpen((prev) => ({ ...openSubs, ...prev }));
   }
 
-  async function createService(event) {
-    event.preventDefault();
-    const payload = {
-      ...serviceForm,
-      category: serviceForm.category ? Number(serviceForm.category) : null,
-      price: Number(serviceForm.price),
-      duration_minutes: Number(serviceForm.duration_minutes),
-    };
-    const response = await authFetch(`${API_URL}/catalog/services/`, { method: "POST", body: JSON.stringify(payload) });
-    if (!response.ok) return setSellerStatus("Ошибка при создании услуги.");
-    setServiceForm({ category: "", name: "", price: "1000", duration_minutes: "30", is_active: true });
-    setSellerStatus("Услуга создана.");
-    loadSellerData();
+  function updateServiceDraft(serviceId, patch) {
+    setServiceDrafts((prev) => {
+      const base =
+        prev[serviceId] ?? buildServiceDraftFromService(services.find((s) => Number(s.id) === Number(serviceId)) || {});
+      return { ...prev, [serviceId]: { ...base, ...patch } };
+    });
+  }
+
+  const dirtyServiceCount = useMemo(
+    () => services.filter((s) => !serviceDraftEqualsService(serviceDrafts[s.id], s)).length,
+    [services, serviceDrafts],
+  );
+
+  const staffAssignableServices = useMemo(
+    () =>
+      services.filter((s) => {
+        const draft = serviceDrafts[s.id];
+        if (draft) return Boolean(draft.is_active);
+        return Boolean(s.is_active);
+      }),
+    [services, serviceDrafts],
+  );
+
+  const staffAssignableCategories = useMemo(() => {
+    const categoryIds = new Set(
+      staffAssignableServices.map((s) => Number(s.category)).filter((id) => Number.isFinite(id) && id > 0),
+    );
+    return categories.filter((cat) => categoryIds.has(Number(cat.id)));
+  }, [categories, staffAssignableServices]);
+
+  async function saveAllServiceChanges() {
+    const dirty = services.filter((s) => !serviceDraftEqualsService(serviceDrafts[s.id], s));
+    if (!dirty.length) {
+      setSellerStatus("Нет изменений для сохранения.");
+      return;
+    }
+    setServiceSavingAll(true);
+    setSellerStatus("");
+    const results = await Promise.all(
+      dirty.map((s) => {
+        const d = serviceDrafts[s.id];
+        return authFetch(`${API_URL}/catalog/services/${s.id}/`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            price: Number(d.price),
+            duration_minutes: Number(d.duration_minutes),
+            is_active: d.is_active,
+          }),
+        });
+      }),
+    );
+    setServiceSavingAll(false);
+    const failed = results.filter((r) => !r.ok).length;
+    if (failed) {
+      setSellerStatus(`Не удалось сохранить ${failed} из ${dirty.length} услуг.`);
+      return;
+    }
+    setServices((prev) =>
+      prev.map((s) => {
+        const d = serviceDrafts[s.id];
+        if (!dirty.some((x) => x.id === s.id)) return s;
+        return {
+          ...s,
+          price: Number(d.price),
+          duration_minutes: Number(d.duration_minutes),
+          is_active: d.is_active,
+        };
+      }),
+    );
+    setServiceDrafts((prev) => {
+      const next = { ...prev };
+      for (const s of dirty) {
+        next[s.id] = { ...serviceDrafts[s.id] };
+      }
+      return next;
+    });
+    setSellerStatus(`Сохранено услуг: ${dirty.length}.`);
   }
 
   async function updateService(id, patch) {
@@ -3298,44 +4221,560 @@ export default function App() {
     loadSellerData();
   }
 
-  async function onClientLocationSelect(locationId) {
+  async function onClientLocationSelect(locationId, presetDate = "") {
     const loc = allLocations.find((x) => String(x.id) === String(locationId));
     if (!loc) {
-      setClientBookingForm((p) => ({ ...p, locationId: "", provider: "", slot: "" }));
+      setClientBookingForm((p) => ({
+        ...p,
+        locationId: "",
+        provider: "",
+        serviceId: "",
+        windowKey: "",
+      }));
       setProviderServices([]);
-      setProviderSlots([]);
+      setClientBookWindows([]);
       return;
     }
     const pid = String(loc.provider);
-    setClientBookingForm((p) => ({ ...p, locationId: String(loc.id), provider: pid, slot: "", comment: p.comment }));
-    const [servicesRes, slotsRes] = await Promise.all([
-      authFetch(`${API_URL}/catalog/services/?provider=${encodeURIComponent(pid)}`),
-      authFetch(`${API_URL}/booking/slots/?provider=${encodeURIComponent(pid)}`),
-    ]);
-    if (servicesRes.ok) setProviderServices(await servicesRes.json());
-    if (slotsRes.ok) setProviderSlots(await slotsRes.json());
+    const bookDate = presetDate || clientDiscoverFiltersRef.current?.slot_date || clientBookingForm.bookDate || todayIsoDate();
+    setClientBookingForm((p) => ({
+      ...p,
+      locationId: String(loc.id),
+      provider: pid,
+      serviceId: "",
+      windowKey: "",
+      bookDate,
+    }));
+    const servicesRes = await authFetch(`${API_URL}/catalog/services/?provider=${encodeURIComponent(pid)}`);
+    if (servicesRes.ok) {
+      const list = await servicesRes.json();
+      setProviderServices(list.filter((s) => s.is_active));
+    } else {
+      setProviderServices([]);
+    }
+    setClientBookWindows([]);
   }
 
   async function createClientBooking(event) {
     event.preventDefault();
-    const serviceId = providerServices.find((s) => s.is_active)?.id;
+    const serviceId = Number(clientBookingForm.serviceId);
     if (!serviceId) {
-      setClientStatus("У исполнителя нет активных услуг для записи.");
+      setClientStatus("Выберите услугу.");
+      return;
+    }
+    const win = clientBookWindows.find((w) => clientWindowKey(w) === clientBookingForm.windowKey);
+    if (!win) {
+      setClientStatus("Выберите время записи.");
       return;
     }
     const response = await authFetch(`${API_URL}/booking/`, {
       method: "POST",
       body: JSON.stringify({
         provider: Number(clientBookingForm.provider),
-        service: Number(serviceId),
-        slot: Number(clientBookingForm.slot),
+        service: serviceId,
+        starts_at: win.starts_at,
+        ends_at: win.ends_at,
+        staff: win.staff_id ?? null,
         comment: clientBookingForm.comment,
       }),
     });
-    if (!response.ok) return setClientStatus("Не удалось создать запись.");
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      setClientStatus(err.detail || "Не удалось создать запись.");
+      return;
+    }
+    const created = await response.json().catch(() => ({}));
+    await reloadBookingsList();
+    const monthKey = isoMonthKey(created.slot_starts_at || win.starts_at);
+    if (monthKey) setBookingsMonth(monthKey);
     setClientStatus("Запись создана.");
-    setClientBookingForm({ locationId: "", provider: "", slot: "", comment: "" });
-    loadClientBookings();
+    setClientBookingForm({
+      locationId: "",
+      provider: "",
+      serviceId: "",
+      bookDate: clientDiscoverFilters.slot_date || "",
+      windowKey: "",
+      comment: "",
+    });
+    setClientBookWindows([]);
+    setClientBookModalOpen(false);
+    setMapOrgPopup(null);
+    setCurrentView("bookings");
+  }
+
+  function bookingClientLabel(it) {
+    const n = (it.client_display_name || "").trim();
+    if (n) return n;
+    return it.client_username || "Клиент";
+  }
+
+  function bookingSlotSecondaryLabel(it) {
+    if (me?.role === "client") {
+      const master = (it.staff_display_name || "").trim();
+      if (master) return master;
+      return (it.service_name || "").trim() || "Мастер";
+    }
+    const client = bookingClientLabel(it);
+    const service = (it.service_name || "").trim();
+    if (client && service) return `${client} · ${service}`;
+    return client || service || "Запись";
+  }
+
+  async function reloadBookingsList() {
+    const bookingsRes = await authFetch(`${API_URL}/booking/`);
+    if (!bookingsRes.ok) return [];
+    const list = normalizeBookingsList(await bookingsRes.json());
+    setBookings(list);
+    return list;
+  }
+
+  async function openChatWithClient(clientId) {
+    const res = await authFetch(`${API_URL}/chat/conversations/create-with-client/`, {
+      method: "POST",
+      body: JSON.stringify({ client_id: Number(clientId) }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    await loadChats();
+    setSelectedChatId(data.id);
+    setChatFolder("clients");
+    setCurrentView("chats");
+    setMenuOpen(false);
+  }
+
+  async function openChatWithProvider(providerId) {
+    const res = await authFetch(`${API_URL}/chat/conversations/create-with-provider/`, {
+      method: "POST",
+      body: JSON.stringify({ provider_id: Number(providerId) }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    await loadChats();
+    setSelectedChatId(data.id);
+    setCurrentView("chats");
+    setMenuOpen(false);
+  }
+
+  async function orgBookingAction(bookingId, action, event) {
+    event?.stopPropagation?.();
+    event?.preventDefault?.();
+    const res = await authFetch(`${API_URL}/booking/${bookingId}/${action}/`, { method: "POST", body: "{}" });
+    if (res.ok) {
+      await reloadBookingsList();
+      return;
+    }
+    const err = await res.json().catch(() => ({}));
+    if (
+      err.code === "confirm_message_not_set"
+      || err.code === "cancel_message_not_set"
+      || err.code === "done_message_not_set"
+      || err.code === "booking_not_started_yet"
+    ) {
+      setBookingMessageError({ code: err.code, detail: err.detail || "" });
+    }
+  }
+
+  function bookingHasStarted(it) {
+    if (!it?.slot_starts_at) return true;
+    const start = new Date(it.slot_starts_at).getTime();
+    return !Number.isNaN(start) && start <= Date.now();
+  }
+
+  async function clientCancelBooking(bookingId, event) {
+    event?.stopPropagation?.();
+    event?.preventDefault?.();
+    const res = await authFetch(`${API_URL}/booking/${bookingId}/cancel-by-client/`, { method: "POST", body: "{}" });
+    if (res.ok) await reloadBookingsList();
+  }
+
+  function goOrgSettingsForBookingMessage(code) {
+    setBookingMessageError(null);
+    const highlight =
+      code === "confirm_message_not_set" ? "confirm" : code === "done_message_not_set" ? "done" : "cancel";
+    setOrgSettingsHighlight(highlight);
+    setCurrentView("organization");
+    setMenuOpen(false);
+    setTimeout(() => setOrgSettingsHighlight(""), 2500);
+  }
+
+  async function loadMapOrgSummary(providerId) {
+    const res = await authFetch(`${API_URL}/reviews/summary/?provider=${encodeURIComponent(providerId)}`);
+    if (res.ok) setMapOrgSummary(await res.json());
+  }
+
+  async function loadMapOrgReviews(providerId, ordering) {
+    const res = await authFetch(
+      `${API_URL}/reviews/?provider=${encodeURIComponent(providerId)}&ordering=${encodeURIComponent(ordering || "-created_at")}`,
+    );
+    if (res.ok) setMapOrgReviews(normalizeReviewsList(await res.json()));
+  }
+
+  async function loadProviderReviewsList(ordering = providerReviewsOrdering) {
+    const res = await authFetch(
+      `${API_URL}/reviews/?ordering=${encodeURIComponent(ordering || "-created_at")}`,
+    );
+    if (res.ok) setProviderReviews(normalizeReviewsList(await res.json()));
+  }
+
+  async function loadMyReviews() {
+    const res = await authFetch(`${API_URL}/reviews/`);
+    if (res.ok) setMyReviews(normalizeReviewsList(await res.json()));
+  }
+
+  async function loadMissedReviewsCount() {
+    if (me?.role !== "provider") return;
+    const res = await authFetch(`${API_URL}/reviews/unread-count/`);
+    if (res.ok) {
+      const data = await res.json();
+      setMissedReviewsCount(Number(data.count) || 0);
+    }
+  }
+
+  async function markReviewsSeen() {
+    if (me?.role !== "provider") return;
+    const res = await authFetch(`${API_URL}/reviews/mark-seen/`, { method: "POST", body: "{}" });
+    if (res.ok) setMissedReviewsCount(0);
+  }
+
+  function openProviderReviews() {
+    setCurrentView("reviews");
+    loadProviderReviewsList(providerReviewsOrdering);
+    markReviewsSeen();
+  }
+
+  async function refreshReviewsAfterSubmit(providerId) {
+    if (me?.role === "client") await loadMyReviews();
+    if (me?.role === "provider") await loadProviderReviewsList(providerReviewsOrdering);
+    if (mapOrgPopup && Number(mapOrgPopup.provider) === Number(providerId)) {
+      await loadMapOrgSummary(providerId);
+      if (mapOrgReviewsOpen) await loadMapOrgReviews(providerId, mapOrgReviewsOrdering);
+    }
+  }
+
+  function bookingHasReview(bookingId) {
+    return myReviews.some((r) => Number(r.booking) === Number(bookingId));
+  }
+
+  function patchReviewInLists(updated) {
+    const merge = (list) => list.map((r) => (Number(r.id) === Number(updated.id) ? { ...r, ...updated } : r));
+    setProviderReviews((list) => merge(list));
+    setMapOrgReviews((list) => merge(list));
+  }
+
+  async function toggleReviewLike(reviewId, likedByMe) {
+    const path = likedByMe ? "unlike" : "like";
+    const res = await authFetch(`${API_URL}/reviews/${reviewId}/${path}/`, { method: "POST", body: "{}" });
+    if (!res.ok) return;
+    const data = await res.json();
+    const patch = (list) =>
+      list.map((r) =>
+        Number(r.id) === Number(reviewId)
+          ? { ...r, liked_by_me: !likedByMe, likes_count: data.likes_count ?? r.likes_count }
+          : r,
+      );
+    setProviderReviews(patch);
+    setMapOrgReviews(patch);
+  }
+
+  function defaultReviewReplyForm(review) {
+    return {
+      text: review?.reply?.text || "",
+      publishReply: true,
+      viaChat: Boolean(review?.reply?.sent_via_chat),
+    };
+  }
+
+  async function submitReviewReply(reviewId) {
+    const form = reviewReplyForms[reviewId] || {};
+    const text = (form.text || "").trim();
+    if (!text) {
+      setReviewReplyFormError("Введите текст ответа.");
+      return;
+    }
+    if (!form.publishReply && !form.viaChat) {
+      setReviewReplyFormError("Отметьте хотя бы один способ: ответ на отзыв или сообщение в чат.");
+      return;
+    }
+    setReviewReplyFormError("");
+    const res = await authFetch(`${API_URL}/reviews/${reviewId}/reply/`, {
+      method: "POST",
+      body: JSON.stringify({
+        text,
+        publish_reply: form.publishReply,
+        via_chat: form.viaChat,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setReviewReplyFormError(formatApiError(err, res.status) || "Не удалось отправить ответ.");
+      return;
+    }
+    const updated = await res.json();
+    patchReviewInLists(updated);
+    setReviewReplyOpenId(null);
+    setReviewReplyForms((p) => {
+      const next = { ...p };
+      delete next[reviewId];
+      return next;
+    });
+  }
+
+  function renderReviewListItem(r, { showClientName = true } = {}) {
+    return (
+      <li key={r.id} className={["review-item", r.is_new && "review-item--new"].filter(Boolean).join(" ")}>
+        <div className="review-item-head">
+          {showClientName ? <strong>{r.client_name || "Клиент"}</strong> : null}
+          {r.is_new ? <span className="review-new-pill">Новый</span> : null}
+          <span className="review-stars" aria-label={`Оценка ${r.rating}`}>
+            {"★".repeat(r.rating)}
+            <span className="review-stars-empty">{"☆".repeat(Math.max(0, 5 - r.rating))}</span>
+          </span>
+        </div>
+        {r.staff_name ? <p className="muted small">Мастер: {r.staff_name}</p> : null}
+        {r.text ? <p className="review-item-text">{r.text}</p> : null}
+        {r.photos?.length > 0 && (
+          <div className="review-photos">
+            {r.photos.map((p) => (
+              <a key={p.id} href={reviewImageUrl(p.image)} target="_blank" rel="noreferrer">
+                <img src={reviewImageUrl(p.image)} alt="" />
+              </a>
+            ))}
+          </div>
+        )}
+        {r.reply?.text && reviewReplyOpenId !== r.id ? (
+          <p className="review-reply">
+            <strong>Ответ организации:</strong> {r.reply.text}
+            {r.reply.sent_via_chat ? <span className="muted small"> (также в чате)</span> : null}
+          </p>
+        ) : null}
+        <div className="review-item-actions">
+          {accessToken && (
+            <button
+              type="button"
+              className={["review-like-btn", r.liked_by_me && "review-like-btn--active"].filter(Boolean).join(" ")}
+              onClick={() => toggleReviewLike(r.id, r.liked_by_me)}
+              aria-pressed={Boolean(r.liked_by_me)}
+            >
+              <span className="review-like-icon" aria-hidden>{r.liked_by_me ? "♥" : "♡"}</span>
+              <span>{Number(r.likes_count) || 0}</span>
+            </button>
+          )}
+          {(me?.role === "provider" || me?.role === "staff") && (
+            reviewReplyOpenId === r.id ? (
+              <div className="review-reply-editor">
+                <textarea
+                  placeholder="Текст ответа"
+                  value={reviewReplyForms[r.id]?.text ?? r.reply?.text ?? ""}
+                  onChange={(e) =>
+                    setReviewReplyForms((p) => ({
+                      ...p,
+                      [r.id]: { ...defaultReviewReplyForm(r), ...p[r.id], text: e.target.value },
+                    }))
+                  }
+                  rows={3}
+                />
+                <div className="review-reply-options">
+                  <label className="checkbox review-reply-option">
+                    <input
+                      type="checkbox"
+                      checked={reviewReplyForms[r.id]?.publishReply ?? true}
+                      onChange={(e) =>
+                        setReviewReplyForms((p) => ({
+                          ...p,
+                          [r.id]: { ...defaultReviewReplyForm(r), ...p[r.id], publishReply: e.target.checked },
+                        }))
+                      }
+                    />
+                    Ответ на отзыв (виден всем)
+                  </label>
+                  <label className="checkbox review-reply-option">
+                    <input
+                      type="checkbox"
+                      checked={reviewReplyForms[r.id]?.viaChat ?? false}
+                      onChange={(e) =>
+                        setReviewReplyForms((p) => ({
+                          ...p,
+                          [r.id]: { ...defaultReviewReplyForm(r), ...p[r.id], viaChat: e.target.checked },
+                        }))
+                      }
+                    />
+                    Отправить клиенту в чат
+                  </label>
+                </div>
+                {reviewReplyFormError ? <p className="status error">{reviewReplyFormError}</p> : null}
+                <div className="review-reply-editor-actions">
+                  <button
+                    type="button"
+                    className="ghost-btn small"
+                    onClick={() => {
+                      setReviewReplyOpenId(null);
+                      setReviewReplyFormError("");
+                    }}
+                  >
+                    Отмена
+                  </button>
+                  <button type="button" className="small" onClick={() => submitReviewReply(r.id)}>
+                    Отправить
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="ghost-btn small review-reply-open-btn"
+                onClick={() => {
+                  setReviewReplyOpenId(r.id);
+                  setReviewReplyFormError("");
+                  setReviewReplyForms((p) => ({ ...p, [r.id]: defaultReviewReplyForm(r) }));
+                }}
+              >
+                {r.reply?.text ? "Изменить ответ" : "Ответить"}
+              </button>
+            )
+          )}
+        </div>
+      </li>
+    );
+  }
+
+  function renderProviderReviewsBlock() {
+    return (
+      <section className="card full-width reviews-page">
+        <h2>Отзывы</h2>
+        <label className="field-label" htmlFor="provider-reviews-order">Сортировка</label>
+        <select
+          id="provider-reviews-order"
+          value={providerReviewsOrdering}
+          onChange={(e) => {
+            setProviderReviewsOrdering(e.target.value);
+            loadProviderReviewsList(e.target.value);
+          }}
+        >
+          <option value="-created_at">Сначала новые</option>
+          <option value="-rating">Сначала положительные</option>
+          <option value="rating">Сначала негативные</option>
+        </select>
+        {providerReviews.length === 0 ? (
+          <p className="muted">Пока нет отзывов.</p>
+        ) : (
+          <ul className="list review-list">{providerReviews.map((r) => renderReviewListItem(r))}</ul>
+        )}
+      </section>
+    );
+  }
+
+  async function saveOrgBookingMessages(event) {
+    event.preventDefault();
+    const response = await authFetch(`${API_URL}/users/me/`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        booking_confirm_message_default: orgBookingMessages.confirm,
+        booking_cancel_message_default: orgBookingMessages.cancel,
+        booking_done_message_default: orgBookingMessages.done,
+      }),
+    });
+    if (response.ok) {
+      setProfileOrgStatus("Сообщения для записей сохранены.");
+      loadMe();
+    } else {
+      setProfileOrgStatus("Не удалось сохранить сообщения.");
+    }
+  }
+
+  async function submitClientReview(event) {
+    event.preventDefault();
+    if (!reviewModalBooking) return;
+    setReviewSubmitError("");
+    const fd = new FormData();
+    fd.append("provider", String(reviewModalBooking.provider));
+    fd.append("booking", String(reviewModalBooking.id));
+    if (reviewModalBooking.staff_user_id) {
+      fd.append("staff_user", String(reviewModalBooking.staff_user_id));
+    }
+    fd.append("rating", String(reviewForm.rating));
+    fd.append("text", reviewForm.text || "");
+    const input = document.getElementById("review-photos-input");
+    if (input?.files) {
+      for (const f of input.files) fd.append("photos", f);
+    }
+    const res = await authFetch(`${API_URL}/reviews/`, { method: "POST", body: fd });
+    if (res.ok) {
+      const providerId = reviewModalBooking.provider;
+      setReviewModalBooking(null);
+      setReviewForm({ rating: 5, text: "" });
+      setReviewSubmitError("");
+      setClientStatus("Отзыв отправлен.");
+      await refreshReviewsAfterSubmit(providerId);
+      return;
+    }
+    const err = await res.json().catch(() => ({}));
+    setReviewSubmitError(formatApiError(err, res.status) || "Не удалось отправить отзыв.");
+  }
+
+  function renderBookingSlotActions(it) {
+    if (!it?.id) return null;
+    const isOrg = canManageBookings();
+    const isClient = me?.role === "client";
+    const cancelled = it.status === "cancelled";
+    const done = it.status === "done";
+    return (
+      <div className="booking-actions-bar" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+        {isOrg && !cancelled && it.status === "new" && (
+          <button type="button" className="booking-action-btn booking-action-btn--confirm" title="Подтвердить" onClick={(e) => orgBookingAction(it.id, "confirm", e)}>
+            ✓
+          </button>
+        )}
+        {isOrg && !cancelled && (
+          <button type="button" className="booking-action-btn booking-action-btn--chat" title="Чат с клиентом" onClick={(e) => { e.stopPropagation(); openChatWithClient(it.client); }}>
+            💬
+          </button>
+        )}
+        {isOrg && !cancelled && (
+          <button type="button" className="booking-action-btn booking-action-btn--cancel" title="Отменить" onClick={(e) => orgBookingAction(it.id, "cancel-by-org", e)}>
+            ✕
+          </button>
+        )}
+        {isOrg && !cancelled && !done && (
+          <button
+            type="button"
+            className="ghost-btn small booking-action-done"
+            disabled={!bookingHasStarted(it)}
+            title={
+              bookingHasStarted(it)
+                ? "Отметить, что услуга оказана"
+                : "Можно отметить только после начала записи по времени"
+            }
+            onClick={(e) => orgBookingAction(it.id, "mark-done", e)}
+          >
+            Услуга оказана
+          </button>
+        )}
+        {isClient && !cancelled && (
+          <button type="button" className="booking-action-btn booking-action-btn--chat" title="Чат с организацией" onClick={(e) => { e.stopPropagation(); openChatWithProvider(it.provider); }}>
+            💬
+          </button>
+        )}
+        {isClient && !cancelled && (
+          <button type="button" className="booking-action-btn booking-action-btn--cancel" title="Отменить запись" onClick={(e) => clientCancelBooking(it.id, e)}>
+            ✕
+          </button>
+        )}
+        {isClient && done && !bookingHasReview(it.id) && (
+          <button
+            type="button"
+            className="ghost-btn small"
+            onClick={(e) => {
+              e.stopPropagation();
+              setReviewSubmitError("");
+              setReviewForm({ rating: 5, text: "" });
+              setReviewModalBooking({ ...it, staff_user_id: it.staff || null });
+            }}
+          >
+            Отзыв
+          </button>
+        )}
+      </div>
+    );
   }
 
   function renderBookingCalendar(title = "Записи") {
@@ -3346,9 +4785,10 @@ export default function App() {
     const weekdays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
     const byDay = bookings
-      .filter((b) => b.slot_starts_at?.slice(0, 7) === bookingsMonth)
+      .filter((b) => isoMonthKey(b.slot_starts_at) === bookingsMonth)
       .reduce((acc, item) => {
-        const day = Number(item.slot_starts_at.slice(8, 10));
+        const d = new Date(item.slot_starts_at);
+        const day = Number.isNaN(d.getTime()) ? Number(String(item.slot_starts_at).slice(8, 10)) : d.getDate();
         if (!acc[day]) acc[day] = [];
         acc[day].push(item);
         return acc;
@@ -3377,13 +4817,20 @@ export default function App() {
                   <div className="calendar-day">{day}</div>
                   <div className="calendar-slots">
                     {(byDay[day] || []).map((it) => (
-                      <div key={it.id} className="calendar-slot booking">
-                        <span>
+                      <div
+                        key={it.id}
+                        className={["calendar-slot", "booking", bookingSlotStatusModifier(it.status)].filter(Boolean).join(" ")}
+                      >
+                        <div className="booking-slot-time">
                           {new Date(it.slot_starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          {" - "}
+                          {" – "}
                           {new Date(it.slot_ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                        <strong>{it.status}</strong>
+                        </div>
+                        <div className="booking-slot-name">{bookingSlotSecondaryLabel(it)}</div>
+                        {it.status && it.status !== "confirmed" && (
+                          <div className="booking-slot-status">{bookingStatusLabel(it.status)}</div>
+                        )}
+                        {renderBookingSlotActions(it)}
                       </div>
                     ))}
                   </div>
@@ -3517,12 +4964,19 @@ export default function App() {
                 <>
                   <div className="calendar-day">{day}</div>
                   <div className="calendar-slots">
-                    {(byDay[day] || []).slice(0, 3).map((s) => (
-                      <div key={s.id} className="slot-chip">
-                        <span>
+                    {(byDay[day] || []).slice(0, 5).map((s) => (
+                      <div
+                        key={s.id}
+                        className={["slot-chip", s.is_booked && "slot-chip--booked"].filter(Boolean).join(" ")}
+                        title={s.is_booked ? "Запись клиента" : "Свободный интервал"}
+                      >
+                        <span className="slot-chip-label">
                           {new Date(s.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          {" - "}
+                          {" – "}
                           {new Date(s.ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {s.is_booked && s.booking_client_name ? (
+                            <span className="slot-chip-booking"> · {s.booking_client_name}</span>
+                          ) : null}
                         </span>
                         {!s.is_booked && (
                           <button
@@ -3538,7 +4992,7 @@ export default function App() {
                         )}
                       </div>
                     ))}
-                    {(byDay[day] || []).length > 3 && <div className="muted">+{(byDay[day] || []).length - 3}</div>}
+                    {(byDay[day] || []).length > 5 && <div className="muted">+{(byDay[day] || []).length - 5}</div>}
                     {(byDay[day] || []).some((s) => s.recurrence_group && !s.is_booked) && (
                       <button
                         type="button"
@@ -3593,54 +5047,125 @@ export default function App() {
     );
   }
 
+  function groupCategoryServices(cat) {
+    const catServices = services.filter((s) => Number(s.category) === Number(cat.id));
+    const groups = (cat.subcategories || []).map((sub) => ({
+      sub,
+      items: catServices.filter((s) => Number(s.subcategory) === Number(sub.id)),
+    }));
+    const loose = catServices.filter(
+      (s) => !s.subcategory || !groups.some((g) => Number(g.sub.id) === Number(s.subcategory)),
+    );
+    return { groups, loose };
+  }
+
   function renderServiceTree() {
-    const uncategorized = services.filter((s) => !s.category);
+    const activeCount = services.filter((s) => s.is_active).length;
+    const sphereLabel =
+      catalogStatus?.sphere_label ||
+      sphereOptions.find((o) => o.key === me?.provider_sphere)?.value ||
+      "";
+
+    if (!catalogStatus?.catalog_seeded) {
+      return (
+        <div className="catalog-empty-state">
+          <h2>Каталог услуг</h2>
+          <p className="muted">
+            Для сферы «{sphereLabel || "вашей сферы"}» подготовлен готовый каталог. Загрузите его и отметьте услуги,
+            которые оказываете: укажите цену и длительность.
+          </p>
+          {catalogStatus?.has_template === false && (
+            <p className="status error">Для этой сферы шаблон каталога пока недоступен.</p>
+          )}
+          <button
+            type="button"
+            disabled={catalogSeeding || catalogStatus?.has_template === false}
+            onClick={seedProviderCatalog}
+          >
+            {catalogSeeding ? "Загрузка…" : "Загрузить каталог услуг"}
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div>
-        <h2>Все услуги</h2>
-        <div className="tree-list">
+        <div className="catalog-tree-head">
+          <h2>Каталог услуг</h2>
+          <p className="muted small">
+            Сфера: {sphereLabel}. Активно {activeCount} из {services.length}.
+            {dirtyServiceCount > 0 ? ` · Не сохранено: ${dirtyServiceCount}` : ""}
+          </p>
+        </div>
+        <div className="tree-list catalog-tree">
           {categories.map((cat) => {
-            const catServices = services.filter((s) => s.category === cat.id);
-            const isOpen = categoryOpen[cat.id] ?? true;
+            const { groups, loose } = groupCategoryServices(cat);
+            const catOpen = categoryOpen[cat.id] ?? true;
+            const catActive = services.filter((s) => Number(s.category) === Number(cat.id) && s.is_active).length;
             return (
-              <div key={cat.id} className="tree-node">
+              <div key={cat.id} className="tree-node catalog-tree-category">
                 <button
                   type="button"
                   className="tree-toggle"
-                  onClick={() => setCategoryOpen((prev) => ({ ...prev, [cat.id]: !isOpen }))}
+                  onClick={() => setCategoryOpen((prev) => ({ ...prev, [cat.id]: !catOpen }))}
                 >
-                  {isOpen ? "▼" : "▶"} {cat.name}
+                  {catOpen ? "▼" : "▶"} {cat.name}
+                  <span className="catalog-tree-meta">{catActive} активн.</span>
                 </button>
-                {isOpen && (
+                {catOpen && (
                   <div className="tree-children">
-                    {catServices.length === 0 && <p className="muted">Нет услуг</p>}
-                    {catServices.map((srv) => (
-                      <ServiceEditor
-                        key={srv.id}
-                        service={srv}
-                        categories={categories}
-                        onSave={updateService}
-                      />
-                    ))}
+                    {groups.map(({ sub, items }) => {
+                      const subKey = `${cat.id}-${sub.id}`;
+                      const subOpen = subcategoryOpen[subKey] ?? true;
+                      return (
+                        <div key={sub.id} className="catalog-tree-subcategory">
+                          <button
+                            type="button"
+                            className="tree-toggle tree-toggle--sub"
+                            onClick={() => setSubcategoryOpen((prev) => ({ ...prev, [subKey]: !subOpen }))}
+                          >
+                            {subOpen ? "▼" : "▶"} {sub.name}
+                            <span className="catalog-tree-meta">
+                              {items.filter((x) => x.is_active).length}/{items.length}
+                            </span>
+                          </button>
+                          {subOpen && (
+                            <div className="tree-children catalog-tree-services">
+                              {items.map((srv) => (
+                                <ServiceEditor
+                                  key={srv.id}
+                                  service={srv}
+                                  draft={serviceDrafts[srv.id]}
+                                  dirty={!serviceDraftEqualsService(serviceDrafts[srv.id], srv)}
+                                  onDraftChange={updateServiceDraft}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {loose.length > 0 && (
+                      <div className="catalog-tree-subcategory">
+                        <div className="tree-toggle tree-toggle--sub">Прочее</div>
+                        <div className="tree-children catalog-tree-services">
+                          {loose.map((srv) => (
+                            <ServiceEditor
+                              key={srv.id}
+                              service={srv}
+                              draft={serviceDrafts[srv.id]}
+                              dirty={!serviceDraftEqualsService(serviceDrafts[srv.id], srv)}
+                              onDraftChange={updateServiceDraft}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             );
           })}
-          <div className="tree-node">
-            <h4>Без категории</h4>
-            <div className="tree-children">
-              {uncategorized.length === 0 && <p className="muted">Нет услуг</p>}
-              {uncategorized.map((srv) => (
-                <ServiceEditor
-                  key={srv.id}
-                  service={srv}
-                  categories={categories}
-                  onSave={updateService}
-                />
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     );
@@ -3650,6 +5175,12 @@ export default function App() {
     () => conversations.filter((c) => (Number(c.unread_message_count) || 0) > 0).length,
     [conversations],
   );
+
+  const unreadMessagesCount = useMemo(() => {
+    const fromList = conversations.reduce((s, c) => s + (Number(c.unread_message_count) || 0), 0);
+    if (fromList > 0) return fromList;
+    return Number(chatActivity?.unread_chat_messages_count) || 0;
+  }, [conversations, chatActivity?.unread_chat_messages_count]);
 
   const orgFolderUnreadChatsCount = useMemo(
     () =>
@@ -3664,12 +5195,18 @@ export default function App() {
   );
 
   const filteredSidebarChats = useMemo(() => {
-    const folder = chatFolder;
-    let list = conversations.filter((c) => (folder === "clients" ? c.is_client_correspondence : !c.is_client_correspondence));
+    let list = conversations;
+    if (me?.role === "client") {
+      list = list.filter((c) => c.is_client_correspondence && !c.is_saved_messages);
+    } else {
+      const folder = chatFolder;
+      list = list.filter((c) => (folder === "clients" ? c.is_client_correspondence : !c.is_client_correspondence));
+    }
     const q = chatSearchQuery.trim().toLowerCase();
     if (q) {
       list = list.filter((c) => displayConversationTitle(c).toLowerCase().includes(q));
     }
+    const folder = me?.role === "client" ? "clients" : chatFolder;
     const pins = folder === "clients" ? chatPins.clients : chatPins.org;
     const pinSet = new Set(pins.map(Number));
     const lastTs = (c) => {
@@ -3686,7 +5223,7 @@ export default function App() {
       return Number(b.id) - Number(a.id);
     });
     return [...pinnedList, ...unpinned];
-  }, [conversations, chatFolder, chatSearchQuery, chatLocalPrefs, chatPins]);
+  }, [conversations, chatFolder, chatSearchQuery, chatLocalPrefs, chatPins, me?.role]);
 
   function renderGeneralSettings() {
     return (
@@ -3737,6 +5274,57 @@ export default function App() {
         )}
         {me?.role === "provider" && (
           <>
+            <h3 id="org-booking-messages">Сообщения при работе с записями</h3>
+            <form
+              onSubmit={saveOrgBookingMessages}
+              className={[
+                "form booking-messages-form",
+                orgSettingsHighlight && "org-settings-highlight",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              <BookingMessageField
+                  id="org-msg-confirm"
+                  label="Подтверждение записи"
+                  placeholder="Текст клиенту при подтверждении"
+                  value={orgBookingMessages.confirm}
+                  onChange={(v) => setOrgBookingMessages((p) => ({ ...p, confirm: v }))}
+                  highlighted={orgSettingsHighlight === "confirm"}
+                />
+                <BookingMessageField
+                  id="org-msg-cancel"
+                  label="Отмена записи"
+                  placeholder="Текст клиенту при отмене"
+                  value={orgBookingMessages.cancel}
+                  onChange={(v) => setOrgBookingMessages((p) => ({ ...p, cancel: v }))}
+                  highlighted={orgSettingsHighlight === "cancel"}
+                />
+                <BookingMessageField
+                  id="org-msg-done"
+                  label="Услуга оказана"
+                  placeholder="Текст клиенту, когда услуга оказана"
+                  value={orgBookingMessages.done}
+                  onChange={(v) => setOrgBookingMessages((p) => ({ ...p, done: v }))}
+                  highlighted={orgSettingsHighlight === "done"}
+                />
+              <button type="submit">Сохранить сообщения</button>
+            </form>
+            <aside className="booking-messages-hint" aria-labelledby="booking-messages-hint-title">
+              <h4 id="booking-messages-hint-title">Как это работает</h4>
+              <p>
+                Перетащите метку <strong>«Дата и время записи»</strong> в поле сообщения или нажмите на неё под полем —
+                в тексте она отобразится такой же кнопкой, а не кодом.
+              </p>
+              <p>
+                Когда вы подтверждаете, отменяете или завершаете запись, метка автоматически заменяется на дату и время
+                клиента, например <strong>17.05.2026 14:30</strong>.
+              </p>
+              <p className="muted small booking-messages-hint-example">
+                Пример: «Ваша запись подтверждена на» + метка «Дата и время записи» + «. Ждём вас!»
+              </p>
+            </aside>
+
             <h3>Адрес организации (основной)</h3>
             {!orgMainEditOpen ? (
               <div className="org-main-display">
@@ -3811,6 +5399,7 @@ export default function App() {
             <button
               type="button"
               className="ghost-btn org-branch-add-toggle"
+
               onClick={() => {
                 setOrgBranchAddOpen((v) => {
                   const next = !v;
@@ -4007,6 +5596,7 @@ export default function App() {
               manage_intervals: false,
               manage_services: false,
               manage_chats: true,
+              manage_client_chats: true,
               manage_staff: false,
               can_delegate_permissions: false,
               ...(link.permissions || {}),
@@ -4016,6 +5606,7 @@ export default function App() {
               ["manage_intervals", "Календарь интервалов"],
               ["manage_services", "Услуги и категории"],
               ["manage_chats", "Чаты организации"],
+              ["manage_client_chats", "Чаты с клиентами"],
               ["manage_staff", "Добавление сотрудников"],
               ["can_delegate_permissions", "Может настраивать права других"],
             ];
@@ -4079,6 +5670,25 @@ export default function App() {
                     )}
                   </div>
                 )}
+                {link.is_active && (me?.role === "provider" || staffEffectivePerms.can_delegate_permissions) && (
+                  <div className="staff-perms">
+                    <button
+                      type="button"
+                      className="staff-perms-toggle muted small-label"
+                      onClick={() => setStaffServicesOpenId((id) => (id === link.id ? null : link.id))}
+                    >
+                      Услуги сотрудника{staffServicesOpenId === link.id ? " ▲" : " ▼"}
+                    </button>
+                    {staffServicesOpenId === link.id && (
+                      <StaffServicesAssignment
+                        link={link}
+                        categories={staffAssignableCategories}
+                        services={staffAssignableServices}
+                        onSave={patchStaffServiceAssignment}
+                      />
+                    )}
+                  </div>
+                )}
               </li>
             );
           })}
@@ -4104,7 +5714,7 @@ export default function App() {
   const chatMsgSearchHits = useMemo(() => {
     const q = chatMsgSearchQuery.trim().toLowerCase();
     if (!q) return [];
-    return chatMessages.filter((m) => (m.text || "").toLowerCase().includes(q));
+    return chatMessages.filter((m) => chatMessagePlainText(m).toLowerCase().includes(q));
   }, [chatMessages, chatMsgSearchQuery]);
 
   useEffect(() => {
@@ -4157,13 +5767,41 @@ export default function App() {
           />
         </button>
         <div>{verifyStatus && <p className="verify-note">{verifyStatus}</p>}</div>
+        {accessToken && me?.role === "client" && (
+          <div className="client-header-search">
+            <input
+              type="search"
+              className="client-header-search-input"
+              placeholder="Сфера или название организации…"
+              value={clientMapSearchInput}
+              onChange={(e) => setClientMapSearchInput(e.target.value)}
+              autoComplete="off"
+              aria-label="Поиск на карте"
+            />
+            <button
+              type="button"
+              className="client-filter-icon-btn"
+              aria-label="Фильтры"
+              title="Фильтры"
+              onClick={() => {
+                setClientFilterModalDraft({ ...clientDiscoverFilters });
+                setClientFiltersOpen(true);
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+                <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" />
+              </svg>
+            </button>
+          </div>
+        )}
         {accessToken && (
-          <div className="menu-wrap">
+          <div className="menu-wrap" ref={menuWrapRef}>
             <div className="menu-btn-wrap">
               <button
                 type="button"
                 className="menu-btn menu-btn--icon"
                 aria-label="Меню"
+                aria-expanded={menuOpen}
                 title="Меню"
                 onClick={() => setMenuOpen((v) => !v)}
               >
@@ -4233,18 +5871,39 @@ export default function App() {
           <button type="button" className={currentView === "client_map" ? "active" : ""} onClick={() => setCurrentView("client_map")}>
             Карта
           </button>
-          <button type="button" className={currentView === "client_book" ? "active" : ""} onClick={() => setCurrentView("client_book")}>
-            Записаться
-          </button>
           <button type="button" className={currentView === "bookings" ? "active" : ""} onClick={() => setCurrentView("bookings")}>
             Мои записи
+          </button>
+          <button
+            type="button"
+            className={["app-subnav-chat", currentView === "chats" && "active"].filter(Boolean).join(" ")}
+            onClick={() => setCurrentView("chats")}
+          >
+            <span>Чаты</span>
+            {unreadMessagesCount > 0 && (
+              <span className="app-subnav-badge" aria-label={`Непрочитанных сообщений: ${unreadMessagesCount}`}>
+                {unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
+              </span>
+            )}
           </button>
         </nav>
       )}
 
       {accessToken && me?.role === "provider" && (
-        <nav className="app-subnav" aria-label="Разделы исполнителя">
+        <nav className="app-subnav app-subnav--scroll" aria-label="Разделы исполнителя">
           <button type="button" className={currentView === "bookings" ? "active" : ""} onClick={() => setCurrentView("bookings")}>Записи</button>
+          <button
+            type="button"
+            className={["app-subnav-reviews", currentView === "reviews" && "active"].filter(Boolean).join(" ")}
+            onClick={openProviderReviews}
+          >
+            <span>Отзывы</span>
+            {missedReviewsCount > 0 && (
+              <span className="app-subnav-badge" aria-label={`Непросмотренных отзывов: ${missedReviewsCount}`}>
+                {missedReviewsCount > 99 ? "99+" : missedReviewsCount}
+              </span>
+            )}
+          </button>
           <button type="button" className={currentView === "intervals" ? "active" : ""} onClick={() => setCurrentView("intervals")}>Календарь интервалов</button>
           <button type="button" className={currentView === "services" ? "active" : ""} onClick={() => setCurrentView("services")}>Услуги и категории</button>
           <button
@@ -4258,9 +5917,9 @@ export default function App() {
               </svg>
               <span>Чаты</span>
             </span>
-            {chatsTabUnreadChatsCount > 0 && (
-              <span className="app-subnav-badge" aria-hidden="true">
-                {chatsTabUnreadChatsCount > 99 ? "99+" : chatsTabUnreadChatsCount}
+            {unreadMessagesCount > 0 && (
+              <span className="app-subnav-badge" aria-label={`Непрочитанных сообщений: ${unreadMessagesCount}`}>
+                {unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
               </span>
             )}
           </button>
@@ -4268,9 +5927,23 @@ export default function App() {
       )}
 
       {accessToken && me?.role === "staff" && (
-        <nav className="app-subnav" aria-label="Разделы сотрудника">
+        <nav className="app-subnav app-subnav--scroll" aria-label="Разделы сотрудника">
           {staffHasPerm("manage_bookings") && (
             <button type="button" className={currentView === "bookings" ? "active" : ""} onClick={() => setCurrentView("bookings")}>Записи</button>
+          )}
+          {canViewOrgReviews() && (
+            <button
+              type="button"
+              className={["app-subnav-reviews", currentView === "reviews" && "active"].filter(Boolean).join(" ")}
+              onClick={openProviderReviews}
+            >
+              <span>Отзывы</span>
+              {missedReviewsCount > 0 && (
+                <span className="app-subnav-badge" aria-label={`Непросмотренных отзывов: ${missedReviewsCount}`}>
+                  {missedReviewsCount > 99 ? "99+" : missedReviewsCount}
+                </span>
+              )}
+            </button>
           )}
           {staffHasPerm("manage_chats") && (
             <button
@@ -4284,9 +5957,9 @@ export default function App() {
                 </svg>
                 <span>Чаты</span>
               </span>
-              {chatsTabUnreadChatsCount > 0 && (
-                <span className="app-subnav-badge" aria-hidden="true">
-                  {chatsTabUnreadChatsCount > 99 ? "99+" : chatsTabUnreadChatsCount}
+              {unreadMessagesCount > 0 && (
+                <span className="app-subnav-badge" aria-label={`Непрочитанных сообщений: ${unreadMessagesCount}`}>
+                  {unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
                 </span>
               )}
             </button>
@@ -4487,10 +6160,11 @@ export default function App() {
         {accessToken && currentView === "organization" && canManageOrgSettings && renderOrganizationSettings()}
         {accessToken && currentView === "staff" && canManageOrgSettings && renderStaffManagement()}
 
+        {accessToken && canViewOrgReviews() && currentView === "reviews" && renderProviderReviewsBlock()}
         {accessToken && me?.role === "provider" && currentView === "bookings" && renderBookingsBlock("Записи клиентов")}
         {accessToken && me?.role === "provider" && currentView === "intervals" && renderSlotCalendar(true)}
         {accessToken && me?.role === "staff" && currentView === "bookings" && staffHasPerm("manage_bookings") && renderBookingsBlock("Записи")}
-        {accessToken && (me?.role === "provider" || me?.role === "staff") && currentView === "chats" && (
+        {accessToken && currentView === "chats" && (me?.role === "client" || me?.role === "provider" || me?.role === "staff") && (
           <section className="card full-width tg-chats-card">
             <div className="tg-body">
               <aside className="tg-sidebar">
@@ -4538,6 +6212,7 @@ export default function App() {
                   value={chatSearchQuery}
                   onChange={(e) => setChatSearchQuery(e.target.value)}
                 />
+                {(me?.role === "provider" || me?.role === "staff") && (
                 <div className="tg-folder-tabs">
                   <button type="button" className={chatFolder === "org" ? "active" : ""} onClick={() => setChatFolder("org")}>
                     <span className="tg-folder-tab-label">Организация</span>
@@ -4552,6 +6227,7 @@ export default function App() {
                     )}
                   </button>
                 </div>
+                )}
                 <div className="tg-chat-list">
                   {filteredSidebarChats.map((c) => {
                     const peerM = chatFolder === "org" ? getOrgDmPeerMember(c, me?.id) : null;
@@ -4778,7 +6454,7 @@ export default function App() {
                                             minute: "2-digit",
                                           })}
                                         </span>
-                                        <span className="tg-msg-search-hit-text">{m.text || "—"}</span>
+                                        <span className="tg-msg-search-hit-text">{chatMessagePlainText(m) || "—"}</span>
                                       </button>
                                     </li>
                                   ))}
@@ -4830,7 +6506,7 @@ export default function App() {
                               <div className="tg-msg-author">
                                 {formatMessageSenderLine(m) || m.sender_username}
                               </div>
-                              <div className="tg-msg-text">{m.text}</div>
+                              {renderChatMessageBody(m)}
                               <div className="tg-msg-meta">
                                 <div className="tg-msg-time">
                                   {new Date(m.created_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
@@ -5025,58 +6701,28 @@ export default function App() {
             <section className="card">
               {renderServiceTree()}
             </section>
-            <section className="card right-stack">
-              <h2>Создать категорию</h2>
-              <form onSubmit={createCategory} className="form">
-                <input
-                  placeholder="Название категории"
-                  value={categoryForm.name}
-                  onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                  required
-                />
-                <button type="submit">Добавить категорию</button>
-              </form>
-              <h2>Создать услугу</h2>
-              <form onSubmit={createService} className="form">
-                <input
-                  placeholder="Название услуги"
-                  value={serviceForm.name}
-                  onChange={(e) => setServiceForm({ ...serviceForm, name: e.target.value })}
-                  required
-                />
-                <input
-                  type="number"
-                  placeholder="Цена"
-                  value={serviceForm.price}
-                  onChange={(e) => setServiceForm({ ...serviceForm, price: e.target.value })}
-                  required
-                />
-                <input
-                  type="number"
-                  placeholder="Длительность (мин)"
-                  value={serviceForm.duration_minutes}
-                  onChange={(e) => setServiceForm({ ...serviceForm, duration_minutes: e.target.value })}
-                  required
-                />
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    checked={serviceForm.is_active}
-                    onChange={(e) => setServiceForm({ ...serviceForm, is_active: e.target.checked })}
-                  />
-                  Активна
-                </label>
-                <select
-                  value={serviceForm.category}
-                  onChange={(e) => setServiceForm({ ...serviceForm, category: e.target.value })}
+            <section className="card right-stack catalog-help-panel">
+              <h2>Как настроить</h2>
+              <ol className="catalog-help-list">
+                <li>Загрузите готовый каталог для вашей сферы.</li>
+                <li>Включите «Оказываем» у нужных услуг.</li>
+                <li>Укажите цену и длительность и нажмите «Сохранить все изменения».</li>
+              </ol>
+              {dirtyServiceCount > 0 && (
+                <button
+                  type="button"
+                  className="catalog-save-all-btn"
+                  disabled={serviceSavingAll}
+                  onClick={saveAllServiceChanges}
                 >
-                  <option value="">Без категории</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                <button type="submit">Создать услугу</button>
-              </form>
+                  {serviceSavingAll ? "Сохранение…" : `Сохранить все изменения (${dirtyServiceCount})`}
+                </button>
+              )}
+              {catalogStatus?.catalog_seeded && (
+                <button type="button" className="ghost-btn" disabled={catalogSeeding} onClick={seedProviderCatalog}>
+                  Обновить каталог из шаблона
+                </button>
+              )}
               <p className="status">{sellerStatus}</p>
             </section>
           </div>
@@ -5085,38 +6731,74 @@ export default function App() {
         {accessToken && me?.role === "client" && currentView === "client_map" && (
           <section className="card full-width client-discover-card">
             <div className="client-discover-top">
-              <div className="client-discover-title-row">
-                <h2 className="client-discover-title" id="client-map-title">
-                  Исполнители на карте
-                </h2>
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={() => {
-                    setClientFilterModalDraft({ ...clientDiscoverFilters });
-                    setClientFiltersOpen(true);
-                  }}
-                >
-                  Фильтры
-                </button>
-              </div>
-              <input
-                type="search"
-                className="client-discover-search"
-                placeholder="Название организации, сфера (например, парикмахерская), адрес…"
-                value={clientMapSearchInput}
-                onChange={(e) => setClientMapSearchInput(e.target.value)}
-                autoComplete="off"
-                aria-labelledby="client-map-title"
-              />
+              <h2 className="client-discover-title" id="client-map-title">
+                Карта услуг
+              </h2>
               <p className="muted client-discover-meta">Найдено точек: {allLocations.length}</p>
             </div>
-            <div id="client-discover-map" className="client-discover-map" role="application" aria-label="Карта точек записи" />
-            <p className="muted client-discover-hint">Нажми на метку, чтобы перейти к записи к этому исполнителю.</p>
+            <div
+              className={[
+                "client-discover-map-wrap",
+                mapOrgPopup && "client-discover-map-wrap--has-sheet",
+                mapOrgReviewsOpen && "client-discover-map-wrap--org-reviews",
+                (mapOrgPopup || clientBookModalOpen || clientFiltersOpen) && "client-discover-map-wrap--blocked",
+                (clientBookModalOpen || clientFiltersOpen) && "client-discover-map-wrap--sheet-inert",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              <div id="client-discover-map" className="client-discover-map" role="application" aria-label="Карта точек записи" />
+              {mapOrgPopup && (
+                <div
+                  className={["map-org-sheet", mapOrgReviewsOpen && "map-org-sheet--reviews-open"].filter(Boolean).join(" ")}
+                  role="dialog"
+                  aria-label="Организация на карте"
+                >
+                  <button
+                    type="button"
+                    className="map-org-sheet-close"
+                    aria-label="Закрыть"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMapOrgPopup(null);
+                      setMapOrgReviewsOpen(false);
+                    }}
+                  >
+                    ×
+                  </button>
+                  <h3 className="map-org-sheet-title">{mapOrgPopup.organization_name || mapOrgPopup.title}</h3>
+                  {mapOrgSummary?.average_rating != null && (
+                    <p className="map-org-sheet-rating">★ {Number(mapOrgSummary.average_rating).toFixed(2)} ({mapOrgSummary.reviews_count} отзывов)</p>
+                  )}
+                  <div className="map-org-sheet-actions row-2">
+                    <button type="button" onClick={() => { const filterDate = clientDiscoverFiltersRef.current?.slot_date || todayIsoDate(); onClientLocationSelect(String(mapOrgPopup.id), filterDate); setClientBookModalOpen(true); }}>Записаться</button>
+                    <button type="button" onClick={() => openChatWithProvider(mapOrgPopup.provider)}>Чат</button>
+                  </div>
+                  <button type="button" className="ghost-btn" onClick={() => { const open = !mapOrgReviewsOpen; setMapOrgReviewsOpen(open); if (open) loadMapOrgReviews(mapOrgPopup.provider, mapOrgReviewsOrdering); }}>{mapOrgReviewsOpen ? "Скрыть отзывы" : "Отзывы"}</button>
+                  {mapOrgReviewsOpen && (
+                    <div className="map-org-reviews">
+                      <select value={mapOrgReviewsOrdering} onChange={(e) => { setMapOrgReviewsOrdering(e.target.value); loadMapOrgReviews(mapOrgPopup.provider, e.target.value); }}>
+                        <option value="-created_at">Сначала новые</option>
+                        <option value="-rating">Сначала положительные</option>
+                        <option value="rating">Сначала негативные</option>
+                      </select>
+                      <ul className="list review-list">
+                        {mapOrgReviews.length === 0 ? (
+                          <li className="muted">Пока нет отзывов.</li>
+                        ) : (
+                          mapOrgReviews.map((r) => renderReviewListItem(r))
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <p className="muted client-discover-hint">Нажми на метку, чтобы открыть карточку организации.</p>
           </section>
         )}
 
-        {accessToken && me?.role === "client" && currentView === "client_book" && (
+        {accessToken && me?.role === "client" && false && currentView === "client_book" && (
           <section className="card client-book-card">
             <h2>Записаться</h2>
             <p className="muted">
@@ -5137,26 +6819,65 @@ export default function App() {
                   </option>
                 ))}
               </select>
-              <label className="field-label" htmlFor="client-book-slot">Время приёма</label>
+              <MiniDatePicker
+                id="client-book-date"
+                label="Дата записи"
+                value={clientBookingForm.bookDate}
+                onChange={(iso) => setClientBookingForm((p) => ({ ...p, bookDate: iso, windowKey: "" }))}
+              />
+              <label className="field-label" htmlFor="client-book-service">Услуга</label>
               <select
-                id="client-book-slot"
-                value={clientBookingForm.slot}
-                onChange={(e) => setClientBookingForm({ ...clientBookingForm, slot: e.target.value })}
+                id="client-book-service"
+                value={clientBookingForm.serviceId}
+                onChange={(e) => setClientBookingForm((p) => ({ ...p, serviceId: e.target.value, windowKey: "" }))}
                 required
+                disabled={!clientBookingForm.provider}
               >
-                <option value="">Выбери время</option>
-                {providerSlots.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {new Date(item.starts_at).toLocaleString("ru-RU")}
+                <option value="">Выбери услугу</option>
+                {providerServices.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} — {s.price} ₽ ({s.duration_minutes} мин)
                   </option>
                 ))}
               </select>
+              {clientBookingForm.serviceId && clientBookingForm.bookDate && (
+                <>
+                  <p className="field-label">Свободное время</p>
+                  {clientBookWindows.length === 0 ? (
+                    <p className="muted small">Нет свободных интервалов на эту дату.</p>
+                  ) : (
+                    <div className="client-slot-strip" role="listbox" aria-label="Доступное время">
+                      {clientBookWindows.map((w) => {
+                        const key = clientWindowKey(w);
+                        const active = clientBookingForm.windowKey === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            role="option"
+                            aria-selected={active}
+                            className={["client-slot-chip", active && "client-slot-chip--active"].filter(Boolean).join(" ")}
+                            onClick={() => setClientBookingForm((p) => ({ ...p, windowKey: key }))}
+                          >
+                            <span className="client-slot-chip-time">
+                              {formatTimeHm(w.starts_at)} — {formatTimeHm(w.ends_at)}
+                            </span>
+                            <span className="client-slot-chip-master">{w.staff_label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
               <input
                 placeholder="Комментарий к записи"
                 value={clientBookingForm.comment}
                 onChange={(e) => setClientBookingForm({ ...clientBookingForm, comment: e.target.value })}
               />
-              <button type="submit">Подтвердить запись</button>
+              <button type="submit" disabled={!clientBookingForm.windowKey}>
+                Подтвердить запись
+              </button>
             </form>
             <p className="status">{clientStatus}</p>
           </section>
@@ -5164,9 +6885,9 @@ export default function App() {
 
         {accessToken && me?.role === "client" && currentView === "bookings" && renderBookingsBlock("Мои записи")}
 
-        {accessToken && me?.role === "client" && clientFiltersOpen && (
+        {accessToken && me?.role === "client" && clientFiltersOpen && typeof document !== "undefined" && createPortal(
           <div
-            className="modal-backdrop"
+            className="modal-backdrop modal-backdrop--app-overlay"
             role="dialog"
             aria-modal="true"
             aria-labelledby="client-filters-title"
@@ -5221,30 +6942,14 @@ export default function App() {
                   </div>
                 </div>
                 <p className="muted small">Учитывается диапазон цен активных услуг исполнителя.</p>
-                <div className="row-2">
-                  <div>
-                    <label className="field-label" htmlFor="client-filter-df">
-                      Дата слота с
-                    </label>
-                    <input
-                      id="client-filter-df"
-                      type="date"
-                      value={clientFilterModalDraft.slot_date_from}
-                      onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, slot_date_from: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <label className="field-label" htmlFor="client-filter-dt">
-                      Дата слота по
-                    </label>
-                    <input
-                      id="client-filter-dt"
-                      type="date"
-                      value={clientFilterModalDraft.slot_date_to}
-                      onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, slot_date_to: e.target.value }))}
-                    />
-                  </div>
-                </div>
+                <MiniDatePicker
+                  id="client-filter-date"
+                  label="Дата записи"
+                  value={clientFilterModalDraft.slot_date}
+                  allowClear
+                  onChange={(iso) => setClientFilterModalDraft((d) => ({ ...d, slot_date: iso }))}
+                />
+                <p className="muted small">Дату и время указывайте только если нужны исполнители со свободным слотом. Для фильтра по сфере оставьте дату пустой.</p>
                 <div className="row-2">
                   <div>
                     <label className="field-label" htmlFor="client-filter-tf">
@@ -5269,22 +6974,14 @@ export default function App() {
                     />
                   </div>
                 </div>
-                <p className="muted small">Показываются только исполнители со свободным слотом в выбранных рамках даты и времени.</p>
+                <p className="muted small">Время учитывается только вместе с выбранной датой или диапазоном дат на сервере.</p>
               </div>
               <div className="client-filters-actions">
                 <button
                   type="button"
                   className="ghost-btn"
                   onClick={() => {
-                    const empty = {
-                      sphere: "",
-                      min_price: "",
-                      max_price: "",
-                      slot_date_from: "",
-                      slot_date_to: "",
-                      time_from: "",
-                      time_to: "",
-                    };
+                    const empty = emptyClientFilters();
                     setClientFilterModalDraft(empty);
                     setClientDiscoverFilters(empty);
                     setClientFiltersOpen(false);
@@ -5298,7 +6995,20 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    setClientDiscoverFilters({ ...clientFilterModalDraft });
+                    const slotDate = String(clientFilterModalDraft.slot_date || "").trim();
+                    const timeFrom = String(clientFilterModalDraft.time_from || "").trim();
+                    const timeTo = String(clientFilterModalDraft.time_to || "").trim();
+                    const nextFilters = {
+                      ...clientFilterModalDraft,
+                      slot_date: slotDate,
+                      time_from: slotDate ? timeFrom : "",
+                      time_to: slotDate ? timeTo : "",
+                    };
+                    setClientDiscoverFilters(nextFilters);
+                    setClientBookingForm((p) => ({
+                      ...p,
+                      bookDate: slotDate || p.bookDate || todayIsoDate(),
+                    }));
                     setClientFiltersOpen(false);
                   }}
                 >
@@ -5306,10 +7016,158 @@ export default function App() {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body,
         )}
       </main>
+
+      {bookingMessageError && typeof document !== "undefined" && createPortal(
+        <div
+          className="modal-backdrop modal-backdrop--app-overlay"
+          role="alertdialog"
+          onClick={() => setBookingMessageError(null)}
+        >
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3>
+              {bookingMessageError.code === "booking_not_started_yet"
+                ? "Рано отмечать выполнение"
+                : "Сообщение не задано"}
+            </h3>
+            <p className="muted">
+              {bookingMessageError.code === "booking_not_started_yet"
+                ? bookingMessageError.detail
+                  || "Отметить «услуга оказана» можно только после начала записи по времени."
+                : bookingMessageError.code === "confirm_message_not_set"
+                  ? "Сообщение для подтверждения записи не задано. Задайте его в настройках организации."
+                  : bookingMessageError.code === "done_message_not_set"
+                    ? "Сообщение при отметке «услуга оказана» не задано. Задайте его в настройках организации."
+                    : "Сообщение об отмене записи не задано. Задайте его в настройках организации."}
+            </p>
+            <div className="row-2">
+              {bookingMessageError.code !== "booking_not_started_yet" ? (
+                <button type="button" onClick={() => goOrgSettingsForBookingMessage(bookingMessageError.code)}>
+                  Перейти в настройки
+                </button>
+              ) : null}
+              <button type="button" className="ghost-btn" onClick={() => setBookingMessageError(null)}>
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {reviewModalBooking && typeof document !== "undefined" && createPortal(
+        <div className="modal-backdrop modal-backdrop--app-overlay" onClick={() => setReviewModalBooking(null)}>
+          <div
+            className="modal-card review-modal-card"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-labelledby="review-modal-title"
+          >
+            <div className="review-modal-head">
+              <h3 id="review-modal-title">Отзыв</h3>
+              <button
+                type="button"
+                className="review-modal-close"
+                aria-label="Закрыть"
+                onClick={() => setReviewModalBooking(null)}
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={submitClientReview} className="form review-modal-form">
+              <div className="review-modal-body">
+                <p className="field-label">Оценка</p>
+                <StarRating
+                  value={reviewForm.rating}
+                  onChange={(rating) => setReviewForm((p) => ({ ...p, rating }))}
+                />
+                <textarea
+                  placeholder="Комментарий (необязательно)"
+                  value={reviewForm.text}
+                  onChange={(e) => setReviewForm((p) => ({ ...p, text: e.target.value }))}
+                  rows={4}
+                />
+                <label className="field-label" htmlFor="review-photos-input">Фото (необязательно)</label>
+                <input id="review-photos-input" type="file" accept="image/*" multiple />
+                {reviewSubmitError ? <p className="status error">{reviewSubmitError}</p> : null}
+              </div>
+              <div className="review-modal-actions">
+                <button type="submit" className="review-modal-submit">
+                  Отправить отзыв
+                </button>
+                <button type="button" className="ghost-btn" onClick={() => setReviewModalBooking(null)}>
+                  Пропустить
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body,
+      )}
+
       <div className="incoming-toast-stack" aria-live="polite">
+
+        {clientBookModalOpen && typeof document !== "undefined" && createPortal(
+          <div className="modal-backdrop modal-backdrop--app-overlay" onClick={() => setClientBookModalOpen(false)}>
+            <div className="modal-card client-book-overlay" onClick={(e) => e.stopPropagation()}>
+              <h3>Запись</h3>
+              <form onSubmit={createClientBooking} className="form">
+                <select value={clientBookingForm.serviceId} onChange={(e) => setClientBookingForm((p) => ({ ...p, serviceId: e.target.value, windowKey: "" }))} required disabled={!clientBookingForm.provider || providerServices.length === 0}>
+                  <option value="">Услуга</option>
+                  {providerServices.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} — {s.price} ₽</option>
+                  ))}
+                </select>
+                {clientBookingForm.provider && providerServices.length === 0 ? (
+                  <p className="muted small">Нет услуг, которые оказывают мастера организации. Назначьте услуги в настройках сотрудников.</p>
+                ) : null}
+                <MiniDatePicker label="Дата" value={clientBookingForm.bookDate} onChange={(iso) => setClientBookingForm((p) => ({ ...p, bookDate: iso, windowKey: "" }))} />
+                {clientBookingForm.serviceId && clientBookingForm.bookDate && (
+                  <>
+                    <p className="field-label">Свободное время</p>
+                    {clientBookWindows.length === 0 ? (
+                      <p className="muted small">Нет свободных интервалов на эту дату.</p>
+                    ) : (
+                      <div className="client-slot-strip client-book-slot-strip" role="listbox" aria-label="Доступное время">
+                        {clientBookWindows.map((w) => {
+                          const key = clientWindowKey(w);
+                          const active = clientBookingForm.windowKey === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              role="option"
+                              aria-selected={active}
+                              className={["client-slot-chip", active && "client-slot-chip--active"].filter(Boolean).join(" ")}
+                              onClick={() => setClientBookingForm((p) => ({ ...p, windowKey: key }))}
+                            >
+                              <span className="client-slot-chip-time">
+                                {formatTimeHm(w.starts_at)} — {formatTimeHm(w.ends_at)}
+                              </span>
+                              {w.staff_label ? <span className="client-slot-chip-master">{w.staff_label}</span> : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+                <input
+                  placeholder="Комментарий к записи"
+                  value={clientBookingForm.comment}
+                  onChange={(e) => setClientBookingForm((p) => ({ ...p, comment: e.target.value }))}
+                />
+                <button type="submit" disabled={!clientBookingForm.windowKey}>Подтвердить</button>
+              </form>
+              <p className="status">{clientStatus}</p>
+            </div>
+          </div>,
+          document.body,
+        )}
+
         {incomingToasts.map((t) => (
           <button
             key={t.id}
@@ -5329,64 +7187,50 @@ export default function App() {
   );
 }
 
-function ServiceEditor({ service, categories, onSave }) {
-  const [local, setLocal] = useState({
-    name: service.name,
-    price: service.price,
-    duration_minutes: service.duration_minutes,
-    is_active: service.is_active,
-    category: service.category ?? "",
-  });
-
-  useEffect(() => {
-    setLocal({
-      name: service.name,
-      price: service.price,
-      duration_minutes: service.duration_minutes,
-      is_active: service.is_active,
-      category: service.category ?? "",
-    });
-  }, [service]);
+function ServiceEditor({ service, draft, dirty, onDraftChange }) {
+  const local = draft ?? buildServiceDraftFromService(service);
 
   return (
-    <div className="service-editor service-editor-row">
-      <input value={local.name} onChange={(e) => setLocal({ ...local, name: e.target.value })} placeholder="Услуга" />
-      <input type="number" value={local.price} onChange={(e) => setLocal({ ...local, price: e.target.value })} placeholder="Цена" />
+    <div
+      className={[
+        "service-editor",
+        "service-editor-row",
+        !local.is_active && "service-editor--inactive",
+        dirty && "service-editor--dirty",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <div className="service-editor-name">
+        <strong>{service.name}</strong>
+        {dirty ? <span className="service-editor-dirty-mark">●</span> : null}
+      </div>
       <input
         type="number"
-        value={local.duration_minutes}
-        onChange={(e) => setLocal({ ...local, duration_minutes: e.target.value })}
-        placeholder="Длительность"
+        min="0"
+        step="1"
+        value={local.price}
+        onChange={(e) => onDraftChange(service.id, { price: e.target.value })}
+        placeholder="Цена"
+        aria-label="Цена"
       />
-      <select value={local.category} onChange={(e) => setLocal({ ...local, category: e.target.value })}>
-        <option value="">Без категории</option>
-        {categories.map((c) => (
-          <option key={c.id} value={c.id}>{c.name}</option>
-        ))}
-      </select>
-      <label className="checkbox">
+      <input
+        type="number"
+        min="5"
+        step="5"
+        value={local.duration_minutes}
+        onChange={(e) => onDraftChange(service.id, { duration_minutes: e.target.value })}
+        placeholder="Мин"
+        aria-label="Минуты"
+      />
+      <label className="checkbox service-editor-active">
         <input
           type="checkbox"
           checked={local.is_active}
-          onChange={(e) => setLocal({ ...local, is_active: e.target.checked })}
+          onChange={(e) => onDraftChange(service.id, { is_active: e.target.checked })}
         />
-        Активна
+        Оказываем
       </label>
-      <button
-        type="button"
-        className="save-btn"
-        onClick={() =>
-          onSave(service.id, {
-            name: local.name,
-            price: Number(local.price),
-            duration_minutes: Number(local.duration_minutes),
-            is_active: local.is_active,
-            category: local.category ? Number(local.category) : null,
-          })
-        }
-      >
-        Сохранить
-      </button>
     </div>
   );
 }

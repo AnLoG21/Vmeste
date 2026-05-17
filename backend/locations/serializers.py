@@ -21,6 +21,8 @@ class ProviderLocationClientSerializer(serializers.ModelSerializer):
     min_service_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True, allow_null=True)
     max_service_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True, allow_null=True)
 
+    is_main_office = serializers.BooleanField(read_only=True, default=False)
+
     class Meta:
         model = ProviderLocation
         fields = [
@@ -40,6 +42,7 @@ class ProviderLocationClientSerializer(serializers.ModelSerializer):
             "sphere_label",
             "min_service_price",
             "max_service_price",
+            "is_main_office",
         ]
 
     def get_sphere_label(self, obj):

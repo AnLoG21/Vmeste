@@ -107,6 +107,10 @@ button:hover {
   color: #8d3e00;
 }
 
+.status.error {
+  color: #c0392b;
+}
+
 .auth-switch-text {
   margin: 10px 0 6px;
   text-align: center;
@@ -401,6 +405,22 @@ button:hover {
   font-size: 12px;
 }
 
+.interval-calendar .slot-chip--booked {
+  background: #d8f0e3;
+  border-color: #3dad6e;
+  color: #1a4d32;
+}
+
+.slot-chip-booking {
+  font-weight: 600;
+}
+
+.slot-chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .chip-btn {
   padding: 2px 6px;
   font-size: 11px;
@@ -617,6 +637,18 @@ button:hover {
   border-bottom: 1px solid #ffd9bd;
 }
 
+.app-subnav--scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.app-subnav--scroll button {
+  flex-shrink: 0;
+}
+
 .app-subnav button {
   background: transparent;
   color: #8d3e00;
@@ -636,7 +668,8 @@ button:hover {
   color: #5a2800;
 }
 
-.app-subnav-chat {
+.app-subnav-chat,
+.app-subnav-reviews {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -1368,6 +1401,71 @@ body.theme-dark button.staff-perms-toggle:hover,
 .tg-msg-text {
   font-size: 14px;
   color: #1a1a1a;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tg-msg-review-card {
+  font-size: 14px;
+  color: #1a1a1a;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  padding: 10px 12px;
+  max-width: 100%;
+}
+
+.tg-msg-own .tg-msg-review-card {
+  background: rgba(255, 248, 235, 0.9);
+  border-color: rgba(184, 90, 0, 0.15);
+}
+
+.tg-msg-review-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.tg-msg-review-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #666;
+}
+
+.tg-msg-review-stars {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.tg-msg-review-text {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tg-msg-review-photos {
+  margin-bottom: 8px;
+}
+
+.tg-msg-review-reply {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.12);
+}
+
+.tg-msg-review-reply strong {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+  color: #444;
+}
+
+.tg-msg-review-reply p {
+  margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -2461,6 +2559,83 @@ body.theme-dark .tg-chat-item-row:hover {
   gap: 16px;
 }
 
+.catalog-empty-state {
+  display: grid;
+  gap: 12px;
+  max-width: 520px;
+}
+
+.catalog-tree-head h2 {
+  margin: 0 0 4px;
+}
+
+.catalog-tree-meta {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.catalog-tree-subcategory {
+  margin: 6px 0 6px 8px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(255, 122, 0, 0.25);
+}
+
+.tree-toggle--sub {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.catalog-tree-services {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.service-editor--inactive {
+  opacity: 0.72;
+}
+
+.service-editor-name {
+  flex: 1 1 100%;
+  min-width: 140px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.service-editor-active {
+  white-space: nowrap;
+}
+
+.catalog-help-list {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.catalog-help-panel .ghost-btn {
+  width: auto;
+}
+
+.catalog-save-all-btn {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.service-editor--dirty {
+  box-shadow: inset 0 0 0 2px rgba(255, 122, 0, 0.45);
+  border-radius: 8px;
+}
+
+.service-editor-dirty-mark {
+  color: #ff7a00;
+  margin-left: 6px;
+  font-size: 10px;
+}
+
 .services-layout .card,
 .services-layout .form,
 .services-layout input,
@@ -2740,8 +2915,30 @@ body.theme-dark .tg-chat-item-row:hover {
 }
 
 .tg-main--dark .tg-msg-text,
-.tg-main--dark .tg-msg-time {
+.tg-main--dark .tg-msg-time,
+.tg-main--dark .tg-msg-review-card,
+.tg-main--dark .tg-msg-review-text,
+.tg-main--dark .tg-msg-review-reply p {
   color: #f4f4f4;
+}
+
+.tg-main--dark .tg-msg-review-card {
+  background: rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.tg-main--dark .tg-msg-own .tg-msg-review-card {
+  background: rgba(255, 140, 60, 0.2);
+  border-color: rgba(255, 180, 100, 0.25);
+}
+
+.tg-main--dark .tg-msg-review-reply {
+  border-top-color: rgba(255, 255, 255, 0.15);
+}
+
+.tg-main--dark .tg-msg-review-reply strong,
+.tg-main--dark .tg-msg-review-label {
+  color: #ccc;
 }
 
 .tg-main--dark .tg-compose {
@@ -3159,6 +3356,419 @@ body.theme-dark .tg-chat-search {
   overflow: hidden;
 }
 
+.client-discover-map-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: min(520px, 62vh);
+}
+
+.client-discover-map-wrap .client-discover-map {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 200px;
+  height: min(520px, 62vh);
+}
+
+.client-discover-map-wrap--has-sheet .client-discover-map {
+  flex: 1 1 42%;
+  height: auto;
+  min-height: 140px;
+  max-height: 48vh;
+}
+
+.client-discover-map-wrap--org-reviews .client-discover-map {
+  flex: 0 0 auto;
+  min-height: 100px;
+  max-height: 32vh;
+}
+
+.map-org-sheet {
+  position: relative;
+  flex: 0 0 auto;
+  z-index: 5000;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  background: #fff;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.18);
+  padding: 12px 16px 20px;
+  overflow: visible;
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+
+.map-org-sheet--reviews-open {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.map-org-sheet-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #f5f5f5;
+  border-radius: 50%;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.map-org-sheet-title {
+  margin: 0 36px 8px 0;
+  font-size: 1.1rem;
+}
+
+.map-org-sheet-rating {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.map-org-sheet-actions {
+  margin-bottom: 10px;
+}
+
+.map-org-sheet-actions button {
+  pointer-events: auto;
+}
+
+.map-org-reviews {
+  margin-top: 10px;
+  max-height: none;
+  overflow: visible;
+}
+
+.review-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+
+.review-like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #e0c2a8;
+  background: #fff;
+  color: #8d3e00;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.review-like-btn--active {
+  border-color: #e25555;
+  background: #fff5f5;
+  color: #c0392b;
+}
+
+.review-like-btn--active .review-like-icon {
+  color: #e25555;
+}
+
+.review-like-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.review-reply-open-btn {
+  flex-shrink: 0;
+}
+
+.review-reply-editor {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.review-reply-editor textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 72px;
+  resize: vertical;
+}
+
+.review-reply-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.review-reply-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.review-reply-option {
+  font-size: 13px;
+  align-items: flex-start;
+}
+
+.booking-calendar .calendar-slot.booking {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.booking-slot-time {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.booking-slot-name {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.booking-slot-status {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  opacity: 0.95;
+}
+
+.booking-calendar .calendar-slot.booking.booking-slot--cancelled {
+  background: #e25555;
+  border-color: #c73a3a;
+  color: #fff;
+}
+
+.booking-calendar .calendar-slot.booking.booking-slot--done {
+  background: #3dad6e;
+  border-color: #2a8f57;
+  color: #fff;
+}
+
+.booking-calendar .calendar-slot.booking.booking-slot--cancelled .booking-slot-status {
+  color: #fff;
+}
+
+.review-modal-card {
+  max-width: 440px;
+  width: min(440px, calc(100vw - 24px));
+  max-height: min(92vh, 720px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.review-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 0;
+}
+
+.review-modal-head h3 {
+  margin: 0;
+}
+
+.review-modal-close {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #f5f5f5;
+  color: #333;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.review-modal-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+  padding: 0 16px 16px;
+}
+
+.review-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  padding-bottom: 8px;
+}
+
+.review-modal-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #ffe4cf;
+  background: #fff;
+}
+
+.review-modal-submit {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 15px;
+}
+
+.reviews-page select {
+  margin-bottom: 12px;
+  max-width: 280px;
+}
+
+.review-list {
+  margin-top: 12px;
+}
+
+.review-item {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.review-item--new {
+  background: rgba(255, 153, 51, 0.08);
+  margin: 0 -8px;
+  padding-left: 8px;
+  padding-right: 8px;
+  border-radius: 8px;
+}
+
+.review-new-pill {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #c45a00;
+  background: #ffe8d5;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.review-item:last-child {
+  border-bottom: none;
+}
+
+.review-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.review-stars {
+  color: #f5b301;
+  letter-spacing: 1px;
+  font-size: 14px;
+}
+
+.review-stars-empty {
+  color: #d4d0cb;
+}
+
+.review-item-text {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}
+
+.review-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.review-photos img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #e0c2a8;
+}
+
+.review-reply {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 153, 51, 0.12);
+  font-size: 13px;
+}
+
+.star-rating {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  margin: 4px 0 12px;
+}
+
+.star-rating-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.star-rating-btn:focus-visible {
+  outline: 2px solid #ff7a00;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.star-rating-icon {
+  font-size: 32px;
+  color: #d4d0cb;
+  transition: color 0.12s ease, transform 0.12s ease;
+}
+
+.star-rating-btn--active .star-rating-icon {
+  color: #f5b301;
+}
+
+.star-rating-btn:hover .star-rating-icon,
+.star-rating-btn:focus-visible .star-rating-icon {
+  color: #ffc933;
+  transform: scale(1.06);
+}
+
+.booking-actions-bar {
+  position: relative;
+  z-index: 2;
+}
+
 .client-discover-top {
   padding: 16px 16px 8px;
 }
@@ -3208,6 +3818,348 @@ body.theme-dark .tg-chat-search {
 
 .client-filters-modal {
   max-width: 440px;
+  max-height: min(90vh, 720px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.client-filters-modal .form {
+  overflow: visible;
+}
+
+.client-filters-modal .row-2 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.client-filters-modal .row-2 > div {
+  min-width: 0;
+}
+
+.client-filters-modal input,
+.client-filters-modal select,
+.client-filters-modal .mini-date-picker {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.client-filters-modal .mini-date-picker-btn {
+  max-width: 100%;
+}
+
+.client-filters-modal .mini-date-picker-clear {
+  margin-top: 6px;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.org-settings-highlight {
+  animation: org-settings-pulse 2s ease-in-out 1;
+  box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.45);
+  border-radius: 10px;
+}
+
+.booking-messages-form {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.booking-messages-hint {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(255, 122, 0, 0.08);
+  border: 1px solid rgba(255, 122, 0, 0.22);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin: 20px 0 1.5rem;
+  clear: both;
+}
+
+.booking-messages-hint h4 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+
+.booking-messages-hint p {
+  margin: 0 0 10px;
+}
+
+.booking-messages-hint p:last-child {
+  margin-bottom: 0;
+}
+
+.booking-messages-hint code {
+  font-size: 0.85em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.booking-messages-hint-example {
+  font-style: italic;
+}
+
+.booking-msg-field {
+  margin-bottom: 1rem;
+}
+
+.booking-msg-field:last-of-type {
+  margin-bottom: 0.75rem;
+}
+
+.booking-msg-composer {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 4.5rem;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+  background: var(--input-bg, #fff);
+  cursor: text;
+}
+
+.booking-msg-editor {
+  position: relative;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  max-height: 320px;
+}
+
+.booking-msg-editor--empty::before {
+  content: attr(data-placeholder);
+  color: rgba(0, 0, 0, 0.42);
+  pointer-events: none;
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  right: 12px;
+}
+
+.booking-msg-editor:focus.booking-msg-editor--empty::before,
+.booking-msg-editor:not(.booking-msg-editor--empty)::before {
+  display: none;
+}
+
+.booking-msg-editor .booking-msg-token--inline {
+  margin: 0 2px;
+  vertical-align: baseline;
+}
+
+.booking-msg-composer--highlight {
+  outline: 2px solid rgba(255, 122, 0, 0.55);
+  outline-offset: 2px;
+}
+
+.booking-msg-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px dashed rgba(255, 122, 0, 0.55);
+  background: rgba(255, 122, 0, 0.12);
+  color: inherit;
+  font-size: 0.88rem;
+  font-family: inherit;
+  line-height: 1.25;
+  cursor: grab;
+  user-select: none;
+  vertical-align: middle;
+}
+
+.booking-msg-token--palette {
+  margin-top: 8px;
+}
+
+.booking-msg-token--inline {
+  flex-shrink: 0;
+}
+
+.booking-msg-token:active {
+  cursor: grabbing;
+}
+
+.booking-msg-token-grip {
+  opacity: 0.55;
+  font-size: 0.75rem;
+  letter-spacing: -2px;
+}
+
+.booking-msg-token-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  border-radius: 50%;
+  font-size: 1rem;
+  line-height: 1;
+  opacity: 0.65;
+  cursor: pointer;
+}
+
+.booking-msg-token-remove:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .booking-msg-composer,
+body.theme-dark .booking-msg-composer {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--input-bg, rgba(255, 255, 255, 0.06));
+}
+
+[data-theme="dark"] .booking-msg-editor--empty::before,
+body.theme-dark .booking-msg-editor--empty::before {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+[data-theme="dark"] .booking-messages-hint,
+body.theme-dark .booking-messages-hint {
+  background: rgba(255, 122, 0, 0.12);
+  border-color: rgba(255, 122, 0, 0.35);
+}
+
+[data-theme="dark"] .booking-messages-hint code,
+body.theme-dark .booking-messages-hint code {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@keyframes org-settings-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(255, 122, 0, 0.45);
+  }
+}
+
+.booking-actions-bar {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+}
+
+.booking-actions-bar .ghost-btn,
+.booking-actions-bar .booking-action-done {
+  width: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.2;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.booking-calendar .calendar-slots {
+  overflow: visible;
+}
+
+.booking-calendar .calendar-slot.booking {
+  overflow: visible;
+}
+
+.booking-action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  background: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.booking-action-btn--confirm {
+  border-color: #2e7d32;
+  color: #2e7d32;
+}
+
+.booking-action-btn--chat {
+  border-color: #ffbf8a;
+  color: #ff7a00;
+}
+
+.booking-action-btn--cancel {
+  border-color: #c62828;
+  color: #c62828;
+}
+
+.calendar-slot.booking {
+  cursor: pointer;
+}
+
+.calendar-slot.booking:hover {
+  filter: brightness(0.97);
+}
+
+.client-book-overlay {
+  max-width: 580px;
+  width: min(580px, calc(100% - 24px));
+  min-height: min(72vh, 720px);
+  max-height: min(88vh, 820px);
+  overflow-y: auto;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.client-book-overlay .form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.client-book-slot-strip {
+  flex: 1;
+  min-height: 120px;
+  max-height: 280px;
+  overflow-y: auto;
+  align-content: flex-start;
+}
+
+/* Поверх Яндекс.Карты (её слои до ~5000) */
+.modal-backdrop--app-overlay {
+  z-index: 20000;
+  pointer-events: auto;
+  isolation: isolate;
+}
+
+.modal-backdrop--app-overlay .modal-card {
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Блокируем только карту; панель организации остаётся кликабельной */
+.client-discover-map-wrap--blocked #client-discover-map,
+.client-discover-map-wrap--blocked .client-discover-map {
+  pointer-events: none !important;
+}
+
+/* Когда поверх открыта запись/фильтры — панель тоже неактивна */
+.client-discover-map-wrap--sheet-inert .map-org-sheet {
+  pointer-events: none !important;
+}
+
+.map-org-popup {
+  max-width: 420px;
+  width: calc(100% - 24px);
 }
 
 .client-filters-actions {
@@ -3233,4 +4185,298 @@ body.theme-dark .client-discover-search {
 [data-theme="dark"] .field-label,
 body.theme-dark .field-label {
   color: var(--text-muted, #aaa);
+}
+
+/* Клиент: поиск в шапке */
+.page-logged .hero.top-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, min(840px, 58vw)) minmax(0, 1fr);
+  align-items: center;
+  width: 100%;
+  column-gap: 12px;
+  row-gap: 8px;
+  flex-wrap: unset;
+  justify-content: stretch;
+}
+
+.page-logged .hero.top-row > button.brand-btn {
+  grid-column: 1;
+  justify-self: start;
+}
+
+.page-logged .hero.top-row > div:empty,
+.page-logged .hero.top-row > div:not(.client-header-search):not(.menu-wrap) {
+  display: none;
+}
+
+.page-logged .hero.top-row .client-header-search {
+  grid-column: 2;
+  justify-self: center;
+  width: 100%;
+  max-width: 840px;
+}
+
+.page-logged .hero.top-row .menu-wrap {
+  grid-column: 3;
+  justify-self: end;
+  margin-left: 0;
+}
+
+.client-header-search {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .page-logged .hero.top-row {
+    grid-template-columns: auto 1fr auto;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .client-header-search {
+    min-width: 0;
+  }
+}
+
+.client-header-search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid #e0c2a8;
+  font: inherit;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.client-filter-icon-btn {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 1px solid #e0c2a8;
+  background: rgba(255, 255, 255, 0.92);
+  color: #555;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.client-filter-icon-btn:hover {
+  background: rgba(255, 122, 0, 0.12);
+  border-color: #ffbf8a;
+  color: #ff7a00;
+}
+
+/* Мини-календарь */
+.mini-date-picker {
+  position: relative;
+}
+
+.mini-date-picker-btn {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e0c2a8;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.mini-date-picker-btn--empty {
+  color: #888;
+}
+
+.mini-date-picker-popover {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 280px;
+  background: #fff;
+  border: 1px solid #e0c2a8;
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+  padding: 10px;
+}
+
+.mini-date-picker-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.mini-date-picker-month {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.mini-date-nav-btn {
+  min-width: 36px;
+  padding: 4px 10px;
+}
+
+.mini-date-picker-weekdays,
+.mini-date-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.mini-date-wd {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #888;
+}
+
+.mini-date-cell {
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 0;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mini-date-cell--empty {
+  pointer-events: none;
+}
+
+.mini-date-cell--today {
+  box-shadow: inset 0 0 0 2px rgba(255, 122, 0, 0.45);
+}
+
+.mini-date-cell--selected {
+  background: #ff7a00;
+  color: #fff;
+  font-weight: 800;
+}
+
+.mini-date-cell:hover:not(.mini-date-cell--empty):not(.mini-date-cell--selected) {
+  background: rgba(255, 122, 0, 0.12);
+}
+
+/* Горизонтальные слоты записи */
+.client-slot-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 2px 10px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.client-slot-chip {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 120px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #e86f00;
+  background: #ff9933;
+  color: #3d1a00;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.client-slot-chip--active {
+  background: #ff7a00;
+  color: #fff;
+  border-color: #c45a00;
+  box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.35);
+}
+
+.client-slot-chip-time {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.client-slot-chip-master {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.92;
+}
+
+.client-slot-chip--active .client-slot-chip-master {
+  opacity: 1;
+}
+
+/* Услуги сотрудника — дерево */
+.staff-services-tree {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid #f0e0d0;
+  border-radius: 10px;
+  background: rgba(255, 250, 245, 0.8);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.staff-svc-cat {
+  margin-bottom: 8px;
+}
+
+.staff-svc-cat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.staff-svc-check {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.staff-svc-toggle {
+  flex: 1;
+  text-align: left;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.staff-svc-children {
+  margin-left: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.staff-svc-item {
+  font-size: 13px;
+}
+
+[data-theme="dark"] .client-header-search-input,
+body.theme-dark .client-header-search-input,
+[data-theme="dark"] .client-filter-icon-btn,
+body.theme-dark .client-filter-icon-btn,
+[data-theme="dark"] .mini-date-picker-btn,
+body.theme-dark .mini-date-picker-btn,
+[data-theme="dark"] .mini-date-picker-popover,
+body.theme-dark .mini-date-picker-popover {
+  border-color: var(--border);
+  background: var(--bg-card);
+  color: var(--text);
 }

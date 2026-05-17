@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Q
+from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -8,6 +9,7 @@ from rest_framework.response import Response
 from catalog.models import Service
 from notifications.models import InAppNotification
 
+from .booking_windows import book_time_window, list_available_windows
 from .models import AvailabilitySlot, Booking, ProviderStaff
 from .serializers import AvailabilitySlotSerializer, BookingSerializer, ProviderStaffSerializer
 
@@ -133,7 +135,9 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        qs = AvailabilitySlot.objects.all().select_related("provider", "staff")
+        qs = AvailabilitySlot.objects.all().select_related(
+            "provider", "staff", "booking__client", "booking__service"
+        )
         provider = self.request.query_params.get("provider")
         if self.request.user.role == "client":
             if not provider:
@@ -153,6 +157,24 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(provider=self.request.user)
 
+    @action(detail=False, methods=["get"], url_path="available-windows")
+    def available_windows(self, request):
+        if request.user.role != "client":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        provider = (request.query_params.get("provider") or "").strip()
+        service = (request.query_params.get("service") or "").strip()
+        book_date_raw = (request.query_params.get("date") or "").strip()
+        if not provider or not service or not book_date_raw:
+            return Response(
+                {"detail": "Укажите provider, service и date."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        book_date = parse_date(book_date_raw)
+        if not book_date:
+            return Response({"detail": "Некорректная дата."}, status=status.HTTP_400_BAD_REQUEST)
+        data = list_available_windows(int(provider), int(service), book_date)
+        return Response(data)
+
     @action(detail=False, methods=["delete"], url_path="delete-series")
     def delete_series(self, request):
         group = (request.query_params.get("recurrence_group") or "").strip()
@@ -169,25 +191,93 @@ class BookingViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     http_method_names = ["get", "post", "head", "options"]
 
+    def _booking_for_actor(self, booking):
+        user = self.request.user
+        if user.role == "client" and booking.client_id == user.id:
+            return True
+        if user.role == "provider" and booking.provider_id == user.id:
+            return True
+        if user.role == "staff":
+            return ProviderStaff.objects.filter(
+                provider_id=booking.provider_id,
+                staff=user,
+                is_active=True,
+                invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+            ).exists()
+        return False
+
+    def _staff_has_booking_perm(self, booking):
+        user = self.request.user
+        if user.role == "provider":
+            return True
+        if user.role != "staff":
+            return False
+        link = ProviderStaff.objects.filter(
+            provider_id=booking.provider_id,
+            staff=user,
+            is_active=True,
+            invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+        ).first()
+        if not link:
+            return False
+        perms = link.permissions or {}
+        return bool(perms.get("manage_bookings", True))
+
     def get_queryset(self):
         user = self.request.user
         if user.role == "provider":
-            return Booking.objects.filter(provider=user).select_related("client", "provider", "service", "slot")
-        if user.role == "staff":
-            return (
-                Booking.objects.filter(Q(provider=user) | Q(provider__staff_links__staff=user))
-                .select_related("client", "provider", "service", "slot")
-                .distinct()
+            return Booking.objects.filter(provider=user).select_related(
+                "client", "provider", "service", "slot", "staff"
             )
-        return Booking.objects.filter(client=user).select_related("client", "provider", "service", "slot")
+        if user.role == "staff":
+            provider_ids = ProviderStaff.objects.filter(
+                staff=user,
+                is_active=True,
+                invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+            ).values_list("provider_id", flat=True)
+            return Booking.objects.filter(provider_id__in=provider_ids).select_related(
+                "client", "provider", "service", "slot", "staff"
+            )
+        return Booking.objects.filter(client=user).select_related(
+            "client", "provider", "service", "slot", "staff"
+        )
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         if request.user.role != "client":
             return Response(status=status.HTTP_403_FORBIDDEN)
-        slot_id = request.data.get("slot")
         service_id = request.data.get("service")
         provider_id = request.data.get("provider")
+        slot_id = request.data.get("slot")
+        starts_raw = request.data.get("starts_at")
+        ends_raw = request.data.get("ends_at")
+        staff_id = request.data.get("staff")
+        comment = (request.data.get("comment") or "")[:250]
+
+        if starts_raw and ends_raw:
+            starts_at = parse_datetime(str(starts_raw))
+            ends_at = parse_datetime(str(ends_raw))
+            if not starts_at or not ends_at or ends_at <= starts_at:
+                return Response({"detail": "Некорректное время."}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                booking = book_time_window(
+                    int(provider_id),
+                    int(service_id),
+                    starts_at,
+                    ends_at,
+                    int(staff_id) if staff_id not in (None, "", "null") else None,
+                    request.user,
+                    comment,
+                )
+            except Service.DoesNotExist:
+                return Response({"detail": "Услуга не найдена."}, status=status.HTTP_400_BAD_REQUEST)
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            ser = self.get_serializer(booking)
+            return Response(ser.data, status=status.HTTP_201_CREATED)
+
+        if not slot_id:
+            return Response({"detail": "Укажите слот или время."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             slot = AvailabilitySlot.objects.select_for_update().get(pk=slot_id)
         except AvailabilitySlot.DoesNotExist:
@@ -209,7 +299,70 @@ class BookingViewSet(viewsets.ModelViewSet):
             provider_id=provider_id,
             service=service,
             slot=slot,
-            comment=(request.data.get("comment") or "")[:250],
+            staff_id=int(staff_id) if staff_id not in (None, "", "null") else slot.staff_id,
+            comment=comment,
         )
         ser = self.get_serializer(booking)
         return Response(ser.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"])
+    def confirm(self, request, pk=None):
+        from .booking_actions import confirm_booking
+
+        booking = self.get_object()
+        if not self._booking_for_actor(booking) or not self._staff_has_booking_perm(booking):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if request.user.role == "client":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        ok, err = confirm_booking(booking, request.user)
+        if not ok:
+            return Response({"code": err}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.get_serializer(booking).data)
+
+    @action(detail=True, methods=["post"], url_path="cancel-by-org")
+    def cancel_by_org(self, request, pk=None):
+        from .booking_actions import cancel_booking_by_org
+
+        booking = self.get_object()
+        if not self._booking_for_actor(booking) or not self._staff_has_booking_perm(booking):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if request.user.role == "client":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        ok, err = cancel_booking_by_org(booking, request.user)
+        if not ok:
+            return Response({"code": err}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.get_serializer(booking).data)
+
+    @action(detail=True, methods=["post"], url_path="cancel-by-client")
+    def cancel_by_client(self, request, pk=None):
+        from .booking_actions import cancel_booking_by_client
+
+        booking = self.get_object()
+        if request.user.role != "client" or booking.client_id != request.user.id:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        ok, _ = cancel_booking_by_client(booking)
+        return Response(self.get_serializer(booking).data)
+
+    @action(detail=True, methods=["post"], url_path="mark-done")
+    def mark_done(self, request, pk=None):
+        from .booking_actions import mark_booking_done
+
+        booking = self.get_object()
+        if not self._booking_for_actor(booking) or not self._staff_has_booking_perm(booking):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if request.user.role == "client":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        ok, err = mark_booking_done(booking, request.user)
+        if not ok:
+            payload = {"code": err}
+            if err == "booking_not_started_yet":
+                from .booking_actions import format_booking_when
+
+                when = format_booking_when(booking)
+                payload["detail"] = (
+                    f"Отметить «услуга оказана» можно не раньше начала записи"
+                    + (f" ({when})" if when else "")
+                    + "."
+                )
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.get_serializer(booking).data)
