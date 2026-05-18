@@ -20,7 +20,7 @@ from .serializers import (
 class ReviewViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    http_method_names = ["get", "post", "head", "options"]
+    http_method_names = ["get", "post", "patch", "head", "options"]
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -70,6 +70,41 @@ class ReviewViewSet(viewsets.ModelViewSet):
             )
 
         return qs.order_by(ordering)
+
+    def partial_update(self, request, *args, **kwargs):
+        if request.user.role != User.Role.CLIENT:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        review = self.get_object()
+        if review.client_id != request.user.id:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if review.supplemented_at:
+            return Response(
+                {"detail": "Отзыв уже дополнен."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        append_text = (request.data.get("append_text") or request.data.get("text") or "").strip()
+        new_photos = list(request.FILES.getlist("photos"))
+        if not append_text and not new_photos:
+            return Response(
+                {"detail": "Добавьте текст или фото."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        update_fields = []
+        if append_text:
+            base = (review.text or "").strip()
+            review.text = f"{base}\n\n{append_text}" if base else append_text
+            update_fields.append("text")
+        for f in new_photos:
+            ReviewPhoto.objects.create(review=review, image=f)
+        review.supplemented_at = timezone.now()
+        update_fields.append("supplemented_at")
+        review.save(update_fields=update_fields)
+        review = (
+            Review.objects.select_related("client", "staff", "staff__staff", "provider", "reply")
+            .prefetch_related("photos")
+            .get(pk=review.pk)
+        )
+        return Response(ReviewSerializer(review, context={"request": request}).data)
 
     def create(self, request, *args, **kwargs):
         if request.user.role != User.Role.CLIENT:

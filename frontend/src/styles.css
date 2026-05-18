@@ -3378,6 +3378,14 @@ body.theme-dark .tg-chat-search {
   max-height: 48vh;
 }
 
+.client-discover-map-wrap:not(.client-discover-map-wrap--has-sheet) .client-discover-map {
+  flex: 1 1 auto;
+  width: 100%;
+  height: min(520px, 62vh);
+  min-height: 280px;
+  max-height: none;
+}
+
 .client-discover-map-wrap--org-reviews .client-discover-map {
   flex: 0 0 auto;
   min-height: 100px;
@@ -4400,6 +4408,183 @@ body.theme-dark .field-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.booking-history-card h2 {
+  margin-top: 0;
+}
+
+.booking-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.booking-history-item {
+  border: 1px solid #e8d4c0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #fff;
+}
+
+.booking-history-item.booking-slot--cancelled {
+  opacity: 0.72;
+}
+
+.booking-history-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.booking-history-datetime {
+  margin: 0 0 4px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.booking-history-service {
+  margin: 0 0 6px;
+}
+
+.booking-history-price {
+  margin: 0 0 6px;
+  font-weight: 700;
+  color: #c85a00;
+}
+
+.booking-history-counterparty {
+  margin: 0;
+}
+
+.booking-history-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #1565c0;
+  font-weight: 600;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.booking-history-link:hover {
+  color: #0d47a1;
+}
+
+.booking-history-status {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 122, 0, 0.12);
+  color: #c85a00;
+}
+
+.booking-history-status--confirmed {
+  background: rgba(46, 125, 50, 0.12);
+  color: #2e7d32;
+}
+
+.booking-history-status--done {
+  background: rgba(21, 101, 192, 0.12);
+  color: #1565c0;
+}
+
+.booking-history-status--cancelled {
+  background: rgba(198, 40, 40, 0.1);
+  color: #c62828;
+}
+
+.booking-history-review {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0e6dc;
+}
+
+.booking-history-review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.booking-history-review-text {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  font-size: 14px;
+}
+
+.booking-history-review-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.booking-history-review-photos img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.booking-history-review-reply {
+  margin: 0;
+}
+
+.review-modal-existing {
+  margin: 0 0 10px;
+  white-space: pre-wrap;
+}
+
+.review-text-stack {
+  margin: 0;
+}
+
+.review-supplemented-block {
+  margin-top: 10px;
+}
+
+.review-supplemented-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.review-supplemented-enter-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(0, 0, 0, 0.38);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.review-supplemented-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.42);
+}
+
+.review-text-supplement,
+.booking-history-review-text.review-text-supplement {
+  margin: 0;
+  padding-left: 1.35rem;
+  border-left: 2px solid rgba(255, 153, 102, 0.45);
+  white-space: pre-wrap;
+  font-size: 14px;
+  color: #444;
 }
 
 .client-filter-icon-btn {

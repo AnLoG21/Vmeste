@@ -1017,6 +1017,76 @@ function bookingStatusLabel(status) {
   return BOOKING_STATUS_LABELS[status] || status || "";
 }
 
+function formatBookingPrice(price) {
+  if (price == null || price === "") return "—";
+  const n = Number(price);
+  if (Number.isNaN(n)) return String(price);
+  return `${n.toLocaleString("ru-RU", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽`;
+}
+
+function reviewIsSupplemented(review) {
+  return Boolean(review?.supplemented_at);
+}
+
+function splitSupplementedReviewText(review) {
+  const text = String(review?.text || "").trim();
+  if (!reviewIsSupplemented(review)) {
+    return { main: text, supplement: "" };
+  }
+  const sep = text.lastIndexOf("\n\n");
+  if (sep >= 0) {
+    return {
+      main: text.slice(0, sep).trim(),
+      supplement: text.slice(sep + 2).trim(),
+    };
+  }
+  return { main: text, supplement: "" };
+}
+
+function ReviewSupplementEnterIcon() {
+  return (
+    <span className="review-supplemented-enter-icon" aria-hidden="true">
+      ↪
+    </span>
+  );
+}
+
+function ReviewTextContent({ review, mainClassName = "review-item-text", supplementClassName = "review-text-supplement" }) {
+  const { main, supplement } = splitSupplementedReviewText(review);
+  if (!reviewIsSupplemented(review)) {
+    return main ? <p className={mainClassName}>{main}</p> : null;
+  }
+  const showSupplementBlock = Boolean(supplement) || reviewIsSupplemented(review);
+  if (!main && !showSupplementBlock) return null;
+  return (
+    <div className="review-text-stack">
+      {main ? <p className={mainClassName}>{main}</p> : null}
+      {showSupplementBlock && (
+        <div className="review-supplemented-block">
+          <div className="review-supplemented-label-row">
+            <ReviewSupplementEnterIcon />
+            <span className="review-supplemented-label">Отзыв дополнен</span>
+          </div>
+          {supplement ? <p className={supplementClassName}>{supplement}</p> : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatBookingDateTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleString("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function StarRating({ value, onChange }) {
   return (
     <div className="star-rating" role="group" aria-label="Оценка">
@@ -1801,6 +1871,7 @@ export default function App() {
   const [orgSettingsHighlight, setOrgSettingsHighlight] = useState("");
   const [bookingMessageError, setBookingMessageError] = useState(null);
   const [reviewModalBooking, setReviewModalBooking] = useState(null);
+  const [reviewModalReview, setReviewModalReview] = useState(null);
   const [reviewForm, setReviewForm] = useState({ rating: 5, text: "" });
   const [reviewSubmitError, setReviewSubmitError] = useState("");
   const [providerReviews, setProviderReviews] = useState([]);
@@ -2488,6 +2559,12 @@ export default function App() {
   }, [accessToken, currentView, me?.role, me?.id]);
 
   useEffect(() => {
+    if (!accessToken || currentView !== "booking_history") return;
+    reloadBookingsList();
+    if (me?.role === "client") loadMyReviews();
+  }, [accessToken, currentView, me?.role, me?.id]);
+
+  useEffect(() => {
     allLocationsRef.current = allLocations;
   }, [allLocations]);
 
@@ -2536,6 +2613,17 @@ export default function App() {
       // ignore
     }
   }, [mapOrgPopup, clientBookModalOpen, clientFiltersOpen, currentView, me?.role]);
+
+  useEffect(() => {
+    if (currentView !== "client_map" || me?.role !== "client") return undefined;
+    if (mapOrgPopup) {
+      window.setTimeout(fitClientDiscoverMapViewport, 0);
+      window.setTimeout(fitClientDiscoverMapViewport, 200);
+    } else {
+      window.setTimeout(fitClientDiscoverMapViewport, 0);
+    }
+    return undefined;
+  }, [mapOrgPopup, mapOrgReviewsOpen, currentView, me?.role]);
 
   useEffect(() => {
     if (currentView !== "client_map" || me?.role !== "client") {
@@ -4880,6 +4968,36 @@ export default function App() {
     return data;
   }
 
+  function fitClientDiscoverMapViewport() {
+    const map = clientDiscoverMapRef.current;
+    if (!map) return;
+    try {
+      if (map.container?.fitToViewport) map.container.fitToViewport();
+      else map.setSize?.([map.container?.getSize?.()?.[0], map.container?.getSize?.()?.[1]]);
+    } catch {
+      // ignore
+    }
+  }
+
+  function closeMapOrgSheet() {
+    setMapOrgPopup(null);
+    setMapOrgProfile(null);
+    setMapOrgReviewsOpen(false);
+    setMapOrgReviews([]);
+    window.setTimeout(fitClientDiscoverMapViewport, 0);
+    window.setTimeout(fitClientDiscoverMapViewport, 120);
+  }
+
+  async function waitForClientDiscoverMap(maxMs = 4500) {
+    if (clientDiscoverMapRef.current) return clientDiscoverMapRef.current;
+    const started = Date.now();
+    while (Date.now() - started < maxMs) {
+      await new Promise((r) => window.setTimeout(r, 80));
+      if (clientDiscoverMapRef.current) return clientDiscoverMapRef.current;
+    }
+    return null;
+  }
+
   async function openOrgOnMap(loc) {
     setMapOrgPopup(loc);
     setMapOrgCarouselIndex(0);
@@ -4892,6 +5010,7 @@ export default function App() {
       setMapOrgReviews([]);
     }
     loadMapOrgSummary(loc.provider);
+    window.setTimeout(fitClientDiscoverMapViewport, 0);
   }
 
   async function saveOrgProfileInfo(event) {
@@ -4990,13 +5109,45 @@ export default function App() {
   }
 
   function bookingHasReview(bookingId) {
+    const b = bookings.find((x) => Number(x.id) === Number(bookingId));
+    if (b?.review?.id) return true;
     return myReviews.some((r) => Number(r.booking) === Number(bookingId));
+  }
+
+  function getBookingReview(booking) {
+    if (booking?.review?.id) return booking.review;
+    if (me?.role === "client") {
+      return myReviews.find((r) => Number(r.booking) === Number(booking.id)) || null;
+    }
+    return null;
+  }
+
+  async function openOrgCardFromHistory(booking) {
+    const providerId = booking?.provider;
+    if (!providerId) return;
+    let loc = allLocations.find((l) => Number(l.provider) === Number(providerId));
+    if (!loc) {
+      const res = await authFetch(`${API_URL}/locations/`);
+      if (res.ok) {
+        const list = await res.json();
+        loc = list.find((l) => Number(l.provider) === Number(providerId));
+        if (Array.isArray(list) && list.length) setAllLocations(list);
+      }
+    }
+    if (!loc) {
+      setClientStatus("Точка организации на карте не найдена.");
+      return;
+    }
+    setCurrentView("client_map");
+    await waitForClientDiscoverMap();
+    await openOrgOnMap(loc);
   }
 
   function patchReviewInLists(updated) {
     const merge = (list) => list.map((r) => (Number(r.id) === Number(updated.id) ? { ...r, ...updated } : r));
     setProviderReviews((list) => merge(list));
     setMapOrgReviews((list) => merge(list));
+    setMyReviews((list) => merge(list));
   }
 
   async function toggleReviewLike(reviewId, likedByMe) {
@@ -5106,7 +5257,7 @@ export default function App() {
           </span>
         </div>
         {r.staff_name ? <p className="muted small">Мастер: {r.staff_name}</p> : null}
-        {r.text ? <p className="review-item-text">{r.text}</p> : null}
+        <ReviewTextContent review={r} />
         {r.photos?.length > 0 && (
           <div className="review-photos">
             {r.photos.map((p, photoIdx) => (
@@ -5267,6 +5418,60 @@ export default function App() {
     event.preventDefault();
     if (!reviewModalBooking) return;
     setReviewSubmitError("");
+    const input = document.getElementById("review-photos-input");
+    const isSupplement = Boolean(reviewModalReview?.id);
+
+    if (isSupplement) {
+      const fd = new FormData();
+      if ((reviewForm.text || "").trim()) fd.append("append_text", reviewForm.text.trim());
+      if (input?.files) {
+        for (const f of input.files) fd.append("photos", f);
+      }
+      const res = await authFetch(`${API_URL}/reviews/${reviewModalReview.id}/`, {
+        method: "PATCH",
+        body: fd,
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        const bookingId = reviewModalBooking.id;
+        const providerId = reviewModalBooking.provider;
+        setBookings((prev) =>
+          prev.map((b) =>
+            Number(b.id) === Number(bookingId)
+              ? {
+                  ...b,
+                  review: {
+                    id: updated.id,
+                    rating: updated.rating,
+                    text: updated.text,
+                    created_at: updated.created_at,
+                    supplemented_at: updated.supplemented_at,
+                    photos: updated.photos || [],
+                    reply: updated.reply || null,
+                  },
+                }
+              : b,
+          ),
+        );
+        setMyReviews((prev) => {
+          const has = prev.some((r) => Number(r.id) === Number(updated.id));
+          if (has) return prev.map((r) => (Number(r.id) === Number(updated.id) ? { ...r, ...updated } : r));
+          return [updated, ...prev];
+        });
+        setReviewModalBooking(null);
+        setReviewModalReview(null);
+        setReviewForm({ rating: 5, text: "" });
+        if (input) input.value = "";
+        setReviewSubmitError("");
+        setClientStatus("Отзыв дополнен.");
+        await refreshReviewsAfterSubmit(providerId);
+        return;
+      }
+      const err = await res.json().catch(() => ({}));
+      setReviewSubmitError(formatApiError(err, res.status) || "Не удалось дополнить отзыв.");
+      return;
+    }
+
     const fd = new FormData();
     fd.append("provider", String(reviewModalBooking.provider));
     fd.append("booking", String(reviewModalBooking.id));
@@ -5275,15 +5480,36 @@ export default function App() {
     }
     fd.append("rating", String(reviewForm.rating));
     fd.append("text", reviewForm.text || "");
-    const input = document.getElementById("review-photos-input");
     if (input?.files) {
       for (const f of input.files) fd.append("photos", f);
     }
     const res = await authFetch(`${API_URL}/reviews/`, { method: "POST", body: fd });
     if (res.ok) {
+      const created = await res.json();
       const providerId = reviewModalBooking.provider;
+      const bookingId = reviewModalBooking.id;
+      setBookings((prev) =>
+        prev.map((b) =>
+          Number(b.id) === Number(bookingId)
+            ? {
+                ...b,
+                review: {
+                  id: created.id,
+                  rating: created.rating,
+                  text: created.text,
+                  created_at: created.created_at,
+                  supplemented_at: created.supplemented_at,
+                  photos: created.photos || [],
+                  reply: created.reply || null,
+                },
+              }
+            : b,
+        ),
+      );
       setReviewModalBooking(null);
+      setReviewModalReview(null);
       setReviewForm({ rating: 5, text: "" });
+      if (input) input.value = "";
       setReviewSubmitError("");
       setClientStatus("Отзыв отправлен.");
       await refreshReviewsAfterSubmit(providerId);
@@ -5347,9 +5573,7 @@ export default function App() {
             className="ghost-btn small"
             onClick={(e) => {
               e.stopPropagation();
-              setReviewSubmitError("");
-              setReviewForm({ rating: 5, text: "" });
-              setReviewModalBooking({ ...it, staff_user_id: it.staff || null });
+              openClientReviewModal(it);
             }}
           >
             Отзыв
@@ -5428,6 +5652,147 @@ export default function App() {
 
   function renderBookingsBlock(title = "Записи") {
     return renderBookingCalendar(title);
+  }
+
+  function openClientReviewModal(booking, existingReview = null) {
+    if (existingReview && reviewIsSupplemented(existingReview)) return;
+    setReviewSubmitError("");
+    if (existingReview) {
+      setReviewModalReview(existingReview);
+      setReviewForm({ rating: existingReview.rating, text: "" });
+    } else {
+      setReviewModalReview(null);
+      setReviewForm({ rating: 5, text: "" });
+    }
+    setReviewModalBooking({ ...booking, staff_user_id: booking.staff || null });
+  }
+
+  function renderBookingHistoryReview(booking) {
+    const review = getBookingReview(booking);
+    if (!review) {
+      if (me?.role === "client" && booking.status === "done") {
+        return (
+          <div className="booking-history-review">
+            <button
+              type="button"
+              className="ghost-btn small"
+              onClick={() => openClientReviewModal(booking)}
+            >
+              Оставить отзыв
+            </button>
+          </div>
+        );
+      }
+      return null;
+    }
+    const photos = review.photos || [];
+    return (
+      <div className="booking-history-review">
+        <div className="booking-history-review-head">
+          <span className="review-stars" aria-label={`Оценка ${review.rating}`}>
+            {"★".repeat(review.rating)}
+            <span className="review-stars-empty">{"☆".repeat(5 - review.rating)}</span>
+          </span>
+          {me?.role === "client" && booking.status === "done" && !reviewIsSupplemented(review) && (
+            <button
+              type="button"
+              className="ghost-btn small booking-history-review-supplement"
+              onClick={() => openClientReviewModal(booking, review)}
+            >
+              Дополнить отзыв
+            </button>
+          )}
+        </div>
+        <ReviewTextContent
+          review={review}
+          mainClassName="booking-history-review-text"
+          supplementClassName="booking-history-review-text review-text-supplement"
+        />
+        {photos.length > 0 && (
+          <div className="booking-history-review-photos">
+            {photos.map((ph) => (
+              <a key={ph.id} href={reviewImageUrl(ph.url || ph.image)} target="_blank" rel="noreferrer">
+                <img src={reviewImageUrl(ph.url || ph.image)} alt="" />
+              </a>
+            ))}
+          </div>
+        )}
+        {review.reply?.text ? (
+          <p className="booking-history-review-reply muted small">
+            <strong>Ответ организации:</strong> {review.reply.text}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  function renderBookingHistory() {
+    const isClient = me?.role === "client";
+    const sorted = [...bookings].sort(
+      (a, b) => new Date(b.slot_starts_at || 0) - new Date(a.slot_starts_at || 0),
+    );
+    return (
+      <section className="card full-width booking-history-card">
+        <h2>История записей</h2>
+        {sorted.length === 0 ? (
+          <p className="muted">Записей пока нет.</p>
+        ) : (
+          <ul className="booking-history-list">
+            {sorted.map((b) => {
+              const counterpartyLabel = isClient
+                ? (b.organization_name || "Организация")
+                : bookingClientLabel(b);
+              return (
+                <li key={b.id} className={["booking-history-item", bookingSlotStatusModifier(b.status)].filter(Boolean).join(" ")}>
+                  <div className="booking-history-top">
+                    <div className="booking-history-main">
+                      <p className="booking-history-datetime">{formatBookingDateTime(b.slot_starts_at)}</p>
+                      <p className="booking-history-service muted small">
+                        {(b.service_name || "Услуга").trim()}
+                        {b.staff_display_name ? ` · ${b.staff_display_name}` : ""}
+                      </p>
+                      <p className="booking-history-price">{formatBookingPrice(b.service_price)}</p>
+                      <p className="booking-history-counterparty">
+                        {isClient ? (
+                          <button
+                            type="button"
+                            className="booking-history-link"
+                            onClick={() => openOrgCardFromHistory(b)}
+                          >
+                            {counterpartyLabel}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="booking-history-link"
+                            onClick={() => openChatWithClient(b.client)}
+                          >
+                            {counterpartyLabel}
+                          </button>
+                        )}
+                      </p>
+                    </div>
+                    <span
+                      className={[
+                        "booking-history-status",
+                        b.status === "cancelled" && "booking-history-status--cancelled",
+                        b.status === "done" && "booking-history-status--done",
+                        b.status === "confirmed" && "booking-history-status--confirmed",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
+                      {bookingStatusLabel(b.status)}
+                    </span>
+                  </div>
+                  {renderBookingHistoryReview(b)}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    );
   }
 
   function renderSlotCalendar(showCreateControls = false) {
@@ -6774,6 +7139,12 @@ export default function App() {
                   </span>
                   <span className="menu-item-label">Настройки</span>
                 </button>
+                <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("booking_history"); setMenuOpen(false); }}>
+                  <span className="menu-item-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z" /></svg>
+                  </span>
+                  <span className="menu-item-label">История записей</span>
+                </button>
                 {canManageOrgSettings && (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("staff"); setMenuOpen(false); }}>
                     <span className="menu-item-icon" aria-hidden="true">
@@ -7703,9 +8074,7 @@ export default function App() {
                       aria-label="Закрыть"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setMapOrgPopup(null);
-                        setMapOrgProfile(null);
-                        setMapOrgReviewsOpen(false);
+                        closeMapOrgSheet();
                       }}
                     >
                       ×
@@ -7984,6 +8353,8 @@ export default function App() {
 
         {accessToken && me?.role === "client" && currentView === "bookings" && renderBookingsBlock("Мои записи")}
 
+        {accessToken && currentView === "booking_history" && renderBookingHistory()}
+
         {accessToken && me?.role === "client" && clientFiltersOpen && typeof document !== "undefined" && createPortal(
           <div
             className="modal-backdrop modal-backdrop--app-overlay"
@@ -8236,7 +8607,13 @@ export default function App() {
       )}
 
       {reviewModalBooking && typeof document !== "undefined" && createPortal(
-        <div className="modal-backdrop modal-backdrop--app-overlay" onClick={() => setReviewModalBooking(null)}>
+        <div
+          className="modal-backdrop modal-backdrop--app-overlay"
+          onClick={() => {
+            setReviewModalBooking(null);
+            setReviewModalReview(null);
+          }}
+        >
           <div
             className="modal-card review-modal-card"
             onClick={(e) => e.stopPropagation()}
@@ -8244,39 +8621,65 @@ export default function App() {
             aria-labelledby="review-modal-title"
           >
             <div className="review-modal-head">
-              <h3 id="review-modal-title">Отзыв</h3>
+              <h3 id="review-modal-title">{reviewModalReview?.id ? "Дополнить отзыв" : "Отзыв"}</h3>
               <button
                 type="button"
                 className="review-modal-close"
                 aria-label="Закрыть"
-                onClick={() => setReviewModalBooking(null)}
+                onClick={() => {
+                  setReviewModalBooking(null);
+                  setReviewModalReview(null);
+                }}
               >
                 ×
               </button>
             </div>
             <form onSubmit={submitClientReview} className="form review-modal-form">
               <div className="review-modal-body">
-                <p className="field-label">Оценка</p>
-                <StarRating
-                  value={reviewForm.rating}
-                  onChange={(rating) => setReviewForm((p) => ({ ...p, rating }))}
-                />
+                {reviewModalReview?.id ? (
+                  <p className="muted small review-modal-existing">
+                    Текущая оценка: {"★".repeat(reviewModalReview.rating)}
+                    {reviewModalReview.text ? (
+                      <>
+                        <br />
+                        {reviewModalReview.text}
+                      </>
+                    ) : null}
+                  </p>
+                ) : (
+                  <>
+                    <p className="field-label">Оценка</p>
+                    <StarRating
+                      value={reviewForm.rating}
+                      onChange={(rating) => setReviewForm((p) => ({ ...p, rating }))}
+                    />
+                  </>
+                )}
                 <textarea
-                  placeholder="Комментарий (необязательно)"
+                  placeholder={reviewModalReview?.id ? "Дополнительный текст к отзыву" : "Комментарий (необязательно)"}
                   value={reviewForm.text}
                   onChange={(e) => setReviewForm((p) => ({ ...p, text: e.target.value }))}
                   rows={4}
                 />
-                <label className="field-label" htmlFor="review-photos-input">Фото (необязательно)</label>
+                <label className="field-label" htmlFor="review-photos-input">
+                  {reviewModalReview?.id ? "Добавить фото" : "Фото (необязательно)"}
+                </label>
                 <input id="review-photos-input" type="file" accept="image/*" multiple />
                 {reviewSubmitError ? <p className="status error">{reviewSubmitError}</p> : null}
               </div>
               <div className="review-modal-actions">
                 <button type="submit" className="review-modal-submit">
-                  Отправить отзыв
+                  {reviewModalReview?.id ? "Сохранить дополнение" : "Отправить отзыв"}
                 </button>
-                <button type="button" className="ghost-btn" onClick={() => setReviewModalBooking(null)}>
-                  Пропустить
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={() => {
+                    setReviewModalBooking(null);
+                    setReviewModalReview(null);
+                  }}
+                >
+                  {reviewModalReview?.id ? "Отмена" : "Пропустить"}
                 </button>
               </div>
             </form>

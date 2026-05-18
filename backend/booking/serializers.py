@@ -130,11 +130,16 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
 
 class BookingSerializer(serializers.ModelSerializer):
     service_name = serializers.CharField(source="service.name", read_only=True)
+    service_price = serializers.DecimalField(
+        source="service.price", max_digits=10, decimal_places=2, read_only=True
+    )
+    organization_name = serializers.SerializerMethodField()
     client_username = serializers.CharField(source="client.username", read_only=True)
     client_display_name = serializers.SerializerMethodField()
     staff_display_name = serializers.SerializerMethodField()
     slot_starts_at = serializers.DateTimeField(source="slot.starts_at", read_only=True)
     slot_ends_at = serializers.DateTimeField(source="slot.ends_at", read_only=True)
+    review = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -149,22 +154,79 @@ class BookingSerializer(serializers.ModelSerializer):
             "comment",
             "created_at",
             "service_name",
+            "service_price",
+            "organization_name",
             "client_username",
             "client_display_name",
             "staff_display_name",
             "slot_starts_at",
             "slot_ends_at",
+            "review",
         ]
         read_only_fields = [
             "client",
             "created_at",
             "service_name",
+            "service_price",
+            "organization_name",
             "client_username",
             "client_display_name",
             "staff_display_name",
             "slot_starts_at",
             "slot_ends_at",
+            "review",
         ]
+
+    def get_organization_name(self, obj):
+        prov = getattr(obj, "provider", None)
+        if not prov:
+            return ""
+        name = (getattr(prov, "organization_name", None) or "").strip()
+        return name or (prov.username or "")
+
+    def get_review(self, obj):
+        from reviews.models import Review
+
+        request = self.context.get("request")
+        prefetched = getattr(obj, "_prefetched_objects_cache", None)
+        if prefetched is not None and "reviews" in prefetched:
+            review = obj.reviews.all().first()
+        else:
+            review = (
+                Review.objects.filter(booking_id=obj.id)
+                .select_related("reply")
+                .prefetch_related("photos")
+                .order_by("-created_at")
+                .first()
+            )
+        if not review:
+            return None
+        photos = []
+        for row in review.photos.all():
+            if not row.image:
+                continue
+            url = row.image.url
+            if request:
+                url = request.build_absolute_uri(url)
+            photos.append({"id": row.id, "url": url})
+        reply = getattr(review, "reply", None)
+        reply_data = None
+        if reply:
+            reply_data = {
+                "id": reply.id,
+                "text": reply.text,
+                "sent_via_chat": reply.sent_via_chat,
+                "created_at": reply.created_at,
+            }
+        return {
+            "id": review.id,
+            "rating": review.rating,
+            "text": review.text,
+            "created_at": review.created_at,
+            "supplemented_at": review.supplemented_at,
+            "photos": photos,
+            "reply": reply_data,
+        }
 
     def get_client_display_name(self, obj):
         from .booking_actions import client_display_name

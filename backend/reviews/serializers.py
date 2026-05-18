@@ -38,6 +38,7 @@ class ReviewSerializer(serializers.ModelSerializer):
             "staff",
             "rating",
             "text",
+            "supplemented_at",
             "created_at",
             "client_name",
             "staff_name",
@@ -50,6 +51,7 @@ class ReviewSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "client",
             "created_at",
+            "supplemented_at",
             "client_name",
             "staff_name",
             "photos",

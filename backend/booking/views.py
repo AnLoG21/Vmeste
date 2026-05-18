@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Prefetch, Q
+
+from reviews.models import Review
 from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -223,24 +225,27 @@ class BookingViewSet(viewsets.ModelViewSet):
         perms = link.permissions or {}
         return bool(perms.get("manage_bookings", True))
 
+    def _booking_queryset(self, qs):
+        review_prefetch = Prefetch(
+            "reviews",
+            queryset=Review.objects.select_related("reply").prefetch_related("photos").order_by("-created_at"),
+        )
+        return qs.select_related("client", "provider", "service", "slot", "staff").prefetch_related(
+            review_prefetch
+        )
+
     def get_queryset(self):
         user = self.request.user
         if user.role == "provider":
-            return Booking.objects.filter(provider=user).select_related(
-                "client", "provider", "service", "slot", "staff"
-            )
+            return self._booking_queryset(Booking.objects.filter(provider=user))
         if user.role == "staff":
             provider_ids = ProviderStaff.objects.filter(
                 staff=user,
                 is_active=True,
                 invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
             ).values_list("provider_id", flat=True)
-            return Booking.objects.filter(provider_id__in=provider_ids).select_related(
-                "client", "provider", "service", "slot", "staff"
-            )
-        return Booking.objects.filter(client=user).select_related(
-            "client", "provider", "service", "slot", "staff"
-        )
+            return self._booking_queryset(Booking.objects.filter(provider_id__in=provider_ids))
+        return self._booking_queryset(Booking.objects.filter(client=user))
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
