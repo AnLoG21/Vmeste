@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from .models import User
+from .models import ProviderGalleryPhoto, User
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -31,8 +31,29 @@ class UserSerializer(serializers.ModelSerializer):
             "booking_confirm_message_default",
             "booking_cancel_message_default",
             "booking_done_message_default",
+            "organization_working_hours",
+            "organization_phones",
+            "organization_websites",
+            "organization_card_note",
         ]
         read_only_fields = ["id", "username", "email", "role", "email_verified"]
+
+
+class ProviderGalleryPhotoSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProviderGalleryPhoto
+        fields = ["id", "url", "sort_order", "created_at"]
+        read_only_fields = ["id", "url", "created_at"]
+
+    def get_url(self, obj):
+        request = self.context.get("request")
+        if obj.image and request:
+            return request.build_absolute_uri(obj.image.url)
+        if obj.image:
+            return obj.image.url
+        return ""
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):

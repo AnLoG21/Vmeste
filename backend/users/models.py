@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
@@ -45,3 +46,37 @@ class User(AbstractUser):
         default="",
         help_text="Сообщение клиенту при отметке «услуга оказана».",
     )
+    organization_working_hours = models.JSONField(
+        blank=True,
+        default=dict,
+        help_text="Расписание: ключи mon..sun, значения {open, close, closed}.",
+    )
+    organization_phones = models.JSONField(
+        blank=True,
+        default=list,
+        help_text="Телефоны организации для клиентов.",
+    )
+    organization_websites = models.JSONField(
+        blank=True,
+        default=list,
+        help_text="Сайты организации для клиентов (URL).",
+    )
+    organization_card_note = models.TextField(
+        blank=True,
+        default="",
+        help_text="Дополнительная информация в карточке организации.",
+    )
+
+
+class ProviderGalleryPhoto(models.Model):
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="gallery_photos",
+    )
+    image = models.ImageField(upload_to="org_gallery/%Y/%m/")
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]

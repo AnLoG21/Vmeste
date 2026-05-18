@@ -1,7 +1,7 @@
 from datetime import time
 from decimal import Decimal
 
-from django.db.models import Exists, Max, Min, OuterRef, Q, Subquery
+from django.db.models import Avg, Count, Exists, FloatField, Max, Min, OuterRef, Prefetch, Q, Subquery
 from django.db.models.fields import DecimalField
 from django.utils.dateparse import parse_date
 from rest_framework import permissions, viewsets
@@ -10,8 +10,9 @@ from rest_framework.response import Response
 
 from booking.models import AvailabilitySlot, ProviderStaff
 from catalog.models import Service
+from reviews.models import Review
 
-from users.models import User
+from users.models import ProviderGalleryPhoto, User
 
 from .models import ProviderLocation
 from .serializers import ProviderLocationClientSerializer, ProviderLocationSerializer
@@ -70,12 +71,32 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
             .annotate(m=Max("price"))
             .values("m")[:1]
         )
+        rating_sub = (
+            Review.objects.filter(provider_id=OuterRef("provider_id"))
+            .values("provider_id")
+            .annotate(a=Avg("rating"))
+            .values("a")[:1]
+        )
+        reviews_count_sub = (
+            Review.objects.filter(provider_id=OuterRef("provider_id"))
+            .values("provider_id")
+            .annotate(c=Count("id"))
+            .values("c")[:1]
+        )
 
+        gallery_prefetch = Prefetch(
+            "provider__gallery_photos",
+            queryset=ProviderGalleryPhoto.objects.order_by("sort_order", "id")[:1],
+            to_attr="_gallery_cover_list",
+        )
         qs = (
             ProviderLocation.objects.select_related("provider")
+            .prefetch_related(gallery_prefetch)
             .annotate(
                 min_service_price=Subquery(min_sub, output_field=DecimalField(max_digits=12, decimal_places=2)),
                 max_service_price=Subquery(max_sub, output_field=DecimalField(max_digits=12, decimal_places=2)),
+                provider_average_rating=Subquery(rating_sub, output_field=FloatField()),
+                provider_reviews_count=Subquery(reviews_count_sub),
             )
         )
 
@@ -197,12 +218,23 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
         if sphere:
             providers_qs = providers_qs.filter(provider_sphere=sphere)
 
-        for prov in providers_qs:
+        extra_providers = list(providers_qs)
+        cover_by_provider = {}
+        if extra_providers:
+            prov_ids = [p.id for p in extra_providers]
+            for row in ProviderGalleryPhoto.objects.filter(provider_id__in=prov_ids).order_by(
+                "provider_id", "sort_order", "id"
+            ):
+                if row.provider_id not in cover_by_provider and row.image:
+                    cover_by_provider[row.provider_id] = request.build_absolute_uri(row.image.url)
+
+        for prov in extra_providers:
             min_p, max_p = self._provider_price_range(prov.id)
             if not self._provider_passes_price_filters(request, min_p, max_p):
                 continue
             if not self._provider_passes_slot_filters(request, prov.id):
                 continue
+            rev_agg = Review.objects.filter(provider_id=prov.id).aggregate(a=Avg("rating"), c=Count("id"))
             data.append(
                 {
                     "id": f"main-{prov.id}",
@@ -219,9 +251,13 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
                     "organization_name": prov.organization_name or prov.username,
                     "provider_sphere": prov.provider_sphere or "",
                     "sphere_label": dict(User.ProviderSphere.choices).get(prov.provider_sphere or "", ""),
+                    "provider_cover_url": cover_by_provider.get(prov.id),
                     "min_service_price": min_p,
                     "max_service_price": max_p,
                     "is_main_office": True,
+                    "provider_average_rating": round(rev_agg["a"], 2) if rev_agg["a"] is not None else None,
+                    "provider_reviews_count": rev_agg["c"] or 0,
+                    "provider_working_hours": prov.organization_working_hours or {},
                 }
             )
         return Response(data)

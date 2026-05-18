@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .org_profile import OrganizationClientProfileView, ProviderGalleryView, ProviderOrganizationInfoView
 from .views import (
     ChangeEmailView,
     ChangePasswordView,
@@ -19,6 +20,9 @@ urlpatterns = [
     path("verify-email/", VerifyEmailView.as_view(), name="user-verify-email"),
     path("resend-verification/", ResendVerificationView.as_view(), name="user-resend-verification"),
     path("me/", MeView.as_view(), name="user-me"),
+    path("organization-profile/", OrganizationClientProfileView.as_view(), name="organization-client-profile"),
+    path("organization-info/", ProviderOrganizationInfoView.as_view(), name="organization-info"),
+    path("gallery/", ProviderGalleryView.as_view(), name="provider-gallery"),
     path("presence/ping/", PresencePingView.as_view(), name="user-presence-ping"),
     path("change-password/", ChangePasswordView.as_view(), name="user-change-password"),
     path("change-email/", ChangeEmailView.as_view(), name="user-change-email"),
