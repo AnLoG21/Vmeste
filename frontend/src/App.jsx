@@ -1,6 +1,153 @@
 import { createPortal } from "react-dom";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import logoMain from "./assets/logo-main.png";
+import {
+  ORG_GALLERY_MAX_PHOTOS,
+  ORG_WEEKDAYS,
+  buildOrgCarouselItems,
+  buildYmapOrgPlacemark,
+  resetOrgPinLayoutClass,
+  defaultOrgWorkingHours,
+  formatOrgWorkingHoursText,
+  getOrgWorkingHoursStatus,
+  normalizeOrgWorkingHours,
+  sphereMapIconHref,
+  uniqueDiscoverOrgs,
+} from "./clientOrgFeatures.js";
+
+function formatWebsiteHref(url) {
+  const s = String(url || "").trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s)) return s;
+  return `https://${s}`;
+}
+
+function MapOrgContactsBlock({ phones, websites }) {
+  const [open, setOpen] = useState(false);
+  const phoneList = Array.isArray(phones) ? phones.filter(Boolean) : [];
+  const siteList = Array.isArray(websites) ? websites.filter(Boolean) : [];
+  if (!phoneList.length && !siteList.length) return null;
+
+  return (
+    <div className="map-org-contacts">
+      <button
+        type="button"
+        className="staff-perms-toggle muted small-label map-org-contacts-toggle"
+        onClick={() => setOpen((v) => !v)}
+      >
+        Контакты{open ? " ▲" : " ▼"}
+      </button>
+      {open ? (
+        <div className="map-org-contacts-body">
+          {phoneList.map((ph) => (
+            <a key={ph} href={`tel:${ph.replace(/[^\d+]/g, "")}`} className="map-org-phone-link">
+              {ph}
+            </a>
+          ))}
+          {siteList.map((site) => (
+            <a
+              key={site}
+              href={formatWebsiteHref(site)}
+              className="map-org-website-link"
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              {site.replace(/^https?:\/\//i, "")}
+            </a>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PhotoLightboxReviewCaption({ photo }) {
+  const [expanded, setExpanded] = useState(false);
+  const text = String(photo?.text || "").trim();
+  const isLong = text.split(/\n/).length > 2 || text.length > 90;
+  const rating = Math.min(5, Math.max(0, Number(photo?.rating) || 0));
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [photo?.id, photo?.url]);
+
+  return (
+    <div className="photo-lightbox-review">
+      <p className="photo-lightbox-review-head">
+        <span className="photo-lightbox-stars-filled" aria-hidden>
+          {"★".repeat(rating)}
+        </span>
+        <span className="photo-lightbox-stars-empty" aria-hidden>
+          {"☆".repeat(5 - rating)}
+        </span>
+        {photo.client_name ? ` · ${photo.client_name}` : ""}
+      </p>
+      {text ? (
+        <p
+          className={[
+            "photo-lightbox-review-text",
+            !expanded && "photo-lightbox-review-text--clamped",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          {text}
+        </p>
+      ) : null}
+      {text && isLong ? (
+        <button
+          type="button"
+          className="staff-perms-toggle muted small-label photo-lightbox-review-expand"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? "Свернуть отзыв ▲" : "Развернуть отзыв ▼"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function MapOrgHoursBlock({ workingHours }) {
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [tick, setTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setTick(Date.now()), 30000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const status = useMemo(
+    () => getOrgWorkingHoursStatus(workingHours, new Date(tick)),
+    [workingHours, tick],
+  );
+
+  if (!workingHours) return null;
+
+  return (
+    <div className="map-org-hours">
+      <p
+        className={[
+          "map-org-hours-status",
+          status.isRed && "map-org-hours-status--closed",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {status.mainText}
+      </p>
+      <button
+        type="button"
+        className="staff-perms-toggle muted small-label map-org-hours-toggle"
+        onClick={() => setScheduleOpen((v) => !v)}
+      >
+        График работы{scheduleOpen ? " ▲" : " ▼"}
+      </button>
+      {scheduleOpen ? (
+        <pre className="map-org-hours-text">{status.fullScheduleText}</pre>
+      ) : null}
+    </div>
+  );
+}
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 const NOMINATIM_HEADERS = { Accept: "application/json", "Accept-Language": "ru,ru-RU;q=0.9,en;q=0.5" };
@@ -901,6 +1048,129 @@ function clientWindowKey(w) {
 }
 
 const BOOKING_MESSAGE_DATE_TOKEN = "{date}";
+const bookingTokenDragRef = { el: null };
+const bookingTokenPointerRef = { active: false, token: null, editorRoot: null, onComplete: null };
+
+function stopBookingTokenPointerDrag() {
+  if (!bookingTokenPointerRef.active) return;
+  bookingTokenPointerRef.active = false;
+  bookingTokenPointerRef.token = null;
+  bookingTokenPointerRef.editorRoot = null;
+  bookingTokenPointerRef.onComplete = null;
+  document.body.classList.remove("booking-token-pointer-dragging");
+  document.removeEventListener("pointermove", onBookingTokenPointerMove);
+  document.removeEventListener("pointerup", onBookingTokenPointerUp);
+  document.removeEventListener("pointercancel", onBookingTokenPointerUp);
+}
+
+function onBookingTokenPointerMove(e) {
+  if (bookingTokenPointerRef.active) e.preventDefault();
+}
+
+function onBookingTokenPointerUp(e) {
+  const { token, editorRoot, onComplete } = bookingTokenPointerRef;
+  token?.classList?.remove("booking-msg-token--dragging");
+  stopBookingTokenPointerDrag();
+  if (typeof onComplete === "function") onComplete(e.clientX, e.clientY, editorRoot);
+}
+
+function startBookingTokenPointerDrag({ token, editorRoot, onComplete }) {
+  stopBookingTokenPointerDrag();
+  bookingTokenPointerRef.active = true;
+  bookingTokenPointerRef.token = token;
+  bookingTokenPointerRef.editorRoot = editorRoot;
+  bookingTokenPointerRef.onComplete = onComplete;
+  token?.classList?.add("booking-msg-token--dragging");
+  document.body.classList.add("booking-token-pointer-dragging");
+  document.addEventListener("pointermove", onBookingTokenPointerMove, { passive: false });
+  document.addEventListener("pointerup", onBookingTokenPointerUp);
+  document.addEventListener("pointercancel", onBookingTokenPointerUp);
+}
+
+function getBookingEditorCaretAtPoint(root, clientX, clientY, excludeToken = null) {
+  if (!root) return null;
+
+  if (document.caretRangeFromPoint) {
+    const range = document.caretRangeFromPoint(clientX, clientY);
+    if (range && root.contains(range.commonAncestorContainer)) {
+      if (!excludeToken || !excludeToken.contains(range.commonAncestorContainer)) return range;
+    }
+  } else if (document.caretPositionFromPoint) {
+    const pos = document.caretPositionFromPoint(clientX, clientY);
+    if (pos?.offsetNode && root.contains(pos.offsetNode)) {
+      if (!excludeToken || !excludeToken.contains(pos.offsetNode)) {
+        const range = document.createRange();
+        range.setStart(pos.offsetNode, pos.offset);
+        range.collapse(true);
+        return range;
+      }
+    }
+  }
+
+  let node = document.elementFromPoint(clientX, clientY);
+  if (!node || !root.contains(node)) return null;
+
+  const hitToken = node.closest?.("[data-booking-token='date']");
+  if (hitToken && root.contains(hitToken) && hitToken !== excludeToken) {
+    const range = document.createRange();
+    const rect = hitToken.getBoundingClientRect();
+    if (clientX > rect.left + rect.width / 2) range.setStartAfter(hitToken);
+    else range.setStartBefore(hitToken);
+    range.collapse(true);
+    return range;
+  }
+
+  let child = node;
+  while (child && child.parentNode !== root) child = child.parentNode;
+  if (child && child !== root) {
+    const range = document.createRange();
+    const rect = child.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const midX = rect.left + rect.width / 2;
+    if (clientY > midY || (clientY >= rect.top && clientX > midX)) {
+      if (child.nextSibling) range.setStartBefore(child.nextSibling);
+      else range.setStartAfter(child);
+    } else {
+      range.setStartBefore(child);
+    }
+    range.collapse(true);
+    if (root.contains(range.commonAncestorContainer)) return range;
+  }
+
+  const fallback = document.createRange();
+  fallback.selectNodeContents(root);
+  fallback.collapse(false);
+  return fallback;
+}
+
+function insertBookingTokenAtRange(root, range, token) {
+  if (!root || !token) return;
+  if (range && root.contains(range.commonAncestorContainer)) {
+    range.insertNode(token);
+    range.setStartAfter(token);
+    range.collapse(true);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  } else {
+    root.appendChild(token);
+  }
+}
+
+function dropBookingTokenAtPoint(root, clientX, clientY, { moveToken = null, createNew = false, onAfterChange } = {}) {
+  if (!root) return;
+  const rect = root.getBoundingClientRect();
+  if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return;
+
+  const range = getBookingEditorCaretAtPoint(root, clientX, clientY, moveToken || null);
+  let token = moveToken;
+  if (createNew) token = createBookingTokenElement(root, onAfterChange);
+  else if (token?.parentNode) token.remove();
+
+  insertBookingTokenAtRange(root, range, token);
+  resizeBookingEditor(root);
+  onAfterChange?.();
+}
 
 function parseBookingMessage(value) {
   if (!value) return [""];
@@ -936,7 +1206,42 @@ function resizeBookingEditor(el) {
   el.style.height = `${Math.max(el.scrollHeight, 72)}px`;
 }
 
-function createBookingTokenElement() {
+function bindInlineBookingTokenDrag(token, editorRoot, onAfterChange) {
+  if (!token || token.dataset.pointerDragBound) return;
+  token.dataset.pointerDragBound = "1";
+  token.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest(".booking-msg-token-remove")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    startBookingTokenPointerDrag({
+      token,
+      editorRoot,
+      onComplete: (x, y, root) => {
+        dropBookingTokenAtPoint(root || editorRoot, x, y, { moveToken: token, onAfterChange });
+      },
+    });
+  });
+  token.draggable = true;
+  token.addEventListener("dragstart", (e) => {
+    bookingTokenDragRef.el = token;
+    token.classList.add("booking-msg-token--dragging");
+    e.dataTransfer.setData("application/x-booking-token-move", "1");
+    e.dataTransfer.setData("text/plain", BOOKING_MESSAGE_DATE_TOKEN);
+    e.dataTransfer.effectAllowed = "move";
+    try {
+      e.dataTransfer.setDragImage(document.createElement("span"), 0, 0);
+    } catch {
+      // ignore
+    }
+  });
+  token.addEventListener("dragend", () => {
+    bookingTokenDragRef.el = null;
+    token.classList.remove("booking-msg-token--dragging");
+  });
+}
+
+function createBookingTokenElement(editorRoot, onAfterChange) {
   const wrap = document.createElement("span");
   wrap.contentEditable = "false";
   wrap.dataset.bookingToken = "date";
@@ -944,15 +1249,20 @@ function createBookingTokenElement() {
   wrap.setAttribute("title", "Дата и время записи клиента");
   wrap.innerHTML =
     '<span class="booking-msg-token-grip" aria-hidden="true">⋮⋮</span> Дата и время записи <span class="booking-msg-token-remove" role="button" tabindex="0" aria-label="Убрать дату и время">×</span>';
+  bindInlineBookingTokenDrag(wrap, editorRoot, onAfterChange);
   return wrap;
 }
 
-function syncBookingEditorFromValue(root, value) {
+function insertBookingTokenAtPoint(root, clientX, clientY, onAfterChange) {
+  dropBookingTokenAtPoint(root, clientX, clientY, { createNew: true, onAfterChange });
+}
+
+function syncBookingEditorFromValue(root, value, onAfterChange) {
   if (!root) return;
   root.innerHTML = "";
   parseBookingMessage(value).forEach((part) => {
     if (part === BOOKING_MESSAGE_DATE_TOKEN) {
-      root.appendChild(createBookingTokenElement());
+      root.appendChild(createBookingTokenElement(root, onAfterChange));
     } else if (part) {
       root.appendChild(document.createTextNode(part));
     }
@@ -960,10 +1270,10 @@ function syncBookingEditorFromValue(root, value) {
   resizeBookingEditor(root);
 }
 
-function insertBookingTokenAtSelection(root) {
+function insertBookingTokenAtSelection(root, onAfterChange) {
   if (!root) return;
   root.focus();
-  const token = createBookingTokenElement();
+  const token = createBookingTokenElement(root, onAfterChange);
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) {
     root.appendChild(token);
@@ -981,14 +1291,16 @@ function insertBookingTokenAtSelection(root) {
     }
   }
   resizeBookingEditor(root);
+  onAfterChange?.();
 }
 
-function BookingMsgDateToken({ onDragStart, onRemove, onClick, className = "" }) {
+function BookingMsgDateToken({ onPointerDown, onDragStart, onRemove, onClick, className = "" }) {
   return (
     <button
       type="button"
       draggable
       className={["booking-msg-token", className].filter(Boolean).join(" ")}
+      onPointerDown={onPointerDown}
       onDragStart={onDragStart}
       onClick={onClick}
       title="Перетащите в текст или нажмите для вставки"
@@ -1027,11 +1339,6 @@ function BookingMessageField({ id, label, value, onChange, placeholder, highligh
   const syncingRef = useRef(false);
   const isEmpty = !value.trim();
 
-  function onTokenDragStart(e) {
-    e.dataTransfer.setData("text/plain", BOOKING_MESSAGE_DATE_TOKEN);
-    e.dataTransfer.effectAllowed = "copy";
-  }
-
   function emitFromEditor() {
     const el = editorRef.current;
     if (!el) return;
@@ -1041,18 +1348,44 @@ function BookingMessageField({ id, label, value, onChange, placeholder, highligh
     resizeBookingEditor(el);
   }
 
+  function onTokenDragStart(e) {
+    e.dataTransfer.setData("text/plain", BOOKING_MESSAGE_DATE_TOKEN);
+    e.dataTransfer.effectAllowed = "copy";
+    try {
+      e.dataTransfer.setDragImage(document.createElement("span"), 0, 0);
+    } catch {
+      // ignore
+    }
+  }
+
+  function onPalettePointerDown(e) {
+    if (e.button !== 0) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const root = editorRef.current;
+    startBookingTokenPointerDrag({
+      token: null,
+      editorRoot: root,
+      onComplete: (x, y, editorRoot) => {
+        if (Math.hypot(x - startX, y - startY) < 8) return;
+        dropBookingTokenAtPoint(editorRoot || root, x, y, { createNew: true, onAfterChange: emitFromEditor });
+      },
+    });
+  }
+
   function insertToken() {
-    insertBookingTokenAtSelection(editorRef.current);
-    emitFromEditor();
+    insertBookingTokenAtSelection(editorRef.current, emitFromEditor);
   }
 
   useEffect(() => {
     const el = editorRef.current;
     if (!el || syncingRef.current) return;
     if (serializeBookingEditor(el) !== value) {
-      syncBookingEditorFromValue(el, value);
+      syncBookingEditorFromValue(el, value, emitFromEditor);
     }
   }, [value]);
+
+  useEffect(() => () => stopBookingTokenPointerDrag(), []);
 
   return (
     <div className="booking-msg-field">
@@ -1079,12 +1412,20 @@ function BookingMessageField({ id, label, value, onChange, placeholder, highligh
         onInput={emitFromEditor}
         onDragOver={(e) => {
           e.preventDefault();
-          e.dataTransfer.dropEffect = "copy";
+          e.dataTransfer.dropEffect = bookingTokenDragRef.el ? "move" : "copy";
         }}
         onDrop={(e) => {
           e.preventDefault();
+          const el = editorRef.current;
+          if (!el) return;
+          const moving = bookingTokenDragRef.el;
+          bookingTokenDragRef.el = null;
+          if (moving?.parentNode) {
+            dropBookingTokenAtPoint(el, e.clientX, e.clientY, { moveToken: moving, onAfterChange: emitFromEditor });
+            return;
+          }
           if (e.dataTransfer.getData("text/plain") === BOOKING_MESSAGE_DATE_TOKEN) {
-            insertToken();
+            dropBookingTokenAtPoint(el, e.clientX, e.clientY, { createNew: true, onAfterChange: emitFromEditor });
           }
         }}
         onClick={(e) => {
@@ -1113,6 +1454,7 @@ function BookingMessageField({ id, label, value, onChange, placeholder, highligh
       />
       <BookingMsgDateToken
         className="booking-msg-token--palette"
+        onPointerDown={onPalettePointerDown}
         onDragStart={onTokenDragStart}
         onClick={insertToken}
       />
@@ -1386,6 +1728,8 @@ export default function App() {
   const [allLocations, setAllLocations] = useState([]);
   const allLocationsRef = useRef([]);
   const [clientMapSearchInput, setClientMapSearchInput] = useState("");
+  const [clientMapSearchFocused, setClientMapSearchFocused] = useState(false);
+  const clientHeaderSearchWrapRef = useRef(null);
   const [clientDiscoverSearch, setClientDiscoverSearch] = useState("");
   const emptyClientFilters = () => ({
     sphere: "",
@@ -1405,6 +1749,54 @@ export default function App() {
   const [mapOrgReviewsOpen, setMapOrgReviewsOpen] = useState(false);
   const [mapOrgReviews, setMapOrgReviews] = useState([]);
   const [mapOrgReviewsOrdering, setMapOrgReviewsOrdering] = useState("-created_at");
+  const [mapOrgProfile, setMapOrgProfile] = useState(null);
+  const [mapOrgCarouselIndex, setMapOrgCarouselIndex] = useState(0);
+  const [mapMarkersTick, setMapMarkersTick] = useState(0);
+  const [orgPhotoLightbox, setOrgPhotoLightbox] = useState(null);
+
+  function openOrgPhotoLightbox(items, index = 0) {
+    if (!items?.length) return;
+    setOrgPhotoLightbox({
+      items,
+      index: Math.max(0, Math.min(index, items.length - 1)),
+    });
+  }
+
+  function stepOrgPhotoLightbox(delta) {
+    setOrgPhotoLightbox((prev) => {
+      if (!prev?.items?.length) return prev;
+      const n = prev.items.length;
+      return { ...prev, index: (prev.index + delta + n) % n };
+    });
+  }
+
+  const orgPhotoLightboxTouchX = useRef(0);
+
+  useEffect(() => {
+    if (!orgPhotoLightbox?.items?.length) return undefined;
+    function onKeyDown(e) {
+      if (e.key === "Escape") setOrgPhotoLightbox(null);
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        stepOrgPhotoLightbox(-1);
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        stepOrgPhotoLightbox(1);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [orgPhotoLightbox?.items?.length, orgPhotoLightbox?.index]);
+
+  const [orgProfileForm, setOrgProfileForm] = useState({
+    working_hours: defaultOrgWorkingHours(),
+    phones: [""],
+    websites: [""],
+    card_note: "",
+  });
+  const [orgGalleryPhotos, setOrgGalleryPhotos] = useState([]);
+  const [orgProfileSaveStatus, setOrgProfileSaveStatus] = useState("");
   const [orgBookingMessages, setOrgBookingMessages] = useState({ confirm: "", cancel: "", done: "" });
   const [orgSettingsHighlight, setOrgSettingsHighlight] = useState("");
   const [bookingMessageError, setBookingMessageError] = useState(null);
@@ -1419,6 +1811,8 @@ export default function App() {
   const [reviewReplyForms, setReviewReplyForms] = useState({});
   const [reviewReplyFormError, setReviewReplyFormError] = useState("");
   const clientDiscoverMapRef = useRef(null);
+  const clientDiscoverMapClickBoundRef = useRef(false);
+  const clientDiscoverMapZoomTimerRef = useRef(null);
   const clientMeBootstrappedRef = useRef(false);
   const [providerServices, setProviderServices] = useState([]);
   const [clientBookWindows, setClientBookWindows] = useState([]);
@@ -1605,6 +1999,36 @@ export default function App() {
       done: me.booking_done_message_default || "",
     });
   }, [me?.booking_confirm_message_default, me?.booking_cancel_message_default, me?.booking_done_message_default]);
+
+  useEffect(() => {
+    if (!me || me.role !== "provider") return;
+    const phones = Array.isArray(me.organization_phones) ? me.organization_phones.filter(Boolean) : [];
+    const websites = Array.isArray(me.organization_websites) ? me.organization_websites.filter(Boolean) : [];
+    setOrgProfileForm({
+      working_hours: normalizeOrgWorkingHours(me.organization_working_hours),
+      phones: phones.length ? phones : [""],
+      websites: websites.length ? websites : [""],
+      card_note: me.organization_card_note || "",
+    });
+  }, [
+    me?.id,
+    me?.role,
+    me?.organization_working_hours,
+    me?.organization_phones,
+    me?.organization_websites,
+    me?.organization_card_note,
+  ]);
+
+  useEffect(() => {
+    if (me?.role !== "provider" || currentView !== "organization") return;
+    (async () => {
+      const res = await authFetch(`${API_URL}/users/gallery/`);
+      if (res.ok) {
+        const data = await res.json();
+        setOrgGalleryPhotos(Array.isArray(data) ? data : data.photos || []);
+      }
+    })();
+  }, [accessToken, me?.role, currentView]);
 
   function staffHasPerm(key) {
     if (me?.role === "provider") return true;
@@ -1965,6 +2389,24 @@ export default function App() {
     return () => clearTimeout(t);
   }, [clientMapSearchInput]);
 
+  const clientDiscoverSearchOrgs = useMemo(() => {
+    if (!clientMapSearchInput.trim()) return [];
+    return uniqueDiscoverOrgs(allLocations);
+  }, [allLocations, clientMapSearchInput]);
+
+  const showClientDiscoverSearchDropdown =
+    clientMapSearchFocused && clientMapSearchInput.trim().length > 0;
+
+  useEffect(() => {
+    if (!clientMapSearchFocused) return undefined;
+    const onDocDown = (e) => {
+      if (clientHeaderSearchWrapRef.current?.contains(e.target)) return;
+      setClientMapSearchFocused(false);
+    };
+    document.addEventListener("mousedown", onDocDown);
+    return () => document.removeEventListener("mousedown", onDocDown);
+  }, [clientMapSearchFocused]);
+
   useEffect(() => {
     if (!accessToken || !me || me.role !== "client") return;
     if (!clientMeBootstrappedRef.current) {
@@ -2106,12 +2548,26 @@ export default function App() {
       if (!document.getElementById("client-discover-map")) return;
       ymaps.ready(() => {
         if (clientDiscoverMapRef.current) return;
-        clientDiscoverMapRef.current = new ymaps.Map("client-discover-map", {
+        const map = new ymaps.Map("client-discover-map", {
           center: [55.751244, 37.618423],
           zoom: 10,
           controls: ["zoomControl", "fullscreenControl", "geolocationControl"],
         });
-        refreshClientDiscoverMapMarkers(allLocationsRef.current);
+        clientDiscoverMapRef.current = map;
+        if (!map._vmesteZoomBound) {
+          map._vmesteZoomBound = true;
+          map.events.add("boundschange", () => {
+            if (clientDiscoverMapZoomTimerRef.current) {
+              window.clearTimeout(clientDiscoverMapZoomTimerRef.current);
+            }
+            clientDiscoverMapZoomTimerRef.current = window.setTimeout(() => {
+              if (clientDiscoverMapRef.current) {
+                paintClientDiscoverMapMarkers(allLocationsRef.current, { fitView: false });
+              }
+            }, 160);
+          });
+        }
+        paintClientDiscoverMapMarkers(allLocationsRef.current, { fitView: true });
       });
     }, 280);
     return () => {
@@ -2121,9 +2577,20 @@ export default function App() {
   }, [currentView, me?.role]);
 
   useEffect(() => {
+    if (currentView !== "client_map" || me?.role !== "client") return undefined;
+    const id = window.setInterval(() => setMapMarkersTick((t) => t + 1), 60000);
+    return () => window.clearInterval(id);
+  }, [currentView, me?.role]);
+
+  useEffect(() => {
     if (currentView !== "client_map" || me?.role !== "client" || !clientDiscoverMapRef.current) return;
-    refreshClientDiscoverMapMarkers(allLocations);
+    paintClientDiscoverMapMarkers(allLocations, { fitView: true });
   }, [allLocations, currentView, me?.role]);
+
+  useEffect(() => {
+    if (currentView !== "client_map" || me?.role !== "client" || !clientDiscoverMapRef.current) return;
+    paintClientDiscoverMapMarkers(allLocations, { fitView: false });
+  }, [mapMarkersTick, currentView, me?.role]);
 
   useEffect(() => {
     currentViewRef.current = currentView;
@@ -2910,41 +3377,40 @@ export default function App() {
       }
       clientDiscoverMapRef.current = null;
     }
+    clientDiscoverMapClickBoundRef.current = false;
+    if (clientDiscoverMapZoomTimerRef.current) {
+      window.clearTimeout(clientDiscoverMapZoomTimerRef.current);
+      clientDiscoverMapZoomTimerRef.current = null;
+    }
+    resetOrgPinLayoutClass();
   }
 
-  function refreshClientDiscoverMapMarkers(locations) {
+  function paintClientDiscoverMapMarkers(locations, { fitView = false } = {}) {
     const ymaps = window.ymaps;
     const map = clientDiscoverMapRef.current;
     if (!ymaps || !map || !Array.isArray(locations)) return;
+    if (!clientDiscoverMapClickBoundRef.current) {
+      clientDiscoverMapClickBoundRef.current = true;
+      map.geoObjects.events.add("click", (e) => {
+        const target = e.get("target");
+        const loc = target?.properties?.get?.("vmesteLoc");
+        if (loc) openOrgOnMap(loc);
+      });
+    }
+    const zoom = map.getZoom();
     map.geoObjects.removeAll();
     const coordsList = [];
     for (const loc of locations) {
       const lat = Number(loc.latitude);
       const lon = Number(loc.longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      const title = (loc.organization_name && String(loc.organization_name).trim()) || loc.title || "Организация";
-      const hint = [title, loc.sphere_label].filter(Boolean).join(" · ");
-      const priceLine =
-        loc.min_service_price != null && loc.max_service_price != null
-          ? `<div>Услуги: от ${loc.min_service_price} до ${loc.max_service_price} ₽</div>`
-          : "";
-      const pm = new ymaps.Placemark(
-        [lat, lon],
-        {
-          balloonContentHeader: title,
-          balloonContentBody: `${loc.sphere_label ? `<p>${loc.sphere_label}</p>` : ""}<p>${loc.address || ""}</p>${priceLine}`,
-          hintContent: hint || title,
-        },
-        { preset: "islands#orangeDotIcon" },
-      );
-      pm.events.add("click", () => {
-        setMapOrgPopup(loc);
-        setMapOrgReviewsOpen(false);
-        loadMapOrgSummary(loc.provider);
-      });
+      const pm = buildYmapOrgPlacemark(ymaps, loc, () => {
+        openOrgOnMap(loc);
+      }, new Date(), zoom);
       map.geoObjects.add(pm);
       coordsList.push([lat, lon]);
     }
+    if (!fitView) return;
     if (coordsList.length === 1) {
       map.setCenter(coordsList[0], 14);
     } else if (coordsList.length > 1) {
@@ -4402,6 +4868,78 @@ export default function App() {
     if (res.ok) setMapOrgSummary(await res.json());
   }
 
+  async function loadMapOrgProfile(providerId) {
+    const res = await authFetch(`${API_URL}/users/organization-profile/?provider=${encodeURIComponent(providerId)}`);
+    if (!res.ok) {
+      setMapOrgProfile(null);
+      return null;
+    }
+    const data = await res.json();
+    setMapOrgProfile(data);
+    setMapOrgCarouselIndex(0);
+    return data;
+  }
+
+  async function openOrgOnMap(loc) {
+    setMapOrgPopup(loc);
+    setMapOrgCarouselIndex(0);
+    const profile = await loadMapOrgProfile(loc.provider);
+    if (profile?.reviews_count > 0) {
+      setMapOrgReviewsOpen(true);
+      await loadMapOrgReviews(loc.provider, mapOrgReviewsOrdering);
+    } else {
+      setMapOrgReviewsOpen(false);
+      setMapOrgReviews([]);
+    }
+    loadMapOrgSummary(loc.provider);
+  }
+
+  async function saveOrgProfileInfo(event) {
+    event?.preventDefault?.();
+    const phones = orgProfileForm.phones.map((p) => String(p).trim()).filter(Boolean);
+    const websites = orgProfileForm.websites.map((w) => String(w).trim()).filter(Boolean);
+    const res = await authFetch(`${API_URL}/users/organization-info/`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        organization_working_hours: orgProfileForm.working_hours,
+        organization_phones: phones,
+        organization_websites: websites,
+        organization_card_note: orgProfileForm.card_note,
+      }),
+    });
+    if (!res.ok) {
+      setOrgProfileSaveStatus("Не удалось сохранить.");
+      return;
+    }
+    setOrgProfileSaveStatus("Сохранено.");
+    loadMe();
+  }
+
+  async function uploadOrgGalleryPhoto(file) {
+    if (!file) return false;
+    if (orgGalleryPhotos.length >= ORG_GALLERY_MAX_PHOTOS) {
+      setOrgProfileSaveStatus(`Можно загрузить не более ${ORG_GALLERY_MAX_PHOTOS} фото.`);
+      return false;
+    }
+    const fd = new FormData();
+    fd.append("image", file);
+    const res = await authFetch(`${API_URL}/users/gallery/`, { method: "POST", body: fd });
+    if (res.ok) {
+      const row = await res.json();
+      setOrgGalleryPhotos((p) => [...p, row].slice(0, ORG_GALLERY_MAX_PHOTOS));
+      setOrgProfileSaveStatus("Фото добавлено.");
+      return true;
+    }
+    const err = await res.json().catch(() => ({}));
+    setOrgProfileSaveStatus(err.detail || "Не удалось загрузить фото.");
+    return false;
+  }
+
+  async function deleteOrgGalleryPhoto(id) {
+    const res = await authFetch(`${API_URL}/users/gallery/?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (res.ok) setOrgGalleryPhotos((p) => p.filter((x) => Number(x.id) !== Number(id)));
+  }
+
   async function loadMapOrgReviews(providerId, ordering) {
     const res = await authFetch(
       `${API_URL}/reviews/?provider=${encodeURIComponent(providerId)}&ordering=${encodeURIComponent(ordering || "-created_at")}`,
@@ -4519,7 +5057,44 @@ export default function App() {
     });
   }
 
-  function renderReviewListItem(r, { showClientName = true } = {}) {
+  function buildAllReviewPhotoLightboxItems(reviews) {
+    const items = [];
+    for (const r of reviews || []) {
+      for (const p of r.photos || []) {
+        items.push({
+          id: `review-${r.id}-${p.id}`,
+          url: reviewImageUrl(p.image),
+          source: "review",
+          review_id: r.id,
+          client_name: r.client_name,
+          rating: r.rating,
+          text: r.text || "",
+        });
+      }
+    }
+    return items;
+  }
+
+  function findReviewPhotoGlobalIndex(reviews, reviewId, photoIndex) {
+    let offset = 0;
+    for (const r of reviews || []) {
+      const photos = r.photos || [];
+      if (r.id === reviewId) return offset + photoIndex;
+      offset += photos.length;
+    }
+    return 0;
+  }
+
+  function openReviewPhotoLightbox(review, photoIndex = 0, reviewsList = null) {
+    const reviews = reviewsList?.length ? reviewsList : [review];
+    const items = buildAllReviewPhotoLightboxItems(reviews);
+    if (!items.length) return;
+    const globalIndex = findReviewPhotoGlobalIndex(reviews, review.id, photoIndex);
+    openOrgPhotoLightbox(items, globalIndex);
+  }
+
+  function renderReviewListItem(r, { showClientName = true, reviewsForGallery = null } = {}) {
+    const galleryReviews = reviewsForGallery?.length ? reviewsForGallery : [r];
     return (
       <li key={r.id} className={["review-item", r.is_new && "review-item--new"].filter(Boolean).join(" ")}>
         <div className="review-item-head">
@@ -4534,10 +5109,15 @@ export default function App() {
         {r.text ? <p className="review-item-text">{r.text}</p> : null}
         {r.photos?.length > 0 && (
           <div className="review-photos">
-            {r.photos.map((p) => (
-              <a key={p.id} href={reviewImageUrl(p.image)} target="_blank" rel="noreferrer">
+            {r.photos.map((p, photoIdx) => (
+              <button
+                key={p.id}
+                type="button"
+                className="review-photo-btn"
+                onClick={() => openReviewPhotoLightbox(r, photoIdx, galleryReviews)}
+              >
                 <img src={reviewImageUrl(p.image)} alt="" />
-              </a>
+              </button>
             ))}
           </div>
         )}
@@ -4657,7 +5237,9 @@ export default function App() {
         {providerReviews.length === 0 ? (
           <p className="muted">Пока нет отзывов.</p>
         ) : (
-          <ul className="list review-list">{providerReviews.map((r) => renderReviewListItem(r))}</ul>
+          <ul className="list review-list">
+            {providerReviews.map((r) => renderReviewListItem(r, { reviewsForGallery: providerReviews }))}
+          </ul>
         )}
       </section>
     );
@@ -5325,7 +5907,300 @@ export default function App() {
               </p>
             </aside>
 
-            <h3>Адрес организации (основной)</h3>
+            
+
+            <h3>Карточка для клиентов</h3>
+
+            <p className="muted small">Режим работы, телефоны, фото и дополнительная информация отображаются при выборе организации на карте.</p>
+
+            <form onSubmit={saveOrgProfileInfo} className="form org-profile-form">
+
+              <p className="field-label">Режим работы</p>
+
+              <div className="org-hours-grid">
+
+                {ORG_WEEKDAYS.map(({ key, label }) => (
+
+                  <div key={key} className="org-hours-row">
+
+                    <label className="checkbox org-hours-closed">
+
+                      <input
+
+                        type="checkbox"
+
+                        checked={Boolean(orgProfileForm.working_hours[key]?.closed)}
+
+                        onChange={(e) =>
+
+                          setOrgProfileForm((p) => ({
+
+                            ...p,
+
+                            working_hours: {
+
+                              ...p.working_hours,
+
+                              [key]: { ...p.working_hours[key], closed: e.target.checked },
+
+                            },
+
+                          }))
+
+                        }
+
+                      />
+
+                      {label} — выходной
+
+                    </label>
+
+                    <div className="org-hours-times">
+
+                      <input
+
+                        type="time"
+
+                        disabled={orgProfileForm.working_hours[key]?.closed}
+
+                        value={orgProfileForm.working_hours[key]?.open || "09:00"}
+
+                        onChange={(e) =>
+
+                          setOrgProfileForm((p) => ({
+
+                            ...p,
+
+                            working_hours: {
+
+                              ...p.working_hours,
+
+                              [key]: { ...p.working_hours[key], open: e.target.value },
+
+                            },
+
+                          }))
+
+                        }
+
+                      />
+
+                      <span>—</span>
+
+                      <input
+
+                        type="time"
+
+                        disabled={orgProfileForm.working_hours[key]?.closed}
+
+                        value={orgProfileForm.working_hours[key]?.close || "18:00"}
+
+                        onChange={(e) =>
+
+                          setOrgProfileForm((p) => ({
+
+                            ...p,
+
+                            working_hours: {
+
+                              ...p.working_hours,
+
+                              [key]: { ...p.working_hours[key], close: e.target.value },
+
+                            },
+
+                          }))
+
+                        }
+
+                      />
+
+                    </div>
+
+                  </div>
+
+                ))}
+
+              </div>
+
+              <label className="field-label">Телефоны</label>
+
+              {orgProfileForm.phones.map((ph, idx) => (
+
+                <div key={idx} className="org-phone-row">
+
+                  <input
+
+                    type="tel"
+
+                    placeholder="+7 …"
+
+                    value={ph}
+
+                    onChange={(e) =>
+
+                      setOrgProfileForm((p) => {
+
+                        const phones = [...p.phones];
+
+                        phones[idx] = e.target.value;
+
+                        return { ...p, phones };
+
+                      })
+
+                    }
+
+                  />
+
+                  <button
+
+                    type="button"
+
+                    className="ghost-btn"
+
+                    onClick={() =>
+
+                      setOrgProfileForm((p) => ({
+
+                        ...p,
+
+                        phones: p.phones.filter((_, i) => i !== idx),
+
+                      }))
+
+                    }
+
+                  >
+
+                    ✕
+
+                  </button>
+
+                </div>
+
+              ))}
+
+              <button
+
+                type="button"
+
+                className="ghost-btn"
+
+                onClick={() => setOrgProfileForm((p) => ({ ...p, phones: [...p.phones, ""] }))}
+
+              >
+
+                + Телефон
+
+              </button>
+
+              <label className="field-label">Сайты</label>
+
+              {orgProfileForm.websites.map((site, idx) => (
+                <div key={idx} className="org-phone-row">
+                  <input
+                    type="url"
+                    placeholder="https://example.ru"
+                    value={site}
+                    onChange={(e) =>
+                      setOrgProfileForm((p) => {
+                        const websites = [...p.websites];
+                        websites[idx] = e.target.value;
+                        return { ...p, websites };
+                      })
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    onClick={() =>
+                      setOrgProfileForm((p) => ({
+                        ...p,
+                        websites: p.websites.filter((_, i) => i !== idx),
+                      }))
+                    }
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() => setOrgProfileForm((p) => ({ ...p, websites: [...p.websites, ""] }))}
+              >
+                + Сайт
+              </button>
+
+              <label className="field-label" htmlFor="org-card-note">Дополнительно (для клиентов)</label>
+
+              <textarea
+
+                id="org-card-note"
+
+                rows={3}
+
+                placeholder="Например: парковка во дворе, вход со двора"
+
+                value={orgProfileForm.card_note}
+
+                onChange={(e) => setOrgProfileForm((p) => ({ ...p, card_note: e.target.value }))}
+
+              />
+
+              <label className="field-label">
+                Фото организации ({orgGalleryPhotos.length}/{ORG_GALLERY_MAX_PHOTOS})
+              </label>
+              <p className="muted small">Не более {ORG_GALLERY_MAX_PHOTOS} фото. Сначала показываются они, затем фото из отзывов.</p>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                disabled={orgGalleryPhotos.length >= ORG_GALLERY_MAX_PHOTOS}
+                onChange={async (e) => {
+                  const files = [...(e.target.files || [])];
+                  const slotsLeft = ORG_GALLERY_MAX_PHOTOS - orgGalleryPhotos.length;
+                  for (const f of files.slice(0, slotsLeft)) {
+                    const ok = await uploadOrgGalleryPhoto(f);
+                    if (!ok) break;
+                  }
+                  e.target.value = "";
+                }}
+              />
+
+              {orgGalleryPhotos.length > 0 && (
+
+                <div className="org-gallery-grid">
+
+                  {orgGalleryPhotos.map((ph) => (
+
+                    <div key={ph.id} className="org-gallery-item">
+
+                      <img src={ph.url} alt="" />
+
+                      <button type="button" className="ghost-btn" onClick={() => deleteOrgGalleryPhoto(ph.id)}>
+
+                        Удалить
+
+                      </button>
+
+                    </div>
+
+                  ))}
+
+                </div>
+
+              )}
+
+              <button type="submit">Сохранить карточку</button>
+
+              <p className="status">{orgProfileSaveStatus}</p>
+
+            </form>
+
+<h3>Адрес организации (основной)</h3>
             {!orgMainEditOpen ? (
               <div className="org-main-display">
                 <p className="org-display-line"><strong>{orgAddressForm.organization_name || "—"}</strong></p>
@@ -5769,15 +6644,82 @@ export default function App() {
         <div>{verifyStatus && <p className="verify-note">{verifyStatus}</p>}</div>
         {accessToken && me?.role === "client" && (
           <div className="client-header-search">
-            <input
-              type="search"
-              className="client-header-search-input"
-              placeholder="Сфера или название организации…"
-              value={clientMapSearchInput}
-              onChange={(e) => setClientMapSearchInput(e.target.value)}
-              autoComplete="off"
-              aria-label="Поиск на карте"
-            />
+            <div className="client-header-search-input-wrap" ref={clientHeaderSearchWrapRef}>
+              <input
+                type="search"
+                className="client-header-search-input"
+                placeholder="Сфера или название организации…"
+                value={clientMapSearchInput}
+                onChange={(e) => setClientMapSearchInput(e.target.value)}
+                onFocus={() => setClientMapSearchFocused(true)}
+                autoComplete="off"
+                aria-label="Поиск на карте"
+                aria-expanded={showClientDiscoverSearchDropdown}
+                aria-controls="client-org-search-list"
+                aria-autocomplete="list"
+              />
+              {showClientDiscoverSearchDropdown && (
+                <ul
+                  id="client-org-search-list"
+                  className="client-org-search-dropdown"
+                  role="listbox"
+                  aria-label="Организации"
+                >
+                  {clientDiscoverSearchOrgs.length === 0 &&
+                    clientDiscoverSearch.trim() === clientMapSearchInput.trim() && (
+                      <li className="client-org-search-empty" role="presentation">
+                        Ничего не найдено
+                      </li>
+                    )}
+                  {clientDiscoverSearchOrgs.map((loc) => {
+                    const name = loc.organization_name || loc.title || "Организация";
+                    const sphereLabel =
+                      loc.sphere_label ||
+                      sphereOptions.find((o) => o.key === loc.provider_sphere)?.value ||
+                      "";
+                    const rating =
+                      loc.provider_average_rating != null
+                        ? Number(loc.provider_average_rating).toFixed(1)
+                        : null;
+                    return (
+                      <li key={loc.provider} role="option">
+                        <button
+                          type="button"
+                          className="client-org-search-item"
+                          onClick={() => {
+                            setClientMapSearchFocused(false);
+                            openOrgOnMap(loc);
+                          }}
+                        >
+                          <span className="client-org-search-thumb">
+                            {loc.provider_cover_url ? (
+                              <img src={loc.provider_cover_url} alt="" />
+                            ) : (
+                              <img
+                                src={sphereMapIconHref(loc.provider_sphere)}
+                                alt=""
+                                className="client-org-search-thumb-sphere"
+                              />
+                            )}
+                          </span>
+                          <span className="client-org-search-body">
+                            <span className="client-org-search-name">{name}</span>
+                            <span className="client-org-search-meta">
+                              {rating != null && (
+                                <span className="client-org-search-rating">★ {rating}</span>
+                              )}
+                              {sphereLabel && (
+                                <span className="client-org-search-sphere">{sphereLabel}</span>
+                              )}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
             <button
               type="button"
               className="client-filter-icon-btn"
@@ -6741,7 +7683,7 @@ export default function App() {
                 "client-discover-map-wrap",
                 mapOrgPopup && "client-discover-map-wrap--has-sheet",
                 mapOrgReviewsOpen && "client-discover-map-wrap--org-reviews",
-                (mapOrgPopup || clientBookModalOpen || clientFiltersOpen) && "client-discover-map-wrap--blocked",
+                (clientBookModalOpen || clientFiltersOpen) && "client-discover-map-wrap--blocked",
                 (clientBookModalOpen || clientFiltersOpen) && "client-discover-map-wrap--sheet-inert",
               ]
                 .filter(Boolean)
@@ -6754,43 +7696,200 @@ export default function App() {
                   role="dialog"
                   aria-label="Организация на карте"
                 >
-                  <button
-                    type="button"
-                    className="map-org-sheet-close"
-                    aria-label="Закрыть"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMapOrgPopup(null);
-                      setMapOrgReviewsOpen(false);
-                    }}
-                  >
-                    ×
-                  </button>
-                  <h3 className="map-org-sheet-title">{mapOrgPopup.organization_name || mapOrgPopup.title}</h3>
-                  {mapOrgSummary?.average_rating != null && (
-                    <p className="map-org-sheet-rating">★ {Number(mapOrgSummary.average_rating).toFixed(2)} ({mapOrgSummary.reviews_count} отзывов)</p>
-                  )}
-                  <div className="map-org-sheet-actions row-2">
-                    <button type="button" onClick={() => { const filterDate = clientDiscoverFiltersRef.current?.slot_date || todayIsoDate(); onClientLocationSelect(String(mapOrgPopup.id), filterDate); setClientBookModalOpen(true); }}>Записаться</button>
-                    <button type="button" onClick={() => openChatWithProvider(mapOrgPopup.provider)}>Чат</button>
+                  <div className="map-org-sheet-sticky-top">
+                    <button
+                      type="button"
+                      className="map-org-sheet-close map-org-sheet-close--float"
+                      aria-label="Закрыть"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMapOrgPopup(null);
+                        setMapOrgProfile(null);
+                        setMapOrgReviewsOpen(false);
+                      }}
+                    >
+                      ×
+                    </button>
                   </div>
-                  <button type="button" className="ghost-btn" onClick={() => { const open = !mapOrgReviewsOpen; setMapOrgReviewsOpen(open); if (open) loadMapOrgReviews(mapOrgPopup.provider, mapOrgReviewsOrdering); }}>{mapOrgReviewsOpen ? "Скрыть отзывы" : "Отзывы"}</button>
-                  {mapOrgReviewsOpen && (
-                    <div className="map-org-reviews">
-                      <select value={mapOrgReviewsOrdering} onChange={(e) => { setMapOrgReviewsOrdering(e.target.value); loadMapOrgReviews(mapOrgPopup.provider, e.target.value); }}>
-                        <option value="-created_at">Сначала новые</option>
-                        <option value="-rating">Сначала положительные</option>
-                        <option value="rating">Сначала негативные</option>
-                      </select>
-                      <ul className="list review-list">
-                        {mapOrgReviews.length === 0 ? (
-                          <li className="muted">Пока нет отзывов.</li>
-                        ) : (
-                          mapOrgReviews.map((r) => renderReviewListItem(r))
-                        )}
-                      </ul>
+                  <div className="map-org-sheet-header">
+                    {(() => {
+                      const sphereKey = mapOrgPopup.provider_sphere || mapOrgProfile?.provider_sphere;
+                      const sphereLabel =
+                        mapOrgPopup.sphere_label ||
+                        mapOrgProfile?.sphere_label ||
+                        sphereOptions.find((o) => o.key === sphereKey)?.value ||
+                        "";
+                      return sphereLabel ? (
+                        <p className="map-org-sheet-sphere">{sphereLabel}</p>
+                      ) : null;
+                    })()}
+                    <h3 className="map-org-sheet-title">
+                      {mapOrgPopup.organization_name || mapOrgPopup.title}
+                    </h3>
+                    {(mapOrgProfile?.average_rating != null || mapOrgSummary?.average_rating != null) && (
+                      <p className="map-org-sheet-rating">
+                        ★ {Number(mapOrgProfile?.average_rating ?? mapOrgSummary?.average_rating).toFixed(2)}
+                        {" "}
+                        ({mapOrgProfile?.reviews_count ?? mapOrgSummary?.reviews_count ?? 0} отзывов)
+                      </p>
+                    )}
+                  </div>
+
+                  {buildOrgCarouselItems(mapOrgProfile).length > 0 && (
+
+                    <div className="map-org-carousel">
+
+                      <button
+
+                        type="button"
+
+                        className="map-org-carousel-main"
+
+                        onClick={() => {
+                          const items = buildOrgCarouselItems(mapOrgProfile);
+                          openOrgPhotoLightbox(items, mapOrgCarouselIndex);
+                        }}
+
+                      >
+
+                        <img
+
+                          src={buildOrgCarouselItems(mapOrgProfile)[mapOrgCarouselIndex]?.url}
+
+                          alt=""
+
+                        />
+
+                      </button>
+
+                      {buildOrgCarouselItems(mapOrgProfile).length > 1 && (
+
+                        <div className="map-org-carousel-thumbs">
+
+                          {buildOrgCarouselItems(mapOrgProfile).map((ph, idx) => (
+
+                            <button
+
+                              key={ph.id}
+
+                              type="button"
+
+                              className={["map-org-carousel-thumb", idx === mapOrgCarouselIndex && "map-org-carousel-thumb--active"].filter(Boolean).join(" ")}
+
+                              onClick={() => setMapOrgCarouselIndex(idx)}
+
+                            >
+
+                              <img src={ph.url} alt="" />
+
+                            </button>
+
+                          ))}
+
+                        </div>
+
+                      )}
+
                     </div>
+
                   )}
+
+                  {(mapOrgProfile?.phones?.length > 0 || mapOrgProfile?.websites?.length > 0) && (
+                    <MapOrgContactsBlock phones={mapOrgProfile.phones} websites={mapOrgProfile.websites} />
+                  )}
+
+                  {mapOrgProfile?.card_note ? (
+
+                    <p className="map-org-card-note">{mapOrgProfile.card_note}</p>
+
+                  ) : null}
+
+                  {mapOrgProfile?.working_hours ? (
+                    <MapOrgHoursBlock workingHours={mapOrgProfile.working_hours} />
+                  ) : null}
+
+                  {mapOrgPopup.address && <p className="muted small">{mapOrgPopup.address}</p>}
+
+                  <div className="map-org-sheet-actions row-2">
+
+                    <button
+
+                      type="button"
+
+                      onClick={() => {
+
+                        const filterDate = clientDiscoverFiltersRef.current?.slot_date || todayIsoDate();
+
+                        onClientLocationSelect(String(mapOrgPopup.id), filterDate);
+
+                        setClientBookModalOpen(true);
+
+                      }}
+
+                    >
+
+                      Записаться
+
+                    </button>
+
+                    <button type="button" onClick={() => openChatWithProvider(mapOrgPopup.provider)}>
+
+                      Чат
+
+                    </button>
+
+                  </div>
+
+                  {(mapOrgProfile?.reviews_count > 0 || mapOrgReviews.length > 0) && (
+
+                    <div className="map-org-reviews">
+
+                      <div className="map-org-reviews-head">
+
+                        <p className="field-label">Отзывы</p>
+
+                        <select
+
+                          value={mapOrgReviewsOrdering}
+
+                          onChange={(e) => {
+
+                            setMapOrgReviewsOrdering(e.target.value);
+
+                            loadMapOrgReviews(mapOrgPopup.provider, e.target.value);
+
+                          }}
+
+                        >
+
+                          <option value="-created_at">Сначала новые</option>
+
+                          <option value="-rating">Сначала положительные</option>
+
+                          <option value="rating">Сначала негативные</option>
+
+                        </select>
+
+                      </div>
+
+                      <ul className="list review-list">
+
+                        {mapOrgReviews.length === 0 ? (
+
+                          <li className="muted">Загрузка…</li>
+
+                        ) : (
+
+                          mapOrgReviews.map((r) => renderReviewListItem(r, { reviewsForGallery: mapOrgReviews }))
+
+                        )}
+
+                      </ul>
+
+                    </div>
+
+                  )}
+
                 </div>
               )}
             </div>
@@ -7058,6 +8157,84 @@ export default function App() {
         document.body,
       )}
 
+      {orgPhotoLightbox?.items?.length > 0 && typeof document !== "undefined" && createPortal(
+        <div
+          className="photo-lightbox-backdrop"
+          onClick={() => setOrgPhotoLightbox(null)}
+        >
+          {orgPhotoLightbox.items.length > 1 ? (
+            <>
+              <button
+                type="button"
+                className="photo-lightbox-nav photo-lightbox-nav--prev"
+                aria-label="Предыдущее фото"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  stepOrgPhotoLightbox(-1);
+                }}
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                className="photo-lightbox-nav photo-lightbox-nav--next"
+                aria-label="Следующее фото"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  stepOrgPhotoLightbox(1);
+                }}
+              >
+                ›
+              </button>
+              <p className="photo-lightbox-counter">
+                {orgPhotoLightbox.index + 1} / {orgPhotoLightbox.items.length}
+              </p>
+            </>
+          ) : null}
+          <div className="photo-lightbox-inner" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Просмотр фото">
+            <button type="button" className="photo-lightbox-close" aria-label="Закрыть" onClick={() => setOrgPhotoLightbox(null)}>
+              ×
+            </button>
+            <div
+              className="photo-lightbox-viewport"
+              onTouchStart={(e) => {
+                orgPhotoLightboxTouchX.current = e.touches?.[0]?.clientX ?? 0;
+              }}
+              onTouchEnd={(e) => {
+                if (orgPhotoLightbox.items.length < 2) return;
+                const x = e.changedTouches?.[0]?.clientX ?? 0;
+                const dx = x - orgPhotoLightboxTouchX.current;
+                if (Math.abs(dx) < 48) return;
+                e.stopPropagation();
+                stepOrgPhotoLightbox(dx > 0 ? -1 : 1);
+              }}
+            >
+              {orgPhotoLightbox.items.map((item, i) => (
+                <img
+                  key={item.id || item.url}
+                  src={item.url}
+                  alt=""
+                  draggable={false}
+                  className={[
+                    "photo-lightbox-slide",
+                    i === orgPhotoLightbox.index && "photo-lightbox-slide--active",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                />
+              ))}
+            </div>
+            {orgPhotoLightbox.items[orgPhotoLightbox.index]?.source === "review" && (
+              <PhotoLightboxReviewCaption
+                key={orgPhotoLightbox.items[orgPhotoLightbox.index]?.id || orgPhotoLightbox.index}
+                photo={orgPhotoLightbox.items[orgPhotoLightbox.index]}
+              />
+            )}
+          </div>
+        </div>,
+        document.body,
+      )}
+
       {reviewModalBooking && typeof document !== "undefined" && createPortal(
         <div className="modal-backdrop modal-backdrop--app-overlay" onClick={() => setReviewModalBooking(null)}>
           <div
@@ -7113,7 +8290,16 @@ export default function App() {
         {clientBookModalOpen && typeof document !== "undefined" && createPortal(
           <div className="modal-backdrop modal-backdrop--app-overlay" onClick={() => setClientBookModalOpen(false)}>
             <div className="modal-card client-book-overlay" onClick={(e) => e.stopPropagation()}>
-              <h3>Запись</h3>
+              <h3>Запись{mapOrgPopup?.organization_name ? ` · ${mapOrgPopup.organization_name}` : ""}</h3>
+              {mapOrgProfile?.phones?.length > 0 && (
+                <div className="client-book-phones">
+                  {mapOrgProfile.phones.map((ph) => (
+                    <a key={ph} href={`tel:${ph.replace(/[^\d+]/g, "")}`}>
+                      {ph}
+                    </a>
+                  ))}
+                </div>
+              )}
               <form onSubmit={createClientBooking} className="form">
                 <select value={clientBookingForm.serviceId} onChange={(e) => setClientBookingForm((p) => ({ ...p, serviceId: e.target.value, windowKey: "" }))} required disabled={!clientBookingForm.provider || providerServices.length === 0}>
                   <option value="">Услуга</option>
