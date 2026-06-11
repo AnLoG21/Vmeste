@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .service_center_catalog import SERVICE_CENTER_CATALOG
+
 # slug, name, subcategories: [{slug, name, services: [{slug, name, duration_minutes?, price?}]}]
 HAIR_SALON_CATALOG: dict[str, Any] = {
     "sphere": "hair_salon",
@@ -257,6 +259,7 @@ HAIR_SALON_CATALOG: dict[str, Any] = {
 
 SPHERE_CATALOGS: dict[str, dict[str, Any]] = {
     "hair_salon": HAIR_SALON_CATALOG,
+    "service_center": SERVICE_CENTER_CATALOG,
 }
 
 

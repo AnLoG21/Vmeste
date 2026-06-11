@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "chat",
     "notifications",
     "reviews",
+    "subscriptions",
 ]
 
 MIDDLEWARE = [
@@ -121,6 +122,18 @@ CORS_ALLOWED_ORIGINS = [
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 SKIP_EMAIL_VERIFICATION = os.environ.get("SKIP_EMAIL_VERIFICATION", "0") in ("1", "true", "True", "yes")
+
+EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") in ("1", "true", "True", "yes")
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "Vmeste <vmesteofficialsupport@gmail.com>")
+SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "vmesteofficialsupport@gmail.com")
+
+YOOKASSA_SHOP_ID = os.environ.get("YOOKASSA_SHOP_ID", "")
+YOOKASSA_SECRET_KEY = os.environ.get("YOOKASSA_SECRET_KEY", "")
 
 TEMPLATES = [
     {

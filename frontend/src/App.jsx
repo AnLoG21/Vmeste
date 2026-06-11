@@ -1,6 +1,9 @@
 import { createPortal } from "react-dom";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import logoMain from "./assets/logo-main.png";
+import LandingPage from "./LandingPage.jsx";
+import SubscriptionsPage from "./SubscriptionsPage.jsx";
+import "./landing.css";
 import {
   ORG_GALLERY_MAX_PHOTOS,
   ORG_WEEKDAYS,
@@ -1768,6 +1771,7 @@ function StaffServicesAssignment({ link, categories, services, onSave }) {
 
 export default function App() {
   const [authMode, setAuthMode] = useState("login");
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [registerStep, setRegisterStep] = useState(1);
   const [menuOpen, setMenuOpen] = useState(false);
   const [currentView, setCurrentView] = useState("bookings");
@@ -2178,6 +2182,35 @@ export default function App() {
     loadSpheres();
     handleVerifyEmailFromUrl();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    const paymentId = params.get("payment_id");
+    if (payment !== "success" || !paymentId || !accessToken) return;
+    authFetch(`${API_URL}/subscriptions/confirm/`, {
+      method: "POST",
+      body: JSON.stringify({ payment_id: Number(paymentId) }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        setVerifyStatus(data.detail || "Оплата обработана.");
+        setCurrentView("subscriptions");
+      })
+      .catch(() => {});
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }, [accessToken]);
+
+  function openAuth(mode) {
+    setAuthMode(mode);
+    setShowAuthModal(true);
+    setRegisterStep(1);
+  }
+
+  function closeAuth() {
+    setShowAuthModal(false);
+  }
+
 
   useEffect(() => {
     if (accessToken) loadMe();
@@ -2769,14 +2802,14 @@ export default function App() {
   }, [accessToken, currentView, me?.role, me?.id, staffEffectivePerms.manage_chats]);
 
   useEffect(() => {
-    if (authMode === "register" && form.role === "provider") initMap();
-  }, [authMode, registerStep, form.role]);
+    if (showAuthModal && authMode === "register" && form.role === "provider") initMap();
+  }, [showAuthModal, authMode, registerStep, form.role]);
 
   useEffect(() => {
-    if (authMode === "register" && form.role === "provider" && registerStep === 2) {
+    if (showAuthModal && authMode === "register" && form.role === "provider" && registerStep === 2) {
       detectCityByGeolocation();
     }
-  }, [authMode, form.role, registerStep]);
+  }, [showAuthModal, authMode, form.role, registerStep]);
 
   useEffect(() => {
     if (me?.role !== "provider" || !me?.id) {
@@ -2849,6 +2882,10 @@ export default function App() {
       body: JSON.stringify({ token }),
     });
     setVerifyStatus(response.ok ? "Email подтвержден. Теперь можно войти." : "Ссылка подтверждения недействительна.");
+    if (response.ok) {
+      setAuthMode("login");
+      setShowAuthModal(true);
+    }
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 
@@ -2911,7 +2948,8 @@ export default function App() {
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      setAuthStatus(error.detail || "Ошибка входа.");
+      const msg = error.detail || (typeof error === "object" && error.non_field_errors?.[0]) || "Ошибка входа.";
+      setAuthStatus(typeof msg === "string" ? msg : "Ошибка входа.");
       return;
     }
     const data = await response.json();
@@ -2920,6 +2958,7 @@ export default function App() {
     localStorage.setItem("vmeste_access", data.access);
     localStorage.setItem("vmeste_refresh", data.refresh);
     setAuthStatus("Вход выполнен.");
+    setShowAuthModal(false);
   }
 
   function logout() {
@@ -2951,10 +2990,17 @@ export default function App() {
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      setStatus(typeof error === "object" ? "Проверь поля регистрации." : "Ошибка регистрации.");
+      if (error.email) {
+        setStatus(Array.isArray(error.email) ? error.email[0] : error.email);
+      } else if (error.username) {
+        setStatus(Array.isArray(error.username) ? error.username[0] : error.username);
+      } else {
+        setStatus(error.detail || "Проверь поля регистрации.");
+      }
       return;
     }
-    setStatus("Регистрация успешна. Подтверди email (ссылка в логе backend).");
+    const data = await response.json().catch(() => ({}));
+    setStatus(data.detail || "Регистрация успешна. Проверьте почту для подтверждения email.");
     setForm(emptyRegisterForm);
     setRegisterStep(1);
     setLoginForm({ username: form.username, password: form.password });
@@ -6991,15 +7037,22 @@ export default function App() {
       : { backgroundColor: activeChatWallpaper }
     : undefined;
   const tgMainDark = activeChatWallpaper === "#1e2a24";
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions"].includes(currentView);
 
   return (
-    <div className={`page${accessToken ? " page-logged" : ""}`}>
-      <header className="hero top-row">
-        <button type="button" className="brand-link brand-btn" onClick={() => setCurrentView(me?.role === "client" ? "client_map" : "bookings")}>
+    <div className={`page${accessToken ? " page-logged" : " page--guest"}`}>
+      <header className={`hero top-row${!accessToken ? " page-header-guest" : ""}`}>
+        <button
+          type="button"
+          className="brand-link brand-btn"
+          onClick={() => {
+            if (!accessToken) window.scrollTo({ top: 0, behavior: "smooth" });
+            else setCurrentView(me?.role === "client" ? "client_map" : "bookings");
+          }}
+        >
           <img
             src={logoMain}
-            alt="Vmeste"
+            alt="Вместе"
             className="brand-logo"
             onError={(e) => {
               e.currentTarget.style.display = "none";
@@ -7101,6 +7154,16 @@ export default function App() {
             </button>
           </div>
         )}
+        {!accessToken && (
+          <div className="landing-header-auth">
+            <button type="button" className="landing-header-btn landing-header-btn--login" onClick={() => openAuth("login")}>
+              Войти
+            </button>
+            <button type="button" className="landing-header-btn landing-header-btn--primary" onClick={() => openAuth("register")}>
+              Регистрация
+            </button>
+          </div>
+        )}
         {accessToken && (
           <div className="menu-wrap" ref={menuWrapRef}>
             <div className="menu-btn-wrap">
@@ -7144,6 +7207,12 @@ export default function App() {
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z" /></svg>
                   </span>
                   <span className="menu-item-label">История записей</span>
+                </button>
+                <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("subscriptions"); setMenuOpen(false); }}>
+                  <span className="menu-item-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" /></svg>
+                  </span>
+                  <span className="menu-item-label">Подписки</span>
                 </button>
                 {canManageOrgSettings && (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("staff"); setMenuOpen(false); }}>
@@ -7280,110 +7349,102 @@ export default function App() {
         </nav>
       )}
 
-      <main className={`grid ${!accessToken ? "grid-auth" : ""}${centeredWorkspace ? " grid-centered-workspace" : ""}`}>
+      <main className={`grid${centeredWorkspace ? " grid-centered-workspace" : ""}`}>
         {!accessToken && (
-          <section className="card profile-card">
-            <h2>{authMode === "login" ? "Вход" : "Регистрация"}</h2>
-            {authMode === "login" ? (
-              <form onSubmit={onLogin} className="form">
-                <input placeholder="Логин" value={loginForm.username} onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })} required />
-                <input placeholder="Пароль" type="password" value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} required />
-                <button type="submit">Войти</button>
-              </form>
-            ) : (
-              <form onSubmit={onSubmit} className="form">
-                {registerStep === 1 && (
-                  <>
-                    <input placeholder="Фамилия" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required />
-                    <input placeholder="Имя" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required />
-                    <input placeholder="Отчество (если есть)" value={form.patronymic} onChange={(e) => setForm({ ...form, patronymic: e.target.value })} />
-                    <input placeholder="Логин" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required />
-                    <input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-                    <input placeholder="Телефон" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-                    <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                      {roleOptions.map((item) => <option key={item.key} value={item.key}>{item.value}</option>)}
-                    </select>
-                    <input placeholder="Пароль" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
-                    <input
-                      placeholder="Повторите пароль"
-                      type="password"
-                      value={form.password_confirm}
-                      onChange={(e) => setForm({ ...form, password_confirm: e.target.value })}
-                      required
-                    />
-                    {form.role === "provider" ? <button type="button" onClick={() => setRegisterStep(2)}>Продолжить</button> : <button type="submit">Создать аккаунт</button>}
-                  </>
-                )}
-                {registerStep === 2 && form.role === "provider" && (
-                  <>
-                    <select value={form.provider_sphere} onChange={(e) => setForm({ ...form, provider_sphere: e.target.value })} required>
-                      <option value="">Выбери сферу услуг</option>
-                      {sphereOptions.map((s) => <option key={s.key} value={s.key}>{s.value}</option>)}
-                    </select>
-                    <input placeholder="Название организации" value={form.organization_name} onChange={(e) => setForm({ ...form, organization_name: e.target.value })} required />
-                    <input
-                      placeholder="Адрес"
-                      value={form.organization_address}
-                      onChange={(e) => onAddressInput(e.target.value)}
-                      onBlur={(e) => geocodeAddress(e.target.value)}
-                      required
-                    />
-                    {detectedCity && <p className="hint">Город поиска: {detectedCity}</p>}
-                    {addressSuggestions.length > 0 && (
-                      <div className="suggestions">
-                        {addressSuggestions.map((item, idx) => (
-                          <button
-                            key={`${item.value}-${idx}`}
-                            type="button"
-                            className="suggestion-item"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => pickSuggestion(item)}
-                          >
-                            {item.value}
-                          </button>
-                        ))}
+          <LandingPage onLogin={() => openAuth("login")} onRegister={() => openAuth("register")} />
+        )}
+
+        {!accessToken && showAuthModal && createPortal(
+          <div className="auth-modal-overlay" role="presentation">
+            <div className="auth-modal" role="dialog" aria-modal="true">
+              <button type="button" className="auth-modal-close" onClick={closeAuth} aria-label="Закрыть">×</button>
+              <h2>{authMode === "login" ? "Вход" : "Регистрация"}</h2>
+              {authMode === "login" ? (
+                <form onSubmit={onLogin} className="form">
+                  <input placeholder="Логин" value={loginForm.username} onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })} required />
+                  <input placeholder="Пароль" type="password" value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} required />
+                  <button type="submit">Войти</button>
+                </form>
+              ) : (
+                <form onSubmit={onSubmit} className="form">
+                  {registerStep === 1 && (
+                    <>
+                      <input placeholder="Фамилия" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required />
+                      <input placeholder="Имя" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required />
+                      <input placeholder="Отчество (если есть)" value={form.patronymic} onChange={(e) => setForm({ ...form, patronymic: e.target.value })} />
+                      <input placeholder="Логин" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required />
+                      <input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+                      <input placeholder="Телефон" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                      <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                        {roleOptions.map((item) => <option key={item.key} value={item.key}>{item.value}</option>)}
+                      </select>
+                      <input placeholder="Пароль" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+                      <input
+                        placeholder="Повторите пароль"
+                        type="password"
+                        value={form.password_confirm}
+                        onChange={(e) => setForm({ ...form, password_confirm: e.target.value })}
+                        required
+                      />
+                      {form.role === "provider" ? <button type="button" onClick={() => setRegisterStep(2)}>Продолжить</button> : <button type="submit">Создать аккаунт</button>}
+                    </>
+                  )}
+                  {registerStep === 2 && form.role === "provider" && (
+                    <>
+                      <select value={form.provider_sphere} onChange={(e) => setForm({ ...form, provider_sphere: e.target.value })} required>
+                        <option value="">Выбери сферу услуг</option>
+                        {sphereOptions.map((s) => <option key={s.key} value={s.key}>{s.value}</option>)}
+                      </select>
+                      <input placeholder="Название организации" value={form.organization_name} onChange={(e) => setForm({ ...form, organization_name: e.target.value })} required />
+                      <input
+                        placeholder="Адрес"
+                        value={form.organization_address}
+                        onChange={(e) => onAddressInput(e.target.value)}
+                        onBlur={(e) => geocodeAddress(e.target.value)}
+                        required
+                      />
+                      {detectedCity && <p className="hint">Город поиска: {detectedCity}</p>}
+                      {addressSuggestions.length > 0 && (
+                        <div className="suggestions">
+                          {addressSuggestions.map((item, idx) => (
+                            <button
+                              key={`${item.value}-${idx}`}
+                              type="button"
+                              className="suggestion-item"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => pickSuggestion(item)}
+                            >
+                              {item.value}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div id="reg-map" className="map-box" />
+                      <div className="address-details-grid">
+                        <input placeholder="Подъезд" value={form.entrance} onChange={(e) => setForm({ ...form, entrance: e.target.value })} />
+                        <input placeholder="Этаж" value={form.floor} onChange={(e) => setForm({ ...form, floor: e.target.value })} />
+                        <input placeholder="Квартира/офис" value={form.apartment} onChange={(e) => setForm({ ...form, apartment: e.target.value })} />
+                        <input placeholder="Домофон" value={form.intercom} onChange={(e) => setForm({ ...form, intercom: e.target.value })} />
                       </div>
-                    )}
-                    <div id="reg-map" className="map-box" />
-                    <div className="address-details-grid">
                       <input
-                        placeholder="Подъезд"
-                        value={form.entrance}
-                        onChange={(e) => setForm({ ...form, entrance: e.target.value })}
+                        placeholder="Доп. ориентир (необязательно)"
+                        value={form.organization_address_details}
+                        onChange={(e) => setForm({ ...form, organization_address_details: e.target.value })}
                       />
-                      <input
-                        placeholder="Этаж"
-                        value={form.floor}
-                        onChange={(e) => setForm({ ...form, floor: e.target.value })}
-                      />
-                      <input
-                        placeholder="Квартира/офис"
-                        value={form.apartment}
-                        onChange={(e) => setForm({ ...form, apartment: e.target.value })}
-                      />
-                      <input
-                        placeholder="Домофон"
-                        value={form.intercom}
-                        onChange={(e) => setForm({ ...form, intercom: e.target.value })}
-                      />
-                    </div>
-                    <input
-                      placeholder="Доп. ориентир (необязательно)"
-                      value={form.organization_address_details}
-                      onChange={(e) => setForm({ ...form, organization_address_details: e.target.value })}
-                    />
-                    <button type="button" className="ghost-btn" onClick={() => setRegisterStep(1)}>Назад</button>
-                    <button type="submit">Завершить регистрацию</button>
-                  </>
-                )}
-              </form>
-            )}
-            <p className="auth-switch-text">{authMode === "login" ? "Нет аккаунта?" : "Уже есть аккаунт?"}</p>
-            <button className="ghost-btn" type="button" onClick={() => setAuthMode((prev) => (prev === "login" ? "register" : "login"))}>
-              {authMode === "login" ? "Регистрация" : "Войти"}
-            </button>
-            <p className="status">{authMode === "login" ? authStatus : status}</p>
-          </section>
+                      <button type="button" className="ghost-btn" onClick={() => setRegisterStep(1)}>Назад</button>
+                      <button type="submit">Завершить регистрацию</button>
+                    </>
+                  )}
+                </form>
+              )}
+              <p className="auth-switch-text">{authMode === "login" ? "Нет аккаунта?" : "Уже есть аккаунт?"}</p>
+              <button className="ghost-btn" type="button" onClick={() => setAuthMode((prev) => (prev === "login" ? "register" : "login"))}>
+                {authMode === "login" ? "Регистрация" : "Войти"}
+              </button>
+              <p className="status">{authMode === "login" ? authStatus : status}</p>
+            </div>
+          </div>,
+          document.body,
         )}
 
         {accessToken && currentView === "profile" && (
@@ -7449,6 +7510,7 @@ export default function App() {
             </form>
             <div className="row-2 profile-quick-nav">
               <button type="button" className="ghost-btn" onClick={() => setCurrentView("settings")}>Настройки</button>
+              <button type="button" className="ghost-btn" onClick={() => setCurrentView("subscriptions")}>Подписки</button>
               {canManageOrgSettings && (
                 <button type="button" className="ghost-btn" onClick={() => setCurrentView("organization")}>Организация</button>
               )}
@@ -7467,6 +7529,14 @@ export default function App() {
               </>
             )}
           </section>
+        )}
+
+        {accessToken && currentView === "subscriptions" && (
+          <SubscriptionsPage
+            apiUrl={API_URL}
+            authFetch={authFetch}
+            me={me}
+          />
         )}
 
         {accessToken && currentView === "settings" && renderGeneralSettings()}

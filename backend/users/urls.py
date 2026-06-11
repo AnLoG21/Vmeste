@@ -2,6 +2,7 @@ from django.urls import path
 
 from .org_profile import OrganizationClientProfileView, ProviderGalleryView, ProviderOrganizationInfoView
 from .views import (
+    AutomationRequestView,
     ChangeEmailView,
     ChangePasswordView,
     MeView,
@@ -26,4 +27,5 @@ urlpatterns = [
     path("presence/ping/", PresencePingView.as_view(), name="user-presence-ping"),
     path("change-password/", ChangePasswordView.as_view(), name="user-change-password"),
     path("change-email/", ChangeEmailView.as_view(), name="user-change-email"),
+    path("automation-request/", AutomationRequestView.as_view(), name="automation-request"),
 ]

@@ -89,6 +89,18 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             "floor",
         ]
 
+    def validate_email(self, value):
+        email = (value or "").strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError("Пользователь с таким email уже зарегистрирован.")
+        return email
+
+    def validate_username(self, value):
+        username = (value or "").strip()
+        if User.objects.filter(username__iexact=username).exists():
+            raise serializers.ValidationError("Пользователь с таким логином уже существует.")
+        return username
+
     def validate(self, attrs):
         if attrs["password"] != attrs.pop("password_confirm", None):
             raise serializers.ValidationError({"password_confirm": "Пароли не совпадают."})
@@ -129,3 +141,11 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 class ChangeEmailSerializer(serializers.Serializer):
     new_email = serializers.EmailField()
+
+
+class AutomationRequestSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    phone = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
+    telegram = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    message = serializers.CharField(required=False, allow_blank=True, default="")
