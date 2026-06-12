@@ -1,5 +1,9 @@
-# HTTP внутри Docker; HTTPS — через Cloudflare Tunnel.
+# Временно: только HTTP, без Let's Encrypt (пока порт 80 недоступен снаружи для LE).
+# Использование: cp Caddyfile.http-only Caddyfile && docker compose restart caddy
 http://{$DOMAIN}, http://www.{$DOMAIN} {
+	@www host www.{$DOMAIN}
+	redir @www http://{$DOMAIN}{uri} permanent
+
 	encode gzip
 
 	handle /api/* {

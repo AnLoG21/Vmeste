@@ -61,9 +61,6 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
     environment:
       DOMAIN: ${DOMAIN}
     volumes:
@@ -73,6 +70,14 @@ services:
     depends_on:
       - frontend
       - web
+
+  # Туннель Cloudflare: исходящее соединение с сервера, входящие 80/443 не нужны.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - caddy
 
 volumes:
   vmeste_pgdata:

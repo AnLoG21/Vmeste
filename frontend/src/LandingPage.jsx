@@ -1,15 +1,35 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./landing.css";
+import { SITE_LEGAL } from "./legal/siteLegal.js";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
+function formatPlanPrice(price) {
+  const value = Number(price);
+  if (!value) return "По заявке";
+  return `${value.toLocaleString("ru-RU")} ₽ / месяц`;
+}
+
 export default function LandingPage({ onLogin, onRegister }) {
   const requestRef = useRef(null);
+  const pricingRef = useRef(null);
   const [form, setForm] = useState({ name: "", email: "", phone: "", telegram: "", message: "" });
   const [formStatus, setFormStatus] = useState("");
+  const [plans, setPlans] = useState([]);
+
+  useEffect(() => {
+    fetch(`${API_URL}/subscriptions/plans/`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setPlans(Array.isArray(data) ? data : []))
+      .catch(() => setPlans([]));
+  }, []);
 
   function scrollToRequest() {
     requestRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function scrollToPricing() {
+    pricingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function submitRequest(e) {
@@ -48,6 +68,9 @@ export default function LandingPage({ onLogin, onRegister }) {
           <div className="landing-hero-actions">
             <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
               Начать бесплатно
+            </button>
+            <button type="button" className="landing-btn landing-btn--outline" onClick={scrollToPricing}>
+              Тарифы
             </button>
             <button type="button" className="landing-btn landing-btn--outline" onClick={scrollToRequest}>
               Заказать автоматизацию
@@ -106,6 +129,59 @@ export default function LandingPage({ onLogin, onRegister }) {
             </p>
           </article>
         </div>
+      </section>
+
+      <section className="landing-section landing-pricing" ref={pricingRef} id="pricing">
+        <h2>Тарифы и цены</h2>
+        <p className="landing-section-lead">
+          Фиксированная стоимость подписки на доступ к платформе. Оплата онлайн через ЮKassa после
+          регистрации в разделе «Подписки». Актуальные цены и описание услуг указаны ниже.
+        </p>
+        <div className="subscriptions-plans landing-pricing-grid">
+          {plans.map((plan) => (
+            <article key={plan.id} className="subscriptions-plan-card">
+              <h3>{plan.name}</h3>
+              <p className="subscriptions-plan-desc">{plan.description}</p>
+              <p className="subscriptions-plan-price">{formatPlanPrice(plan.price_monthly)}</p>
+              {Array.isArray(plan.features) && plan.features.length > 0 && (
+                <ul className="subscriptions-plan-features">
+                  {plan.features.map((feature) => (
+                    <li key={feature}>{feature}</li>
+                  ))}
+                </ul>
+              )}
+              {Number(plan.price_monthly) > 0 ? (
+                <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
+                  Выбрать тариф
+                </button>
+              ) : (
+                <button type="button" className="landing-btn landing-btn--outline" onClick={scrollToRequest}>
+                  Оставить заявку
+                </button>
+              )}
+            </article>
+          ))}
+        </div>
+        <p className="landing-note">
+          Оплачивая подписку, вы принимаете условия{" "}
+          <a href="/offer">публичной оферты</a>.
+        </p>
+      </section>
+
+      <section className="landing-section landing-delivery">
+        <h2>Получение услуги после оплаты</h2>
+        <p className="landing-section-lead">
+          Вместе — облачный онлайн-сервис (SaaS). Физическая доставка товаров не производится.
+        </p>
+        <ol className="landing-steps">
+          <li>Зарегистрируйтесь на сайте и подтвердите email.</li>
+          <li>Войдите в личный кабинет и откройте раздел «Подписки».</li>
+          <li>Выберите тариф и оплатите через ЮKassa.</li>
+          <li>
+            После успешной оплаты доступ активируется автоматически в течение нескольких минут —
+            статус подписки станет «Активна».
+          </li>
+        </ol>
       </section>
 
       <section className="landing-section landing-section--automation">
@@ -231,7 +307,19 @@ export default function LandingPage({ onLogin, onRegister }) {
       </section>
 
       <footer className="landing-footer">
-        <p>Вместе · Поддержка: vmesteofficialsupport@gmail.com</p>
+        <p>
+          {SITE_LEGAL.serviceName} · ИНН {SITE_LEGAL.inn} ·{" "}
+          <a href={`mailto:${SITE_LEGAL.email}`}>{SITE_LEGAL.email}</a> ·{" "}
+          <a href={`tel:${SITE_LEGAL.phoneRaw}`}>{SITE_LEGAL.phone}</a>
+        </p>
+        <p className="landing-footer-meta">
+          {SITE_LEGAL.executorName} · {SITE_LEGAL.status} · {SITE_LEGAL.city}
+        </p>
+        <nav className="landing-footer-nav" aria-label="Юридические документы">
+          <a href="/offer">Публичная оферта</a>
+          <a href="/privacy">Политика конфиденциальности</a>
+          <a href="/contacts">Контакты и реквизиты</a>
+        </nav>
       </footer>
     </div>
   );

@@ -153,6 +153,15 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
       <h2>Подписки</h2>
       <p className="subscriptions-lead">
         Управляйте тарифом, оплачивайте и продлевайте подписку. Оплата проходит через ЮKassa.
+        Оплачивая подписку, вы принимаете условия{" "}
+        <a href="/offer" target="_blank" rel="noreferrer">
+          публичной оферты
+        </a>
+        . Реквизиты:{" "}
+        <a href="/contacts" target="_blank" rel="noreferrer">
+          контакты и ИНН
+        </a>
+        .
       </p>
 
       {activeSub && (

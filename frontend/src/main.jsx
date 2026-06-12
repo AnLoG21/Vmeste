@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App.jsx";
+import PublicEntry from "./PublicEntry.jsx";
 import "./styles.css";
 
 const mapsKey = import.meta.env.VITE_YANDEX_MAPS_API_KEY ?? "";
@@ -35,7 +35,7 @@ function loadYandexMaps() {
 function mountApp() {
   createRoot(document.getElementById("root")).render(
     <StrictMode>
-      <App />
+      <PublicEntry />
     </StrictMode>
   );
 }
