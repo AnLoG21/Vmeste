@@ -18,7 +18,16 @@ RUN printf '%s\n' \
   '    add_header Cache-Control "public, max-age=31536000, immutable";' \
   '    try_files $uri =404;' \
   '  }' \
+  '  location ~* \.html$ {' \
+  '    add_header Cache-Control "no-cache, no-store, must-revalidate";' \
+  '    add_header Pragma "no-cache";' \
+  '    add_header Expires "0";' \
+  '    try_files $uri =404;' \
+  '  }' \
   '  location / {' \
+  '    add_header Cache-Control "no-cache, no-store, must-revalidate";' \
+  '    add_header Pragma "no-cache";' \
+  '    add_header Expires "0";' \
   '    try_files $uri $uri.html $uri/ /index.html;' \
   '  }' \
   '}' > /etc/nginx/conf.d/default.conf

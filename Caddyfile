@@ -1,7 +1,6 @@
 # HTTP внутри Docker; HTTPS — через Cloudflare Tunnel.
+# Без encode gzip — сжатие на edge Cloudflare; двойной gzip ломал загрузку JS/CSS.
 http://{$DOMAIN}, http://www.{$DOMAIN} {
-	encode gzip
-
 	@backend path /api/* /admin* /media/* /static/*
 	handle @backend {
 		reverse_proxy web:8000 {
