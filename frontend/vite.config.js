@@ -2,16 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { splitLargeAssetsPlugin } from "./scripts/splitLargeAssets.js";
 
-const EXTERNAL_PACKAGES = [
-  "react",
-  "react-dom",
-  "react-dom/client",
-  "react/jsx-runtime",
-  "scheduler",
-];
-
-function isExternal(id) {
-  return EXTERNAL_PACKAGES.some((pkg) => id === pkg || id.startsWith(`${pkg}/`));
+function vendorChunk(id) {
+  if (!id.includes("node_modules")) return undefined;
+  const match = id.match(/node_modules\/(?:\.pnpm\/)?(@[^/]+\/[^/]+|[^/]+)/);
+  if (!match) return "vendor";
+  return `vendor-${match[1].replace("@", "").replace("/", "-")}`;
 }
 
 export default defineConfig({
@@ -22,16 +17,15 @@ export default defineConfig({
     terserOptions: {
       format: {
         beautify: true,
-        max_line_len: 5000,
+        max_line_len: 8000,
       },
     },
     cssCodeSplit: true,
     rollupOptions: {
-      external: isExternal,
       output: {
         manualChunks(id) {
           if (id.includes("node_modules")) {
-            return undefined;
+            return vendorChunk(id);
           }
           if (id.includes("/src/legal/")) {
             return "legal-pages";

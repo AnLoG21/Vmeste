@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_BYTES = 10_000;
+const MAX_BYTES = 18_000;
 const PART_FILE = /\.p\d+\.(js|css)$/;
 const ORIGIN_PLACEHOLDER = "__VMESTE_ORIGIN__";
 
