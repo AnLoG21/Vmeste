@@ -2,11 +2,14 @@ FROM node:20-alpine AS build
 WORKDIR /app
 ARG VITE_API_URL=http://localhost:8000/api
 ENV VITE_API_URL=${VITE_API_URL}
-ENV NODE_ENV=development
+
 COPY package.json package-lock.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
+COPY index.html vite.config.js ./
+COPY public ./public
+COPY src ./src
+
+RUN npm install
+RUN node node_modules/vite/bin/vite.js build
 
 FROM nginx:1.27-alpine
 COPY --from=build /app/dist /usr/share/nginx/html
