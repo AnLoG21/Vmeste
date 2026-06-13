@@ -40,4 +40,6 @@ function mountApp() {
   );
 }
 
-loadYandexMaps().then(mountApp).catch(mountApp);
+// Не блокируем первый экран ожиданием Яндекс.Карт (модерация ЮKassa, медленные сети).
+mountApp();
+void loadYandexMaps().catch(() => {});

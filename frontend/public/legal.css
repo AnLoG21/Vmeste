@@ -1,0 +1,76 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.55;
+  color: #1a1a1a;
+  background: #f7f8fa;
+}
+
+.legal-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+  background: #fff;
+  min-height: 100vh;
+}
+
+.legal-page h1 {
+  font-size: 1.75rem;
+  margin: 0 0 1rem;
+}
+
+.legal-page h2 {
+  font-size: 1.15rem;
+  margin: 1.75rem 0 0.75rem;
+}
+
+.legal-page p,
+.legal-page li {
+  margin: 0 0 0.75rem;
+}
+
+.legal-page ul {
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+}
+
+.legal-nav {
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+}
+
+.legal-nav a {
+  color: #2563eb;
+  margin-right: 1rem;
+}
+
+.legal-meta {
+  color: #555;
+  font-size: 0.9rem;
+}
+
+.legal-pricing {
+  display: grid;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.legal-pricing article {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.legal-pricing h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+}
+
+.legal-price {
+  font-weight: 600;
+  color: #111;
+}
