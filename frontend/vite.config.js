@@ -36,12 +36,6 @@ export default defineConfig({
           if (id.includes("/src/legal/")) {
             return "legal-pages";
           }
-          if (id.includes("/src/LandingPage")) {
-            return "landing-page";
-          }
-          if (id.includes("/src/SubscriptionsPage")) {
-            return "subscriptions-page";
-          }
           if (id.includes("/src/clientOrgFeatures")) {
             return "client-org-features";
           }

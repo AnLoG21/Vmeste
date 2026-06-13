@@ -79,7 +79,10 @@ let __code__ = "";
 for (const __part__ of __parts__) {
   __code__ += await __fetchPart__(__part__);
 }
-__code__ = __code__.replace(/${ORIGIN_PLACEHOLDER}/g, __origin__);
+__code__ = __code__
+  .replace(/__VMESTE_ORIGIN__/g, __origin__)
+  .replace(/import\\s*\\(\\s*(["'])\\.\\/([^"']+)\\1/g, (_, q, p) => "import(" + q + __origin__ + "/assets/" + p + q + ")")
+  .replace(/from\\s*(["'])\\.\\/([^"']+)\\1/g, (_, q, p) => "from " + q + __origin__ + "/assets/" + p + q);
 const __blob__ = new Blob([__code__], { type: "text/javascript" });
 const __mod__ = await import(URL.createObjectURL(__blob__));
 export default __mod__.default;

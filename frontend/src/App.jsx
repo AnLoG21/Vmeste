@@ -1,6 +1,8 @@
 import { createPortal } from "react-dom";
-import { Fragment, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import logoMain from "./assets/logo-main.png";
+import LandingPage from "./LandingPage.jsx";
+import SubscriptionsPage from "./SubscriptionsPage.jsx";
 import "./landing.css";
 import {
   ORG_GALLERY_MAX_PHOTOS,
@@ -16,9 +18,6 @@ import {
   uniqueDiscoverOrgs,
 } from "./clientOrgFeatures.js";
 import { loadYandexMaps } from "./yandexMapsLoader.js";
-
-const LandingPage = lazy(() => import("./LandingPage.jsx"));
-const SubscriptionsPage = lazy(() => import("./SubscriptionsPage.jsx"));
 
 function formatWebsiteHref(url) {
   const s = String(url || "").trim();
@@ -7406,9 +7405,7 @@ export default function App() {
 
       <main className={`grid${centeredWorkspace ? " grid-centered-workspace" : ""}`}>
         {!accessToken && (
-          <Suspense fallback={null}>
-            <LandingPage onLogin={() => openAuth("login")} onRegister={() => openAuth("register")} />
-          </Suspense>
+          <LandingPage onLogin={() => openAuth("login")} onRegister={() => openAuth("register")} />
         )}
 
         {!accessToken && showAuthModal && createPortal(
@@ -7620,13 +7617,11 @@ export default function App() {
         )}
 
         {accessToken && currentView === "subscriptions" && (
-          <Suspense fallback={null}>
-            <SubscriptionsPage
-              apiUrl={API_URL}
-              authFetch={authFetch}
-              me={me}
-            />
-          </Suspense>
+          <SubscriptionsPage
+            apiUrl={API_URL}
+            authFetch={authFetch}
+            me={me}
+          />
         )}
 
         {accessToken && currentView === "settings" && renderGeneralSettings()}
