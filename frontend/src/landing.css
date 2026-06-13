@@ -343,6 +343,28 @@
   padding-right: 36px;
 }
 
+.auth-verify-panel p {
+  margin: 0 0 12px;
+  line-height: 1.55;
+  color: #4a3426;
+}
+
+.auth-verify-lead {
+  font-weight: 600;
+  color: #8d3e00;
+}
+
+.auth-verify-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.auth-verify-actions button {
+  flex: 1 1 auto;
+}
+
 .subscriptions-page h2 {
   margin-top: 0;
 }

@@ -13,6 +13,11 @@ RUN printf '%s\n' \
   'server {' \
   '  listen 80;' \
   '  root /usr/share/nginx/html;' \
+  '  location /assets/ {' \
+  '    expires 1y;' \
+  '    add_header Cache-Control "public, max-age=31536000, immutable";' \
+  '    try_files $uri =404;' \
+  '  }' \
   '  location / {' \
   '    try_files $uri $uri.html $uri/ /index.html;' \
   '  }' \

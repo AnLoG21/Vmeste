@@ -1792,6 +1792,7 @@ export default function App() {
   const [clientStatus, setClientStatus] = useState("");
   const [verifyStatus, setVerifyStatus] = useState("");
   const [resendStatus, setResendStatus] = useState("");
+  const [verifyEmailNotice, setVerifyEmailNotice] = useState(null);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [detectedCity, setDetectedCity] = useState("");
 
@@ -2206,12 +2207,34 @@ export default function App() {
     setAuthMode(mode);
     setShowAuthModal(true);
     setRegisterStep(1);
+    if (mode === "register") {
+      setVerifyEmailNotice(null);
+      setResendStatus("");
+    }
   }
 
   function closeAuth() {
     setShowAuthModal(false);
+    setVerifyEmailNotice(null);
+    setResendStatus("");
   }
 
+  async function resendVerificationForEmail(email) {
+    const normalized = String(email || "").trim();
+    if (!normalized) return;
+    setResendStatus("Отправляем письмо...");
+    const response = await fetch(`${API_URL}/users/resend-verification/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalized }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setResendStatus(data.detail || "Не удалось отправить письмо.");
+      return;
+    }
+    setResendStatus(data.detail || "Письмо отправлено.");
+  }
 
   useEffect(() => {
     if (accessToken) loadMe();
@@ -3005,25 +3028,26 @@ export default function App() {
       return;
     }
     const data = await response.json().catch(() => ({}));
-    setStatus(data.detail || "Регистрация успешна. Проверьте почту для подтверждения email.");
+    const savedUsername = form.username;
+    const savedPassword = form.password;
+    const savedEmail = form.email;
     setForm(emptyRegisterForm);
     setRegisterStep(1);
-    setLoginForm({ username: form.username, password: form.password });
+    setLoginForm({ username: savedUsername, password: savedPassword });
+    setVerifyEmailNotice({
+      email: savedEmail,
+      detail:
+        data.detail || "Регистрация успешна. Проверьте почту для подтверждения email.",
+    });
+    setResendStatus("");
+    setStatus("");
     setAuthMode("login");
   }
 
   async function resendVerification() {
     setResendStatus("Отправляем письмо...");
-    const response = await authFetch(`${API_URL}/users/resend-verification/`, {
-      method: "POST",
-      body: JSON.stringify({ email: me?.email || form.email || "" }),
-    });
-    if (!response.ok) {
-      setResendStatus("Не удалось отправить письмо.");
-      return;
-    }
-    const data = await response.json();
-    setResendStatus(data.detail || "Письмо отправлено.");
+    const email = me?.email || verifyEmailNotice?.email || form.email || "";
+    await resendVerificationForEmail(email);
   }
 
   function initMap() {
@@ -7388,6 +7412,35 @@ export default function App() {
           <div className="auth-modal-overlay" role="presentation">
             <div className="auth-modal" role="dialog" aria-modal="true">
               <button type="button" className="auth-modal-close" onClick={closeAuth} aria-label="Закрыть">×</button>
+              {verifyEmailNotice ? (
+                <div className="auth-verify-panel">
+                  <h2>Подтвердите email</h2>
+                  <p className="auth-verify-lead">{verifyEmailNotice.detail}</p>
+                  <p>
+                    Мы отправили письмо на{" "}
+                    <strong>{verifyEmailNotice.email}</strong>. Перейдите по ссылке в письме, затем
+                    войдите в аккаунт.
+                  </p>
+                  <p className="hint">Не видите письмо? Проверьте папку «Спам» или «Промоакции».</p>
+                  <div className="auth-verify-actions">
+                    <button type="button" onClick={() => resendVerificationForEmail(verifyEmailNotice.email)}>
+                      Отправить письмо ещё раз
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      onClick={() => {
+                        setVerifyEmailNotice(null);
+                        setResendStatus("");
+                      }}
+                    >
+                      Перейти ко входу
+                    </button>
+                  </div>
+                  {resendStatus ? <p className="status">{resendStatus}</p> : null}
+                </div>
+              ) : (
+                <>
               <h2>{authMode === "login" ? "Вход" : "Регистрация"}</h2>
               {authMode === "login" ? (
                 <form onSubmit={onLogin} className="form">
@@ -7472,6 +7525,8 @@ export default function App() {
                 {authMode === "login" ? "Регистрация" : "Войти"}
               </button>
               <p className="status">{authMode === "login" ? authStatus : status}</p>
+                </>
+              )}
             </div>
           </div>,
           document.body,
