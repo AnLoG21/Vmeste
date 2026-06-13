@@ -17,6 +17,7 @@ import {
   sphereMapIconHref,
   uniqueDiscoverOrgs,
 } from "./clientOrgFeatures.js";
+import { loadYandexMaps } from "./yandexMapsLoader.js";
 
 function formatWebsiteHref(url) {
   const s = String(url || "").trim();
@@ -2664,32 +2665,36 @@ export default function App() {
       return undefined;
     }
     const t = setTimeout(() => {
-      const ymaps = window.ymaps;
-      if (!ymaps || clientDiscoverMapRef.current) return;
-      if (!document.getElementById("client-discover-map")) return;
-      ymaps.ready(() => {
-        if (clientDiscoverMapRef.current) return;
-        const map = new ymaps.Map("client-discover-map", {
-          center: [55.751244, 37.618423],
-          zoom: 10,
-          controls: ["zoomControl", "fullscreenControl", "geolocationControl"],
-        });
-        clientDiscoverMapRef.current = map;
-        if (!map._vmesteZoomBound) {
-          map._vmesteZoomBound = true;
-          map.events.add("boundschange", () => {
-            if (clientDiscoverMapZoomTimerRef.current) {
-              window.clearTimeout(clientDiscoverMapZoomTimerRef.current);
+      void loadYandexMaps()
+        .then(() => {
+          const ymaps = window.ymaps;
+          if (!ymaps || clientDiscoverMapRef.current) return;
+          if (!document.getElementById("client-discover-map")) return;
+          ymaps.ready(() => {
+            if (clientDiscoverMapRef.current) return;
+            const map = new ymaps.Map("client-discover-map", {
+              center: [55.751244, 37.618423],
+              zoom: 10,
+              controls: ["zoomControl", "fullscreenControl", "geolocationControl"],
+            });
+            clientDiscoverMapRef.current = map;
+            if (!map._vmesteZoomBound) {
+              map._vmesteZoomBound = true;
+              map.events.add("boundschange", () => {
+                if (clientDiscoverMapZoomTimerRef.current) {
+                  window.clearTimeout(clientDiscoverMapZoomTimerRef.current);
+                }
+                clientDiscoverMapZoomTimerRef.current = window.setTimeout(() => {
+                  if (clientDiscoverMapRef.current) {
+                    paintClientDiscoverMapMarkers(allLocationsRef.current, { fitView: false });
+                  }
+                }, 160);
+              });
             }
-            clientDiscoverMapZoomTimerRef.current = window.setTimeout(() => {
-              if (clientDiscoverMapRef.current) {
-                paintClientDiscoverMapMarkers(allLocationsRef.current, { fitView: false });
-              }
-            }, 160);
+            paintClientDiscoverMapMarkers(allLocationsRef.current, { fitView: true });
           });
-        }
-        paintClientDiscoverMapMarkers(allLocationsRef.current, { fitView: true });
-      });
+        })
+        .catch(() => {});
     }, 280);
     return () => {
       clearTimeout(t);
@@ -3022,38 +3027,43 @@ export default function App() {
   }
 
   function initMap() {
-    const ymaps = window.ymaps;
-    if (!ymaps || mapRef.current) return;
-    ymaps.ready(() => {
-      if (mapRef.current) return;
-      mapRef.current = new ymaps.Map("reg-map", {
-        center: [Number(form.organization_latitude), Number(form.organization_longitude)],
-        zoom: 11,
-      });
-      mapRef.current.events.add("click", (e) => {
-        const coords = e.get("coords");
-        const [lat, lon] = coords;
-        reverseGeocodeByCoords(lat, lon).then((result) => {
-          const shortAddress = buildShortAddress(result?.address);
-          const city = getCity(result?.address);
-          setForm((prev) => ({
-            ...prev,
-            organization_latitude: lat.toFixed(6),
-            organization_longitude: lon.toFixed(6),
-            organization_address: simplifyCommaAddressLine(
-              shortAddress || result?.display_name || prev.organization_address
-            ),
-          }));
-          if (city) setDetectedCity(city);
+    if (mapRef.current) return;
+    void loadYandexMaps()
+      .then(() => {
+        const ymaps = window.ymaps;
+        if (!ymaps || mapRef.current) return;
+        ymaps.ready(() => {
+          if (mapRef.current) return;
+          mapRef.current = new ymaps.Map("reg-map", {
+            center: [Number(form.organization_latitude), Number(form.organization_longitude)],
+            zoom: 11,
+          });
+          mapRef.current.events.add("click", (e) => {
+            const coords = e.get("coords");
+            const [lat, lon] = coords;
+            reverseGeocodeByCoords(lat, lon).then((result) => {
+              const shortAddress = buildShortAddress(result?.address);
+              const city = getCity(result?.address);
+              setForm((prev) => ({
+                ...prev,
+                organization_latitude: lat.toFixed(6),
+                organization_longitude: lon.toFixed(6),
+                organization_address: simplifyCommaAddressLine(
+                  shortAddress || result?.display_name || prev.organization_address
+                ),
+              }));
+              if (city) setDetectedCity(city);
+            });
+            if (!placemarkRef.current) {
+              placemarkRef.current = new ymaps.Placemark(coords);
+              mapRef.current.geoObjects.add(placemarkRef.current);
+            } else {
+              placemarkRef.current.geometry.setCoordinates(coords);
+            }
+          });
         });
-        if (!placemarkRef.current) {
-          placemarkRef.current = new ymaps.Placemark(coords);
-          mapRef.current.geoObjects.add(placemarkRef.current);
-        } else {
-          placemarkRef.current.geometry.setCoordinates(coords);
-        }
-      });
-    });
+      })
+      .catch(() => {});
   }
 
   async function geocodeAddress(addressValue) {
@@ -3437,6 +3447,10 @@ export default function App() {
         import.meta.env.VITE_YANDEX_SUGGEST_API_KEY || import.meta.env.VITE_YANDEX_MAPS_API_KEY
       );
 
+      if (yandexAutocompleteEnabled) {
+        await loadYandexMaps().catch(() => {});
+      }
+
       const yaPromise =
         window.ymaps && yandexAutocompleteEnabled
           ? Promise.race([
@@ -3555,39 +3569,43 @@ export default function App() {
   }
 
   function initProfileMapFromCoords(lat, lon) {
-    const ymaps = window.ymaps;
-    if (!ymaps) return;
     if (profileMapRef.current) return;
-    ymaps.ready(() => {
-      if (profileMapRef.current || !document.getElementById("profile-address-map")) return;
-      profileMapRef.current = new ymaps.Map("profile-address-map", {
-        center: [lat, lon],
-        zoom: 14,
-      });
-      profilePlacemarkRef.current = new ymaps.Placemark([lat, lon]);
-      profileMapRef.current.geoObjects.add(profilePlacemarkRef.current);
-      profileMapRef.current.events.add("click", (e) => {
-        const coords = e.get("coords");
-        const plat = coords[0];
-        const plon = coords[1];
-        reverseGeocodeByCoords(plat, plon).then((result) => {
-          const shortAddress = buildShortAddress(result?.address);
-          const city = getCity(result?.address);
-          setOrgAddressForm((p) => ({
-            ...p,
-            organization_latitude: plat.toFixed(6),
-            organization_longitude: plon.toFixed(6),
-            organization_address: simplifyCommaAddressLine(
-              shortAddress || result?.display_name || p.organization_address
-            ),
-          }));
-          if (city) setDetectedCity(city);
+    void loadYandexMaps()
+      .then(() => {
+        const ymaps = window.ymaps;
+        if (!ymaps || profileMapRef.current) return;
+        ymaps.ready(() => {
+          if (profileMapRef.current || !document.getElementById("profile-address-map")) return;
+          profileMapRef.current = new ymaps.Map("profile-address-map", {
+            center: [lat, lon],
+            zoom: 14,
+          });
+          profilePlacemarkRef.current = new ymaps.Placemark([lat, lon]);
+          profileMapRef.current.geoObjects.add(profilePlacemarkRef.current);
+          profileMapRef.current.events.add("click", (e) => {
+            const coords = e.get("coords");
+            const plat = coords[0];
+            const plon = coords[1];
+            reverseGeocodeByCoords(plat, plon).then((result) => {
+              const shortAddress = buildShortAddress(result?.address);
+              const city = getCity(result?.address);
+              setOrgAddressForm((p) => ({
+                ...p,
+                organization_latitude: plat.toFixed(6),
+                organization_longitude: plon.toFixed(6),
+                organization_address: simplifyCommaAddressLine(
+                  shortAddress || result?.display_name || p.organization_address
+                ),
+              }));
+              if (city) setDetectedCity(city);
+            });
+            if (profilePlacemarkRef.current) {
+              profilePlacemarkRef.current.geometry.setCoordinates(coords);
+            }
+          });
         });
-        if (profilePlacemarkRef.current) {
-          profilePlacemarkRef.current.geometry.setCoordinates(coords);
-        }
-      });
-    });
+      })
+      .catch(() => {});
   }
 
   function destroyBranchDetailMap() {
@@ -3627,88 +3645,100 @@ export default function App() {
   }
 
   function initBranchDetailMapFromCoords(lat, lon) {
-    const ymaps = window.ymaps;
-    if (!ymaps) return;
-    ymaps.ready(() => {
-      if (!document.getElementById("branch-detail-map")) return;
-      destroyBranchDetailMap();
-      branchDetailMapRef.current = new ymaps.Map("branch-detail-map", {
-        center: [lat, lon],
-        zoom: 14,
-      });
-      branchDetailPlacemarkRef.current = new ymaps.Placemark([lat, lon]);
-      branchDetailMapRef.current.geoObjects.add(branchDetailPlacemarkRef.current);
-    });
+    void loadYandexMaps()
+      .then(() => {
+        const ymaps = window.ymaps;
+        if (!ymaps) return;
+        ymaps.ready(() => {
+          if (!document.getElementById("branch-detail-map")) return;
+          destroyBranchDetailMap();
+          branchDetailMapRef.current = new ymaps.Map("branch-detail-map", {
+            center: [lat, lon],
+            zoom: 14,
+          });
+          branchDetailPlacemarkRef.current = new ymaps.Placemark([lat, lon]);
+          branchDetailMapRef.current.geoObjects.add(branchDetailPlacemarkRef.current);
+        });
+      })
+      .catch(() => {});
   }
 
   function initBranchEditMapFromCoords(lat, lon) {
-    const ymaps = window.ymaps;
-    if (!ymaps) return;
-    ymaps.ready(() => {
-      if (!document.getElementById("branch-edit-map")) return;
-      destroyBranchEditMap();
-      branchEditMapRef.current = new ymaps.Map("branch-edit-map", {
-        center: [lat, lon],
-        zoom: 14,
-      });
-      branchEditPlacemarkRef.current = new ymaps.Placemark([lat, lon]);
-      branchEditMapRef.current.geoObjects.add(branchEditPlacemarkRef.current);
-      branchEditMapRef.current.events.add("click", (e) => {
-        const coords = e.get("coords");
-        const plat = coords[0];
-        const plon = coords[1];
-        reverseGeocodeByCoords(plat, plon).then((result) => {
-          const shortAddress = buildShortAddress(result?.address);
-          const city = getCity(result?.address);
-          const addr = simplifyCommaAddressLine(shortAddress || result?.display_name || prev.address);
-          setLocationForm((prev) => ({
-            ...prev,
-            latitude: plat.toFixed(6),
-            longitude: plon.toFixed(6),
-            address: addr,
-          }));
-          if (city) setDetectedCity(city);
+    void loadYandexMaps()
+      .then(() => {
+        const ymaps = window.ymaps;
+        if (!ymaps) return;
+        ymaps.ready(() => {
+          if (!document.getElementById("branch-edit-map")) return;
+          destroyBranchEditMap();
+          branchEditMapRef.current = new ymaps.Map("branch-edit-map", {
+            center: [lat, lon],
+            zoom: 14,
+          });
+          branchEditPlacemarkRef.current = new ymaps.Placemark([lat, lon]);
+          branchEditMapRef.current.geoObjects.add(branchEditPlacemarkRef.current);
+          branchEditMapRef.current.events.add("click", (e) => {
+            const coords = e.get("coords");
+            const plat = coords[0];
+            const plon = coords[1];
+            reverseGeocodeByCoords(plat, plon).then((result) => {
+              const shortAddress = buildShortAddress(result?.address);
+              const city = getCity(result?.address);
+              const addr = simplifyCommaAddressLine(shortAddress || result?.display_name || prev.address);
+              setLocationForm((prev) => ({
+                ...prev,
+                latitude: plat.toFixed(6),
+                longitude: plon.toFixed(6),
+                address: addr,
+              }));
+              if (city) setDetectedCity(city);
+            });
+            if (branchEditPlacemarkRef.current) {
+              branchEditPlacemarkRef.current.geometry.setCoordinates(coords);
+            }
+          });
         });
-        if (branchEditPlacemarkRef.current) {
-          branchEditPlacemarkRef.current.geometry.setCoordinates(coords);
-        }
-      });
-    });
+      })
+      .catch(() => {});
   }
 
   function initBranchAddMapFromCoords(lat, lon) {
-    const ymaps = window.ymaps;
-    if (!ymaps) return;
-    ymaps.ready(() => {
-      if (!document.getElementById("branch-add-map")) return;
-      destroyBranchAddMap();
-      branchAddMapRef.current = new ymaps.Map("branch-add-map", {
-        center: [lat, lon],
-        zoom: 14,
-      });
-      branchAddPlacemarkRef.current = new ymaps.Placemark([lat, lon]);
-      branchAddMapRef.current.geoObjects.add(branchAddPlacemarkRef.current);
-      branchAddMapRef.current.events.add("click", (e) => {
-        const coords = e.get("coords");
-        const plat = coords[0];
-        const plon = coords[1];
-        reverseGeocodeByCoords(plat, plon).then((result) => {
-          const shortAddress = buildShortAddress(result?.address);
-          const city = getCity(result?.address);
-          const addr = simplifyCommaAddressLine(shortAddress || result?.display_name || prev.address);
-          setLocationForm((prev) => ({
-            ...prev,
-            latitude: plat.toFixed(6),
-            longitude: plon.toFixed(6),
-            address: addr,
-          }));
-          if (city) setDetectedCity(city);
+    void loadYandexMaps()
+      .then(() => {
+        const ymaps = window.ymaps;
+        if (!ymaps) return;
+        ymaps.ready(() => {
+          if (!document.getElementById("branch-add-map")) return;
+          destroyBranchAddMap();
+          branchAddMapRef.current = new ymaps.Map("branch-add-map", {
+            center: [lat, lon],
+            zoom: 14,
+          });
+          branchAddPlacemarkRef.current = new ymaps.Placemark([lat, lon]);
+          branchAddMapRef.current.geoObjects.add(branchAddPlacemarkRef.current);
+          branchAddMapRef.current.events.add("click", (e) => {
+            const coords = e.get("coords");
+            const plat = coords[0];
+            const plon = coords[1];
+            reverseGeocodeByCoords(plat, plon).then((result) => {
+              const shortAddress = buildShortAddress(result?.address);
+              const city = getCity(result?.address);
+              const addr = simplifyCommaAddressLine(shortAddress || result?.display_name || prev.address);
+              setLocationForm((prev) => ({
+                ...prev,
+                latitude: plat.toFixed(6),
+                longitude: plon.toFixed(6),
+                address: addr,
+              }));
+              if (city) setDetectedCity(city);
+            });
+            if (branchAddPlacemarkRef.current) {
+              branchAddPlacemarkRef.current.geometry.setCoordinates(coords);
+            }
+          });
         });
-        if (branchAddPlacemarkRef.current) {
-          branchAddPlacemarkRef.current.geometry.setCoordinates(coords);
-        }
-      });
-    });
+      })
+      .catch(() => {});
   }
 
   function onProfileAddressInput(value) {
