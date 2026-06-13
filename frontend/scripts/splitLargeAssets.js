@@ -1,13 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_BYTES = 15_000;
+const MAX_BYTES = 10_000;
 const PART_FILE = /\.p\d+\.(js|css)$/;
+const ORIGIN_PLACEHOLDER = "__VMESTE_ORIGIN__";
 
-function rewriteImportsToAbsolute(code) {
+function rewriteImportsForBlob(code) {
   return code
-    .replace(/from\s*(["'])\.\/([^"']+)\1/g, 'from "/assets/$2"')
-    .replace(/import\s*(["'])\.\/([^"']+)\1/g, 'import "/assets/$2"');
+    .replace(/from\s*(["'])\.\/([^"']+)\1/g, `from "${ORIGIN_PLACEHOLDER}/assets/$2"`)
+    .replace(/import\s*(["'])\.\/([^"']+)\1/g, `import "${ORIGIN_PLACEHOLDER}/assets/$2"`);
 }
 
 function splitByNewlines(content, maxBytes) {
@@ -61,15 +62,23 @@ function buildJsLoader(partNames, exportNames) {
 
   return `const __parts__ = ${JSON.stringify(partNames)};
 const __origin__ = typeof location !== "undefined" ? location.origin : "";
-const __chunks__ = await Promise.all(__parts__.map(async (__part__) => {
-  const __res__ = await fetch(__origin__ + "/assets/" + __part__);
-  if (!__res__.ok) throw new Error("Failed to load chunk part: " + __part__);
-  return __res__.text();
-}));
-const __code__ = __chunks__.join("").replace(
-  /(from\\s*|import\\s*)(["'])\\/assets\\//g,
-  "$1$2" + __origin__ + "/assets/"
-);
+async function __fetchPart__(__part__) {
+  for (let __try__ = 0; __try__ < 3; __try__ += 1) {
+    const __res__ = await fetch(__origin__ + "/assets/" + __part__);
+    const __text__ = await __res__.text();
+    const __trim__ = __text__.trimStart();
+    if (__res__.ok && __trim__ && !__trim__.startsWith("<")) {
+      return __text__;
+    }
+    await new Promise((__r__) => setTimeout(__r__, 400 * (__try__ + 1)));
+  }
+  throw new Error("Failed to load chunk part: " + __part__);
+}
+let __code__ = "";
+for (const __part__ of __parts__) {
+  __code__ += await __fetchPart__(__part__);
+}
+__code__ = __code__.replace(/${ORIGIN_PLACEHOLDER}/g, __origin__);
 const __blob__ = new Blob([__code__], { type: "text/javascript" });
 const __mod__ = await import(URL.createObjectURL(__blob__));
 export default __mod__.default;
@@ -80,7 +89,7 @@ ${reexports}
 function splitCssFile(filePath) {
   if (PART_FILE.test(path.basename(filePath))) return;
 
-  let css = fs.readFileSync(filePath, "utf8");
+  const css = fs.readFileSync(filePath, "utf8");
   if (Buffer.byteLength(css, "utf8") <= MAX_BYTES) return;
 
   const dir = path.dirname(filePath);
@@ -105,27 +114,17 @@ function splitCssFile(filePath) {
     return partName;
   });
 
-  const importPrefix = dir.endsWith("assets") ? "./" : "/assets/";
-  const wrapper = partNames
-    .map((name) => {
-      const href = dir.endsWith("assets") ? `./${name}` : `/assets/${name}`;
-      return `@import "${href}";`;
-    })
-    .join("\n");
-  fs.writeFileSync(filePath, wrapper, "utf8");
+  fs.writeFileSync(filePath, partNames.map((name) => `@import "./${name}";`).join("\n"), "utf8");
 }
 
 function splitJsFile(filePath) {
   if (PART_FILE.test(path.basename(filePath))) return;
 
   const code = fs.readFileSync(filePath, "utf8");
-  if (Buffer.byteLength(code, "utf8") <= MAX_BYTES) {
-    return;
-  }
+  if (Buffer.byteLength(code, "utf8") <= MAX_BYTES) return;
 
-  const rewritten = rewriteImportsToAbsolute(code);
+  const rewritten = rewriteImportsForBlob(code);
   const exportNames = extractExportNames(rewritten);
-
   const dir = path.dirname(filePath);
   const baseName = path.basename(filePath, ".js");
   const segments = splitByNewlines(rewritten, MAX_BYTES);
@@ -159,53 +158,21 @@ export function splitLargeAssetsPlugin() {
     apply: "build",
     closeBundle() {
       const distDir = path.resolve("dist");
-      const files = collectFiles(distDir);
+      const initialFiles = collectFiles(distDir);
 
-      for (const filePath of files) {
+      for (const filePath of initialFiles) {
         if (filePath.endsWith(".css")) splitCssFile(filePath);
       }
 
-      for (const filePath of files) {
+      for (const filePath of initialFiles) {
         if (filePath.endsWith(".js")) splitJsFile(filePath);
       }
 
-      // Split oversized part files by merging into parent loader lists.
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (const filePath of collectFiles(distDir)) {
-          if (!filePath.endsWith(".js") || !PART_FILE.test(path.basename(filePath))) continue;
-          if (Buffer.byteLength(fs.readFileSync(filePath), "utf8") <= MAX_BYTES) continue;
-          const dir = path.dirname(filePath);
-          const baseName = path.basename(filePath).replace(/\.p\d+\.js$/, "");
-          const code = fs.readFileSync(filePath, "utf8");
-          const subParts = splitByNewlines(code, MAX_BYTES).map((segment, index) => {
-            const existing = fs.readdirSync(dir).filter((name) => name.startsWith(baseName + ".p"));
-            const nextIndex = existing.length + index;
-            const partName = `${baseName}.p${String(nextIndex).padStart(2, "0")}.js`;
-            fs.writeFileSync(path.join(dir, partName), segment, "utf8");
-            return partName;
-          });
-          fs.unlinkSync(filePath);
-          const loaderPath = path.join(dir, `${baseName}.js`);
-          if (fs.existsSync(loaderPath)) {
-            const loader = fs.readFileSync(loaderPath, "utf8");
-            const match = loader.match(/const __parts__ = (\[[^\]]+\]);/);
-            if (match) {
-              const parts = JSON.parse(match[1].replace(/'/g, '"'));
-              const oldName = path.basename(filePath);
-              const idx = parts.indexOf(oldName);
-              if (idx >= 0) {
-                parts.splice(idx, 1, ...subParts);
-                fs.writeFileSync(
-                  loaderPath,
-                  loader.replace(/const __parts__ = (\[[^\]]+\]);/, `const __parts__ = ${JSON.stringify(parts)};`),
-                  "utf8",
-                );
-                changed = true;
-              }
-            }
-          }
+      for (const filePath of collectFiles(distDir)) {
+        if (!filePath.endsWith(".js") || !PART_FILE.test(path.basename(filePath))) continue;
+        const size = Buffer.byteLength(fs.readFileSync(filePath), "utf8");
+        if (size > 12_000) {
+          console.warn(`[split-large-assets] warning: ${path.basename(filePath)} is ${size} bytes`);
         }
       }
     },
