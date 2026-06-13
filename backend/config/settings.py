@@ -36,6 +36,25 @@ DEBUG = os.environ.get("DEBUG", "0") in ("1", "true", "True", "yes")
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
 
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+
+_csrf_origins_env = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
+if _csrf_origins_env.strip():
+    CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_origins_env.split(",") if o.strip()]
+elif FRONTEND_URL.startswith("http"):
+    CSRF_TRUSTED_ORIGINS = [FRONTEND_URL]
+    if FRONTEND_URL.startswith("https://"):
+        _host = FRONTEND_URL.removeprefix("https://")
+        CSRF_TRUSTED_ORIGINS.append(f"https://www.{_host}")
+else:
+    CSRF_TRUSTED_ORIGINS = []
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -117,12 +136,11 @@ SIMPLE_JWT = {
 
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOWED_ORIGINS = [
-    os.environ.get("FRONTEND_URL", "http://localhost:5173"),
+    FRONTEND_URL,
     "http://127.0.0.1:5173",
     "http://localhost:5173",
 ]
 
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 SKIP_EMAIL_VERIFICATION = os.environ.get("SKIP_EMAIL_VERIFICATION", "0") in ("1", "true", "True", "yes")
 
 EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
