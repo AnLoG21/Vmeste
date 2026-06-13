@@ -7,8 +7,9 @@ const ORIGIN_PLACEHOLDER = "__VMESTE_ORIGIN__";
 
 function rewriteImportsForBlob(code) {
   return code
-    .replace(/from\s*(["'])\.\/([^"']+)\1/g, `from "${ORIGIN_PLACEHOLDER}/assets/$2"`)
-    .replace(/import\s*(["'])\.\/([^"']+)\1/g, `import "${ORIGIN_PLACEHOLDER}/assets/$2"`);
+    .replace(/import\s*\(\s*(["'])\.\/([^"']+)\1/g, `import($1${ORIGIN_PLACEHOLDER}/assets/$2$1`)
+    .replace(/from\s*(["'])\.\/([^"']+)\1/g, `from $1${ORIGIN_PLACEHOLDER}/assets/$2$1`)
+    .replace(/import\s+(["'])\.\/([^"']+)\1/g, `import $1${ORIGIN_PLACEHOLDER}/assets/$2$1`);
 }
 
 function splitByNewlines(content, maxBytes) {
