@@ -1,11 +1,10 @@
-# HTTP внутри Docker; HTTPS — через Cloudflare Tunnel.
-# Без encode gzip — сжатие на edge Cloudflare; двойной gzip ломал загрузку JS/CSS.
-http://{$DOMAIN}, http://www.{$DOMAIN} {
+# HTTPS через Let's Encrypt (прямой доступ к Selectel, без Cloudflare proxy).
+{$DOMAIN}, www.{$DOMAIN} {
 	@backend path /api/* /admin* /media/* /static/*
 	handle @backend {
 		reverse_proxy web:8000 {
 			header_up Host {host}
-			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Proto {scheme}
 			header_up X-Forwarded-Host {host}
 		}
 	}

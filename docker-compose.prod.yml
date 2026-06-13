@@ -61,6 +61,10 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
     environment:
       DOMAIN: ${DOMAIN}
     volumes:
@@ -71,14 +75,16 @@ services:
       - frontend
       - web
 
-  # Туннель Cloudflare: только API (api.vsevmeste.space → http://web:8000).
-  # Фронтенд — Cloudflare Pages (vsevmeste.space), не через туннель.
+  # Опционально: туннель Cloudflare, если порты 80/443 снаружи закрыты.
+  # При прямом DNS на Selectel cloudflared можно остановить.
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    profiles:
+      - tunnel
     depends_on:
-      - web
+      - caddy
 
 volumes:
   vmeste_pgdata:
