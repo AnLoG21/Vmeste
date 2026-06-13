@@ -71,13 +71,14 @@ services:
       - frontend
       - web
 
-  # Туннель Cloudflare: исходящее соединение с сервера, входящие 80/443 не нужны.
+  # Туннель Cloudflare: только API (api.vsevmeste.space → http://web:8000).
+  # Фронтенд — Cloudflare Pages (vsevmeste.space), не через туннель.
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
-      - caddy
+      - web
 
 volumes:
   vmeste_pgdata:

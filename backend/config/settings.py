@@ -135,11 +135,18 @@ SIMPLE_JWT = {
 }
 
 CORS_ALLOW_ALL_ORIGINS = DEBUG
-CORS_ALLOWED_ORIGINS = [
-    FRONTEND_URL,
-    "http://127.0.0.1:5173",
-    "http://localhost:5173",
-]
+_cors_origins_env = os.environ.get("CORS_ALLOWED_ORIGINS", "")
+if _cors_origins_env.strip():
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
+else:
+    CORS_ALLOWED_ORIGINS = [
+        FRONTEND_URL,
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ]
+    if FRONTEND_URL.startswith("https://"):
+        _fe_host = FRONTEND_URL.removeprefix("https://").removeprefix("www.")
+        CORS_ALLOWED_ORIGINS.append(f"https://www.{_fe_host}")
 
 SKIP_EMAIL_VERIFICATION = os.environ.get("SKIP_EMAIL_VERIFICATION", "0") in ("1", "true", "True", "yes")
 
