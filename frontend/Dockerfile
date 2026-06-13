@@ -3,12 +3,13 @@ WORKDIR /app
 ARG VITE_API_URL=http://localhost:8000/api
 ENV VITE_API_URL=${VITE_API_URL}
 
-COPY package.json package-lock.json ./
+COPY package.json ./
 COPY index.html vite.config.js ./
 COPY public ./public
 COPY src ./src
 
-RUN npm install
+# Явная установка: lockfile с peer:true иногда не ставит vite в Alpine.
+RUN npm install vite@^6.0.0 @vitejs/plugin-react@^4.4.1 react@^18.3.1 react-dom@^18.3.1
 RUN node node_modules/vite/bin/vite.js build
 
 FROM nginx:1.27-alpine
