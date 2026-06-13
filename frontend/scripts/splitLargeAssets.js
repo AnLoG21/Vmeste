@@ -60,12 +60,16 @@ function buildJsLoader(partNames, exportNames) {
     .join("\n");
 
   return `const __parts__ = ${JSON.stringify(partNames)};
+const __origin__ = typeof location !== "undefined" ? location.origin : "";
 const __chunks__ = await Promise.all(__parts__.map(async (__part__) => {
-  const __res__ = await fetch("/assets/" + __part__);
+  const __res__ = await fetch(__origin__ + "/assets/" + __part__);
   if (!__res__.ok) throw new Error("Failed to load chunk part: " + __part__);
   return __res__.text();
 }));
-const __code__ = __chunks__.join("");
+const __code__ = __chunks__.join("").replace(
+  /(from\\s*|import\\s*)(["'])\\/assets\\//g,
+  "$1$2" + __origin__ + "/assets/"
+);
 const __blob__ = new Blob([__code__], { type: "text/javascript" });
 const __mod__ = await import(URL.createObjectURL(__blob__));
 export default __mod__.default;
@@ -114,18 +118,17 @@ function splitCssFile(filePath) {
 function splitJsFile(filePath) {
   if (PART_FILE.test(path.basename(filePath))) return;
 
-  let code = fs.readFileSync(filePath, "utf8");
-  code = rewriteImportsToAbsolute(code);
-  const exportNames = extractExportNames(code);
-
+  const code = fs.readFileSync(filePath, "utf8");
   if (Buffer.byteLength(code, "utf8") <= MAX_BYTES) {
-    fs.writeFileSync(filePath, code);
     return;
   }
 
+  const rewritten = rewriteImportsToAbsolute(code);
+  const exportNames = extractExportNames(rewritten);
+
   const dir = path.dirname(filePath);
   const baseName = path.basename(filePath, ".js");
-  const segments = splitByNewlines(code, MAX_BYTES);
+  const segments = splitByNewlines(rewritten, MAX_BYTES);
 
   const partNames = segments.map((segment, index) => {
     const partName = `${baseName}.p${String(index).padStart(2, "0")}.js`;
