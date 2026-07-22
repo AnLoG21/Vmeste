@@ -48,8 +48,122 @@
   }
 
   .menu-btn--icon {
-    width: 38px;
-    height: 38px;
+    width: 40px;
+    height: 40px;
+    background: #fff;
+    border-color: #e0c2a8;
+    color: #8d3e00;
+  }
+
+  .menu-wrap {
+    z-index: 300;
+  }
+
+  .page-logged .hero.top-row {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .page-logged .hero.top-row .menu-wrap {
+    grid-column: 3;
+    justify-self: end;
+  }
+
+  .services-layout {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .services-layout .card {
+    padding: 12px;
+  }
+
+  .catalog-help-panel {
+    order: -1;
+  }
+
+  .catalog-tree-head h2 {
+    font-size: 1.15rem;
+  }
+
+  .catalog-tree-head .muted.small {
+    line-height: 1.45;
+  }
+
+  .tree-node {
+    padding: 10px;
+  }
+
+  .tree-toggle {
+    font-size: 14px;
+    padding: 10px 12px;
+  }
+
+  .catalog-tree-meta {
+    margin-left: 0;
+    width: 100%;
+    text-align: right;
+  }
+
+  .service-editor-row {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "name name"
+      "price duration"
+      "active active";
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .service-editor-name {
+    grid-area: name;
+    min-width: 0;
+    word-break: break-word;
+  }
+
+  .service-editor-row input[type="number"]:nth-of-type(1) {
+    grid-area: price;
+  }
+
+  .service-editor-row input[type="number"]:nth-of-type(2) {
+    grid-area: duration;
+  }
+
+  .service-editor-active {
+    grid-area: active;
+    white-space: normal;
+  }
+
+  .service-editor-row input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .service-editor-row,
+  .tree-node,
+  .tree-children {
+    overflow-x: visible;
+  }
+
+  .row-2,
+  .address-details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-save-all-btn,
+  .catalog-help-panel .ghost-btn {
+    width: 100%;
+  }
+
+  .staff-services-tree .checkbox {
+    align-items: flex-start;
+  }
+
+  .card {
+    padding: 12px;
+  }
+
+  .grid {
+    gap: 12px;
   }
 
   .app-subnav {
@@ -134,6 +248,16 @@ html.native-app .app-subnav {
   z-index: 150;
   background: rgba(255, 253, 251, 0.96);
   backdrop-filter: blur(8px);
+}
+
+html.native-app .menu-btn--icon {
+  background: #fff;
+  border-color: #e0c2a8;
+  color: #8d3e00;
+}
+
+html.native-app .service-editor-row {
+  grid-template-columns: 1fr 1fr;
 }
 
 html.native-app .landing-hero-title {
