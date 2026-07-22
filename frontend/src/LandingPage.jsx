@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./landing.css";
 import { SITE_LEGAL } from "./legal/siteLegal.js";
-
-const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000/api").replace(/\/+$/, "").replace(/\/api\/api$/, "/api");
+import { API_URL } from "./config.js";
 
 function formatPlanPrice(price) {
   const value = Number(price);

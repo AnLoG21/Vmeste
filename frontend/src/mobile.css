@@ -1,0 +1,145 @@
+/* Mobile phones and Capacitor native shell */
+
+@media (max-width: 768px) {
+  .page {
+    padding: 12px 12px 24px;
+  }
+
+  .hero.top-row {
+    gap: 8px;
+  }
+
+  .page-logged .hero.top-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 6px 8px 8px;
+    row-gap: 6px;
+  }
+
+  .page-logged .hero.top-row > .brand-btn {
+    max-width: 112px;
+  }
+
+  .hero.top-row .brand-btn .brand-logo,
+  .page-logged .hero.top-row .brand-btn .brand-logo {
+    max-height: 44px !important;
+    height: auto !important;
+    max-width: 112px !important;
+    transform: none !important;
+    object-position: left center;
+  }
+
+  .brand-btn {
+    max-width: min(160px, 44vw);
+  }
+
+  .client-header-search {
+    min-width: 0;
+  }
+
+  .client-header-search-input {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .client-filter-icon-btn {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+  }
+
+  .menu-btn--icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  .app-subnav {
+    padding: 8px 10px 10px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px;
+  }
+
+  .app-subnav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app-subnav button {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .auth-modal-overlay {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .auth-modal {
+    width: 100%;
+    max-height: 92vh;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .grid-auth {
+    min-height: auto;
+  }
+
+  .modal-card {
+    width: min(520px, calc(100vw - 24px));
+  }
+}
+
+@media (max-width: 400px) {
+  .page {
+    padding: 10px 10px 20px;
+  }
+
+  .page-logged .hero.top-row > .brand-btn {
+    max-width: 96px;
+  }
+
+  .hero.top-row .brand-btn .brand-logo {
+    max-height: 38px !important;
+    max-width: 96px !important;
+  }
+}
+
+html.native-app .page {
+  padding: 8px 10px 20px;
+  max-width: none;
+}
+
+html.native-app .hero.top-row {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  background: #fff8f2;
+  border-bottom: 1px solid #ffe4cc;
+  margin: -8px -10px 8px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+html.native-app .page--guest .hero.top-row.page-header-guest,
+html.native-app .page-logged .hero.top-row {
+  padding-top: calc(8px + var(--safe-top, 0px));
+}
+
+html.native-app .app-subnav {
+  position: sticky;
+  top: calc(52px + var(--safe-top, 0px));
+  z-index: 150;
+  background: rgba(255, 253, 251, 0.96);
+  backdrop-filter: blur(8px);
+}
+
+html.native-app .landing-hero-title {
+  font-size: 1.55rem;
+}
+
+html.native-app .landing-section h2 {
+  font-size: 1.45rem;
+}

@@ -1752,8 +1752,7 @@ body {
   width: auto;
   display: block;
   object-fit: contain;
-  transform: scale(1.6);
-  transform-origin: left top;
+  object-position: left center;
 }
 
 .menu-wrap {
@@ -4285,13 +4284,19 @@ body.theme-dark .field-label {
 
 @media (max-width: 900px) {
   .page-logged .hero.top-row {
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     padding-left: 8px;
     padding-right: 8px;
   }
 
   .client-header-search {
     min-width: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-logged .hero.top-row {
+    column-gap: 6px;
   }
 }
 
@@ -5320,4 +5325,22 @@ body.theme-dark .mini-date-picker-popover {
   border-color: var(--border);
   background: var(--bg-card);
   color: var(--text);
+}
+
+/* Capacitor Android / iOS shell */
+html.native-app {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html.native-app body {
+  padding-top: 0;
+  padding-bottom: var(--safe-bottom);
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.native-app .hero.top-row.page-header-guest,
+html.native-app .page-logged .hero.top-row {
+  padding-top: calc(8px + var(--safe-top));
 }

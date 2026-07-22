@@ -18,6 +18,7 @@ import {
   uniqueDiscoverOrgs,
 } from "./clientOrgFeatures.js";
 import { loadYandexMaps } from "./yandexMapsLoader.js";
+import { API_URL, AUTH_URL, BASE_URL, REFRESH_URL } from "./config.js";
 
 function formatWebsiteHref(url) {
   const s = String(url || "").trim();
@@ -153,11 +154,7 @@ function MapOrgHoursBlock({ workingHours }) {
   );
 }
 
-const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000/api").replace(/\/+$/, "").replace(/\/api\/api$/, "/api");
 const NOMINATIM_HEADERS = { Accept: "application/json", "Accept-Language": "ru,ru-RU;q=0.9,en;q=0.5" };
-const BASE_URL = API_URL.replace(/\/api$/, "");
-const AUTH_URL = `${API_URL}/auth/token/`;
-const REFRESH_URL = `${API_URL}/auth/token/refresh/`;
 function savedIntervalsStorageKey(providerId) {
   if (!providerId) return null;
   return `vmeste_saved_intervals_v2_${providerId}`;

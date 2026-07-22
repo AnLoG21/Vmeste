@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Вместе</string>
+    <string name="title_activity_main">Вместе</string>
+    <string name="package_name">space.vsevmeste.app</string>
+    <string name="custom_url_scheme">space.vsevmeste.app</string>
+</resources>

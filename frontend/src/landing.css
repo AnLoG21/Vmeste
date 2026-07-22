@@ -114,6 +114,7 @@
   display: grid;
   gap: 16px;
   position: relative;
+  align-items: stretch;
 }
 
 .landing-hero-card {
@@ -124,7 +125,9 @@
   box-shadow: 0 12px 32px rgba(255, 122, 0, 0.08);
   display: flex;
   flex-direction: column;
-  height: 148px;
+  align-items: flex-start;
+  min-height: 148px;
+  height: 100%;
   box-sizing: border-box;
 }
 
@@ -420,6 +423,7 @@
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
   margin-bottom: 28px;
+  align-items: stretch;
 }
 
 .subscriptions-plan-card {
@@ -427,6 +431,15 @@
   border-radius: 12px;
   padding: 18px;
   background: #fff;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.subscriptions-plan-card .landing-btn,
+.subscriptions-plan-card > button {
+  margin-top: auto;
+  width: 100%;
 }
 
 .subscriptions-plan-desc {
@@ -583,7 +596,71 @@
     grid-template-columns: 1fr;
   }
 
-  .top-row.page-header-guest {
-    flex-wrap: wrap;
+  .page--guest .hero.top-row.page-header-guest {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "logo auth";
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .page--guest .hero.top-row.page-header-guest > .brand-btn {
+    grid-area: logo;
+    max-width: min(160px, 44vw);
+  }
+
+  .page--guest .hero.top-row.page-header-guest > div:not(.landing-header-auth) {
+    display: none;
+  }
+
+  .page--guest .hero.top-row.page-header-guest > div:has(.verify-note) {
+    display: block;
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .page--guest .landing-header-auth {
+    grid-area: auth;
+    margin-left: 0;
+    flex-shrink: 0;
+  }
+
+  .page--guest .brand-logo,
+  .page--guest .hero.top-row .brand-btn .brand-logo {
+    height: 44px !important;
+    max-height: 44px !important;
+    max-width: 100% !important;
+    transform: none !important;
+  }
+
+  .landing-header-btn {
+    padding: 8px 12px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .landing-hero-actions .landing-btn {
+    flex: 1 1 auto;
+    min-width: min(100%, 220px);
+  }
+}
+
+@media (max-width: 520px) {
+  .landing-hero-actions {
+    flex-direction: column;
+  }
+
+  .landing-hero-actions .landing-btn {
+    width: 100%;
+  }
+
+  .landing-header-btn {
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+
+  .landing-hero-card {
+    min-height: 0;
+    padding: 16px 18px;
   }
 }

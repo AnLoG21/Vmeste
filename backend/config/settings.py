@@ -148,6 +148,11 @@ else:
         _fe_host = FRONTEND_URL.removeprefix("https://").removeprefix("www.")
         CORS_ALLOWED_ORIGINS.append(f"https://www.{_fe_host}")
 
+# Capacitor Android/iOS WebView (fetch с https://localhost на API)
+for _cap_origin in ("https://localhost", "capacitor://localhost", "http://localhost"):
+    if _cap_origin not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(_cap_origin)
+
 SKIP_EMAIL_VERIFICATION = os.environ.get("SKIP_EMAIL_VERIFICATION", "0") in ("1", "true", "True", "yes")
 
 EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")

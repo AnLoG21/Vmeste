@@ -1,0 +1,11 @@
+{
+  "appId": "space.vsevmeste.app",
+  "appName": "Вместе",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
