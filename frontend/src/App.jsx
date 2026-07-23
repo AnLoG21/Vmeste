@@ -21,10 +21,13 @@ import { loadYandexMaps } from "./yandexMapsLoader.js";
 import { API_URL, AUTH_URL, BASE_URL, REFRESH_URL } from "./config.js";
 import {
   blobToFile,
+  formatRecordClock,
   groupChatMedia,
   guessAttachAccept,
   loadChatComposeMode,
   mediaUrl,
+  pickRecorderMime,
+  resolveAttachmentUrl,
   saveChatComposeMode,
 } from "./chatMedia.js";
 
@@ -1011,7 +1014,7 @@ function renderChatMessageBody(m) {
       </div>
     );
   }
-  const url = m.attachment_url || mediaUrl(m.attachment, BASE_URL);
+  const url = resolveAttachmentUrl(m, BASE_URL);
   if (m.kind === "image" && url) {
     return (
       <div className="tg-msg-media">
@@ -2038,6 +2041,11 @@ export default function App() {
   const [chatPendingFile, setChatPendingFile] = useState(null);
   const [chatPendingKind, setChatPendingKind] = useState("");
   const [chatRecordingKind, setChatRecordingKind] = useState(null);
+  const [chatRecordLocked, setChatRecordLocked] = useState(false);
+  const [chatRecordLiftHint, setChatRecordLiftHint] = useState(false);
+  const [chatRecordSecs, setChatRecordSecs] = useState(0);
+  const [chatRecordLevels, setChatRecordLevels] = useState(() => Array(24).fill(0.12));
+  const [chatMediaPreview, setChatMediaPreview] = useState(null);
   const [calendarDayDetail, setCalendarDayDetail] = useState(null);
   const menuWrapRef = useRef(null);
   const tgAttachMenuRef = useRef(null);
@@ -2050,6 +2058,17 @@ export default function App() {
   const chatRecordStartedAtRef = useRef(0);
   const chatHoldTimerRef = useRef(null);
   const chatDidHoldRef = useRef(false);
+  const chatPointerStartYRef = useRef(0);
+  const chatRecordLiftHintRef = useRef(false);
+  const chatRecordLockedRef = useRef(false);
+  const chatRecordTickRef = useRef(null);
+  const chatAudioCtxRef = useRef(null);
+  const chatAnalyserRef = useRef(null);
+  const chatLevelRafRef = useRef(null);
+  const chatLiveVideoRef = useRef(null);
+  const chatPreviewMediaRef = useRef(null);
+  const chatRecordMimeRef = useRef("audio/webm");
+  const chatRecordKindRef = useRef(null);
   const [chatSettingsTitle, setChatSettingsTitle] = useState("");
   const [groupForm, setGroupForm] = useState({ title: "", staff_ids: [] });
   const [chatFabOpen, setChatFabOpen] = useState(false);
@@ -4475,57 +4494,142 @@ export default function App() {
     saveChatComposeMode(next);
   }
 
+  function clearChatRecordMeters() {
+    if (chatRecordTickRef.current) {
+      clearInterval(chatRecordTickRef.current);
+      chatRecordTickRef.current = null;
+    }
+    if (chatLevelRafRef.current) {
+      cancelAnimationFrame(chatLevelRafRef.current);
+      chatLevelRafRef.current = null;
+    }
+    if (chatAudioCtxRef.current) {
+      try {
+        chatAudioCtxRef.current.close();
+      } catch {
+        /* ignore */
+      }
+      chatAudioCtxRef.current = null;
+      chatAnalyserRef.current = null;
+    }
+    setChatRecordSecs(0);
+    setChatRecordLevels(Array(24).fill(0.12));
+    setChatRecordLiftHint(false);
+  }
+
+  function stopChatRecordTracks() {
+    const stream = chatRecordStreamRef.current;
+    chatRecordStreamRef.current = null;
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    if (chatLiveVideoRef.current) {
+      try {
+        chatLiveVideoRef.current.srcObject = null;
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  function finishChatRecordingToPreview() {
+    const chunks = chatRecordChunksRef.current.slice();
+    const mime = chatRecordMimeRef.current || "application/octet-stream";
+    const kind = chatRecordKindRef.current || "voice";
+    const elapsed = Date.now() - chatRecordStartedAtRef.current;
+    chatMediaRecorderRef.current = null;
+    chatRecordChunksRef.current = [];
+    setChatRecordingKind(null);
+    chatRecordLockedRef.current = false;
+    setChatRecordLocked(false);
+    clearChatRecordMeters();
+    stopChatRecordTracks();
+    if (elapsed < 400 || !chunks.length) {
+      return;
+    }
+    const blob = new Blob(chunks, { type: mime });
+    if (!blob.size) return;
+    const url = URL.createObjectURL(blob);
+    setChatMediaPreview({
+      blob,
+      url,
+      kind: kind === "video_note" ? "video_note" : "voice",
+      mime,
+      durationSec: Math.max(1, Math.round(elapsed / 1000)),
+    });
+  }
+
   async function startChatRecording(kind) {
-    if (chatRecordingKind || !selectedChatId) return;
+    if (chatRecordingKind || chatMediaPreview || !selectedChatId) return;
     try {
       const constraints =
         kind === "video_note"
-          ? { audio: true, video: { facingMode: "user", width: 480, height: 480 } }
+          ? { audio: true, video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 480 } } }
           : { audio: true };
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       chatRecordStreamRef.current = stream;
       chatRecordChunksRef.current = [];
-      const mime =
-        kind === "video_note"
-          ? MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")
-            ? "video/webm;codecs=vp8,opus"
-            : "video/webm"
-          : MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-            ? "audio/webm;codecs=opus"
-            : "audio/webm";
+      const mime = pickRecorderMime(kind);
+      chatRecordMimeRef.current = mime;
+      chatRecordKindRef.current = kind;
       const recorder = new MediaRecorder(stream, { mimeType: mime });
       chatMediaRecorderRef.current = recorder;
       recorder.ondataavailable = (ev) => {
         if (ev.data && ev.data.size > 0) chatRecordChunksRef.current.push(ev.data);
       };
-      recorder.onstop = async () => {
-        const chunks = chatRecordChunksRef.current;
-        const streamToStop = chatRecordStreamRef.current;
-        chatRecordStreamRef.current = null;
-        chatMediaRecorderRef.current = null;
-        setChatRecordingKind(null);
-        if (streamToStop) streamToStop.getTracks().forEach((t) => t.stop());
-        const elapsed = Date.now() - chatRecordStartedAtRef.current;
-        if (elapsed < 350 || !chunks.length) {
-          setChatStatus("Слишком короткая запись.");
-          return;
-        }
-        const blob = new Blob(chunks, { type: mime });
-        const ext = kind === "video_note" ? "webm" : "webm";
-        const file = await blobToFile(
-          blob,
-          kind === "video_note" ? `video_note_${Date.now()}.${ext}` : `voice_${Date.now()}.${ext}`,
-          mime
-        );
-        await postChatMessage({ file, kind: kind === "video_note" ? "video_note" : "voice" });
+      recorder.onstop = () => {
+        finishChatRecordingToPreview();
       };
       chatRecordStartedAtRef.current = Date.now();
-      recorder.start();
+      recorder.start(250);
       setChatRecordingKind(kind);
-      setChatStatus(kind === "video_note" ? "Запись кружка… отпустите, чтобы отправить" : "Запись голосового… отпустите, чтобы отправить");
+      chatRecordLockedRef.current = false;
+      setChatRecordLocked(false);
+      setChatRecordSecs(0);
+      chatRecordTickRef.current = setInterval(() => {
+        setChatRecordSecs(Math.floor((Date.now() - chatRecordStartedAtRef.current) / 1000));
+      }, 250);
+
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (Ctx) {
+          const ctx = new Ctx();
+          const source = ctx.createMediaStreamSource(stream);
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 64;
+          source.connect(analyser);
+          chatAudioCtxRef.current = ctx;
+          chatAnalyserRef.current = analyser;
+          const data = new Uint8Array(analyser.frequencyBinCount);
+          const tickLevels = () => {
+            if (!chatAnalyserRef.current) return;
+            chatAnalyserRef.current.getByteFrequencyData(data);
+            const step = Math.max(1, Math.floor(data.length / 24));
+            const next = [];
+            for (let i = 0; i < 24; i += 1) {
+              next.push(Math.min(1, (data[i * step] || 0) / 180));
+            }
+            setChatRecordLevels(next);
+            chatLevelRafRef.current = requestAnimationFrame(tickLevels);
+          };
+          tickLevels();
+        }
+      } catch {
+        /* analyser optional */
+      }
+
+      requestAnimationFrame(() => {
+        if (kind === "video_note" && chatLiveVideoRef.current) {
+          chatLiveVideoRef.current.srcObject = stream;
+          chatLiveVideoRef.current.muted = true;
+          chatLiveVideoRef.current.playsInline = true;
+          chatLiveVideoRef.current.play?.().catch(() => {});
+        }
+      });
     } catch (_e) {
       setChatStatus("Нет доступа к микрофону/камере.");
       setChatRecordingKind(null);
+      chatRecordLockedRef.current = false; setChatRecordLocked(false);
+      clearChatRecordMeters();
+      stopChatRecordTracks();
     }
   }
 
@@ -4533,24 +4637,96 @@ export default function App() {
     const rec = chatMediaRecorderRef.current;
     if (rec && rec.state !== "inactive") {
       try {
+        if (typeof rec.requestData === "function") rec.requestData();
         rec.stop();
       } catch {
         setChatRecordingKind(null);
+        chatRecordLockedRef.current = false; setChatRecordLocked(false);
+        clearChatRecordMeters();
+        stopChatRecordTracks();
       }
     } else {
       setChatRecordingKind(null);
+      chatRecordLockedRef.current = false; setChatRecordLocked(false);
+      clearChatRecordMeters();
+      stopChatRecordTracks();
     }
   }
 
+  function cancelChatRecording() {
+    const rec = chatMediaRecorderRef.current;
+    chatRecordChunksRef.current = [];
+    chatRecordStartedAtRef.current = Date.now();
+    if (rec && rec.state !== "inactive") {
+      try {
+        rec.onstop = () => {
+          chatMediaRecorderRef.current = null;
+          setChatRecordingKind(null);
+          chatRecordLockedRef.current = false; setChatRecordLocked(false);
+          clearChatRecordMeters();
+          stopChatRecordTracks();
+        };
+        rec.stop();
+      } catch {
+        setChatRecordingKind(null);
+        chatRecordLockedRef.current = false; setChatRecordLocked(false);
+        clearChatRecordMeters();
+        stopChatRecordTracks();
+      }
+    } else {
+      setChatRecordingKind(null);
+      chatRecordLockedRef.current = false; setChatRecordLocked(false);
+      clearChatRecordMeters();
+      stopChatRecordTracks();
+    }
+  }
+
+  function discardChatMediaPreview() {
+    if (chatMediaPreview?.url) URL.revokeObjectURL(chatMediaPreview.url);
+    setChatMediaPreview(null);
+  }
+
+  async function sendChatMediaPreview() {
+    if (!chatMediaPreview) return;
+    const { blob, kind, mime } = chatMediaPreview;
+    const file = await blobToFile(
+      blob,
+      kind === "video_note" ? `video_note_${Date.now()}.webm` : `voice_${Date.now()}.webm`,
+      mime
+    );
+    discardChatMediaPreview();
+    await postChatMessage({ file, kind });
+  }
+
   function onComposeActionPointerDown(e) {
-    if (chatInput.trim() || chatPendingFile) return;
+    if (chatInput.trim() || chatPendingFile || chatMediaPreview) return;
     e.preventDefault();
     chatDidHoldRef.current = false;
+    chatPointerStartYRef.current = e.clientY ?? e.touches?.[0]?.clientY ?? 0;
+    chatRecordLiftHintRef.current = false;
+    setChatRecordLiftHint(false);
     if (chatHoldTimerRef.current) clearTimeout(chatHoldTimerRef.current);
     chatHoldTimerRef.current = setTimeout(() => {
       chatDidHoldRef.current = true;
       startChatRecording(chatComposeMode);
-    }, 220);
+    }, 200);
+  }
+
+  function onComposeActionPointerMove(e) {
+    if (!chatRecordingKind || chatRecordLockedRef.current) return;
+    const y = e.clientY ?? e.touches?.[0]?.clientY ?? chatPointerStartYRef.current;
+    const dy = chatPointerStartYRef.current - y;
+    const lifted = dy > 40;
+    chatRecordLiftHintRef.current = lifted;
+    setChatRecordLiftHint(lifted);
+    if (dy > 90) {
+      chatRecordLockedRef.current = true;
+      chatRecordLiftHintRef.current = false;
+      chatRecordLockedRef.current = true;
+      chatRecordLiftHintRef.current = false;
+      setChatRecordLocked(true);
+      setChatRecordLiftHint(false);
+    }
   }
 
   function onComposeActionPointerUp() {
@@ -4559,6 +4735,14 @@ export default function App() {
       chatHoldTimerRef.current = null;
     }
     if (chatRecordingKind) {
+      if (chatRecordLockedRef.current) return;
+      if (chatRecordLiftHintRef.current) {
+        chatRecordLockedRef.current = true;
+        chatRecordLiftHintRef.current = false;
+        setChatRecordLocked(true);
+        setChatRecordLiftHint(false);
+        return;
+      }
       stopChatRecording();
       return;
     }
@@ -4570,7 +4754,28 @@ export default function App() {
       clearTimeout(chatHoldTimerRef.current);
       chatHoldTimerRef.current = null;
     }
-    if (chatRecordingKind) stopChatRecording();
+    if (chatRecordingKind && !chatRecordLockedRef.current) {
+      if (chatRecordLiftHintRef.current) {
+        chatRecordLockedRef.current = true;
+        chatRecordLiftHintRef.current = false;
+        setChatRecordLocked(true);
+        setChatRecordLiftHint(false);
+        return;
+      }
+      stopChatRecording();
+    }
+  }
+
+  function onCircleSeekPointer(e, mediaEl) {
+    if (!mediaEl || !Number.isFinite(mediaEl.duration) || mediaEl.duration <= 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const x = (e.clientX ?? e.touches?.[0]?.clientX) - cx;
+    const y = (e.clientY ?? e.touches?.[0]?.clientY) - cy;
+    let angle = Math.atan2(y, x); // -PI..PI, 0 at east
+    angle = (angle + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2); // 0 at north, clockwise
+    mediaEl.currentTime = (angle / (Math.PI * 2)) * mediaEl.duration;
   }
 
   function persistChatVisualSettings() {
@@ -7385,7 +7590,8 @@ export default function App() {
       setChatInfoOpen(false);
       setChatPendingFile(null);
       setChatPendingKind("");
-      if (chatRecordingKind) stopChatRecording();
+      discardChatMediaPreview();
+      if (chatRecordingKind) cancelChatRecording();
     }
   }, [selectedChatId]);
 
@@ -7544,7 +7750,7 @@ export default function App() {
           </div>
         )}
         {accessToken && (
-          <div className="menu-wrap" ref={menuWrapRef}>
+          <div className={`menu-wrap${menuOpen ? " menu-wrap--open" : ""}`} ref={menuWrapRef}>
             <div className="menu-btn-wrap">
               <button
                 type="button"
@@ -8140,14 +8346,25 @@ export default function App() {
                       <div className="tg-main-head-left" />
                       <button
                         type="button"
-                        className="tg-main-head-center tg-main-head-center--btn"
+                        className="tg-main-head-peer"
                         onClick={() => setChatInfoOpen(true)}
                         title="Информация о чате"
                       >
-                        <div className="tg-main-title">
-                          {displayConversationTitle(conversations.find((c) => c.id === selectedChatId))}
-                        </div>
-                        {chatPeerPresenceLine ? <div className="tg-main-head-presence">{chatPeerPresenceLine}</div> : null}
+                        <span className="tg-avatar tg-main-head-avatar">
+                          {chatLocalPrefs[selectedChatId]?.avatarDataUrl ? (
+                            <img src={chatLocalPrefs[selectedChatId].avatarDataUrl} alt="" className="tg-avatar-img" />
+                          ) : (
+                            (displayConversationTitle(conversations.find((c) => c.id === selectedChatId)) || "?")
+                              .slice(0, 1)
+                              .toUpperCase()
+                          )}
+                        </span>
+                        <span className="tg-main-head-peer-text">
+                          <span className="tg-main-title">
+                            {displayConversationTitle(conversations.find((c) => c.id === selectedChatId))}
+                          </span>
+                          {chatPeerPresenceLine ? <span className="tg-main-head-presence">{chatPeerPresenceLine}</span> : null}
+                        </span>
                       </button>
                       <div className="tg-main-head-right">
                         <div className="tg-msg-search-wrap" ref={tgMsgSearchWrapRef}>
@@ -8291,119 +8508,197 @@ export default function App() {
                         onChange={onChatFilePicked}
                         hidden
                       />
-                      <div className="tg-attach-wrap tg-attach-wrap--compose" ref={tgAttachMenuRef}>
-                        <button
-                          type="button"
-                          className="tg-compose-icon-btn"
-                          aria-label="Вложения"
-                          title="Вложения"
-                          onClick={() => setChatAttachMenuOpen((v) => !v)}
-                        >
-                          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                            <path
-                              fill="currentColor"
-                              d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S5 2.79 5 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"
-                            />
-                          </svg>
-                        </button>
-                        {chatAttachMenuOpen && (
-                          <div className="tg-attach-menu tg-attach-menu--up" role="menu">
-                            <button type="button" className="tg-attach-menu-item" onClick={() => openChatAttachPicker("image")}>
-                              Фото
-                            </button>
-                            <button type="button" className="tg-attach-menu-item" onClick={() => openChatAttachPicker("video")}>
-                              Видео
-                            </button>
-                            <button type="button" className="tg-attach-menu-item" onClick={() => openChatAttachPicker("file")}>
-                              Файл
-                            </button>
-                            <button type="button" className="tg-attach-menu-item" onClick={() => openChatAttachPicker("music")}>
-                              Музыка
-                            </button>
+                      {chatRecordingKind === "video_note" ? (
+                        <div className="tg-circle-live-overlay" aria-live="polite">
+                          <div className="tg-circle-live-wrap">
+                            <video ref={chatLiveVideoRef} className="tg-circle-live-video" playsInline muted autoPlay />
+                            <span className="tg-circle-live-timer">{formatRecordClock(chatRecordSecs)}</span>
                           </div>
-                        )}
-                      </div>
-                      <div className="tg-compose-main">
-                        {chatPendingFile ? (
-                          <div className="tg-compose-pending">
-                            <span>
-                              {chatPendingKind === "image"
-                                ? "🖼"
-                                : chatPendingKind === "video" || chatPendingKind === "video_note"
-                                  ? "🎬"
-                                  : chatPendingKind === "voice"
-                                    ? "🎤"
-                                    : "📎"}{" "}
-                              {chatPendingFile.name}
-                            </span>
-                            <button
-                              type="button"
-                              className="tg-compose-pending-clear"
-                              onClick={() => {
-                                setChatPendingFile(null);
-                                setChatPendingKind("");
+                          {chatRecordLocked ? (
+                            <button type="button" className="tg-record-stop-btn" onClick={stopChatRecording}>
+                              Остановить
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {chatMediaPreview ? (
+                        <div className="tg-media-preview">
+                          {chatMediaPreview.kind === "video_note" ? (
+                            <div
+                              className="tg-circle-seek"
+                              onPointerDown={(e) => {
+                                e.currentTarget.setPointerCapture?.(e.pointerId);
+                                onCircleSeekPointer(e, chatPreviewMediaRef.current);
+                              }}
+                              onPointerMove={(e) => {
+                                if (e.buttons || e.pressure > 0) onCircleSeekPointer(e, chatPreviewMediaRef.current);
                               }}
                             >
-                              ×
+                              <video
+                                ref={chatPreviewMediaRef}
+                                className="tg-msg-video-note"
+                                src={chatMediaPreview.url}
+                                playsInline
+                                controls={false}
+                                onClick={(e) => {
+                                  const v = e.currentTarget;
+                                  if (v.paused) v.play();
+                                  else v.pause();
+                                }}
+                              />
+                              <span className="tg-circle-seek-ring" aria-hidden />
+                            </div>
+                          ) : (
+                            <audio ref={chatPreviewMediaRef} src={chatMediaPreview.url} controls preload="metadata" />
+                          )}
+                          <div className="tg-media-preview-actions">
+                            <button type="button" className="ghost-btn" onClick={discardChatMediaPreview}>
+                              Удалить
+                            </button>
+                            <button type="button" className="primary" onClick={sendChatMediaPreview}>
+                              Отправить
                             </button>
                           </div>
-                        ) : null}
-                        <input
-                          className="tg-compose-input"
-                          value={chatInput}
-                          onChange={(e) => setChatInput(e.target.value)}
-                          placeholder={chatRecordingKind ? "Запись…" : "Сообщение..."}
-                          disabled={Boolean(chatRecordingKind)}
-                        />
-                      </div>
-                      {chatInput.trim() || chatPendingFile ? (
-                        <button type="submit" className="tg-send-btn" aria-label="Отправить сообщение" title="Отправить">
-                          <svg className="tg-send-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                            <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                          </svg>
-                        </button>
+                        </div>
                       ) : (
-                        <button
-                          type="button"
-                          className={[
-                            "tg-send-btn",
-                            "tg-record-btn",
-                            chatComposeMode === "video_note" && "tg-record-btn--circle",
-                            chatRecordingKind && "tg-record-btn--active",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                          aria-label={
-                            chatComposeMode === "video_note"
-                              ? "Кружок: нажмите для переключения, удерживайте для записи"
-                              : "Голосовое: нажмите для переключения, удерживайте для записи"
-                          }
-                          title={
-                            chatComposeMode === "video_note"
-                              ? "Кружок · тап — сменить · удержание — запись"
-                              : "Голосовое · тап — сменить · удержание — запись"
-                          }
-                          onPointerDown={onComposeActionPointerDown}
-                          onPointerUp={onComposeActionPointerUp}
-                          onPointerLeave={onComposeActionPointerLeave}
-                          onContextMenu={(e) => e.preventDefault()}
-                        >
-                          {chatComposeMode === "video_note" ? (
-                            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                              <path
-                                fill="currentColor"
-                                d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"
+                        <>
+                          <div className="tg-attach-wrap tg-attach-wrap--compose" ref={tgAttachMenuRef}>
+                            <button
+                              type="button"
+                              className="tg-compose-icon-btn"
+                              aria-label="Вложения"
+                              title="Вложения"
+                              disabled={Boolean(chatRecordingKind)}
+                              onClick={() => setChatAttachMenuOpen((v) => !v)}
+                            >
+                              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                                <path
+                                  fill="currentColor"
+                                  d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S5 2.79 5 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"
+                                />
+                              </svg>
+                            </button>
+                            {chatAttachMenuOpen && (
+                              <div className="tg-attach-menu tg-attach-menu--up" role="menu">
+                                <button type="button" className="tg-attach-menu-item" onClick={() => openChatAttachPicker("image")}>
+                                  Фото
+                                </button>
+                                <button type="button" className="tg-attach-menu-item" onClick={() => openChatAttachPicker("video")}>
+                                  Видео
+                                </button>
+                                <button type="button" className="tg-attach-menu-item" onClick={() => openChatAttachPicker("file")}>
+                                  Файл
+                                </button>
+                                <button type="button" className="tg-attach-menu-item" onClick={() => openChatAttachPicker("music")}>
+                                  Музыка
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <div className="tg-compose-main">
+                            {chatPendingFile ? (
+                              <div className="tg-compose-pending">
+                                <span>
+                                  {chatPendingKind === "image"
+                                    ? "🖼"
+                                    : chatPendingKind === "video" || chatPendingKind === "video_note"
+                                      ? "🎬"
+                                      : chatPendingKind === "voice"
+                                        ? "🎤"
+                                        : "📎"}{" "}
+                                  {chatPendingFile.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="tg-compose-pending-clear"
+                                  onClick={() => {
+                                    setChatPendingFile(null);
+                                    setChatPendingKind("");
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ) : null}
+                            {chatRecordingKind === "voice" ? (
+                              <div className="tg-voice-live" aria-live="polite">
+                                <span className="tg-voice-live-timer">{formatRecordClock(chatRecordSecs)}</span>
+                                <div className="tg-voice-wave" aria-hidden>
+                                  {chatRecordLevels.map((lvl, i) => (
+                                    <span key={i} style={{ height: `${12 + lvl * 22}px` }} />
+                                  ))}
+                                </div>
+                                {chatRecordLocked ? (
+                                  <button type="button" className="tg-record-stop-btn tg-record-stop-btn--inline" onClick={stopChatRecording}>
+                                    Стоп
+                                  </button>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <input
+                                className="tg-compose-input"
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                placeholder="Сообщение..."
+                                disabled={Boolean(chatRecordingKind)}
                               />
-                            </svg>
+                            )}
+                          </div>
+                          {chatInput.trim() || chatPendingFile ? (
+                            <button type="submit" className="tg-send-btn" aria-label="Отправить сообщение" title="Отправить">
+                              <svg className="tg-send-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                                <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                              </svg>
+                            </button>
+                          ) : chatRecordLocked ? (
+                            <button type="button" className="tg-send-btn tg-record-btn tg-record-btn--active" onClick={stopChatRecording} title="Остановить">
+                              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                                <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
+                              </svg>
+                            </button>
                           ) : (
-                            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                              <path
-                                fill="currentColor"
-                                d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"
-                              />
-                            </svg>
+                            <button
+                              type="button"
+                              className={[
+                                "tg-send-btn",
+                                "tg-record-btn",
+                                chatComposeMode === "video_note" && "tg-record-btn--circle",
+                                chatRecordingKind && "tg-record-btn--active",
+                                chatRecordLiftHint && "tg-record-btn--lift",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                              aria-label={
+                                chatComposeMode === "video_note"
+                                  ? "Кружок: тап — сменить, удержание — запись, вверх — закрепить"
+                                  : "Голосовое: тап — сменить, удержание — запись, вверх — закрепить"
+                              }
+                              title={chatComposeMode === "video_note" ? "Кружок" : "Голосовое"}
+                              onPointerDown={onComposeActionPointerDown}
+                              onPointerMove={onComposeActionPointerMove}
+                              onPointerUp={onComposeActionPointerUp}
+                              onPointerCancel={onComposeActionPointerUp}
+                              onPointerLeave={onComposeActionPointerLeave}
+                              onContextMenu={(e) => e.preventDefault()}
+                            >
+                              {chatComposeMode === "video_note" ? (
+                                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                                  <path
+                                    fill="currentColor"
+                                    d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"
+                                  />
+                                </svg>
+                              ) : (
+                                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                                  <path
+                                    fill="currentColor"
+                                    d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"
+                                  />
+                                </svg>
+                              )}
+                            </button>
                           )}
-                        </button>
+                        </>
                       )}
                     </form>
                   </>
@@ -8590,7 +8885,7 @@ export default function App() {
                         (displayConversationTitle(selectedConv) || "?").slice(0, 1).toUpperCase()
                       )}
                     </span>
-                    <div>
+                    <div className="tg-chat-info-titles">
                       <h3>{displayConversationTitle(selectedConv)}</h3>
                       <p className="muted small">
                         {chatPeerPresenceLine ||
@@ -8601,8 +8896,13 @@ export default function App() {
                               : "—")}
                       </p>
                     </div>
-                    <button type="button" className="ghost-btn" onClick={() => setChatInfoOpen(false)}>
-                      ✕
+                    <button
+                      type="button"
+                      className="tg-chat-info-close"
+                      aria-label="Закрыть"
+                      onClick={() => setChatInfoOpen(false)}
+                    >
+                      ×
                     </button>
                   </div>
                   {chatInfoPeer ? (
@@ -9485,61 +9785,89 @@ export default function App() {
           </button>
         ))}
 
-        {calendarDayDetail && (
-          <div className="modal-backdrop" onClick={() => setCalendarDayDetail(null)}>
-            <div className="modal-card calendar-day-sheet" onClick={(e) => e.stopPropagation()}>
-              <h3>
-                {calendarDayDetail.day} · {calendarDayDetail.mode === "bookings" ? "Записи" : "Интервалы"}
-              </h3>
-              {!calendarDayDetail.items?.length ? (
-                <p className="muted">На этот день записей нет</p>
-              ) : (
-                <ul className="calendar-day-sheet-list">
-                  {calendarDayDetail.items.map((it) => (
-                    <li key={it.id} className="calendar-day-sheet-item">
-                      {calendarDayDetail.mode === "bookings" ? (
-                        <>
-                          <strong>
-                            {new Date(it.slot_starts_at).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                            {" – "}
-                            {new Date(it.slot_ends_at).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </strong>
-                          <div>{bookingSlotSecondaryLabel(it)}</div>
-                          {it.status ? <div className="muted">{bookingStatusLabel(it.status)}</div> : null}
-                          {renderBookingSlotActions(it)}
-                        </>
-                      ) : (
-                        <>
-                          <strong>
-                            {new Date(it.starts_at).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                            {" – "}
-                            {new Date(it.ends_at).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </strong>
-                          <div className="muted">{it.is_booked ? it.booking_client_name || "Занято" : "Свободно"}</div>
-                        </>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <button type="button" className="primary" onClick={() => setCalendarDayDetail(null)}>
-                Закрыть
-              </button>
-            </div>
-          </div>
-        )}
+        {calendarDayDetail &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              className="modal-backdrop modal-backdrop--app-overlay"
+              onClick={() => setCalendarDayDetail(null)}
+            >
+              <div className="modal-card calendar-day-sheet" onClick={(e) => e.stopPropagation()} role="dialog">
+                <div className="calendar-day-sheet-head">
+                  <h3>
+                    {(() => {
+                      const ym = String(calendarDayDetail.month || "");
+                      const [y, m] = ym.split("-").map(Number);
+                      if (y && m) {
+                        const d = new Date(y, m - 1, calendarDayDetail.day);
+                        return d.toLocaleDateString("ru-RU", {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        });
+                      }
+                      return `${calendarDayDetail.day}`;
+                    })()}
+                  </h3>
+                  <button
+                    type="button"
+                    className="calendar-day-sheet-close"
+                    aria-label="Закрыть"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCalendarDayDetail(null);
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+                {!calendarDayDetail.items?.length ? (
+                  <p className="muted calendar-day-sheet-empty">На этот день записей нет</p>
+                ) : (
+                  <ul className="calendar-day-sheet-list">
+                    {calendarDayDetail.items.map((it) => (
+                      <li key={it.id} className="calendar-day-sheet-item">
+                        {calendarDayDetail.mode === "bookings" ? (
+                          <>
+                            <strong>
+                              {new Date(it.slot_starts_at).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                              {" – "}
+                              {new Date(it.slot_ends_at).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </strong>
+                            <div>{bookingSlotSecondaryLabel(it)}</div>
+                            {it.status ? <div className="muted">{bookingStatusLabel(it.status)}</div> : null}
+                            {renderBookingSlotActions(it)}
+                          </>
+                        ) : (
+                          <>
+                            <strong>
+                              {new Date(it.starts_at).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                              {" – "}
+                              {new Date(it.ends_at).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </strong>
+                            <div className="muted">{it.is_booked ? it.booking_client_name || "Занято" : "Свободно"}</div>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>,
+            document.body
+          )}
       </div>
     </div>
   );

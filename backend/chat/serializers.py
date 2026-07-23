@@ -209,11 +209,9 @@ class MessageSerializer(serializers.ModelSerializer):
     def get_attachment_url(self, obj):
         if not obj.attachment:
             return None
-        request = self.context.get("request")
-        url = obj.attachment.url
-        if request:
-            return request.build_absolute_uri(url)
-        return url
+        # Relative /media/... so the browser uses the public domain (Caddy),
+        # not the Docker-internal host from build_absolute_uri().
+        return obj.attachment.url
 
     def get_viewed_by_peer(self, obj):
         request = self.context.get("request")

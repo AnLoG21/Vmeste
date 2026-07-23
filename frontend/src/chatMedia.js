@@ -27,6 +27,27 @@ export function mediaUrl(path, baseUrl) {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+/** Resolve attachment URLs from API (relative /media or broken docker hosts). */
+export function resolveAttachmentUrl(m, baseUrl) {
+  if (!m) return "";
+  const raw = m.attachment_url || m.attachment || "";
+  if (!raw) return "";
+  const s = String(raw);
+  if (s.startsWith("http://") || s.startsWith("https://")) {
+    try {
+      const u = new URL(s);
+      const host = (u.hostname || "").toLowerCase();
+      if (host === "web" || host === "localhost" || host === "127.0.0.1") {
+        return mediaUrl(u.pathname + u.search, baseUrl);
+      }
+      return s;
+    } catch {
+      return s;
+    }
+  }
+  return mediaUrl(s, baseUrl);
+}
+
 export function guessAttachAccept(kind) {
   if (kind === "image") return "image/*";
   if (kind === "video") return "video/*";
@@ -42,7 +63,7 @@ export function groupChatMedia(messages, baseUrl) {
   const music = [];
   const voice = [];
   for (const m of messages || []) {
-    const url = m.attachment_url || mediaUrl(m.attachment, baseUrl);
+    const url = resolveAttachmentUrl(m, baseUrl);
     const kind = m.kind || "text";
     if (kind === "image" && url) photos.push({ ...m, url });
     else if ((kind === "video" || kind === "video_note") && url) videos.push({ ...m, url });
@@ -61,4 +82,27 @@ export function groupChatMedia(messages, baseUrl) {
 
 export async function blobToFile(blob, filename, mime) {
   return new File([blob], filename, { type: mime || blob.type || "application/octet-stream" });
+}
+
+export function formatRecordClock(totalSec) {
+  const s = Math.max(0, Math.floor(Number(totalSec) || 0));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, "0")}`;
+}
+
+export function pickRecorderMime(kind) {
+  if (kind === "video_note") {
+    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")) {
+      return "video/webm;codecs=vp8,opus";
+    }
+    return "video/webm";
+  }
+  if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+    return "audio/webm;codecs=opus";
+  }
+  if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")) {
+    return "audio/ogg;codecs=opus";
+  }
+  return "audio/webm";
 }
