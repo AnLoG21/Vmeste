@@ -59,6 +59,22 @@ def message_preview_text(message: Message) -> str:
         if reply:
             return f"Ответ на отзыв: {reply[:200]}"
         return "Ответ на отзыв"
+    if message.kind == Message.Kind.IMAGE:
+        return "Фото"
+    if message.kind == Message.Kind.VIDEO:
+        return "Видео"
+    if message.kind == Message.Kind.VIDEO_NOTE:
+        return "Кружок"
+    if message.kind == Message.Kind.VOICE:
+        payload = message.payload or {}
+        dur = payload.get("duration_sec")
+        return f"Голосовое{': ' + str(dur) + ' c' if dur else ''}"
+    if message.kind == Message.Kind.FILE:
+        payload = message.payload or {}
+        name = payload.get("file_name") or "Файл"
+        return f"📎 {name}"
+    if message.kind == Message.Kind.LINK:
+        return (message.text or (message.payload or {}).get("url") or "Ссылка")[:240]
     return (message.text or "")[:240]
 
 

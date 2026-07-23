@@ -19,6 +19,14 @@ import {
 } from "./clientOrgFeatures.js";
 import { loadYandexMaps } from "./yandexMapsLoader.js";
 import { API_URL, AUTH_URL, BASE_URL, REFRESH_URL } from "./config.js";
+import {
+  blobToFile,
+  groupChatMedia,
+  guessAttachAccept,
+  loadChatComposeMode,
+  mediaUrl,
+  saveChatComposeMode,
+} from "./chatMedia.js";
 
 function formatWebsiteHref(url) {
   const s = String(url || "").trim();
@@ -960,6 +968,11 @@ function chatMessagePlainText(m) {
     const p = m.payload;
     return [p.review_text, p.reply_text].filter(Boolean).join(" ");
   }
+  if (m.kind === "image") return m.text || "Фото";
+  if (m.kind === "video") return m.text || "Видео";
+  if (m.kind === "video_note") return m.text || "Видеосообщение";
+  if (m.kind === "voice") return m.text || "Голосовое сообщение";
+  if (m.kind === "file") return m.text || m.payload?.name || "Файл";
   return (m.display_text || m.text || "").trim();
 }
 
@@ -995,6 +1008,49 @@ function renderChatMessageBody(m) {
           <strong>Ответ организации</strong>
           {replyText ? <p>{replyText}</p> : null}
         </div>
+      </div>
+    );
+  }
+  const url = m.attachment_url || mediaUrl(m.attachment, BASE_URL);
+  if (m.kind === "image" && url) {
+    return (
+      <div className="tg-msg-media">
+        <a href={url} target="_blank" rel="noreferrer" className="tg-msg-image-link">
+          <img src={url} alt={m.text || "Фото"} className="tg-msg-image" />
+        </a>
+        {m.text ? <div className="tg-msg-text">{m.text}</div> : null}
+      </div>
+    );
+  }
+  if ((m.kind === "video" || m.kind === "video_note") && url) {
+    return (
+      <div className={["tg-msg-media", m.kind === "video_note" && "tg-msg-media--circle"].filter(Boolean).join(" ")}>
+        <video
+          className={m.kind === "video_note" ? "tg-msg-video-note" : "tg-msg-video"}
+          src={url}
+          controls
+          playsInline
+          preload="metadata"
+        />
+        {m.text ? <div className="tg-msg-text">{m.text}</div> : null}
+      </div>
+    );
+  }
+  if (m.kind === "voice" && url) {
+    return (
+      <div className="tg-msg-voice">
+        <audio src={url} controls preload="metadata" />
+        {m.text ? <div className="tg-msg-text">{m.text}</div> : null}
+      </div>
+    );
+  }
+  if (m.kind === "file" && url) {
+    const name = m.payload?.name || m.text || "Файл";
+    return (
+      <div className="tg-msg-file">
+        <a href={url} target="_blank" rel="noreferrer" download={name}>
+          📎 {name}
+        </a>
       </div>
     );
   }
@@ -1976,10 +2032,24 @@ export default function App() {
   const [chatMsgSearchOpen, setChatMsgSearchOpen] = useState(false);
   const [chatMsgSearchQuery, setChatMsgSearchQuery] = useState("");
   const [chatMsgSearchActiveIdx, setChatMsgSearchActiveIdx] = useState(0);
+  const [chatInfoOpen, setChatInfoOpen] = useState(false);
+  const [chatInfoTab, setChatInfoTab] = useState("photos");
+  const [chatComposeMode, setChatComposeMode] = useState(() => loadChatComposeMode());
+  const [chatPendingFile, setChatPendingFile] = useState(null);
+  const [chatPendingKind, setChatPendingKind] = useState("");
+  const [chatRecordingKind, setChatRecordingKind] = useState(null);
+  const [calendarDayDetail, setCalendarDayDetail] = useState(null);
   const menuWrapRef = useRef(null);
   const tgAttachMenuRef = useRef(null);
   const tgMsgSearchWrapRef = useRef(null);
   const chatMsgSearchInputRef = useRef(null);
+  const chatFileInputRef = useRef(null);
+  const chatMediaRecorderRef = useRef(null);
+  const chatRecordChunksRef = useRef([]);
+  const chatRecordStreamRef = useRef(null);
+  const chatRecordStartedAtRef = useRef(0);
+  const chatHoldTimerRef = useRef(null);
+  const chatDidHoldRef = useRef(false);
   const [chatSettingsTitle, setChatSettingsTitle] = useState("");
   const [groupForm, setGroupForm] = useState({ title: "", staff_ids: [] });
   const [chatFabOpen, setChatFabOpen] = useState(false);
@@ -3705,13 +3775,17 @@ export default function App() {
             reverseGeocodeByCoords(plat, plon).then((result) => {
               const shortAddress = buildShortAddress(result?.address);
               const city = getCity(result?.address);
-              const addr = simplifyCommaAddressLine(shortAddress || result?.display_name || prev.address);
-              setLocationForm((prev) => ({
-                ...prev,
-                latitude: plat.toFixed(6),
-                longitude: plon.toFixed(6),
-                address: addr,
-              }));
+              setLocationForm((prev) => {
+                const addr = simplifyCommaAddressLine(
+                  shortAddress || result?.display_name || prev.address
+                );
+                return {
+                  ...prev,
+                  latitude: plat.toFixed(6),
+                  longitude: plon.toFixed(6),
+                  address: addr,
+                };
+              });
               if (city) setDetectedCity(city);
             });
             if (branchEditPlacemarkRef.current) {
@@ -3744,13 +3818,17 @@ export default function App() {
             reverseGeocodeByCoords(plat, plon).then((result) => {
               const shortAddress = buildShortAddress(result?.address);
               const city = getCity(result?.address);
-              const addr = simplifyCommaAddressLine(shortAddress || result?.display_name || prev.address);
-              setLocationForm((prev) => ({
-                ...prev,
-                latitude: plat.toFixed(6),
-                longitude: plon.toFixed(6),
-                address: addr,
-              }));
+              setLocationForm((prev) => {
+                const addr = simplifyCommaAddressLine(
+                  shortAddress || result?.display_name || prev.address
+                );
+                return {
+                  ...prev,
+                  latitude: plat.toFixed(6),
+                  longitude: plon.toFixed(6),
+                  address: addr,
+                };
+              });
               if (city) setDetectedCity(city);
             });
             if (branchAddPlacemarkRef.current) {
@@ -4309,32 +4387,190 @@ export default function App() {
     patchStaffPermissions(link.id, next);
   }
 
-  async function sendChatMessage(event) {
-    event.preventDefault();
-    if (!selectedChatId || !chatInput.trim()) return;
-    const response = await authFetch(`${API_URL}/chat/messages/`, {
-      method: "POST",
-      body: JSON.stringify({ conversation: selectedChatId, text: chatInput.trim() }),
-    });
+  async function refreshChatMessages(conversationId = selectedChatId) {
+    if (!conversationId) return;
+    const res = await authFetch(`${API_URL}/chat/messages/?conversation=${conversationId}`);
+    if (!res.ok) return;
+    const msgs = await res.json();
+    setChatMessages(msgs);
+    const last = msgs.length ? msgs[msgs.length - 1] : null;
+    if (last) {
+      await authFetch(`${API_URL}/chat/conversations/${conversationId}/mark-read/`, {
+        method: "POST",
+        body: JSON.stringify({ message_id: last.id }),
+      });
+      loadChats();
+    }
+  }
+
+  async function postChatMessage({ text = "", file = null, kind = "" }) {
+    if (!selectedChatId) return false;
+    const hasText = Boolean(String(text || "").trim());
+    if (!hasText && !file) return false;
+    let response;
+    if (file) {
+      const fd = new FormData();
+      fd.append("conversation", String(selectedChatId));
+      if (hasText) fd.append("text", String(text).trim());
+      if (kind) fd.append("kind", kind);
+      fd.append("attachment", file);
+      response = await authFetch(`${API_URL}/chat/messages/`, { method: "POST", body: fd });
+    } else {
+      response = await authFetch(`${API_URL}/chat/messages/`, {
+        method: "POST",
+        body: JSON.stringify({ conversation: selectedChatId, text: String(text).trim(), kind: "text" }),
+      });
+    }
     if (!response.ok) {
       setChatStatus("Не удалось отправить сообщение.");
-      return;
+      return false;
     }
     setChatInput("");
+    setChatPendingFile(null);
+    setChatPendingKind("");
     setChatStatus("");
-    const res = await authFetch(`${API_URL}/chat/messages/?conversation=${selectedChatId}`);
-    if (res.ok) {
-      const msgs = await res.json();
-      setChatMessages(msgs);
-      const last = msgs.length ? msgs[msgs.length - 1] : null;
-      if (last) {
-        await authFetch(`${API_URL}/chat/conversations/${selectedChatId}/mark-read/`, {
-          method: "POST",
-          body: JSON.stringify({ message_id: last.id }),
-        });
-        loadChats();
-      }
+    setChatAttachMenuOpen(false);
+    await refreshChatMessages(selectedChatId);
+    return true;
+  }
+
+  async function sendChatMessage(event) {
+    event.preventDefault();
+    if (chatPendingFile) {
+      await postChatMessage({ text: chatInput, file: chatPendingFile, kind: chatPendingKind });
+      return;
     }
+    if (!chatInput.trim()) return;
+    await postChatMessage({ text: chatInput.trim() });
+  }
+
+  function openChatAttachPicker(kind) {
+    setChatPendingKind(kind);
+    setChatAttachMenuOpen(false);
+    const input = chatFileInputRef.current;
+    if (!input) return;
+    input.accept = guessAttachAccept(kind === "music" ? "music" : kind);
+    input.value = "";
+    input.click();
+  }
+
+  function onChatFilePicked(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    let kind = chatPendingKind;
+    if (!kind || kind === "auto") {
+      if (file.type.startsWith("image/")) kind = "image";
+      else if (file.type.startsWith("video/")) kind = "video";
+      else if (file.type.startsWith("audio/")) kind = "voice";
+      else kind = "file";
+    }
+    if (kind === "music") kind = "file";
+    setChatPendingFile(file);
+    setChatPendingKind(kind);
+  }
+
+  function toggleChatComposeMode() {
+    const next = chatComposeMode === "voice" ? "video_note" : "voice";
+    setChatComposeMode(next);
+    saveChatComposeMode(next);
+  }
+
+  async function startChatRecording(kind) {
+    if (chatRecordingKind || !selectedChatId) return;
+    try {
+      const constraints =
+        kind === "video_note"
+          ? { audio: true, video: { facingMode: "user", width: 480, height: 480 } }
+          : { audio: true };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      chatRecordStreamRef.current = stream;
+      chatRecordChunksRef.current = [];
+      const mime =
+        kind === "video_note"
+          ? MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")
+            ? "video/webm;codecs=vp8,opus"
+            : "video/webm"
+          : MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+            ? "audio/webm;codecs=opus"
+            : "audio/webm";
+      const recorder = new MediaRecorder(stream, { mimeType: mime });
+      chatMediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (ev) => {
+        if (ev.data && ev.data.size > 0) chatRecordChunksRef.current.push(ev.data);
+      };
+      recorder.onstop = async () => {
+        const chunks = chatRecordChunksRef.current;
+        const streamToStop = chatRecordStreamRef.current;
+        chatRecordStreamRef.current = null;
+        chatMediaRecorderRef.current = null;
+        setChatRecordingKind(null);
+        if (streamToStop) streamToStop.getTracks().forEach((t) => t.stop());
+        const elapsed = Date.now() - chatRecordStartedAtRef.current;
+        if (elapsed < 350 || !chunks.length) {
+          setChatStatus("Слишком короткая запись.");
+          return;
+        }
+        const blob = new Blob(chunks, { type: mime });
+        const ext = kind === "video_note" ? "webm" : "webm";
+        const file = await blobToFile(
+          blob,
+          kind === "video_note" ? `video_note_${Date.now()}.${ext}` : `voice_${Date.now()}.${ext}`,
+          mime
+        );
+        await postChatMessage({ file, kind: kind === "video_note" ? "video_note" : "voice" });
+      };
+      chatRecordStartedAtRef.current = Date.now();
+      recorder.start();
+      setChatRecordingKind(kind);
+      setChatStatus(kind === "video_note" ? "Запись кружка… отпустите, чтобы отправить" : "Запись голосового… отпустите, чтобы отправить");
+    } catch (_e) {
+      setChatStatus("Нет доступа к микрофону/камере.");
+      setChatRecordingKind(null);
+    }
+  }
+
+  function stopChatRecording() {
+    const rec = chatMediaRecorderRef.current;
+    if (rec && rec.state !== "inactive") {
+      try {
+        rec.stop();
+      } catch {
+        setChatRecordingKind(null);
+      }
+    } else {
+      setChatRecordingKind(null);
+    }
+  }
+
+  function onComposeActionPointerDown(e) {
+    if (chatInput.trim() || chatPendingFile) return;
+    e.preventDefault();
+    chatDidHoldRef.current = false;
+    if (chatHoldTimerRef.current) clearTimeout(chatHoldTimerRef.current);
+    chatHoldTimerRef.current = setTimeout(() => {
+      chatDidHoldRef.current = true;
+      startChatRecording(chatComposeMode);
+    }, 220);
+  }
+
+  function onComposeActionPointerUp() {
+    if (chatHoldTimerRef.current) {
+      clearTimeout(chatHoldTimerRef.current);
+      chatHoldTimerRef.current = null;
+    }
+    if (chatRecordingKind) {
+      stopChatRecording();
+      return;
+    }
+    if (!chatDidHoldRef.current) toggleChatComposeMode();
+  }
+
+  function onComposeActionPointerLeave() {
+    if (chatHoldTimerRef.current) {
+      clearTimeout(chatHoldTimerRef.current);
+      chatHoldTimerRef.current = null;
+    }
+    if (chatRecordingKind) stopChatRecording();
   }
 
   function persistChatVisualSettings() {
@@ -5705,6 +5941,7 @@ export default function App() {
       <section className="card full-width booking-calendar">
         <h2>{title}</h2>
         <input type="month" value={bookingsMonth} onChange={(e) => setBookingsMonth(e.target.value)} />
+        <p className="muted small calendar-mobile-hint">На телефоне нажмите на день, чтобы открыть записи</p>
         <div className="calendar-grid">
           {weekdays.map((wd, wi) => (
             <div key={wd} className={`calendar-head ${wi >= 5 ? "weekend-head" : ""}`}>{wd}</div>
@@ -5713,13 +5950,26 @@ export default function App() {
             const col = idx % 7;
             const weekend =
               day != null ? (offset + day - 1) % 7 >= 5 : col >= 5;
+            const dayItems = day ? byDay[day] || [] : [];
             return (
-            <div key={`${day ?? "empty"}-${idx}`} className={`calendar-cell ${day ? "" : "empty"} ${weekend ? "weekend-cell" : ""}`}>
+            <div
+              key={`${day ?? "empty"}-${idx}`}
+              className={`calendar-cell ${day ? "clickable calendar-cell--bookings" : "empty"} ${weekend ? "weekend-cell" : ""} ${dayItems.length ? "calendar-cell--has-items" : ""}`}
+              onClick={() => {
+                if (!day) return;
+                setCalendarDayDetail({
+                  mode: "bookings",
+                  day,
+                  month: bookingsMonth,
+                  items: dayItems,
+                });
+              }}
+            >
               {day && (
                 <>
                   <div className="calendar-day">{day}</div>
-                  <div className="calendar-slots">
-                    {(byDay[day] || []).map((it) => (
+                  <div className="calendar-slots calendar-slots--desktop">
+                    {dayItems.map((it) => (
                       <div
                         key={it.id}
                         className={["calendar-slot", "booking", bookingSlotStatusModifier(it.status)].filter(Boolean).join(" ")}
@@ -5736,6 +5986,23 @@ export default function App() {
                         {renderBookingSlotActions(it)}
                       </div>
                     ))}
+                  </div>
+                  <div className="calendar-slots calendar-slots--mobile">
+                    {dayItems.slice(0, 3).map((it) => (
+                      <div
+                        key={it.id}
+                        className={["calendar-slot-compact", bookingSlotStatusModifier(it.status)].filter(Boolean).join(" ")}
+                        title={bookingSlotSecondaryLabel(it)}
+                      >
+                        <span className="calendar-slot-compact-icon" aria-hidden>
+                          {it.status === "cancelled" ? "✕" : it.status === "done" ? "✓" : "🕒"}
+                        </span>
+                        <span className="calendar-slot-compact-time">
+                          {new Date(it.slot_starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                    ))}
+                    {dayItems.length > 3 ? <div className="calendar-slot-more">+{dayItems.length - 3}</div> : null}
                   </div>
                 </>
               )}
@@ -6006,8 +6273,28 @@ export default function App() {
             >
               {day && (
                 <>
-                  <div className="calendar-day">{day}</div>
-                  <div className="calendar-slots">
+                  <div className="calendar-day-row">
+                    <div className="calendar-day">{day}</div>
+                    {(byDay[day] || []).length > 0 && (
+                      <button
+                        type="button"
+                        className="calendar-day-expand"
+                        aria-label="Открыть день"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCalendarDayDetail({
+                            mode: "intervals",
+                            day,
+                            month: calendarMonth,
+                            items: byDay[day] || [],
+                          });
+                        }}
+                      >
+                        ▾
+                      </button>
+                    )}
+                  </div>
+                  <div className="calendar-slots calendar-slots--desktop">
                     {(byDay[day] || []).slice(0, 5).map((s) => (
                       <div
                         key={s.id}
@@ -6050,6 +6337,22 @@ export default function App() {
                         Удалить серию
                       </button>
                     )}
+                  </div>
+                  <div className="calendar-slots calendar-slots--mobile">
+                    {(byDay[day] || []).slice(0, 3).map((s) => (
+                      <div
+                        key={s.id}
+                        className={["calendar-slot-compact", s.is_booked && "calendar-slot-compact--booked"].filter(Boolean).join(" ")}
+                      >
+                        <span aria-hidden>{s.is_booked ? "●" : "○"}</span>
+                        <span>
+                          {new Date(s.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                    ))}
+                    {(byDay[day] || []).length > 3 ? (
+                      <div className="calendar-slot-more">+{(byDay[day] || []).length - 3}</div>
+                    ) : null}
                   </div>
                 </>
               )}
@@ -7079,8 +7382,33 @@ export default function App() {
       setChatMsgSearchOpen(false);
       setChatMsgSearchQuery("");
       setChatMsgSearchActiveIdx(0);
+      setChatInfoOpen(false);
+      setChatPendingFile(null);
+      setChatPendingKind("");
+      if (chatRecordingKind) stopChatRecording();
     }
   }, [selectedChatId]);
+
+  const chatMediaGroups = useMemo(() => groupChatMedia(chatMessages, BASE_URL), [chatMessages]);
+
+  const chatInfoPeer = useMemo(() => {
+    if (!selectedConv) return null;
+    const st = selectedConv.org_direct_peer_status;
+    if (st) return st;
+    const peers = (selectedConv.members || []).filter((m) => Number(m.user) !== Number(me?.id));
+    if (!peers.length) return null;
+    const p = peers[0];
+    return {
+      is_online: p.is_online,
+      last_seen_at: p.last_seen_at,
+      first_name: p.first_name,
+      last_name: p.last_name,
+      patronymic: p.patronymic,
+      username: p.username,
+      organization_name: p.organization_name,
+      role: p.role,
+    };
+  }, [selectedConv, me?.id]);
   const activeChatWallpaper = selectedChatId ? chatLocalPrefs[selectedChatId]?.wallpaper : null;
   const tgMainStyle = activeChatWallpaper
     ? String(activeChatWallpaper).includes("gradient")
@@ -7809,43 +8137,18 @@ export default function App() {
                 <div className="tg-main-head">
                   {selectedChatId ? (
                     <div className="tg-main-head-bar">
-                      <div className="tg-main-head-left">
-                        <div className="tg-attach-wrap" ref={tgAttachMenuRef}>
-                          <button
-                            type="button"
-                            className="tg-head-icon-btn"
-                            aria-label="Вложения"
-                            title="Вложения"
-                            onClick={() => setChatAttachMenuOpen((v) => !v)}
-                          >
-                            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                              <path
-                                fill="currentColor"
-                                d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S5 2.79 5 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"
-                              />
-                            </svg>
-                          </button>
-                          {chatAttachMenuOpen && (
-                            <div className="tg-attach-menu" role="menu">
-                              <button type="button" className="tg-attach-menu-item" onClick={() => { setChatStatus("Фото или видео — скоро"); setChatAttachMenuOpen(false); }}>
-                                Фото или видео
-                              </button>
-                              <button type="button" className="tg-attach-menu-item" onClick={() => { setChatStatus("Файл — скоро"); setChatAttachMenuOpen(false); }}>
-                                Файл
-                              </button>
-                              <button type="button" className="tg-attach-menu-item" onClick={() => { setChatStatus("Ссылка — скоро"); setChatAttachMenuOpen(false); }}>
-                                Ссылка
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="tg-main-head-center">
+                      <div className="tg-main-head-left" />
+                      <button
+                        type="button"
+                        className="tg-main-head-center tg-main-head-center--btn"
+                        onClick={() => setChatInfoOpen(true)}
+                        title="Информация о чате"
+                      >
                         <div className="tg-main-title">
                           {displayConversationTitle(conversations.find((c) => c.id === selectedChatId))}
                         </div>
                         {chatPeerPresenceLine ? <div className="tg-main-head-presence">{chatPeerPresenceLine}</div> : null}
-                      </div>
+                      </button>
                       <div className="tg-main-head-right">
                         <div className="tg-msg-search-wrap" ref={tgMsgSearchWrapRef}>
                           <button
@@ -7932,16 +8235,11 @@ export default function App() {
                         <button
                           type="button"
                           className="tg-head-icon-btn"
-                          onClick={() => setChatReceiptsSettingsOpen(true)}
-                          aria-label="Прочтение сообщений"
-                          title="Прочтение сообщений"
+                          onClick={() => setChatSettingsForId(selectedChatId)}
+                          aria-label="Настройки чата"
+                          title="Настройки чата"
                         >
-                          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                            <path
-                              fill="currentColor"
-                              d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"
-                            />
-                          </svg>
+                          <span aria-hidden="true" style={{ fontSize: 22, lineHeight: 1 }}>⋮</span>
                         </button>
                       </div>
                     </div>
@@ -7986,15 +8284,127 @@ export default function App() {
                       })}
                     </div>
                     <form onSubmit={sendChatMessage} className="tg-compose">
-                      <input className="tg-compose-input" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Сообщение..." />
-                      <button type="submit" className="tg-send-btn" aria-label="Отправить сообщение" title="Отправить">
-                        <svg className="tg-send-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                          <path
-                            fill="currentColor"
-                            d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"
-                          />
-                        </svg>
-                      </button>
+                      <input
+                        ref={chatFileInputRef}
+                        type="file"
+                        className="tg-file-input-hidden"
+                        onChange={onChatFilePicked}
+                        hidden
+                      />
+                      <div className="tg-attach-wrap tg-attach-wrap--compose" ref={tgAttachMenuRef}>
+                        <button
+                          type="button"
+                          className="tg-compose-icon-btn"
+                          aria-label="Вложения"
+                          title="Вложения"
+                          onClick={() => setChatAttachMenuOpen((v) => !v)}
+                        >
+                          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                            <path
+                              fill="currentColor"
+                              d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S5 2.79 5 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"
+                            />
+                          </svg>
+                        </button>
+                        {chatAttachMenuOpen && (
+                          <div className="tg-attach-menu tg-attach-menu--up" role="menu">
+                            <button type="button" className="tg-attach-menu-item" onClick={() => openChatAttachPicker("image")}>
+                              Фото
+                            </button>
+                            <button type="button" className="tg-attach-menu-item" onClick={() => openChatAttachPicker("video")}>
+                              Видео
+                            </button>
+                            <button type="button" className="tg-attach-menu-item" onClick={() => openChatAttachPicker("file")}>
+                              Файл
+                            </button>
+                            <button type="button" className="tg-attach-menu-item" onClick={() => openChatAttachPicker("music")}>
+                              Музыка
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="tg-compose-main">
+                        {chatPendingFile ? (
+                          <div className="tg-compose-pending">
+                            <span>
+                              {chatPendingKind === "image"
+                                ? "🖼"
+                                : chatPendingKind === "video" || chatPendingKind === "video_note"
+                                  ? "🎬"
+                                  : chatPendingKind === "voice"
+                                    ? "🎤"
+                                    : "📎"}{" "}
+                              {chatPendingFile.name}
+                            </span>
+                            <button
+                              type="button"
+                              className="tg-compose-pending-clear"
+                              onClick={() => {
+                                setChatPendingFile(null);
+                                setChatPendingKind("");
+                              }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ) : null}
+                        <input
+                          className="tg-compose-input"
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          placeholder={chatRecordingKind ? "Запись…" : "Сообщение..."}
+                          disabled={Boolean(chatRecordingKind)}
+                        />
+                      </div>
+                      {chatInput.trim() || chatPendingFile ? (
+                        <button type="submit" className="tg-send-btn" aria-label="Отправить сообщение" title="Отправить">
+                          <svg className="tg-send-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                            <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className={[
+                            "tg-send-btn",
+                            "tg-record-btn",
+                            chatComposeMode === "video_note" && "tg-record-btn--circle",
+                            chatRecordingKind && "tg-record-btn--active",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          aria-label={
+                            chatComposeMode === "video_note"
+                              ? "Кружок: нажмите для переключения, удерживайте для записи"
+                              : "Голосовое: нажмите для переключения, удерживайте для записи"
+                          }
+                          title={
+                            chatComposeMode === "video_note"
+                              ? "Кружок · тап — сменить · удержание — запись"
+                              : "Голосовое · тап — сменить · удержание — запись"
+                          }
+                          onPointerDown={onComposeActionPointerDown}
+                          onPointerUp={onComposeActionPointerUp}
+                          onPointerLeave={onComposeActionPointerLeave}
+                          onContextMenu={(e) => e.preventDefault()}
+                        >
+                          {chatComposeMode === "video_note" ? (
+                            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                              <path
+                                fill="currentColor"
+                                d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"
+                              />
+                            </svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                              <path
+                                fill="currentColor"
+                                d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"
+                              />
+                            </svg>
+                          )}
+                        </button>
+                      )}
                     </form>
                   </>
                 ) : (
@@ -8154,6 +8564,157 @@ export default function App() {
                     <button type="button" className="ghost-btn" onClick={() => setChatSettingsForId(null)}>
                       Закрыть
                     </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    style={{ marginTop: 8 }}
+                    onClick={() => {
+                      setChatSettingsForId(null);
+                      setChatReceiptsSettingsOpen(true);
+                    }}
+                  >
+                    Прочтение сообщений…
+                  </button>
+                </div>
+              </div>
+            )}
+            {chatInfoOpen && selectedChatId && (
+              <div className="modal-backdrop" onClick={() => setChatInfoOpen(false)}>
+                <div className="modal-card tg-chat-info-card" onClick={(e) => e.stopPropagation()}>
+                  <div className="tg-chat-info-head">
+                    <span className="tg-avatar tg-chat-info-avatar">
+                      {chatLocalPrefs[selectedChatId]?.avatarDataUrl ? (
+                        <img src={chatLocalPrefs[selectedChatId].avatarDataUrl} alt="" className="tg-avatar-img" />
+                      ) : (
+                        (displayConversationTitle(selectedConv) || "?").slice(0, 1).toUpperCase()
+                      )}
+                    </span>
+                    <div>
+                      <h3>{displayConversationTitle(selectedConv)}</h3>
+                      <p className="muted small">
+                        {chatPeerPresenceLine ||
+                          (chatInfoPeer?.is_online
+                            ? "в сети"
+                            : chatInfoPeer?.last_seen_at
+                              ? formatLastSeenLabel(chatInfoPeer.last_seen_at)
+                              : "—")}
+                      </p>
+                    </div>
+                    <button type="button" className="ghost-btn" onClick={() => setChatInfoOpen(false)}>
+                      ✕
+                    </button>
+                  </div>
+                  {chatInfoPeer ? (
+                    <div className="tg-chat-info-meta">
+                      {(chatInfoPeer.first_name || chatInfoPeer.last_name) && (
+                        <p>
+                          {[chatInfoPeer.last_name, chatInfoPeer.first_name, chatInfoPeer.patronymic]
+                            .filter(Boolean)
+                            .join(" ")}
+                        </p>
+                      )}
+                      {chatInfoPeer.organization_name ? <p>Организация: {chatInfoPeer.organization_name}</p> : null}
+                      {chatInfoPeer.username ? <p className="muted">@{chatInfoPeer.username}</p> : null}
+                    </div>
+                  ) : null}
+                  <div className="tg-chat-info-tabs">
+                    {[
+                      ["photos", "Фото"],
+                      ["videos", "Видео"],
+                      ["files", "Файлы"],
+                      ["links", "Ссылки"],
+                      ["music", "Музыка"],
+                      ["voice", "Голосовые"],
+                    ].map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={chatInfoTab === key ? "active" : ""}
+                        onClick={() => setChatInfoTab(key)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="tg-chat-info-body">
+                    {chatInfoTab === "photos" &&
+                      (chatMediaGroups.photos.length ? (
+                        <div className="tg-chat-info-grid">
+                          {chatMediaGroups.photos.map((m) => (
+                            <a key={m.id} href={m.url} target="_blank" rel="noreferrer">
+                              <img src={m.url} alt="" />
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="muted">Пока нет фото</p>
+                      ))}
+                    {chatInfoTab === "videos" &&
+                      (chatMediaGroups.videos.length ? (
+                        <ul className="tg-chat-info-list">
+                          {chatMediaGroups.videos.map((m) => (
+                            <li key={m.id}>
+                              <video src={m.url} controls preload="metadata" />
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="muted">Пока нет видео</p>
+                      ))}
+                    {chatInfoTab === "files" &&
+                      (chatMediaGroups.files.length ? (
+                        <ul className="tg-chat-info-list">
+                          {chatMediaGroups.files.map((m) => (
+                            <li key={m.id}>
+                              <a href={m.url} target="_blank" rel="noreferrer">
+                                {m.name || "Файл"}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="muted">Пока нет файлов</p>
+                      ))}
+                    {chatInfoTab === "links" &&
+                      (chatMediaGroups.links.length ? (
+                        <ul className="tg-chat-info-list">
+                          {chatMediaGroups.links.map((m) => (
+                            <li key={m.id}>
+                              <a href={(m.text || "").match(/https?:\/\/\S+/)?.[0] || "#"} target="_blank" rel="noreferrer">
+                                {m.text}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="muted">Пока нет ссылок</p>
+                      ))}
+                    {chatInfoTab === "music" &&
+                      (chatMediaGroups.music.length ? (
+                        <ul className="tg-chat-info-list">
+                          {chatMediaGroups.music.map((m) => (
+                            <li key={m.id}>
+                              <div>{m.name}</div>
+                              <audio src={m.url} controls preload="metadata" />
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="muted">Пока нет музыки</p>
+                      ))}
+                    {chatInfoTab === "voice" &&
+                      (chatMediaGroups.voice.length ? (
+                        <ul className="tg-chat-info-list">
+                          {chatMediaGroups.voice.map((m) => (
+                            <li key={m.id}>
+                              <audio src={m.url} controls preload="metadata" />
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="muted">Пока нет голосовых</p>
+                      ))}
                   </div>
                 </div>
               </div>
@@ -8923,6 +9484,62 @@ export default function App() {
             <span>{t.text}</span>
           </button>
         ))}
+
+        {calendarDayDetail && (
+          <div className="modal-backdrop" onClick={() => setCalendarDayDetail(null)}>
+            <div className="modal-card calendar-day-sheet" onClick={(e) => e.stopPropagation()}>
+              <h3>
+                {calendarDayDetail.day} · {calendarDayDetail.mode === "bookings" ? "Записи" : "Интервалы"}
+              </h3>
+              {!calendarDayDetail.items?.length ? (
+                <p className="muted">На этот день записей нет</p>
+              ) : (
+                <ul className="calendar-day-sheet-list">
+                  {calendarDayDetail.items.map((it) => (
+                    <li key={it.id} className="calendar-day-sheet-item">
+                      {calendarDayDetail.mode === "bookings" ? (
+                        <>
+                          <strong>
+                            {new Date(it.slot_starts_at).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                            {" – "}
+                            {new Date(it.slot_ends_at).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </strong>
+                          <div>{bookingSlotSecondaryLabel(it)}</div>
+                          {it.status ? <div className="muted">{bookingStatusLabel(it.status)}</div> : null}
+                          {renderBookingSlotActions(it)}
+                        </>
+                      ) : (
+                        <>
+                          <strong>
+                            {new Date(it.starts_at).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                            {" – "}
+                            {new Date(it.ends_at).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </strong>
+                          <div className="muted">{it.is_booked ? it.booking_client_name || "Занято" : "Свободно"}</div>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button type="button" className="primary" onClick={() => setCalendarDayDetail(null)}>
+                Закрыть
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

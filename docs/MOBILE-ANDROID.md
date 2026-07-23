@@ -123,7 +123,51 @@ docker compose -f docker-compose.prod.yml up -d --build web
 
 | Проблема | Решение |
 |----------|---------|
+| **`This build uses a Java 8 JVM`** | Gradle нужна Java 11+. См. раздел ниже |
 | API не отвечает | `VITE_API_URL`, обновить backend (CORS) |
 | Белый экран | `npm run cap:sync`, Logcat в Android Studio |
 | Gradle долго качает | Первый запуск, нужен интернет |
-| `JAVA_HOME` | JDK 17 в Android Studio → Settings |
+| `JAVA_HOME` | JDK 17+ из Android Studio → Settings → Gradle |
+
+---
+
+## Ошибка «This build uses a Java 8 JVM»
+
+На Windows часто в системе стоит старая **Java 8**, а Android Gradle Plugin требует **Java 11+** (лучше **17** из Android Studio).
+
+### Быстро — перед сборкой в PowerShell
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:Path = "$env:JAVA_HOME\bin;$env:Path"
+cd C:\Users\analo\projects\vmeste\Vmeste\frontend\android
+.\gradlew.bat assembleDebug
+```
+
+### Навсегда (Windows)
+
+1. **Параметры Windows** → **Система** → **О системе** → **Дополнительные параметры системы**
+2. **Переменные среды**
+3. **JAVA_HOME** (создать или изменить):
+   ```
+   C:\Program Files\Android\Android Studio\jbr
+   ```
+4. В **Path** добавить:
+   ```
+   %JAVA_HOME%\bin
+   ```
+5. Закрыть и открыть PowerShell, проверить:
+   ```powershell
+   java -version
+   ```
+   Должно быть **17** или **21**, не `1.8`.
+
+### Через Android Studio (без командной строки)
+
+**Build → Build Bundle(s) / APK(s) → Build APK(s)** — Studio сама использует правильную Java.
+
+**APK после успешной сборки:**
+
+```
+frontend\android\app\build\outputs\apk\debug\app-debug.apk
+```

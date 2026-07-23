@@ -36,6 +36,12 @@ class Message(models.Model):
     class Kind(models.TextChoices):
         TEXT = "text", "Text"
         REVIEW_REPLY = "review_reply", "Review reply"
+        IMAGE = "image", "Image"
+        VIDEO = "video", "Video"
+        FILE = "file", "File"
+        VOICE = "voice", "Voice"
+        VIDEO_NOTE = "video_note", "Video note"
+        LINK = "link", "Link"
 
     conversation = models.ForeignKey(
         Conversation, on_delete=models.CASCADE, related_name="messages"
@@ -46,4 +52,5 @@ class Message(models.Model):
     kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.TEXT)
     payload = models.JSONField(default=dict, blank=True)
     text = models.TextField(blank=True, default="")
+    attachment = models.FileField(upload_to="chat/%Y/%m/", blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
