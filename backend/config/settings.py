@@ -166,7 +166,10 @@ SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "vmesteofficialsupport@gmail.com
 
 YOOKASSA_SHOP_ID = os.environ.get("YOOKASSA_SHOP_ID", "")
 YOOKASSA_SECRET_KEY = os.environ.get("YOOKASSA_SECRET_KEY", "")
-# Legacy FCM server key for Android/iOS push (Firebase Console → Cloud Messaging)
+# FCM HTTP v1: path to Firebase service account JSON inside the container/host
+FIREBASE_CREDENTIALS = os.environ.get("FIREBASE_CREDENTIALS", "")
+FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "")
+# Deprecated legacy key (ignored; kept for old .env compatibility)
 FCM_SERVER_KEY = os.environ.get("FCM_SERVER_KEY", "")
 
 TEMPLATES = [

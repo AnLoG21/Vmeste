@@ -267,3 +267,31 @@ html.native-app .landing-hero-title {
 html.native-app .landing-section h2 {
   font-size: 1.45rem;
 }
+
+html.native-app .tg-chats-card.card.full-width,
+html.native-app .tg-body,
+html.native-app .tg-main,
+html.native-app .tg-sidebar {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+html.native-app .tg-body {
+  min-height: 0 !important;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+html.native-app .tg-folder-tabs button {
+  position: static;
+  z-index: auto;
+}
+
+html.native-app .tg-folder-tabs button.active {
+  z-index: 1;
+}
+
+html.native-app .tg-chat-info-thumb-more {
+  opacity: 1;
+}

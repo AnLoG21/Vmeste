@@ -857,7 +857,7 @@ body.theme-dark button.staff-perms-toggle:hover,
 
 .tg-body {
   display: grid;
-  grid-template-columns: 340px 1fr;
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
   min-height: inherit;
   max-height: inherit;
 }
@@ -1596,14 +1596,84 @@ body.theme-dark button.staff-perms-toggle:hover,
 }
 
 @media (max-width: 900px) {
+  .tg-chats-card.card.full-width {
+    min-height: 0;
+    max-height: none;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
   .tg-body {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0 !important;
+    max-height: none;
+    overflow: hidden;
   }
 
   .tg-sidebar {
-    max-height: 42vh;
+    max-height: min(38vh, 280px);
     border-right: none;
     border-bottom: 1px solid #e0e0e0;
+    min-width: 0;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .tg-sidebar .tg-chat-list {
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tg-folder-tabs {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1;
+  }
+
+  .tg-folder-tabs button {
+    min-width: 0;
+    flex: 1 1 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    position: static;
+  }
+
+  .tg-main {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .tg-messages {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  .tg-msg {
+    max-width: min(88%, 100%);
+  }
+
+  .tg-compose {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .tg-chat-info-thumb-more {
+    opacity: 1;
+  }
+
+  .tg-fab-wrap {
+    position: relative;
+    z-index: 2;
   }
 }
 :root,
@@ -1982,7 +2052,7 @@ button.primary:hover {
 
 .tg-body {
   display: grid;
-  grid-template-columns: 340px 1fr;
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
   min-height: inherit;
   max-height: inherit;
 }
@@ -3107,6 +3177,9 @@ body.theme-dark .tg-chat-item-row:hover {
   overflow: hidden;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
   min-height: min(720px, calc(100vh - 200px));
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .tg-color-row {
@@ -5797,6 +5870,8 @@ html.native-app .page-logged .hero.top-row {
   flex-shrink: 0;
   transition: transform 0.25s ease;
   -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  user-select: none;
 }
 
 .tg-circle-player--enlarged {
@@ -5805,25 +5880,43 @@ html.native-app .page-logged .hero.top-row {
 
 .tg-circle-progress {
   position: absolute;
-  inset: -5px;
-  width: calc(100% + 10px);
-  height: calc(100% + 10px);
-  pointer-events: none;
+  inset: -8px;
+  width: calc(100% + 16px);
+  height: calc(100% + 16px);
   overflow: visible;
+  touch-action: none;
+  z-index: 2;
 }
 
 .tg-circle-progress-track {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.28);
-  stroke-width: 3.5;
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 3;
+  pointer-events: none;
 }
 
 .tg-circle-progress-value {
   fill: none;
   stroke: #ff7a00;
-  stroke-width: 3.5;
+  stroke-width: 3;
   stroke-linecap: round;
-  transition: stroke-dasharray 0.05s linear;
+  pointer-events: none;
+}
+
+.tg-circle-progress-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: grab;
+}
+
+.tg-circle-progress-knob {
+  fill: #fff;
+  stroke: #ff7a00;
+  stroke-width: 1.5;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
 }
 
 .tg-msg-image-btn {
@@ -5848,8 +5941,8 @@ html.native-app .page-logged .hero.top-row {
 }
 
 .tg-chat-info-thumb-wrap {
-  display: grid;
-  gap: 4px;
+  position: relative;
+  display: block;
 }
 
 .tg-chat-info-thumb {
@@ -5859,6 +5952,8 @@ html.native-app .page-logged .hero.top-row {
   cursor: pointer;
   border-radius: 8px;
   overflow: hidden;
+  display: block;
+  width: 100%;
 }
 
 .tg-chat-info-thumb img {
@@ -5866,6 +5961,101 @@ html.native-app .page-logged .hero.top-row {
   aspect-ratio: 1;
   object-fit: cover;
   display: block;
+}
+
+.tg-chat-info-thumb-more {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 2;
+}
+
+.tg-chat-info-thumb-wrap:hover .tg-chat-info-thumb-more,
+.tg-chat-info-thumb-wrap:focus-within .tg-chat-info-thumb-more,
+.tg-chat-info-thumb-more:has(.tg-chat-info-dropdown) {
+  opacity: 1;
+}
+
+.tg-chat-info-thumb-dots {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.tg-chat-info-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.tg-chat-info-menu-wrap {
+  position: relative;
+}
+
+.tg-chat-info-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #f5f5f5;
+  color: #444;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.tg-chat-info-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 180px;
+  background: #fff;
+  border: 1px solid #ffd9bd;
+  border-radius: 10px;
+  padding: 4px;
+  display: grid;
+  gap: 2px;
+  z-index: 20;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.tg-chat-info-dropdown--thumb {
+  top: 100%;
+  right: 0;
+  min-width: 140px;
+}
+
+.tg-chat-info-dropdown button {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  color: #3d1a00;
+}
+
+.tg-chat-info-dropdown button:hover {
+  background: #fff3e8;
 }
 
 .tg-chat-info-goto {

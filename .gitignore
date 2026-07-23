@@ -4,6 +4,8 @@
 .env.*.local
 .env.production
 frontend/.env
+firebase-credentials/*.json
+!firebase-credentials/README.md
 
 # Python
 __pycache__/

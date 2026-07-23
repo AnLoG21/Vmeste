@@ -2077,6 +2077,8 @@ export default function App() {
   const [chatMsgSearchActiveIdx, setChatMsgSearchActiveIdx] = useState(0);
   const [chatInfoOpen, setChatInfoOpen] = useState(false);
   const [chatInfoTab, setChatInfoTab] = useState("photos");
+  const [chatInfoHeadMenuOpen, setChatInfoHeadMenuOpen] = useState(false);
+  const [chatInfoPhotoMenuId, setChatInfoPhotoMenuId] = useState(null);
   const [chatComposeMode, setChatComposeMode] = useState(() => loadChatComposeMode());
   const [chatPendingFiles, setChatPendingFiles] = useState([]);
   const [chatPendingKind, setChatPendingKind] = useState("");
@@ -8539,15 +8541,6 @@ export default function App() {
                             </div>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          className="tg-head-icon-btn"
-                          onClick={() => setChatSettingsForId(selectedChatId)}
-                          aria-label="Настройки чата"
-                          title="Настройки чата"
-                        >
-                          <span aria-hidden="true" style={{ fontSize: 22, lineHeight: 1 }}>⋮</span>
-                        </button>
                       </div>
                     </div>
                   ) : (
@@ -9010,7 +9003,14 @@ export default function App() {
               </div>
             )}
             {chatInfoOpen && selectedChatId && (
-              <div className="modal-backdrop" onClick={() => setChatInfoOpen(false)}>
+              <div
+                className="modal-backdrop"
+                onClick={() => {
+                  setChatInfoOpen(false);
+                  setChatInfoHeadMenuOpen(false);
+                  setChatInfoPhotoMenuId(null);
+                }}
+              >
                 <div className="modal-card tg-chat-info-card" onClick={(e) => e.stopPropagation()}>
                   <div className="tg-chat-info-head">
                     <span className="tg-avatar tg-chat-info-avatar">
@@ -9031,14 +9031,59 @@ export default function App() {
                               : "—")}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      className="tg-chat-info-close"
-                      aria-label="Закрыть"
-                      onClick={() => setChatInfoOpen(false)}
-                    >
-                      ×
-                    </button>
+                    <div className="tg-chat-info-head-actions">
+                      <div className="tg-chat-info-menu-wrap">
+                        <button
+                          type="button"
+                          className="tg-chat-info-icon-btn"
+                          aria-label="Ещё"
+                          aria-expanded={chatInfoHeadMenuOpen}
+                          onClick={() => {
+                            setChatInfoPhotoMenuId(null);
+                            setChatInfoHeadMenuOpen((v) => !v);
+                          }}
+                        >
+                          ⋮
+                        </button>
+                        {chatInfoHeadMenuOpen && (
+                          <div className="tg-chat-info-dropdown" role="menu">
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setChatInfoHeadMenuOpen(false);
+                                setChatSettingsForId(selectedChatId);
+                              }}
+                            >
+                              Настройки чата
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setChatInfoHeadMenuOpen(false);
+                                setChatInfoOpen(false);
+                                setChatReceiptsSettingsOpen(true);
+                              }}
+                            >
+                              Прочтение сообщений
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="tg-chat-info-close"
+                        aria-label="Закрыть"
+                        onClick={() => {
+                          setChatInfoOpen(false);
+                          setChatInfoHeadMenuOpen(false);
+                          setChatInfoPhotoMenuId(null);
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
                   {chatInfoPeer ? (
                     <div className="tg-chat-info-meta">
@@ -9082,6 +9127,7 @@ export default function App() {
                                 type="button"
                                 className="tg-chat-info-thumb"
                                 onClick={() => {
+                                  setChatInfoPhotoMenuId(null);
                                   openChatPhotosLightbox(
                                     chatMediaGroups.photos.map((x) => ({ id: x.id, url: x.url, source: "chat" })),
                                     chatMediaGroups.photos.findIndex((x) => x.id === m.id)
@@ -9090,9 +9136,34 @@ export default function App() {
                               >
                                 <img src={m.url} alt="" />
                               </button>
-                              <button type="button" className="tg-chat-info-goto" onClick={() => jumpToChatMessage(m.id)}>
-                                К сообщению
-                              </button>
+                              <div className="tg-chat-info-thumb-more">
+                                <button
+                                  type="button"
+                                  className="tg-chat-info-thumb-dots"
+                                  aria-label="Действия"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setChatInfoHeadMenuOpen(false);
+                                    setChatInfoPhotoMenuId((id) => (id === m.id ? null : m.id));
+                                  }}
+                                >
+                                  ⋮
+                                </button>
+                                {chatInfoPhotoMenuId === m.id && (
+                                  <div className="tg-chat-info-dropdown tg-chat-info-dropdown--thumb" role="menu">
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => {
+                                        setChatInfoPhotoMenuId(null);
+                                        jumpToChatMessage(m.id);
+                                      }}
+                                    >
+                                      К сообщению
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>

@@ -82,27 +82,59 @@ frontend/android/app/build/outputs/apk/debug/app-debug.apk
 
 ---
 
-## Push-уведомления (Android)
+## Push-уведомления (Android) — FCM HTTP v1
 
-1. Создайте проект в [Firebase Console](https://console.firebase.google.com/), добавьте Android-приложение с package `space.vsevmeste.app`.
-2. Скачайте `google-services.json` → положите в `frontend/android/app/google-services.json`.
-3. В Firebase → Project settings → Cloud Messaging скопируйте **Server key** (legacy) в серверный `.env`:
+Legacy Server key в Firebase **отключён**. Нужен Service Account (V1).
+
+### 1. Service Account JSON
+
+1. [Firebase Console](https://console.firebase.google.com/) → проект **vmeste-32513**
+2. ⚙ **Project settings** → вкладка **Service accounts**
+3. **Generate new private key** → скачается JSON
+4. Переименуйте в `service-account.json` и положите:
+
+**На ПК (для проверки):**  
+`Vmeste/firebase-credentials/service-account.json`
+
+**На сервере:**
+```bash
+# с вашего ПК
+scp service-account.json root@ВАШ_IP:/opt/vmeste/firebase-credentials/service-account.json
+```
+
+### 2. Серверный `.env`
 
 ```env
-FCM_SERVER_KEY=...
+FIREBASE_CREDENTIALS=/app/firebase-credentials/service-account.json
+FIREBASE_PROJECT_ID=vmeste-32513
 ```
 
-4. Пересоберите приложение:
+### 3. `google-services.json` в приложении
+
+Уже должен быть в:
+`frontend/android/app/google-services.json`
+
+### 4. Деплой backend
+
+```bash
+cd /opt/vmeste && git pull && docker compose -f docker-compose.prod.yml up -d --build web
+```
+
+### 5. Пересборка APK
 
 ```powershell
-cd frontend
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+cd C:\Users\analo\projects\vmeste\Vmeste\frontend
 npm run cap:sync
-# затем assembleDebug / Run в Android Studio
+cd android
+.\gradlew.bat assembleDebug
 ```
 
-5. На сервере: `docker compose ... up -d --build web` (миграция `DevicePushToken`).
+### 6. На телефоне
 
-Без `google-services.json` и `FCM_SERVER_KEY` регистрация токена не доставит системные push; в браузере остаются in-app бейджи и (по разрешению) Notification API.
+Установите APK → разрешите уведомления → войдите в аккаунт.
+
+Без `service-account.json` на сервере системные push не уйдут (останутся in-app бейджи).
 
 ---
 

@@ -36,12 +36,15 @@ services:
              gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120"
     volumes:
       - vmeste_media:/app/media
+      - ./firebase-credentials:/app/firebase-credentials:ro
     env_file:
       - .env
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
+      FIREBASE_CREDENTIALS: ${FIREBASE_CREDENTIALS:-/app/firebase-credentials/service-account.json}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-vmeste-32513}
     depends_on:
       db:
         condition: service_healthy
