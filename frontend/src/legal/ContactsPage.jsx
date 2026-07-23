@@ -3,7 +3,7 @@ import { SITE_LEGAL } from "./siteLegal.js";
 
 export default function ContactsPage() {
   return (
-    <LegalLayout title="Контакты и реквизиты">
+    <LegalLayout title="Контакты и реквизиты" path="/contacts">
       <p>
         Настоящая страница содержит контактные данные и реквизиты исполнителя сервиса{" "}
         <strong>{SITE_LEGAL.serviceName}</strong> ({SITE_LEGAL.siteUrl}).

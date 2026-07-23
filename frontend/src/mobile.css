@@ -337,3 +337,20 @@ html.native-app .tg-messages {
   overflow-x: hidden;
   max-width: 100%;
 }
+
+html.native-app .tg-compose {
+  gap: 12px;
+  padding: 8px 12px max(12px, env(safe-area-inset-bottom, 0px));
+  align-items: center;
+}
+
+html.native-app .tg-compose-main {
+  min-width: 0;
+  margin-inline-end: 2px;
+}
+
+html.native-app .tg-send-btn,
+html.native-app .tg-compose-icon-btn {
+  flex: 0 0 auto;
+  margin: 0;
+}

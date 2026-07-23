@@ -1696,6 +1696,28 @@ body.theme-dark button.staff-perms-toggle:hover,
   .tg-compose {
     max-width: 100%;
     box-sizing: border-box;
+    gap: 12px;
+    padding: 8px 12px max(10px, env(safe-area-inset-bottom, 0px));
+    align-items: center;
+  }
+
+  .tg-compose-main {
+    min-width: 0;
+    margin-inline-end: 2px;
+  }
+
+  .tg-compose-input {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .tg-send-btn,
+  .tg-compose-icon-btn {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    margin: 0;
   }
 
   .tg-chat-info-thumb-more {
@@ -2494,14 +2516,18 @@ body.theme-dark .tg-chat-item-row:hover {
 
 .tg-compose {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   padding: 10px;
   background: var(--bg-card);
   border-top: 1px solid var(--border);
+  align-items: center;
 }
 
 .tg-compose-input {
   flex: 1;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   border-radius: 22px;
 }
 
@@ -2518,6 +2544,8 @@ body.theme-dark .tg-chat-item-row:hover {
   border: none;
   cursor: pointer;
   font-weight: 700;
+  flex: 0 0 auto;
+  flex-shrink: 0;
 }
 
 .tg-send-icon {
@@ -5649,16 +5677,18 @@ html.native-app .page-logged .hero.top-row {
 
 .tg-compose {
   display: flex;
-  align-items: flex-end;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
   padding: 8px 10px;
   position: relative;
   z-index: 6;
   background: inherit;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .tg-compose-main {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   display: grid;
   gap: 6px;
@@ -5696,17 +5726,26 @@ html.native-app .page-logged .hero.top-row {
   background: #fff3e8;
   color: #8d3e00;
   border: 1px solid #ffd9bd;
+  flex: 0 0 auto;
   flex-shrink: 0;
 }
 
 .tg-attach-wrap--compose {
   position: relative;
+  flex: 0 0 auto;
 }
 
 .tg-attach-menu--up {
   bottom: calc(100% + 6px);
   top: auto;
   left: 0;
+}
+
+.tg-send-btn {
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .tg-record-btn {
@@ -5720,14 +5759,14 @@ html.native-app .page-logged .hero.top-row {
 }
 
 .tg-record-btn--active {
-  transform: scale(1.08);
-  box-shadow: 0 0 0 4px rgba(229, 57, 53, 0.35);
+  transform: scale(1.05);
+  box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.35);
   background: #e53935;
 }
 
 .tg-record-btn--lift {
-  transform: scale(1.22);
-  box-shadow: 0 8px 18px rgba(229, 57, 53, 0.35), 0 0 0 5px rgba(229, 57, 53, 0.28);
+  transform: scale(1.12);
+  box-shadow: 0 6px 14px rgba(229, 57, 53, 0.35), 0 0 0 4px rgba(229, 57, 53, 0.28);
 }
 
 .tg-voice-live {
@@ -5780,19 +5819,11 @@ html.native-app .page-logged .hero.top-row {
 .tg-circle-stage--overlay {
   position: fixed;
   inset: 0;
-  top: 0;
-  right: 0;
-  /* Leave compose bar clickable */
-  bottom: max(76px, calc(env(safe-area-inset-bottom, 0px) + 64px));
-  left: 0;
   z-index: 10045;
-  background: rgba(14, 18, 24, 0.78);
+  background: rgba(14, 18, 24, 0.82);
   pointer-events: none;
-}
-
-.tg-circle-stage--overlay.tg-circle-stage--live {
-  /* During live record, keep full dim but still leave compose reachable for stop */
-  bottom: max(76px, calc(env(safe-area-inset-bottom, 0px) + 64px));
+  padding: 24px 16px max(28px, env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
 }
 
 .tg-circle-stage .tg-circle-live-wrap,
@@ -5805,23 +5836,40 @@ html.native-app .page-logged .hero.top-row {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  margin-top: 8px;
+  gap: 28px;
+  margin-top: 20px;
 }
 
 .tg-circle-stage-btn {
-  min-width: 112px;
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  padding: 0;
   border: 0;
-  border-radius: 999px;
-  padding: 12px 18px;
-  font: inherit;
-  font-weight: 600;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.tg-circle-stage-btn svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .tg-circle-stage-btn--discard {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.14);
   color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.tg-circle-stage-btn--discard:hover {
+  background: rgba(229, 57, 53, 0.85);
+  border-color: transparent;
 }
 
 .tg-circle-stage-btn--send {
@@ -5829,27 +5877,18 @@ html.native-app .page-logged .hero.top-row {
   color: #fff;
 }
 
+.tg-circle-stage-btn--send:hover {
+  background: #eb6f00;
+}
+
+.tg-circle-stage-btn--stop {
+  background: #e53935;
+  color: #fff;
+}
+
 .tg-compose-circle-status {
   padding: 10px 4px;
   font-size: 13px;
-}
-
-.tg-circle-preview-discard {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 0;
-  background: rgba(0, 0, 0, 0.65);
-  color: #fff;
-  font-size: 22px;
-  line-height: 1;
-  cursor: pointer;
-  z-index: 5;
-  pointer-events: auto;
-  touch-action: manipulation;
 }
 
 .tg-compose-recording-spacer {

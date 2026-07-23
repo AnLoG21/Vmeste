@@ -48,6 +48,42 @@ body {
   margin-right: 1rem;
 }
 
+.breadcrumbs {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.breadcrumbs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+}
+
+.breadcrumbs-item {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+}
+
+.breadcrumbs a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.breadcrumbs a:hover {
+  text-decoration: underline;
+}
+
+.breadcrumbs-sep {
+  color: #999;
+  margin: 0 0.15rem;
+}
+
 .legal-meta {
   color: #555;
   font-size: 0.9rem;

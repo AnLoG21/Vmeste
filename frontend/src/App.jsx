@@ -8651,10 +8651,39 @@ export default function App() {
                           aria-live="polite"
                         >
                           {chatRecordingKind === "video_note" ? (
-                            <div className="tg-circle-live-wrap">
-                              <video ref={chatLiveVideoRef} className="tg-circle-live-video" playsInline muted autoPlay />
-                              <span className="tg-circle-live-timer">{formatRecordClock(chatRecordSecs)}</span>
-                            </div>
+                            <>
+                              <div className="tg-circle-live-wrap">
+                                <video ref={chatLiveVideoRef} className="tg-circle-live-video" playsInline muted autoPlay />
+                                <span className="tg-circle-live-timer">{formatRecordClock(chatRecordSecs)}</span>
+                              </div>
+                              <div className="tg-circle-stage-actions">
+                                <button
+                                  type="button"
+                                  className="tg-circle-stage-btn tg-circle-stage-btn--discard"
+                                  aria-label="Отменить запись"
+                                  title="Отменить"
+                                  onClick={cancelChatRecording}
+                                >
+                                  <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                                    <path
+                                      fill="currentColor"
+                                      d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                                    />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="tg-circle-stage-btn tg-circle-stage-btn--stop"
+                                  aria-label="Остановить запись"
+                                  title="Стоп"
+                                  onClick={stopChatRecording}
+                                >
+                                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                                    <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </>
                           ) : (
                             <>
                               <div
@@ -8688,37 +8717,32 @@ export default function App() {
                                   }}
                                 />
                                 <span className="tg-circle-seek-ring" aria-hidden />
-                                <button
-                                  type="button"
-                                  className="tg-circle-preview-discard"
-                                  aria-label="Удалить кружок"
-                                  onPointerDown={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                  }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    discardChatMediaPreview();
-                                  }}
-                                >
-                                  ×
-                                </button>
                               </div>
                               <div className="tg-circle-stage-actions">
                                 <button
                                   type="button"
                                   className="tg-circle-stage-btn tg-circle-stage-btn--discard"
+                                  aria-label="Удалить кружок"
+                                  title="Удалить"
                                   onClick={discardChatMediaPreview}
                                 >
-                                  Удалить
+                                  <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                                    <path
+                                      fill="currentColor"
+                                      d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                                    />
+                                  </svg>
                                 </button>
                                 <button
                                   type="button"
                                   className="tg-circle-stage-btn tg-circle-stage-btn--send"
+                                  aria-label="Отправить кружок"
+                                  title="Отправить"
                                   onClick={sendChatMediaPreview}
                                 >
-                                  Отправить
+                                  <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                                    <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                                  </svg>
                                 </button>
                               </div>
                             </>

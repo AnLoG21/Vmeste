@@ -3,7 +3,7 @@ import { SITE_LEGAL } from "./siteLegal.js";
 
 export default function PrivacyPage() {
   return (
-    <LegalLayout title="Политика конфиденциальности">
+    <LegalLayout title="Политика конфиденциальности" path="/privacy">
       <p className="legal-updated">Дата публикации: 12 июня 2026 г.</p>
 
       <p>

@@ -1,7 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./landing.css";
 import { SITE_LEGAL } from "./legal/siteLegal.js";
 import { API_URL } from "./config.js";
+import JsonLd from "./seo/JsonLd.jsx";
+import {
+  organizationJsonLd,
+  softwareApplicationJsonLd,
+  websiteJsonLd,
+} from "./seo/schema.js";
 
 function formatPlanPrice(price) {
   const value = Number(price);
@@ -16,11 +22,24 @@ export default function LandingPage({ onLogin, onRegister }) {
   const [formStatus, setFormStatus] = useState("");
   const [plans, setPlans] = useState([]);
 
+  const homeJsonLd = useMemo(
+    () => [organizationJsonLd(), websiteJsonLd(), softwareApplicationJsonLd()],
+    []
+  );
+
   useEffect(() => {
     fetch(`${API_URL}/subscriptions/plans/`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setPlans(Array.isArray(data) ? data : []))
       .catch(() => setPlans([]));
+  }, []);
+
+  useEffect(() => {
+    if (window.location.hash === "#pricing") {
+      pricingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (window.location.hash === "#request" || window.location.hash === "#automation-request") {
+      requestRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }, []);
 
   function scrollToRequest() {
@@ -54,6 +73,7 @@ export default function LandingPage({ onLogin, onRegister }) {
 
   return (
     <div className="landing">
+      <JsonLd id="vmeste-home-jsonld" data={homeJsonLd} />
       <section className="landing-hero">
         <div className="landing-hero-content">
           <h1 className="landing-hero-title">
@@ -314,10 +334,12 @@ export default function LandingPage({ onLogin, onRegister }) {
         <p className="landing-footer-meta">
           {SITE_LEGAL.executorName} · {SITE_LEGAL.status} · {SITE_LEGAL.city}
         </p>
-        <nav className="landing-footer-nav" aria-label="Юридические документы">
+        <nav className="landing-footer-nav" aria-label="Разделы сайта">
+          <a href="/#pricing">Тарифы</a>
+          <a href="/#automation-request">Заявка на автоматизацию</a>
+          <a href="/contacts">Контакты и реквизиты</a>
           <a href="/offer">Публичная оферта</a>
           <a href="/privacy">Политика конфиденциальности</a>
-          <a href="/contacts">Контакты и реквизиты</a>
         </nav>
       </footer>
     </div>

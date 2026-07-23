@@ -10,6 +10,36 @@
     />
     <link rel="canonical" href="https://vsevmeste.space/offer" />
     <link rel="stylesheet" href="/legal.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Главная",
+                "item": "https://vsevmeste.space/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Публичная оферта",
+                "item": "https://vsevmeste.space/offer"
+              }
+            ]
+          },
+          {
+            "@type": "WebPage",
+            "name": "Публичная оферта — Вместе",
+            "url": "https://vsevmeste.space/offer",
+            "description": "Публичная оферта сервиса Вместе: условия подписки, тарифы, порядок оказания услуг."
+          }
+        ]
+      }
+    </script>
     <!-- Yandex.Metrika counter -->
     <script type="text/javascript">
       (function (m, e, t, r, i, k, a) {
@@ -54,7 +84,13 @@
         /></div
     ></noscript>
     <main class="legal-page">
-      <nav class="legal-nav">
+      <nav class="breadcrumbs" aria-label="Навигационная цепочка">
+        <ol class="breadcrumbs-list">
+          <li class="breadcrumbs-item"><a href="/">Главная</a><span class="breadcrumbs-sep" aria-hidden="true"> / </span></li>
+          <li class="breadcrumbs-item"><span aria-current="page">Публичная оферта</span></li>
+        </ol>
+      </nav>
+      <nav class="legal-nav" aria-label="Разделы сайта">
         <a href="/">Главная</a>
         <a href="/contacts">Контакты</a>
         <a href="/privacy">Конфиденциальность</a>

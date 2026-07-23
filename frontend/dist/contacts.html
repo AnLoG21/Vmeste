@@ -10,6 +10,50 @@
     />
     <link rel="canonical" href="https://vsevmeste.space/contacts" />
     <link rel="stylesheet" href="/legal.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://vsevmeste.space/#organization",
+            "name": "Вместе",
+            "url": "https://vsevmeste.space",
+            "email": "vmesteofficialsupport@gmail.com",
+            "telephone": "+7-967-074-46-76",
+            "address": {
+              "@type": "PostalAddress",
+              "addressLocality": "Москва",
+              "addressCountry": "RU"
+            }
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Главная",
+                "item": "https://vsevmeste.space/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Контакты и реквизиты",
+                "item": "https://vsevmeste.space/contacts"
+              }
+            ]
+          },
+          {
+            "@type": "ContactPage",
+            "name": "Контакты и реквизиты — Вместе",
+            "url": "https://vsevmeste.space/contacts",
+            "isPartOf": { "@id": "https://vsevmeste.space/#website" },
+            "about": { "@id": "https://vsevmeste.space/#organization" }
+          }
+        ]
+      }
+    </script>
     <!-- Yandex.Metrika counter -->
     <script type="text/javascript">
       (function (m, e, t, r, i, k, a) {
@@ -54,8 +98,15 @@
         /></div
     ></noscript>
     <main class="legal-page">
-      <nav class="legal-nav">
+      <nav class="breadcrumbs" aria-label="Навигационная цепочка">
+        <ol class="breadcrumbs-list">
+          <li class="breadcrumbs-item"><a href="/">Главная</a><span class="breadcrumbs-sep" aria-hidden="true"> / </span></li>
+          <li class="breadcrumbs-item"><span aria-current="page">Контакты и реквизиты</span></li>
+        </ol>
+      </nav>
+      <nav class="legal-nav" aria-label="Разделы сайта">
         <a href="/">Главная</a>
+        <a href="/#pricing">Тарифы</a>
         <a href="/offer">Оферта</a>
         <a href="/privacy">Конфиденциальность</a>
       </nav>
