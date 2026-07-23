@@ -30,6 +30,11 @@ import {
   resolveAttachmentUrl,
   saveChatComposeMode,
 } from "./chatMedia.js";
+import {
+  initPushNotifications,
+  maybeRequestWebNotificationPermission,
+  showLocalBrowserNotification,
+} from "./pushNotifications.js";
 
 function formatWebsiteHref(url) {
   const s = String(url || "").trim();
@@ -1015,21 +1020,22 @@ function renderChatMessageBody(m) {
     );
   }
   const url = resolveAttachmentUrl(m, BASE_URL);
-  if (m.kind === "image" && url) {
+  const kind = m.kind || "text";
+  if (kind === "image" && url) {
     return (
       <div className="tg-msg-media">
         <a href={url} target="_blank" rel="noreferrer" className="tg-msg-image-link">
-          <img src={url} alt={m.text || "Фото"} className="tg-msg-image" />
+          <img src={url} alt={m.text || "Фото"} className="tg-msg-image" loading="lazy" />
         </a>
         {m.text ? <div className="tg-msg-text">{m.text}</div> : null}
       </div>
     );
   }
-  if ((m.kind === "video" || m.kind === "video_note") && url) {
+  if ((kind === "video" || kind === "video_note") && url) {
     return (
-      <div className={["tg-msg-media", m.kind === "video_note" && "tg-msg-media--circle"].filter(Boolean).join(" ")}>
+      <div className={["tg-msg-media", kind === "video_note" && "tg-msg-media--circle"].filter(Boolean).join(" ")}>
         <video
-          className={m.kind === "video_note" ? "tg-msg-video-note" : "tg-msg-video"}
+          className={kind === "video_note" ? "tg-msg-video-note" : "tg-msg-video"}
           src={url}
           controls
           playsInline
@@ -1039,21 +1045,34 @@ function renderChatMessageBody(m) {
       </div>
     );
   }
-  if (m.kind === "voice" && url) {
+  if (kind === "voice" && url) {
     return (
       <div className="tg-msg-voice">
         <audio src={url} controls preload="metadata" />
+        {m.payload?.duration_sec ? (
+          <span className="tg-msg-voice-dur muted">{formatRecordClock(m.payload.duration_sec)}</span>
+        ) : null}
         {m.text ? <div className="tg-msg-text">{m.text}</div> : null}
       </div>
     );
   }
-  if (m.kind === "file" && url) {
+  if (kind === "file" && url) {
     const name = m.payload?.name || m.text || "Файл";
     return (
       <div className="tg-msg-file">
         <a href={url} target="_blank" rel="noreferrer" download={name}>
           📎 {name}
         </a>
+      </div>
+    );
+  }
+  if (url) {
+    return (
+      <div className="tg-msg-file">
+        <a href={url} target="_blank" rel="noreferrer">
+          📎 Вложение
+        </a>
+        {m.text ? <div className="tg-msg-text">{m.text}</div> : null}
       </div>
     );
   }
@@ -2326,6 +2345,25 @@ export default function App() {
     if (accessToken) loadMe();
     else setMe(null);
   }, [accessToken]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    initPushNotifications(authFetch);
+    maybeRequestWebNotificationPermission();
+  }, [accessToken]);
+
+  const chatActivityBadgeRef = useRef(0);
+  useEffect(() => {
+    const next = Number(chatActivity?.badge_count) || 0;
+    const prev = chatActivityBadgeRef.current;
+    chatActivityBadgeRef.current = next;
+    if (prev > 0 && next > prev) {
+      const note = chatActivity?.notifications?.[0];
+      const title = note?.payload?.title || "Вместе";
+      const body = note?.payload?.body || "Есть новые уведомления";
+      showLocalBrowserNotification(title, body);
+    }
+  }, [chatActivity?.badge_count]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -4422,7 +4460,7 @@ export default function App() {
     }
   }
 
-  async function postChatMessage({ text = "", file = null, kind = "" }) {
+  async function postChatMessage({ text = "", file = null, kind = "", durationSec = null }) {
     if (!selectedChatId) return false;
     const hasText = Boolean(String(text || "").trim());
     if (!hasText && !file) return false;
@@ -4432,6 +4470,9 @@ export default function App() {
       fd.append("conversation", String(selectedChatId));
       if (hasText) fd.append("text", String(text).trim());
       if (kind) fd.append("kind", kind);
+      if (durationSec != null && Number(durationSec) > 0) {
+        fd.append("duration_sec", String(Math.round(Number(durationSec))));
+      }
       fd.append("attachment", file);
       response = await authFetch(`${API_URL}/chat/messages/`, { method: "POST", body: fd });
     } else {
@@ -4688,14 +4729,14 @@ export default function App() {
 
   async function sendChatMediaPreview() {
     if (!chatMediaPreview) return;
-    const { blob, kind, mime } = chatMediaPreview;
+    const { blob, kind, mime, durationSec } = chatMediaPreview;
     const file = await blobToFile(
       blob,
       kind === "video_note" ? `video_note_${Date.now()}.webm` : `voice_${Date.now()}.webm`,
       mime
     );
     discardChatMediaPreview();
-    await postChatMessage({ file, kind });
+    await postChatMessage({ file, kind, durationSec });
   }
 
   function onComposeActionPointerDown(e) {
@@ -8500,30 +8541,31 @@ export default function App() {
                         );
                       })}
                     </div>
-                    <form onSubmit={sendChatMessage} className="tg-compose">
-                      <input
-                        ref={chatFileInputRef}
-                        type="file"
-                        className="tg-file-input-hidden"
-                        onChange={onChatFilePicked}
-                        hidden
-                      />
-                      {chatRecordingKind === "video_note" ? (
-                        <div className="tg-circle-live-overlay" aria-live="polite">
-                          <div className="tg-circle-live-wrap">
-                            <video ref={chatLiveVideoRef} className="tg-circle-live-video" playsInline muted autoPlay />
-                            <span className="tg-circle-live-timer">{formatRecordClock(chatRecordSecs)}</span>
-                          </div>
-                          {chatRecordLocked ? (
-                            <button type="button" className="tg-record-stop-btn" onClick={stopChatRecording}>
-                              Остановить
-                            </button>
-                          ) : null}
-                        </div>
-                      ) : null}
-                      {chatMediaPreview ? (
-                        <div className="tg-media-preview">
-                          {chatMediaPreview.kind === "video_note" ? (
+                    {(chatRecordingKind === "video_note" || chatMediaPreview?.kind === "video_note") && (
+                      <div
+                        className={[
+                          "tg-circle-stage",
+                          chatRecordingKind === "video_note" && "tg-circle-stage--live",
+                          chatMediaPreview?.kind === "video_note" && "tg-circle-stage--preview",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        aria-live="polite"
+                      >
+                        {chatRecordingKind === "video_note" ? (
+                          <>
+                            <div className="tg-circle-live-wrap">
+                              <video ref={chatLiveVideoRef} className="tg-circle-live-video" playsInline muted autoPlay />
+                              <span className="tg-circle-live-timer">{formatRecordClock(chatRecordSecs)}</span>
+                            </div>
+                            {chatRecordLocked ? (
+                              <button type="button" className="tg-record-stop-btn" onClick={stopChatRecording}>
+                                Остановить
+                              </button>
+                            ) : null}
+                          </>
+                        ) : (
+                          <>
                             <div
                               className="tg-circle-seek"
                               onPointerDown={(e) => {
@@ -8535,11 +8577,16 @@ export default function App() {
                               }}
                             >
                               <video
+                                key={chatMediaPreview.url}
                                 ref={chatPreviewMediaRef}
-                                className="tg-msg-video-note"
+                                className="tg-msg-video-note tg-msg-video-note--preview"
                                 src={chatMediaPreview.url}
                                 playsInline
                                 controls={false}
+                                preload="auto"
+                                onLoadedData={(e) => {
+                                  e.currentTarget.play?.().catch(() => {});
+                                }}
                                 onClick={(e) => {
                                   const v = e.currentTarget;
                                   if (v.paused) v.play();
@@ -8548,9 +8595,36 @@ export default function App() {
                               />
                               <span className="tg-circle-seek-ring" aria-hidden />
                             </div>
-                          ) : (
-                            <audio ref={chatPreviewMediaRef} src={chatMediaPreview.url} controls preload="metadata" />
-                          )}
+                            <div className="tg-media-preview-actions">
+                              <button type="button" className="ghost-btn" onClick={discardChatMediaPreview}>
+                                Удалить
+                              </button>
+                              <button type="button" className="primary" onClick={sendChatMediaPreview}>
+                                Отправить
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    <form onSubmit={sendChatMessage} className="tg-compose">
+                      <input
+                        ref={chatFileInputRef}
+                        type="file"
+                        className="tg-file-input-hidden"
+                        onChange={onChatFilePicked}
+                        hidden
+                      />
+                      {chatMediaPreview && chatMediaPreview.kind !== "video_note" ? (
+                        <div className="tg-media-preview tg-media-preview--compose">
+                          <audio
+                            key={chatMediaPreview.url}
+                            ref={chatPreviewMediaRef}
+                            src={chatMediaPreview.url}
+                            controls
+                            preload="auto"
+                            autoPlay
+                          />
                           <div className="tg-media-preview-actions">
                             <button type="button" className="ghost-btn" onClick={discardChatMediaPreview}>
                               Удалить
@@ -8559,6 +8633,12 @@ export default function App() {
                               Отправить
                             </button>
                           </div>
+                        </div>
+                      ) : chatRecordingKind === "video_note" || chatMediaPreview?.kind === "video_note" ? (
+                        <div className="tg-compose-recording-spacer muted">
+                          {chatRecordingKind === "video_note"
+                            ? `Запись кружка · ${formatRecordClock(chatRecordSecs)}`
+                            : "Проверьте кружок перед отправкой"}
                         </div>
                       ) : (
                         <>

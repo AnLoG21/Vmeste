@@ -45,7 +45,8 @@ def _create_payment_for_plan(user, plan):
     )
 
     if not yk:
-        if not settings.YOOKASSA_SHOP_ID:
+        # Free activation only in local DEBUG without keys — never in production.
+        if settings.DEBUG and not settings.YOOKASSA_SHOP_ID:
             _activate_subscription(subscription)
             payment.status = Payment.Status.SUCCEEDED
             payment.paid_at = timezone.now()
@@ -58,7 +59,12 @@ def _create_payment_for_plan(user, plan):
         payment.save(update_fields=["status"])
         subscription.status = UserSubscription.Status.CANCELLED
         subscription.save(update_fields=["status", "updated_at"])
-        return None, {"detail": "Не удалось создать платёж. Попробуйте позже."}
+        detail = (
+            "ЮKassa не настроена на сервере (YOOKASSA_SHOP_ID / YOOKASSA_SECRET_KEY)."
+            if not settings.YOOKASSA_SHOP_ID
+            else "Не удалось создать платёж. Попробуйте позже."
+        )
+        return None, {"detail": detail}
 
     payment.yookassa_payment_id = yk.get("id", "")
     payment.confirmation_url = (yk.get("confirmation") or {}).get("confirmation_url", "")

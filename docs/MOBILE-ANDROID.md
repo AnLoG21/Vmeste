@@ -82,6 +82,30 @@ frontend/android/app/build/outputs/apk/debug/app-debug.apk
 
 ---
 
+## Push-уведомления (Android)
+
+1. Создайте проект в [Firebase Console](https://console.firebase.google.com/), добавьте Android-приложение с package `space.vsevmeste.app`.
+2. Скачайте `google-services.json` → положите в `frontend/android/app/google-services.json`.
+3. В Firebase → Project settings → Cloud Messaging скопируйте **Server key** (legacy) в серверный `.env`:
+
+```env
+FCM_SERVER_KEY=...
+```
+
+4. Пересоберите приложение:
+
+```powershell
+cd frontend
+npm run cap:sync
+# затем assembleDebug / Run в Android Studio
+```
+
+5. На сервере: `docker compose ... up -d --build web` (миграция `DevicePushToken`).
+
+Без `google-services.json` и `FCM_SERVER_KEY` регистрация токена не доставит системные push; в браузере остаются in-app бейджи и (по разрешению) Notification API.
+
+---
+
 ## Backend (CORS)
 
 На сервере после `git pull` перезапустите backend:

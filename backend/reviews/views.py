@@ -117,6 +117,19 @@ class ReviewViewSet(viewsets.ModelViewSet):
         review = ser.save(client=request.user)
         for f in request.FILES.getlist("photos"):
             ReviewPhoto.objects.create(review=review, image=f)
+        try:
+            from notifications.models import InAppNotification
+            from notifications.push import notify_users
+
+            notify_users(
+                [review.provider_id],
+                kind=InAppNotification.Kind.REVIEW,
+                title="Новый отзыв",
+                body=f"Оценка {review.rating}/5",
+                payload={"review_id": str(review.id)},
+            )
+        except Exception:
+            pass
         return Response(
             ReviewSerializer(review, context={"request": request}).data,
             status=status.HTTP_201_CREATED,

@@ -69,6 +69,7 @@ services:
       DOMAIN: ${DOMAIN}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - vmeste_media:/srv/media:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

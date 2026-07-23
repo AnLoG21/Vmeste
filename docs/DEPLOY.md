@@ -150,7 +150,7 @@ https://vmeste.ru/api/subscriptions/webhook/yookassa/
    ├── /        → frontend (nginx, React)
    ├── /api     → web (Gunicorn + Django)
    ├── /admin   → web
-   └── /media   → web (файлы)
+   └── /media   → volume vmeste_media (Caddy file_server; Django fallback)
          │
     [PostgreSQL] [Redis]
 ```
