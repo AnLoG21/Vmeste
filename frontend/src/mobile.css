@@ -298,7 +298,7 @@ html.native-app .tg-chat-info-thumb-more {
 
 html.native-app .tg-msg {
   max-width: min(88%, 100%);
-  width: fit-content;
+  width: auto;
   box-sizing: border-box;
 }
 

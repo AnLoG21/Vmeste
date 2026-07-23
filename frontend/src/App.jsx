@@ -4714,9 +4714,12 @@ export default function App() {
       chatRecordStreamRef.current = stream;
       chatRecordChunksRef.current = [];
       const mime = pickRecorderMime(kind);
-      chatRecordMimeRef.current = mime;
+      chatRecordMimeRef.current = mime || (kind === "video_note" ? "video/webm" : "audio/webm");
       chatRecordKindRef.current = kind;
-      const recorder = new MediaRecorder(stream, { mimeType: mime });
+      const recorder = mime
+        ? new MediaRecorder(stream, { mimeType: mime })
+        : new MediaRecorder(stream);
+      if (!mime && recorder.mimeType) chatRecordMimeRef.current = recorder.mimeType;
       chatMediaRecorderRef.current = recorder;
       recorder.ondataavailable = (ev) => {
         if (ev.data && ev.data.size > 0) chatRecordChunksRef.current.push(ev.data);
@@ -4847,15 +4850,21 @@ export default function App() {
   function onComposeActionPointerDown(e) {
     if (chatInput.trim() || chatPendingFiles.length || chatMediaPreview) return;
     e.preventDefault();
+    try {
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    } catch {
+      /* ignore */
+    }
     chatDidHoldRef.current = false;
     chatPointerStartYRef.current = e.clientY ?? e.touches?.[0]?.clientY ?? 0;
     chatRecordLiftHintRef.current = false;
     setChatRecordLiftHint(false);
     if (chatHoldTimerRef.current) clearTimeout(chatHoldTimerRef.current);
+    // Short tap toggles voice/circle; hold ~0.45s starts recording (clicks often last >200ms).
     chatHoldTimerRef.current = setTimeout(() => {
       chatDidHoldRef.current = true;
       startChatRecording(chatComposeMode);
-    }, 200);
+    }, 450);
   }
 
   function onComposeActionPointerMove(e) {
@@ -4868,17 +4877,20 @@ export default function App() {
     if (dy > 90) {
       chatRecordLockedRef.current = true;
       chatRecordLiftHintRef.current = false;
-      chatRecordLockedRef.current = true;
-      chatRecordLiftHintRef.current = false;
       setChatRecordLocked(true);
       setChatRecordLiftHint(false);
     }
   }
 
-  function onComposeActionPointerUp() {
+  function onComposeActionPointerUp(e) {
     if (chatHoldTimerRef.current) {
       clearTimeout(chatHoldTimerRef.current);
       chatHoldTimerRef.current = null;
+    }
+    try {
+      e?.currentTarget?.releasePointerCapture?.(e.pointerId);
+    } catch {
+      /* ignore */
     }
     if (chatRecordingKind) {
       if (chatRecordLockedRef.current) return;
@@ -4893,23 +4905,6 @@ export default function App() {
       return;
     }
     if (!chatDidHoldRef.current) toggleChatComposeMode();
-  }
-
-  function onComposeActionPointerLeave() {
-    if (chatHoldTimerRef.current) {
-      clearTimeout(chatHoldTimerRef.current);
-      chatHoldTimerRef.current = null;
-    }
-    if (chatRecordingKind && !chatRecordLockedRef.current) {
-      if (chatRecordLiftHintRef.current) {
-        chatRecordLockedRef.current = true;
-        chatRecordLiftHintRef.current = false;
-        setChatRecordLocked(true);
-        setChatRecordLiftHint(false);
-        return;
-      }
-      stopChatRecording();
-    }
   }
 
   function onCircleSeekPointer(e, mediaEl) {
@@ -8641,64 +8636,68 @@ export default function App() {
                         );
                       })}
                     </div>
-                    {(chatRecordingKind === "video_note" || chatMediaPreview?.kind === "video_note") && (
-                      <div
-                        className={[
-                          "tg-circle-stage",
-                          chatRecordingKind === "video_note" && "tg-circle-stage--live",
-                          chatMediaPreview?.kind === "video_note" && "tg-circle-stage--preview",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        aria-live="polite"
-                      >
-                        {chatRecordingKind === "video_note" ? (
-                          <div className="tg-circle-live-wrap">
-                            <video ref={chatLiveVideoRef} className="tg-circle-live-video" playsInline muted autoPlay />
-                            <span className="tg-circle-live-timer">{formatRecordClock(chatRecordSecs)}</span>
-                          </div>
-                        ) : (
-                          <div
-                            className="tg-circle-seek"
-                            onPointerDown={(e) => {
-                              e.currentTarget.setPointerCapture?.(e.pointerId);
-                              onCircleSeekPointer(e, chatPreviewMediaRef.current);
-                            }}
-                            onPointerMove={(e) => {
-                              if (e.buttons || e.pressure > 0) onCircleSeekPointer(e, chatPreviewMediaRef.current);
-                            }}
-                          >
-                            <video
-                              key={chatMediaPreview.url}
-                              ref={chatPreviewMediaRef}
-                              className="tg-msg-video-note tg-msg-video-note--preview"
-                              src={chatMediaPreview.url}
-                              playsInline
-                              controls={false}
-                              preload="auto"
-                              onLoadedData={(e) => {
-                                e.currentTarget.play?.().catch(() => {});
+                    {(chatRecordingKind === "video_note" || chatMediaPreview?.kind === "video_note") &&
+                      typeof document !== "undefined" &&
+                      createPortal(
+                        <div
+                          className={[
+                            "tg-circle-stage",
+                            "tg-circle-stage--overlay",
+                            chatRecordingKind === "video_note" && "tg-circle-stage--live",
+                            chatMediaPreview?.kind === "video_note" && "tg-circle-stage--preview",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          aria-live="polite"
+                        >
+                          {chatRecordingKind === "video_note" ? (
+                            <div className="tg-circle-live-wrap">
+                              <video ref={chatLiveVideoRef} className="tg-circle-live-video" playsInline muted autoPlay />
+                              <span className="tg-circle-live-timer">{formatRecordClock(chatRecordSecs)}</span>
+                            </div>
+                          ) : (
+                            <div
+                              className="tg-circle-seek"
+                              onPointerDown={(e) => {
+                                e.currentTarget.setPointerCapture?.(e.pointerId);
+                                onCircleSeekPointer(e, chatPreviewMediaRef.current);
                               }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const v = e.currentTarget;
-                                if (v.paused) v.play();
-                                else v.pause();
+                              onPointerMove={(e) => {
+                                if (e.buttons || e.pressure > 0) onCircleSeekPointer(e, chatPreviewMediaRef.current);
                               }}
-                            />
-                            <span className="tg-circle-seek-ring" aria-hidden />
-                            <button
-                              type="button"
-                              className="tg-circle-preview-discard"
-                              aria-label="Удалить"
-                              onClick={discardChatMediaPreview}
                             >
-                              ×
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                              <video
+                                key={chatMediaPreview.url}
+                                ref={chatPreviewMediaRef}
+                                className="tg-msg-video-note tg-msg-video-note--preview"
+                                src={chatMediaPreview.url}
+                                playsInline
+                                controls={false}
+                                preload="auto"
+                                onLoadedData={(e) => {
+                                  e.currentTarget.play?.().catch(() => {});
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const v = e.currentTarget;
+                                  if (v.paused) v.play();
+                                  else v.pause();
+                                }}
+                              />
+                              <span className="tg-circle-seek-ring" aria-hidden />
+                              <button
+                                type="button"
+                                className="tg-circle-preview-discard"
+                                aria-label="Удалить"
+                                onClick={discardChatMediaPreview}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          )}
+                        </div>,
+                        document.body
+                      )}
                     <form onSubmit={sendChatMessage} className="tg-compose">
                       <input
                         ref={chatFileInputRef}
@@ -8845,15 +8844,18 @@ export default function App() {
                                 .join(" ")}
                               aria-label={
                                 chatComposeMode === "video_note"
-                                  ? "Кружок: тап — сменить, удержание — запись, вверх — закрепить"
-                                  : "Голосовое: тап — сменить, удержание — запись, вверх — закрепить"
+                                  ? "Кружок: короткий тап — голосовое, удержание — запись"
+                                  : "Голосовое: короткий тап — кружок, удержание — запись"
                               }
-                              title={chatComposeMode === "video_note" ? "Кружок" : "Голосовое"}
+                              title={
+                                chatComposeMode === "video_note"
+                                  ? "Кружок (тап — сменить режим)"
+                                  : "Голосовое (тап — сменить режим)"
+                              }
                               onPointerDown={onComposeActionPointerDown}
                               onPointerMove={onComposeActionPointerMove}
                               onPointerUp={onComposeActionPointerUp}
                               onPointerCancel={onComposeActionPointerUp}
-                              onPointerLeave={onComposeActionPointerLeave}
                               onContextMenu={(e) => e.preventDefault()}
                             >
                               {chatComposeMode === "video_note" ? (
@@ -8942,7 +8944,7 @@ export default function App() {
             )}
             {chatSettingsForId != null && (
               <div
-                className="modal-backdrop"
+                className="modal-backdrop modal-backdrop--chat-settings"
                 onClick={() => {
                   setChatSettingsForId(null);
                   setCustomColorPickerOpen(false);
@@ -9099,6 +9101,7 @@ export default function App() {
                               role="menuitem"
                               onClick={() => {
                                 setChatInfoHeadMenuOpen(false);
+                                setChatInfoOpen(false);
                                 setChatSettingsForId(selectedChatId);
                               }}
                             >

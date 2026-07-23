@@ -1401,8 +1401,8 @@ body.theme-dark button.staff-perms-toggle:hover,
 
 .tg-msg {
   align-self: flex-start;
-  max-width: 78%;
-  width: fit-content;
+  max-width: min(78%, 34rem);
+  width: auto;
   box-sizing: border-box;
   background: #fff;
   border-radius: 12px 12px 12px 4px;
@@ -1662,7 +1662,7 @@ body.theme-dark button.staff-perms-toggle:hover,
 
   .tg-msg {
     max-width: min(88%, 100%);
-    width: fit-content;
+    width: auto;
     box-sizing: border-box;
   }
 
@@ -2446,13 +2446,14 @@ body.theme-dark .tg-chat-item-row:hover {
 
 .tg-msg {
   align-self: flex-start;
-  max-width: 78%;
-  width: fit-content;
+  max-width: min(78%, 34rem);
+  width: auto;
   box-sizing: border-box;
   background: var(--tg-bubble);
   border-radius: 12px 12px 12px 4px;
   padding: 8px 12px;
   border: 1px solid var(--border);
+  overflow: visible;
 }
 
 .tg-msg--media-bare {
@@ -2461,6 +2462,7 @@ body.theme-dark .tg-chat-item-row:hover {
   box-shadow: none !important;
   padding: 4px 2px;
   overflow: visible;
+  max-width: min(320px, 88%);
 }
 
 .tg-msg-own {
@@ -2480,8 +2482,8 @@ body.theme-dark .tg-chat-item-row:hover {
   font-size: 14px;
   white-space: pre-wrap;
   word-break: break-word;
-  overflow-wrap: anywhere;
-  min-width: min(12ch, 100%);
+  overflow-wrap: break-word;
+  color: var(--text);
 }
 
 .tg-msg-time {
@@ -4396,6 +4398,10 @@ body.theme-dark .booking-messages-hint code {
   isolation: isolate;
 }
 
+.modal-backdrop--chat-settings {
+  z-index: 20050;
+}
+
 .modal-backdrop--app-overlay .modal-card {
   pointer-events: auto;
   position: relative;
@@ -5771,6 +5777,18 @@ html.native-app .page-logged .hero.top-row {
   pointer-events: none;
 }
 
+.tg-circle-stage--overlay {
+  position: fixed;
+  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10045;
+  background: rgba(14, 18, 24, 0.78);
+  pointer-events: auto;
+}
+
 .tg-circle-stage .tg-circle-live-wrap,
 .tg-circle-stage .tg-circle-seek {
   pointer-events: auto;
@@ -5887,17 +5905,19 @@ html.native-app .page-logged .hero.top-row {
 
 .tg-msg-image {
   max-width: min(280px, 100%);
-  width: auto;
-  max-height: 280px;
+  width: 100%;
+  height: auto;
+  max-height: 360px;
   border-radius: 12px;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
   box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .tg-msg-video {
   max-width: min(280px, 100%);
-  width: auto;
+  width: 100%;
   height: auto;
   border-radius: 12px;
   display: block;
@@ -5907,6 +5927,7 @@ html.native-app .page-logged .hero.top-row {
 .tg-msg-media {
   max-width: 100%;
   width: auto;
+  min-width: 120px;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -6126,7 +6147,7 @@ html.native-app .page-logged .hero.top-row {
   padding: 4px;
   display: grid;
   gap: 2px;
-  z-index: 20;
+  z-index: 80;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 

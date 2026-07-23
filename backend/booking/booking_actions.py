@@ -131,6 +131,7 @@ def cancel_booking_by_client(booking):
     provider = booking.provider
     client = booking.client
     when = format_booking_when(booking)
+    service_name = getattr(getattr(booking, "service", None), "name", None) or "Услуга"
     text = f"Клиент отменил запись на {when}."
     booking.status = Booking.Status.CANCELLED
     booking.save(update_fields=["status"])
@@ -138,4 +139,24 @@ def cancel_booking_by_client(booking):
         booking.slot.is_booked = False
         booking.slot.save(update_fields=["is_booked"])
     post_booking_message(provider, client, text, sender=client)
+    try:
+        from notifications.models import InAppNotification
+        from notifications.push import notify_users
+
+        client_name = client_display_name(client)
+        body = " · ".join(p for p in (service_name, when) if p)
+        if client_name:
+            body = f"{client_name}: {body}" if body else client_name
+        recipients = {provider.id if hasattr(provider, "id") else booking.provider_id}
+        if booking.staff_id:
+            recipients.add(booking.staff_id)
+        notify_users(
+            list(recipients),
+            kind=InAppNotification.Kind.BOOKING,
+            title="Запись отменена клиентом",
+            body=body[:240] or text,
+            payload=booking_notification_payload(booking),
+        )
+    except Exception:
+        pass
     return True, None

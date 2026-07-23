@@ -92,17 +92,29 @@ export function formatRecordClock(totalSec) {
 }
 
 export function pickRecorderMime(kind) {
-  if (kind === "video_note") {
-    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")) {
-      return "video/webm;codecs=vp8,opus";
+  const candidates =
+    kind === "video_note"
+      ? [
+          "video/webm;codecs=vp8,opus",
+          "video/webm;codecs=vp9,opus",
+          "video/webm",
+          "video/mp4",
+        ]
+      : [
+          "audio/webm;codecs=opus",
+          "audio/webm",
+          "audio/ogg;codecs=opus",
+          "audio/mp4",
+        ];
+  if (typeof MediaRecorder === "undefined") {
+    return kind === "video_note" ? "video/webm" : "audio/webm";
+  }
+  for (const mime of candidates) {
+    try {
+      if (MediaRecorder.isTypeSupported(mime)) return mime;
+    } catch {
+      /* ignore */
     }
-    return "video/webm";
   }
-  if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
-    return "audio/webm;codecs=opus";
-  }
-  if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")) {
-    return "audio/ogg;codecs=opus";
-  }
-  return "audio/webm";
+  return "";
 }
