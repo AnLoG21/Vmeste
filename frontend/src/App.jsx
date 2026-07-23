@@ -1101,10 +1101,31 @@ function renderChatMessageBody(m, opts = {}) {
   return <div className="tg-msg-text">{m.text}</div>;
 }
 
-function bookingSlotStatusModifier(status) {
+function bookingSlotStatusModifier(bookingOrStatus, endsAt) {
+  const status = typeof bookingOrStatus === "object" && bookingOrStatus
+    ? bookingOrStatus.status
+    : bookingOrStatus;
+  const endRaw =
+    typeof bookingOrStatus === "object" && bookingOrStatus
+      ? bookingOrStatus.slot_ends_at || bookingOrStatus.ends_at
+      : endsAt;
   if (status === "cancelled") return "booking-slot--cancelled";
   if (status === "done") return "booking-slot--done";
+  const endMs = endRaw ? new Date(endRaw).getTime() : NaN;
+  if (Number.isFinite(endMs) && endMs < Date.now() && (status === "new" || status === "confirmed")) {
+    return "booking-slot--overdue";
+  }
+  if (status === "confirmed") return "booking-slot--confirmed";
+  if (status === "new") return "booking-slot--new";
   return "";
+}
+
+function bookingSlotCompactIcon(statusModifier) {
+  if (statusModifier === "booking-slot--cancelled") return "✕";
+  if (statusModifier === "booking-slot--done") return "✓";
+  if (statusModifier === "booking-slot--overdue") return "!";
+  if (statusModifier === "booking-slot--confirmed") return "●";
+  return "○";
 }
 
 const BOOKING_STATUS_LABELS = {
@@ -1116,6 +1137,26 @@ const BOOKING_STATUS_LABELS = {
 
 function bookingStatusLabel(status) {
   return BOOKING_STATUS_LABELS[status] || status || "";
+}
+
+function formatInAppNotificationText(n) {
+  const title = (n?.payload?.title || "").trim();
+  const body = (n?.payload?.body || "").trim();
+  if (title && body) return `${title}: ${body}`;
+  if (body) return body;
+  if (title) return title;
+  if (n?.kind === "staff_invite_accepted") {
+    return `Сотрудник ${n.payload?.staff_name || ""} принял приглашение.`.trim();
+  }
+  if (n?.kind === "booking") {
+    const service = n?.payload?.service_name;
+    const when = n?.payload?.when;
+    const parts = [service, when].filter(Boolean);
+    return parts.length ? `Запись: ${parts.join(" · ")}` : "Новая запись";
+  }
+  if (n?.kind === "chat_message") return "Новое сообщение в чате";
+  if (n?.kind === "review") return "Новый отзыв";
+  return "Уведомление";
 }
 
 function formatBookingPrice(price) {
@@ -6282,7 +6323,7 @@ export default function App() {
                     {dayItems.map((it) => (
                       <div
                         key={it.id}
-                        className={["calendar-slot", "booking", bookingSlotStatusModifier(it.status)].filter(Boolean).join(" ")}
+                        className={["calendar-slot", "booking", bookingSlotStatusModifier(it)].filter(Boolean).join(" ")}
                       >
                         <div className="booking-slot-time">
                           {new Date(it.slot_starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -6298,21 +6339,26 @@ export default function App() {
                     ))}
                   </div>
                   <div className="calendar-slots calendar-slots--mobile">
-                    {dayItems.slice(0, 3).map((it) => (
-                      <div
-                        key={it.id}
-                        className={["calendar-slot-compact", bookingSlotStatusModifier(it.status)].filter(Boolean).join(" ")}
-                        title={bookingSlotSecondaryLabel(it)}
-                      >
-                        <span className="calendar-slot-compact-icon" aria-hidden>
-                          {it.status === "cancelled" ? "✕" : it.status === "done" ? "✓" : "🕒"}
-                        </span>
-                        <span className="calendar-slot-compact-time">
-                          {new Date(it.slot_starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                      </div>
-                    ))}
-                    {dayItems.length > 3 ? <div className="calendar-slot-more">+{dayItems.length - 3}</div> : null}
+                    {dayItems.slice(0, 4).map((it) => {
+                      const mod = bookingSlotStatusModifier(it);
+                      const time = new Date(it.slot_starts_at).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      });
+                      return (
+                        <div
+                          key={it.id}
+                          className={["calendar-slot-compact", mod].filter(Boolean).join(" ")}
+                          title={`${time} · ${bookingSlotSecondaryLabel(it)} · ${bookingStatusLabel(it.status)}`}
+                          aria-label={`${time} ${bookingStatusLabel(it.status)}`}
+                        >
+                          <span className="calendar-slot-compact-icon" aria-hidden>
+                            {bookingSlotCompactIcon(mod)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {dayItems.length > 4 ? <div className="calendar-slot-more">+{dayItems.length - 4}</div> : null}
                   </div>
                 </>
               )}
@@ -6417,7 +6463,7 @@ export default function App() {
                 ? (b.organization_name || "Организация")
                 : bookingClientLabel(b);
               return (
-                <li key={b.id} className={["booking-history-item", bookingSlotStatusModifier(b.status)].filter(Boolean).join(" ")}>
+                <li key={b.id} className={["booking-history-item", bookingSlotStatusModifier(b)].filter(Boolean).join(" ")}>
                   <div className="booking-history-top">
                     <div className="booking-history-main">
                       <p className="booking-history-datetime">{formatBookingDateTime(b.slot_starts_at)}</p>
@@ -6477,7 +6523,7 @@ export default function App() {
     const weekdays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
     const byDay = slots
-      .filter((s) => s.starts_at?.slice(0, 7) === calendarMonth)
+      .filter((s) => !s.is_booked && s.starts_at?.slice(0, 7) === calendarMonth)
       .reduce((acc, slot) => {
         const day = Number(slot.starts_at.slice(8, 10));
         if (!acc[day]) acc[day] = [];
@@ -6608,39 +6654,34 @@ export default function App() {
                     {(byDay[day] || []).slice(0, 5).map((s) => (
                       <div
                         key={s.id}
-                        className={["slot-chip", s.is_booked && "slot-chip--booked"].filter(Boolean).join(" ")}
-                        title={s.is_booked ? "Запись клиента" : "Свободный интервал"}
+                        className="slot-chip"
+                        title="Свободный интервал"
                       >
                         <span className="slot-chip-label">
                           {new Date(s.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           {" – "}
                           {new Date(s.ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          {s.is_booked && s.booking_client_name ? (
-                            <span className="slot-chip-booking"> · {s.booking_client_name}</span>
-                          ) : null}
                         </span>
-                        {!s.is_booked && (
-                          <button
-                            type="button"
-                            className="chip-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteSlot(s.id);
-                            }}
-                          >
-                            x
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          className="chip-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteSlot(s.id);
+                          }}
+                        >
+                          x
+                        </button>
                       </div>
                     ))}
                     {(byDay[day] || []).length > 5 && <div className="muted">+{(byDay[day] || []).length - 5}</div>}
-                    {(byDay[day] || []).some((s) => s.recurrence_group && !s.is_booked) && (
+                    {(byDay[day] || []).some((s) => s.recurrence_group) && (
                       <button
                         type="button"
                         className="small-btn ghost-btn"
                         onClick={(e) => {
                           e.stopPropagation();
-                          const grp = (byDay[day] || []).find((s) => s.recurrence_group && !s.is_booked)?.recurrence_group;
+                          const grp = (byDay[day] || []).find((s) => s.recurrence_group)?.recurrence_group;
                           if (grp) deleteSeries(grp);
                         }}
                       >
@@ -6650,11 +6691,8 @@ export default function App() {
                   </div>
                   <div className="calendar-slots calendar-slots--mobile">
                     {(byDay[day] || []).slice(0, 3).map((s) => (
-                      <div
-                        key={s.id}
-                        className={["calendar-slot-compact", s.is_booked && "calendar-slot-compact--booked"].filter(Boolean).join(" ")}
-                      >
-                        <span aria-hidden>{s.is_booked ? "●" : "○"}</span>
+                      <div key={s.id} className="calendar-slot-compact">
+                        <span aria-hidden>○</span>
                         <span>
                           {new Date(s.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </span>
@@ -8209,11 +8247,7 @@ export default function App() {
               <div className="chat-notif-banner">
                 {chatActivity.notifications.map((n) => (
                   <div key={n.id} className="chat-notif-card">
-                    <p>
-                      {n.kind === "staff_invite_accepted"
-                        ? `Сотрудник ${n.payload?.staff_name || ""} принял приглашение.`
-                        : n.kind}
-                    </p>
+                    <p>{formatInAppNotificationText(n)}</p>
                     <button type="button" className="ghost-btn" onClick={() => markInAppNotificationsRead([n.id])}>
                       Понятно
                     </button>
@@ -10105,7 +10139,7 @@ export default function App() {
                                 minute: "2-digit",
                               })}
                             </strong>
-                            <div className="muted">{it.is_booked ? it.booking_client_name || "Занято" : "Свободно"}</div>
+                            <div className="muted">Свободно</div>
                           </>
                         )}
                       </li>

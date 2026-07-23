@@ -308,19 +308,9 @@ class BookingViewSet(viewsets.ModelViewSet):
             comment=comment,
         )
         try:
-            from notifications.models import InAppNotification
-            from notifications.push import notify_users
+            from .booking_actions import notify_new_booking
 
-            recipients = {booking.provider_id}
-            if booking.staff_id:
-                recipients.add(booking.staff_id)
-            notify_users(
-                list(recipients),
-                kind=InAppNotification.Kind.BOOKING,
-                title="Новая запись",
-                body=f"{service.name}: клиент записался",
-                payload={"booking_id": str(booking.id), "view": "bookings"},
-            )
+            notify_new_booking(booking)
         except Exception:
             pass
         ser = self.get_serializer(booking)

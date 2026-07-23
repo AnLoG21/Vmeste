@@ -24,6 +24,52 @@ def format_booking_when(booking) -> str:
     return local.strftime("%d.%m.%Y %H:%M")
 
 
+def booking_notification_payload(booking, *, extra=None) -> dict:
+    slot = getattr(booking, "slot", None)
+    service = getattr(booking, "service", None)
+    start = getattr(slot, "starts_at", None) if slot else None
+    end = getattr(slot, "ends_at", None) if slot else None
+    data = {
+        "booking_id": str(booking.id),
+        "view": "bookings",
+        "service_name": getattr(service, "name", "") or "",
+        "client_name": client_display_name(getattr(booking, "client", None)),
+        "starts_at": start.isoformat() if start else "",
+        "ends_at": end.isoformat() if end else "",
+        "when": format_booking_when(booking) if slot else "",
+    }
+    if extra:
+        data.update(extra)
+    return data
+
+
+def notify_new_booking(booking):
+    """Push + in-app notification to provider and assigned staff."""
+    try:
+        from notifications.models import InAppNotification
+        from notifications.push import notify_users
+
+        service_name = getattr(getattr(booking, "service", None), "name", None) or "Услуга"
+        when = format_booking_when(booking) or ""
+        client = client_display_name(getattr(booking, "client", None))
+        parts = [p for p in (service_name, when) if p]
+        body = " · ".join(parts)
+        if client:
+            body = f"{client}: {body}" if body else client
+        recipients = {booking.provider_id}
+        if booking.staff_id:
+            recipients.add(booking.staff_id)
+        notify_users(
+            list(recipients),
+            kind=InAppNotification.Kind.BOOKING,
+            title="Новая запись",
+            body=body[:240] or "Клиент записался",
+            payload=booking_notification_payload(booking),
+        )
+    except Exception:
+        pass
+
+
 def confirm_booking(booking, actor):
     provider = booking.provider
     msg_tpl = (getattr(provider, "booking_confirm_message_default", None) or "").strip()
@@ -43,7 +89,7 @@ def confirm_booking(booking, actor):
                 kind=InAppNotification.Kind.BOOKING,
                 title="Запись подтверждена",
                 body=text[:240] or "Ваша запись подтверждена",
-                payload={"booking_id": str(booking.id), "view": "bookings"},
+                payload=booking_notification_payload(booking),
             )
     except Exception:
         pass

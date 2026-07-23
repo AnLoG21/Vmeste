@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Video note player: tap to play/pause, rim progress + draggable knob on first play,
- * then muted loop without ring.
+ * Video note player: tap to play/pause with rim progress on first play,
+ * then muted loop; next tap restarts from the beginning with sound.
  */
 export default function ChatVideoNotePlayer({ src, size = 180, className = "" }) {
   const videoRef = useRef(null);
@@ -118,12 +118,55 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
     }
   }
 
+  async function playWithSoundFromStart() {
+    const v = videoRef.current;
+    if (!v) return;
+    mutedLoopRef.current = false;
+    stopTick();
+    try {
+      v.pause();
+      v.currentTime = 0;
+    } catch {
+      /* ignore */
+    }
+    setProgressSafe(0);
+    v.muted = false;
+    setEnlarged(true);
+    setShowRing(true);
+    try {
+      if (v.readyState < 2) v.load();
+      await v.play();
+      setPlaying(true);
+      startTick();
+    } catch {
+      try {
+        v.muted = true;
+        await v.play();
+        v.muted = false;
+        setShowRing(true);
+        setEnlarged(true);
+        setPlaying(true);
+        startTick();
+      } catch {
+        setPlaying(false);
+        setEnlarged(false);
+        setShowRing(false);
+      }
+    }
+  }
+
   async function togglePlay(e) {
     if (seekingRef.current) return;
     e?.preventDefault?.();
     e?.stopPropagation?.();
     const v = videoRef.current;
     if (!v) return;
+
+    // After first ending (muted loop): tap restarts from the beginning with sound
+    if (mutedLoopRef.current) {
+      await playWithSoundFromStart();
+      return;
+    }
 
     if (!v.paused && !v.ended) {
       v.pause();
@@ -132,39 +175,27 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
       return;
     }
 
-    if (!mutedLoopRef.current) {
-      v.muted = false;
-      setEnlarged(true);
-      setShowRing(true);
-    } else {
-      v.muted = true;
-      setEnlarged(false);
-      setShowRing(false);
-    }
-
+    v.muted = false;
+    setEnlarged(true);
+    setShowRing(true);
     try {
-      // Some browsers need load() after src change
-      if (v.readyState < 2) {
-        v.load();
-      }
+      if (v.readyState < 2) v.load();
       await v.play();
       setPlaying(true);
       startTick();
-    } catch (err) {
-      // Retry muted then unmute (mobile autoplay quirks)
+    } catch {
       try {
         v.muted = true;
         await v.play();
-        if (!mutedLoopRef.current) {
-          v.muted = false;
-          setShowRing(true);
-          setEnlarged(true);
-        }
+        v.muted = false;
+        setShowRing(true);
+        setEnlarged(true);
         setPlaying(true);
         startTick();
       } catch {
         setPlaying(false);
         setEnlarged(false);
+        setShowRing(false);
       }
     }
   }
@@ -216,7 +247,7 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
           togglePlay(e);
         }
       }}
-      aria-label={playing ? "Пауза кружка" : "Смотреть кружок"}
+      aria-label={playing && !mutedLoopRef.current ? "Пауза кружка" : "Смотреть кружок"}
     >
       <video
         ref={videoRef}
@@ -227,7 +258,9 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
         preload="auto"
         controls={false}
         onEnded={onEnded}
-        onPause={() => setPlaying(false)}
+        onPause={() => {
+          if (!mutedLoopRef.current) setPlaying(false);
+        }}
         onPlay={() => setPlaying(true)}
       />
       {showRing ? (

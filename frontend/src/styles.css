@@ -1402,6 +1402,8 @@ body.theme-dark button.staff-perms-toggle:hover,
 .tg-msg {
   align-self: flex-start;
   max-width: 78%;
+  width: fit-content;
+  box-sizing: border-box;
   background: #fff;
   border-radius: 12px 12px 12px 4px;
   padding: 8px 12px;
@@ -1660,10 +1662,11 @@ body.theme-dark button.staff-perms-toggle:hover,
 
   .tg-msg {
     max-width: min(88%, 100%);
+    width: fit-content;
     box-sizing: border-box;
   }
 
-  .tg-msg-media,
+  .tg-msg-media:not(.tg-msg-media--circle),
   .tg-msg-image-btn,
   .tg-msg-image,
   .tg-msg-video {
@@ -1672,11 +1675,22 @@ body.theme-dark button.staff-perms-toggle:hover,
     box-sizing: border-box;
   }
 
-  .tg-msg-video-note,
+  .tg-msg-media--circle {
+    width: auto !important;
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
   .tg-circle-player {
     max-width: min(180px, 56vw);
     width: min(180px, 56vw) !important;
     height: min(180px, 56vw) !important;
+  }
+
+  .tg-msg-video-note {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
   }
 
   .tg-compose {
@@ -2433,13 +2447,12 @@ body.theme-dark .tg-chat-item-row:hover {
 .tg-msg {
   align-self: flex-start;
   max-width: 78%;
-  min-width: 0;
+  width: fit-content;
   box-sizing: border-box;
   background: var(--tg-bubble);
   border-radius: 12px 12px 12px 4px;
   padding: 8px 12px;
   border: 1px solid var(--border);
-  overflow: hidden;
 }
 
 .tg-msg--media-bare {
@@ -2467,6 +2480,8 @@ body.theme-dark .tg-chat-item-row:hover {
   font-size: 14px;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
+  min-width: min(12ch, 100%);
 }
 
 .tg-msg-time {
@@ -3760,8 +3775,26 @@ body.theme-dark .tg-chat-search {
 }
 
 .booking-calendar .calendar-slot.booking.booking-slot--done {
-  background: #3dad6e;
-  border-color: #2a8f57;
+  background: #2f9e5f;
+  border-color: #247a49;
+  color: #fff;
+}
+
+.booking-calendar .calendar-slot.booking.booking-slot--confirmed {
+  background: #c6e86a;
+  border-color: #9bc44a;
+  color: #2a3d0a;
+}
+
+.booking-calendar .calendar-slot.booking.booking-slot--new {
+  background: #e85d5d;
+  border-color: #c73a3a;
+  color: #fff;
+}
+
+.booking-calendar .calendar-slot.booking.booking-slot--overdue {
+  background: #8b5a2b;
+  border-color: #6e4520;
   color: #fff;
 }
 
@@ -5854,7 +5887,7 @@ html.native-app .page-logged .hero.top-row {
 
 .tg-msg-image {
   max-width: min(280px, 100%);
-  width: 100%;
+  width: auto;
   max-height: 280px;
   border-radius: 12px;
   display: block;
@@ -5864,7 +5897,7 @@ html.native-app .page-logged .hero.top-row {
 
 .tg-msg-video {
   max-width: min(280px, 100%);
-  width: 100%;
+  width: auto;
   height: auto;
   border-radius: 12px;
   display: block;
@@ -5873,10 +5906,15 @@ html.native-app .page-logged .hero.top-row {
 
 .tg-msg-media {
   max-width: 100%;
-  width: 100%;
-  min-width: 0;
+  width: auto;
   overflow: hidden;
   box-sizing: border-box;
+}
+
+.tg-msg-media--circle {
+  overflow: visible;
+  width: auto;
+  max-width: none;
 }
 
 .tg-msg-video-note {
@@ -5900,16 +5938,35 @@ html.native-app .page-logged .hero.top-row {
   width: 180px;
   height: 180px;
   border-radius: 50%;
+  overflow: hidden;
   cursor: pointer;
   flex-shrink: 0;
   transition: transform 0.25s ease;
   -webkit-tap-highlight-color: transparent;
   touch-action: none;
   user-select: none;
+  isolation: isolate;
+  z-index: 1;
 }
 
 .tg-circle-player--enlarged {
-  transform: scale(1.08);
+  transform: scale(1.06);
+  z-index: 3;
+  overflow: visible;
+}
+
+.tg-circle-player--enlarged .tg-msg-video-note {
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.tg-circle-player--ring {
+  overflow: visible;
+}
+
+.tg-circle-player--ring .tg-msg-video-note {
+  border-radius: 50%;
+  clip-path: circle(50% at 50% 50%);
 }
 
 .tg-circle-progress {
@@ -5960,7 +6017,7 @@ html.native-app .page-logged .hero.top-row {
   cursor: pointer;
   display: block;
   max-width: 100%;
-  width: 100%;
+  width: auto;
   box-sizing: border-box;
 }
 
@@ -6242,20 +6299,51 @@ html.native-app .page-logged .hero.top-row {
 .calendar-slot-compact {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  line-height: 1.2;
-  padding: 2px 4px;
+  justify-content: center;
+  gap: 0;
+  font-size: 12px;
+  line-height: 1;
+  padding: 5px 2px;
+  min-height: 22px;
   border-radius: 6px;
-  background: #fff3e8;
-  color: #5a2800;
+  background: #e85d5d;
+  color: #fff;
   white-space: nowrap;
   overflow: hidden;
 }
 
+.calendar-slot-compact-icon {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.calendar-slot-compact.booking-slot--confirmed {
+  background: #c6e86a;
+  color: #2a3d0a;
+}
+
+.calendar-slot-compact.booking-slot--new {
+  background: #e85d5d;
+  color: #fff;
+}
+
+.calendar-slot-compact.booking-slot--overdue {
+  background: #8b5a2b;
+  color: #fff;
+}
+
+.calendar-slot-compact.booking-slot--done {
+  background: #2f9e5f;
+  color: #fff;
+}
+
 .calendar-slot-compact--booked,
 .calendar-slot-compact.booking-slot--cancelled {
-  opacity: 0.75;
+  background: #c0c0c0;
+  color: #444;
+  opacity: 1;
 }
 
 .calendar-slot-more {

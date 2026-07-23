@@ -298,16 +298,15 @@ html.native-app .tg-chat-info-thumb-more {
 
 html.native-app .tg-msg {
   max-width: min(88%, 100%);
-  min-width: 0;
+  width: fit-content;
   box-sizing: border-box;
-  overflow: hidden;
 }
 
 html.native-app .tg-msg--media-bare {
   overflow: visible;
 }
 
-html.native-app .tg-msg-media,
+html.native-app .tg-msg-media:not(.tg-msg-media--circle),
 html.native-app .tg-msg-image-btn,
 html.native-app .tg-msg-image,
 html.native-app .tg-msg-video {
@@ -316,11 +315,22 @@ html.native-app .tg-msg-video {
   box-sizing: border-box;
 }
 
-html.native-app .tg-msg-video-note,
+html.native-app .tg-msg-media--circle {
+  width: auto !important;
+  max-width: none !important;
+  overflow: visible !important;
+}
+
 html.native-app .tg-circle-player {
   max-width: min(180px, 56vw);
   width: min(180px, 56vw) !important;
   height: min(180px, 56vw) !important;
+}
+
+html.native-app .tg-msg-video-note {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
 }
 
 html.native-app .tg-messages {

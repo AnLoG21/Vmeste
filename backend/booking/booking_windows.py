@@ -242,19 +242,9 @@ def book_time_window(provider_id: int, service_id: int, starts_at, ends_at, staf
         comment=(comment or "")[:250],
     )
     try:
-        from notifications.models import InAppNotification
-        from notifications.push import notify_users
+        from .booking_actions import notify_new_booking
 
-        recipients = {provider_id}
-        if booking.staff_id:
-            recipients.add(booking.staff_id)
-        notify_users(
-            list(recipients),
-            kind=InAppNotification.Kind.BOOKING,
-            title="Новая запись",
-            body=f"{getattr(service, 'name', 'Услуга')}: клиент записался",
-            payload={"booking_id": str(booking.id), "view": "bookings"},
-        )
+        notify_new_booking(booking)
     except Exception:
         pass
     return booking
