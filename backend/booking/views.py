@@ -311,12 +311,15 @@ class BookingViewSet(viewsets.ModelViewSet):
             from notifications.models import InAppNotification
             from notifications.push import notify_users
 
+            recipients = {booking.provider_id}
+            if booking.staff_id:
+                recipients.add(booking.staff_id)
             notify_users(
-                [booking.provider_id],
+                list(recipients),
                 kind=InAppNotification.Kind.BOOKING,
                 title="Новая запись",
                 body=f"{service.name}: клиент записался",
-                payload={"booking_id": str(booking.id)},
+                payload={"booking_id": str(booking.id), "view": "bookings"},
             )
         except Exception:
             pass

@@ -33,6 +33,20 @@ def confirm_booking(booking, actor):
     booking.save(update_fields=["status"])
     text = msg_tpl.replace("{date}", format_booking_when(booking))
     post_booking_message(provider, booking.client, text, sender=actor)
+    try:
+        from notifications.models import InAppNotification
+        from notifications.push import notify_users
+
+        if booking.client_id:
+            notify_users(
+                [booking.client_id],
+                kind=InAppNotification.Kind.BOOKING,
+                title="Запись подтверждена",
+                body=text[:240] or "Ваша запись подтверждена",
+                payload={"booking_id": str(booking.id), "view": "bookings"},
+            )
+    except Exception:
+        pass
     return True, None
 
 

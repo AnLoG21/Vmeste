@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Video note player: rim progress + draggable knob while first play,
- * then muted seamless loop without ring.
+ * Video note player: tap to play/pause, rim progress + draggable knob on first play,
+ * then muted loop without ring.
  */
 export default function ChatVideoNotePlayer({ src, size = 180, className = "" }) {
   const videoRef = useRef(null);
@@ -17,13 +17,28 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
   const progressRef = useRef(0);
 
   useEffect(() => {
+    mutedLoopRef.current = false;
+    setShowRing(false);
+    setEnlarged(false);
+    setProgress(0);
+    progressRef.current = 0;
+    const v = videoRef.current;
+    if (v) {
+      try {
+        v.pause();
+        v.currentTime = 0;
+        v.muted = false;
+      } catch {
+        /* ignore */
+      }
+    }
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, []);
+  }, [src]);
 
   function setProgressSafe(p) {
-    const v = Math.max(0, Math.min(1, p));
+    const v = Math.max(0, Math.min(1, Number(p) || 0));
     progressRef.current = v;
     setProgress(v);
   }
@@ -54,7 +69,6 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
     const cy = rect.top + rect.height / 2;
     const x = clientX - cx;
     const y = clientY - cy;
-    // 0 at top, clockwise
     let angle = Math.atan2(y, x);
     angle = (angle + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2);
     return angle / (Math.PI * 2);
@@ -65,7 +79,11 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
     if (!v || !Number.isFinite(v.duration) || v.duration <= 0) return;
     const p = angleToProgress(clientX, clientY);
     setProgressSafe(p);
-    v.currentTime = p * v.duration;
+    try {
+      v.currentTime = p * v.duration;
+    } catch {
+      /* ignore */
+    }
   }
 
   function onSeekPointerDown(e) {
@@ -102,15 +120,18 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
 
   async function togglePlay(e) {
     if (seekingRef.current) return;
+    e?.preventDefault?.();
     e?.stopPropagation?.();
     const v = videoRef.current;
     if (!v) return;
-    if (!v.paused) {
+
+    if (!v.paused && !v.ended) {
       v.pause();
       setPlaying(false);
-      if (!showRing) stopTick();
+      stopTick();
       return;
     }
+
     if (!mutedLoopRef.current) {
       v.muted = false;
       setEnlarged(true);
@@ -120,12 +141,31 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
       setEnlarged(false);
       setShowRing(false);
     }
+
     try {
+      // Some browsers need load() after src change
+      if (v.readyState < 2) {
+        v.load();
+      }
       await v.play();
       setPlaying(true);
       startTick();
-    } catch {
-      setPlaying(false);
+    } catch (err) {
+      // Retry muted then unmute (mobile autoplay quirks)
+      try {
+        v.muted = true;
+        await v.play();
+        if (!mutedLoopRef.current) {
+          v.muted = false;
+          setShowRing(true);
+          setEnlarged(true);
+        }
+        setPlaying(true);
+        startTick();
+      } catch {
+        setPlaying(false);
+        setEnlarged(false);
+      }
     }
   }
 
@@ -138,12 +178,15 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
     setShowRing(false);
     setProgressSafe(0);
     stopTick();
-    v.currentTime = 0;
+    try {
+      v.currentTime = 0;
+    } catch {
+      /* ignore */
+    }
     v.play?.().catch(() => {});
     setPlaying(true);
   }
 
-  // SVG: radius 46 in 100x100 viewBox; knob at progress angle
   const r = 46;
   const c = 2 * Math.PI * r;
   const dashOffset = c * (1 - progress);
@@ -166,6 +209,7 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
       style={{ width: size, height: size }}
       role="button"
       tabIndex={0}
+      onClick={togglePlay}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
@@ -179,15 +223,12 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
         className="tg-msg-video-note"
         src={src}
         playsInline
-        preload="metadata"
+        webkit-playsinline="true"
+        preload="auto"
         controls={false}
-        onClick={togglePlay}
         onEnded={onEnded}
         onPause={() => setPlaying(false)}
-        onPlay={() => {
-          setPlaying(true);
-          if (showRing || !mutedLoopRef.current) startTick();
-        }}
+        onPlay={() => setPlaying(true)}
       />
       {showRing ? (
         <svg
@@ -197,6 +238,7 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
           onPointerMove={onSeekPointerMove}
           onPointerUp={onSeekPointerUp}
           onPointerCancel={onSeekPointerUp}
+          onClick={(e) => e.stopPropagation()}
         >
           <circle className="tg-circle-progress-track" cx="50" cy="50" r={r} />
           <circle
@@ -208,7 +250,6 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
             strokeDashoffset={dashOffset}
             transform="rotate(-90 50 50)"
           />
-          {/* invisible wider hit ring for touch */}
           <circle className="tg-circle-progress-hit" cx="50" cy="50" r={r} />
           <circle className="tg-circle-progress-knob" cx={knobX} cy={knobY} r="4.5" />
         </svg>

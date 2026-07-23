@@ -295,3 +295,35 @@ html.native-app .tg-folder-tabs button.active {
 html.native-app .tg-chat-info-thumb-more {
   opacity: 1;
 }
+
+html.native-app .tg-msg {
+  max-width: min(88%, 100%);
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+html.native-app .tg-msg--media-bare {
+  overflow: visible;
+}
+
+html.native-app .tg-msg-media,
+html.native-app .tg-msg-image-btn,
+html.native-app .tg-msg-image,
+html.native-app .tg-msg-video {
+  max-width: 100% !important;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+html.native-app .tg-msg-video-note,
+html.native-app .tg-circle-player {
+  max-width: min(180px, 56vw);
+  width: min(180px, 56vw) !important;
+  height: min(180px, 56vw) !important;
+}
+
+html.native-app .tg-messages {
+  overflow-x: hidden;
+  max-width: 100%;
+}

@@ -1,7 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { API_URL } from "./config.js";
 
-let started = false;
+let startedForToken = "";
 
 async function postToken(authFetch, token, platform) {
   if (!token || !authFetch) return;
@@ -16,18 +16,26 @@ async function postToken(authFetch, token, platform) {
 }
 
 /**
- * Register for push on Capacitor native apps.
- * Requires google-services.json + FCM_SERVER_KEY on the server for delivery.
+ * Register for push on Capacitor native apps (FCM HTTP v1 + service account on server).
  */
-export async function initPushNotifications(authFetch) {
-  if (started || !authFetch) return;
-  if (!Capacitor.isNativePlatform()) return;
-  started = true;
+export async function initPushNotifications(authFetch, accessToken = "") {
+  if (!authFetch || !Capacitor.isNativePlatform()) return;
+  const key = String(accessToken || "anon");
+  if (startedForToken === key) return;
+  startedForToken = key;
+
   try {
     const { PushNotifications } = await import("@capacitor/push-notifications");
-    const perm = await PushNotifications.requestPermissions();
-    if (perm.receive !== "granted") return;
-    await PushNotifications.register();
+    let perm = await PushNotifications.checkPermissions();
+    if (perm.receive !== "granted") {
+      perm = await PushNotifications.requestPermissions();
+    }
+    if (perm.receive !== "granted") {
+      startedForToken = "";
+      return;
+    }
+
+    await PushNotifications.removeAllListeners();
 
     PushNotifications.addListener("registration", (token) => {
       const platform = Capacitor.getPlatform() === "ios" ? "ios" : "android";
@@ -35,7 +43,7 @@ export async function initPushNotifications(authFetch) {
     });
 
     PushNotifications.addListener("registrationError", () => {
-      /* ignore */
+      startedForToken = "";
     });
 
     PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
@@ -49,10 +57,23 @@ export async function initPushNotifications(authFetch) {
           /* ignore */
         }
       }
+      if (data.view === "bookings" || data.booking_id) {
+        try {
+          window.dispatchEvent(new CustomEvent("vmeste:open-bookings", { detail: { bookingId: data.booking_id } }));
+        } catch {
+          /* ignore */
+        }
+      }
     });
+
+    await PushNotifications.register();
   } catch {
-    started = false;
+    startedForToken = "";
   }
+}
+
+export function resetPushRegistration() {
+  startedForToken = "";
 }
 
 /** Browser Notification API fallback (tab must be allowed). */

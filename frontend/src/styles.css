@@ -1660,6 +1660,23 @@ body.theme-dark button.staff-perms-toggle:hover,
 
   .tg-msg {
     max-width: min(88%, 100%);
+    box-sizing: border-box;
+  }
+
+  .tg-msg-media,
+  .tg-msg-image-btn,
+  .tg-msg-image,
+  .tg-msg-video {
+    max-width: 100% !important;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .tg-msg-video-note,
+  .tg-circle-player {
+    max-width: min(180px, 56vw);
+    width: min(180px, 56vw) !important;
+    height: min(180px, 56vw) !important;
   }
 
   .tg-compose {
@@ -2416,10 +2433,13 @@ body.theme-dark .tg-chat-item-row:hover {
 .tg-msg {
   align-self: flex-start;
   max-width: 78%;
+  min-width: 0;
+  box-sizing: border-box;
   background: var(--tg-bubble);
   border-radius: 12px 12px 12px 4px;
   padding: 8px 12px;
   border: 1px solid var(--border);
+  overflow: hidden;
 }
 
 .tg-msg--media-bare {
@@ -2427,6 +2447,7 @@ body.theme-dark .tg-chat-item-row:hover {
   border: 0 !important;
   box-shadow: none !important;
   padding: 4px 2px;
+  overflow: visible;
 }
 
 .tg-msg-own {
@@ -5832,17 +5853,30 @@ html.native-app .page-logged .hero.top-row {
 }
 
 .tg-msg-image {
-  max-width: min(280px, 70vw);
+  max-width: min(280px, 100%);
+  width: 100%;
   max-height: 280px;
   border-radius: 12px;
   display: block;
   object-fit: cover;
+  box-sizing: border-box;
 }
 
 .tg-msg-video {
-  max-width: min(280px, 70vw);
+  max-width: min(280px, 100%);
+  width: 100%;
+  height: auto;
   border-radius: 12px;
   display: block;
+  box-sizing: border-box;
+}
+
+.tg-msg-media {
+  max-width: 100%;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .tg-msg-video-note {
@@ -5926,6 +5960,8 @@ html.native-app .page-logged .hero.top-row {
   cursor: pointer;
   display: block;
   max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .tg-msg-voice audio,

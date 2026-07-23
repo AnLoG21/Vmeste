@@ -34,6 +34,7 @@ import {
 import {
   initPushNotifications,
   maybeRequestWebNotificationPermission,
+  resetPushRegistration,
   showLocalBrowserNotification,
 } from "./pushNotifications.js";
 
@@ -2370,8 +2371,11 @@ export default function App() {
   }, [accessToken]);
 
   useEffect(() => {
-    if (!accessToken) return;
-    initPushNotifications(authFetch);
+    if (!accessToken) {
+      resetPushRegistration();
+      return;
+    }
+    initPushNotifications(authFetch, accessToken);
     maybeRequestWebNotificationPermission();
   }, [accessToken]);
 
@@ -2795,8 +2799,16 @@ export default function App() {
         `${API_URL}/booking/slots/available-windows/?provider=${encodeURIComponent(provider)}&service=${encodeURIComponent(serviceId)}&date=${encodeURIComponent(bookDate)}`,
       );
       if (cancelled) return;
-      if (res.ok) setClientBookWindows(await res.json());
-      else setClientBookWindows([]);
+      if (res.ok) {
+        const data = await res.json();
+        const now = Date.now();
+        setClientBookWindows(
+          (Array.isArray(data) ? data : []).filter((w) => {
+            const t = new Date(w.starts_at).getTime();
+            return Number.isFinite(t) && t > now;
+          })
+        );
+      } else setClientBookWindows([]);
     })();
     return () => {
       cancelled = true;
@@ -3145,6 +3157,7 @@ export default function App() {
     clientMeBootstrappedRef.current = false;
     setCurrentView("bookings");
     setAuthStatus("Вы вышли.");
+    resetPushRegistration();
   }
 
   async function onSubmit(event) {

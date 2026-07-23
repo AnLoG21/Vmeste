@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.db.models import Q
+from django.utils import timezone
 
 from catalog.models import Service
 
@@ -136,6 +137,7 @@ def list_available_windows(provider_id: int, service_id: int, book_date) -> list
     }
     booked = _booked_ranges(provider_id, book_date)
     windows = []
+    now = timezone.now()
 
     for slot in slots:
         eligible = []
@@ -152,6 +154,10 @@ def list_available_windows(provider_id: int, service_id: int, book_date) -> list
         cur = slot.starts_at
         while cur + duration <= slot.ends_at:
             w_end = cur + duration
+            # Skip windows that already started (or start in the past)
+            if cur < now:
+                cur += duration
+                continue
             for sid in eligible:
                 if _overlaps(cur, w_end, sid, booked):
                     continue
@@ -239,12 +245,15 @@ def book_time_window(provider_id: int, service_id: int, starts_at, ends_at, staf
         from notifications.models import InAppNotification
         from notifications.push import notify_users
 
+        recipients = {provider_id}
+        if booking.staff_id:
+            recipients.add(booking.staff_id)
         notify_users(
-            [provider_id],
+            list(recipients),
             kind=InAppNotification.Kind.BOOKING,
             title="Новая запись",
             body=f"{getattr(service, 'name', 'Услуга')}: клиент записался",
-            payload={"booking_id": str(booking.id)},
+            payload={"booking_id": str(booking.id), "view": "bookings"},
         )
     except Exception:
         pass
