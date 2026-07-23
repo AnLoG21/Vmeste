@@ -3,6 +3,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import logoMain from "./assets/logo-main.png";
 import LandingPage from "./LandingPage.jsx";
 import SubscriptionsPage from "./SubscriptionsPage.jsx";
+import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
 import "./landing.css";
 import {
   ORG_GALLERY_MAX_PHOTOS,
@@ -984,7 +985,7 @@ function chatMessagePlainText(m) {
   return (m.display_text || m.text || "").trim();
 }
 
-function renderChatMessageBody(m) {
+function renderChatMessageBody(m, opts = {}) {
   if (m.kind === "review_reply" && m.payload) {
     const p = m.payload;
     const rating = Math.min(5, Math.max(0, Number(p.rating) || 0));
@@ -1006,9 +1007,23 @@ function renderChatMessageBody(m) {
         {photos.length > 0 ? (
           <div className="tg-msg-review-photos review-photos">
             {photos.map((src, i) => (
-              <a key={`${src}-${i}`} href={reviewImageUrl(src)} target="_blank" rel="noreferrer">
+              <button
+                type="button"
+                key={`${src}-${i}`}
+                className="tg-msg-image-link"
+                onClick={() =>
+                  opts.onOpenPhotos?.(
+                    photos.map((s, idx) => ({
+                      id: `review-${m.id}-${idx}`,
+                      url: reviewImageUrl(s),
+                      source: "chat",
+                    })),
+                    i
+                  )
+                }
+              >
                 <img src={reviewImageUrl(src)} alt="" />
-              </a>
+              </button>
             ))}
           </div>
         ) : null}
@@ -1024,23 +1039,29 @@ function renderChatMessageBody(m) {
   if (kind === "image" && url) {
     return (
       <div className="tg-msg-media">
-        <a href={url} target="_blank" rel="noreferrer" className="tg-msg-image-link">
+        <button
+          type="button"
+          className="tg-msg-image-btn"
+          onClick={() => opts.onOpenPhotos?.([{ id: m.id, url, source: "chat" }], 0)}
+        >
           <img src={url} alt={m.text || "Фото"} className="tg-msg-image" loading="lazy" />
-        </a>
+        </button>
         {m.text ? <div className="tg-msg-text">{m.text}</div> : null}
       </div>
     );
   }
-  if ((kind === "video" || kind === "video_note") && url) {
+  if (kind === "video_note" && url) {
     return (
-      <div className={["tg-msg-media", kind === "video_note" && "tg-msg-media--circle"].filter(Boolean).join(" ")}>
-        <video
-          className={kind === "video_note" ? "tg-msg-video-note" : "tg-msg-video"}
-          src={url}
-          controls
-          playsInline
-          preload="metadata"
-        />
+      <div className="tg-msg-media tg-msg-media--circle">
+        <ChatVideoNotePlayer src={url} size={180} />
+        {m.text ? <div className="tg-msg-text">{m.text}</div> : null}
+      </div>
+    );
+  }
+  if (kind === "video" && url) {
+    return (
+      <div className="tg-msg-media">
+        <video className="tg-msg-video" src={url} controls playsInline preload="metadata" />
         {m.text ? <div className="tg-msg-text">{m.text}</div> : null}
       </div>
     );
@@ -2057,7 +2078,7 @@ export default function App() {
   const [chatInfoOpen, setChatInfoOpen] = useState(false);
   const [chatInfoTab, setChatInfoTab] = useState("photos");
   const [chatComposeMode, setChatComposeMode] = useState(() => loadChatComposeMode());
-  const [chatPendingFile, setChatPendingFile] = useState(null);
+  const [chatPendingFiles, setChatPendingFiles] = useState([]);
   const [chatPendingKind, setChatPendingKind] = useState("");
   const [chatRecordingKind, setChatRecordingKind] = useState(null);
   const [chatRecordLocked, setChatRecordLocked] = useState(false);
@@ -4241,6 +4262,20 @@ export default function App() {
   function scrollChatToMessageId(mid) {
     const el = document.getElementById(`tg-msg-${mid}`);
     el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (el) {
+      el.classList.add("tg-msg--flash");
+      window.setTimeout(() => el.classList.remove("tg-msg--flash"), 1600);
+    }
+  }
+
+  function jumpToChatMessage(mid) {
+    setChatInfoOpen(false);
+    window.setTimeout(() => scrollChatToMessageId(mid), 80);
+  }
+
+  function openChatPhotosLightbox(items, index = 0) {
+    if (!items?.length) return;
+    setOrgPhotoLightbox({ items, index: Math.max(0, Math.min(index, items.length - 1)) });
   }
 
   async function loadChatActivity() {
@@ -4486,7 +4521,7 @@ export default function App() {
       return false;
     }
     setChatInput("");
-    setChatPendingFile(null);
+    setChatPendingFiles([]);
     setChatPendingKind("");
     setChatStatus("");
     setChatAttachMenuOpen(false);
@@ -4496,8 +4531,19 @@ export default function App() {
 
   async function sendChatMessage(event) {
     event.preventDefault();
-    if (chatPendingFile) {
-      await postChatMessage({ text: chatInput, file: chatPendingFile, kind: chatPendingKind });
+    if (chatPendingFiles.length) {
+      const caption = chatInput.trim();
+      const items = [...chatPendingFiles];
+      setChatPendingFiles([]);
+      setChatInput("");
+      for (let i = 0; i < items.length; i += 1) {
+        const item = items[i];
+        await postChatMessage({
+          text: i === 0 ? caption : "",
+          file: item.file,
+          kind: item.kind,
+        });
+      }
       return;
     }
     if (!chatInput.trim()) return;
@@ -4510,23 +4556,26 @@ export default function App() {
     const input = chatFileInputRef.current;
     if (!input) return;
     input.accept = guessAttachAccept(kind === "music" ? "music" : kind);
+    input.multiple = true;
     input.value = "";
     input.click();
   }
 
   function onChatFilePicked(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    let kind = chatPendingKind;
-    if (!kind || kind === "auto") {
-      if (file.type.startsWith("image/")) kind = "image";
-      else if (file.type.startsWith("video/")) kind = "video";
-      else if (file.type.startsWith("audio/")) kind = "voice";
-      else kind = "file";
-    }
-    if (kind === "music") kind = "file";
-    setChatPendingFile(file);
-    setChatPendingKind(kind);
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const next = files.map((file) => {
+      let kind = chatPendingKind;
+      if (!kind || kind === "auto") {
+        if (file.type.startsWith("image/")) kind = "image";
+        else if (file.type.startsWith("video/")) kind = "video";
+        else if (file.type.startsWith("audio/")) kind = "voice";
+        else kind = "file";
+      }
+      if (kind === "music") kind = "file";
+      return { file, kind };
+    });
+    setChatPendingFiles((prev) => [...prev, ...next]);
   }
 
   function toggleChatComposeMode() {
@@ -4740,7 +4789,7 @@ export default function App() {
   }
 
   function onComposeActionPointerDown(e) {
-    if (chatInput.trim() || chatPendingFile || chatMediaPreview) return;
+    if (chatInput.trim() || chatPendingFiles.length || chatMediaPreview) return;
     e.preventDefault();
     chatDidHoldRef.current = false;
     chatPointerStartYRef.current = e.clientY ?? e.touches?.[0]?.clientY ?? 0;
@@ -7629,7 +7678,7 @@ export default function App() {
       setChatMsgSearchQuery("");
       setChatMsgSearchActiveIdx(0);
       setChatInfoOpen(false);
-      setChatPendingFile(null);
+      setChatPendingFiles([]);
       setChatPendingKind("");
       discardChatMediaPreview();
       if (chatRecordingKind) cancelChatRecording();
@@ -8523,11 +8572,22 @@ export default function App() {
                                 <span className="tg-msg-day-chip">{formatMessageDayDividerRu(m.created_at)}</span>
                               </div>
                             )}
-                            <div id={`tg-msg-${m.id}`} className={`tg-msg ${Number(m.sender) === Number(me?.id) ? "tg-msg-own" : ""}`}>
+                            <div
+                              id={`tg-msg-${m.id}`}
+                              className={[
+                                "tg-msg",
+                                Number(m.sender) === Number(me?.id) && "tg-msg-own",
+                                (m.kind === "voice" || m.kind === "video_note") && "tg-msg--media-bare",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                            >
                               <div className="tg-msg-author">
                                 {formatMessageSenderLine(m) || m.sender_username}
                               </div>
-                              {renderChatMessageBody(m)}
+                              {renderChatMessageBody(m, {
+                                onOpenPhotos: (items, index) => openChatPhotosLightbox(items, index),
+                              })}
                               <div className="tg-msg-meta">
                                 <div className="tg-msg-time">
                                   {new Date(m.created_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
@@ -8553,57 +8613,49 @@ export default function App() {
                         aria-live="polite"
                       >
                         {chatRecordingKind === "video_note" ? (
-                          <>
-                            <div className="tg-circle-live-wrap">
-                              <video ref={chatLiveVideoRef} className="tg-circle-live-video" playsInline muted autoPlay />
-                              <span className="tg-circle-live-timer">{formatRecordClock(chatRecordSecs)}</span>
-                            </div>
-                            {chatRecordLocked ? (
-                              <button type="button" className="tg-record-stop-btn" onClick={stopChatRecording}>
-                                Остановить
-                              </button>
-                            ) : null}
-                          </>
+                          <div className="tg-circle-live-wrap">
+                            <video ref={chatLiveVideoRef} className="tg-circle-live-video" playsInline muted autoPlay />
+                            <span className="tg-circle-live-timer">{formatRecordClock(chatRecordSecs)}</span>
+                          </div>
                         ) : (
-                          <>
-                            <div
-                              className="tg-circle-seek"
-                              onPointerDown={(e) => {
-                                e.currentTarget.setPointerCapture?.(e.pointerId);
-                                onCircleSeekPointer(e, chatPreviewMediaRef.current);
+                          <div
+                            className="tg-circle-seek"
+                            onPointerDown={(e) => {
+                              e.currentTarget.setPointerCapture?.(e.pointerId);
+                              onCircleSeekPointer(e, chatPreviewMediaRef.current);
+                            }}
+                            onPointerMove={(e) => {
+                              if (e.buttons || e.pressure > 0) onCircleSeekPointer(e, chatPreviewMediaRef.current);
+                            }}
+                          >
+                            <video
+                              key={chatMediaPreview.url}
+                              ref={chatPreviewMediaRef}
+                              className="tg-msg-video-note tg-msg-video-note--preview"
+                              src={chatMediaPreview.url}
+                              playsInline
+                              controls={false}
+                              preload="auto"
+                              onLoadedData={(e) => {
+                                e.currentTarget.play?.().catch(() => {});
                               }}
-                              onPointerMove={(e) => {
-                                if (e.buttons || e.pressure > 0) onCircleSeekPointer(e, chatPreviewMediaRef.current);
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const v = e.currentTarget;
+                                if (v.paused) v.play();
+                                else v.pause();
                               }}
+                            />
+                            <span className="tg-circle-seek-ring" aria-hidden />
+                            <button
+                              type="button"
+                              className="tg-circle-preview-discard"
+                              aria-label="Удалить"
+                              onClick={discardChatMediaPreview}
                             >
-                              <video
-                                key={chatMediaPreview.url}
-                                ref={chatPreviewMediaRef}
-                                className="tg-msg-video-note tg-msg-video-note--preview"
-                                src={chatMediaPreview.url}
-                                playsInline
-                                controls={false}
-                                preload="auto"
-                                onLoadedData={(e) => {
-                                  e.currentTarget.play?.().catch(() => {});
-                                }}
-                                onClick={(e) => {
-                                  const v = e.currentTarget;
-                                  if (v.paused) v.play();
-                                  else v.pause();
-                                }}
-                              />
-                              <span className="tg-circle-seek-ring" aria-hidden />
-                            </div>
-                            <div className="tg-media-preview-actions">
-                              <button type="button" className="ghost-btn" onClick={discardChatMediaPreview}>
-                                Удалить
-                              </button>
-                              <button type="button" className="primary" onClick={sendChatMediaPreview}>
-                                Отправить
-                              </button>
-                            </div>
-                          </>
+                              ×
+                            </button>
+                          </div>
                         )}
                       </div>
                     )}
@@ -8613,6 +8665,7 @@ export default function App() {
                         type="file"
                         className="tg-file-input-hidden"
                         onChange={onChatFilePicked}
+                        multiple
                         hidden
                       />
                       {chatMediaPreview && chatMediaPreview.kind !== "video_note" ? (
@@ -8634,12 +8687,6 @@ export default function App() {
                             </button>
                           </div>
                         </div>
-                      ) : chatRecordingKind === "video_note" || chatMediaPreview?.kind === "video_note" ? (
-                        <div className="tg-compose-recording-spacer muted">
-                          {chatRecordingKind === "video_note"
-                            ? `Запись кружка · ${formatRecordClock(chatRecordSecs)}`
-                            : "Проверьте кружок перед отправкой"}
-                        </div>
                       ) : (
                         <>
                           <div className="tg-attach-wrap tg-attach-wrap--compose" ref={tgAttachMenuRef}>
@@ -8648,7 +8695,7 @@ export default function App() {
                               className="tg-compose-icon-btn"
                               aria-label="Вложения"
                               title="Вложения"
-                              disabled={Boolean(chatRecordingKind)}
+                              disabled={Boolean(chatRecordingKind) || Boolean(chatMediaPreview)}
                               onClick={() => setChatAttachMenuOpen((v) => !v)}
                             >
                               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
@@ -8676,23 +8723,18 @@ export default function App() {
                             )}
                           </div>
                           <div className="tg-compose-main">
-                            {chatPendingFile ? (
+                            {chatPendingFiles.length ? (
                               <div className="tg-compose-pending">
                                 <span>
-                                  {chatPendingKind === "image"
-                                    ? "🖼"
-                                    : chatPendingKind === "video" || chatPendingKind === "video_note"
-                                      ? "🎬"
-                                      : chatPendingKind === "voice"
-                                        ? "🎤"
-                                        : "📎"}{" "}
-                                  {chatPendingFile.name}
+                                  {chatPendingFiles.length === 1
+                                    ? chatPendingFiles[0].file.name
+                                    : `${chatPendingFiles.length} файлов`}
                                 </span>
                                 <button
                                   type="button"
                                   className="tg-compose-pending-clear"
                                   onClick={() => {
-                                    setChatPendingFile(null);
+                                    setChatPendingFiles([]);
                                     setChatPendingKind("");
                                   }}
                                 >
@@ -8714,6 +8756,13 @@ export default function App() {
                                   </button>
                                 ) : null}
                               </div>
+                            ) : chatRecordingKind === "video_note" ? (
+                              <div className="tg-compose-circle-status muted">
+                                Запись · {formatRecordClock(chatRecordSecs)}
+                                {chatRecordLiftHint ? " · отпустите, чтобы закрепить" : ""}
+                              </div>
+                            ) : chatMediaPreview?.kind === "video_note" ? (
+                              <div className="tg-compose-circle-status muted">Кружок готов к отправке</div>
                             ) : (
                               <input
                                 className="tg-compose-input"
@@ -8724,7 +8773,13 @@ export default function App() {
                               />
                             )}
                           </div>
-                          {chatInput.trim() || chatPendingFile ? (
+                          {chatMediaPreview?.kind === "video_note" ? (
+                            <button type="button" className="tg-send-btn" aria-label="Отправить кружок" title="Отправить" onClick={sendChatMediaPreview}>
+                              <svg className="tg-send-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                                <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                              </svg>
+                            </button>
+                          ) : chatInput.trim() || chatPendingFiles.length ? (
                             <button type="submit" className="tg-send-btn" aria-label="Отправить сообщение" title="Отправить">
                               <svg className="tg-send-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
                                 <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
@@ -9022,9 +9077,23 @@ export default function App() {
                       (chatMediaGroups.photos.length ? (
                         <div className="tg-chat-info-grid">
                           {chatMediaGroups.photos.map((m) => (
-                            <a key={m.id} href={m.url} target="_blank" rel="noreferrer">
-                              <img src={m.url} alt="" />
-                            </a>
+                            <div key={m.id} className="tg-chat-info-thumb-wrap">
+                              <button
+                                type="button"
+                                className="tg-chat-info-thumb"
+                                onClick={() => {
+                                  openChatPhotosLightbox(
+                                    chatMediaGroups.photos.map((x) => ({ id: x.id, url: x.url, source: "chat" })),
+                                    chatMediaGroups.photos.findIndex((x) => x.id === m.id)
+                                  );
+                                }}
+                              >
+                                <img src={m.url} alt="" />
+                              </button>
+                              <button type="button" className="tg-chat-info-goto" onClick={() => jumpToChatMessage(m.id)}>
+                                К сообщению
+                              </button>
+                            </div>
                           ))}
                         </div>
                       ) : (
@@ -9034,8 +9103,11 @@ export default function App() {
                       (chatMediaGroups.videos.length ? (
                         <ul className="tg-chat-info-list">
                           {chatMediaGroups.videos.map((m) => (
-                            <li key={m.id}>
+                            <li key={m.id} className="tg-chat-info-row">
                               <video src={m.url} controls preload="metadata" />
+                              <button type="button" className="ghost-btn small-btn" onClick={() => jumpToChatMessage(m.id)}>
+                                К сообщению
+                              </button>
                             </li>
                           ))}
                         </ul>
@@ -9046,10 +9118,13 @@ export default function App() {
                       (chatMediaGroups.files.length ? (
                         <ul className="tg-chat-info-list">
                           {chatMediaGroups.files.map((m) => (
-                            <li key={m.id}>
+                            <li key={m.id} className="tg-chat-info-row">
                               <a href={m.url} target="_blank" rel="noreferrer">
                                 {m.name || "Файл"}
                               </a>
+                              <button type="button" className="ghost-btn small-btn" onClick={() => jumpToChatMessage(m.id)}>
+                                К сообщению
+                              </button>
                             </li>
                           ))}
                         </ul>
@@ -9060,10 +9135,13 @@ export default function App() {
                       (chatMediaGroups.links.length ? (
                         <ul className="tg-chat-info-list">
                           {chatMediaGroups.links.map((m) => (
-                            <li key={m.id}>
+                            <li key={m.id} className="tg-chat-info-row">
                               <a href={(m.text || "").match(/https?:\/\/\S+/)?.[0] || "#"} target="_blank" rel="noreferrer">
                                 {m.text}
                               </a>
+                              <button type="button" className="ghost-btn small-btn" onClick={() => jumpToChatMessage(m.id)}>
+                                К сообщению
+                              </button>
                             </li>
                           ))}
                         </ul>
@@ -9074,9 +9152,12 @@ export default function App() {
                       (chatMediaGroups.music.length ? (
                         <ul className="tg-chat-info-list">
                           {chatMediaGroups.music.map((m) => (
-                            <li key={m.id}>
+                            <li key={m.id} className="tg-chat-info-row">
                               <div>{m.name}</div>
                               <audio src={m.url} controls preload="metadata" />
+                              <button type="button" className="ghost-btn small-btn" onClick={() => jumpToChatMessage(m.id)}>
+                                К сообщению
+                              </button>
                             </li>
                           ))}
                         </ul>
@@ -9087,8 +9168,11 @@ export default function App() {
                       (chatMediaGroups.voice.length ? (
                         <ul className="tg-chat-info-list">
                           {chatMediaGroups.voice.map((m) => (
-                            <li key={m.id}>
+                            <li key={m.id} className="tg-chat-info-row">
                               <audio src={m.url} controls preload="metadata" />
+                              <button type="button" className="ghost-btn small-btn" onClick={() => jumpToChatMessage(m.id)}>
+                                К сообщению
+                              </button>
                             </li>
                           ))}
                         </ul>
