@@ -244,8 +244,30 @@ class MessageViewSet(viewsets.ModelViewSet):
         conv_id = serializer.validated_data["conversation"].id
         if not Conversation.objects.filter(pk=conv_id, members__user=self.request.user).exists():
             raise PermissionDenied()
-        serializer.save(sender=self.request.user)
+        msg = serializer.save(sender=self.request.user)
         User.objects.filter(pk=self.request.user.id).update(last_seen_at=timezone.now())
+        try:
+            from notifications.models import InAppNotification
+            from notifications.push import notify_users
+            from .services import message_preview_text
+
+            peer_ids = list(
+                ConversationMember.objects.filter(conversation_id=conv_id)
+                .exclude(user_id=self.request.user.id)
+                .values_list("user_id", flat=True)
+            )
+            if peer_ids:
+                title = "Новое сообщение"
+                body = message_preview_text(msg) or "Сообщение"
+                notify_users(
+                    peer_ids,
+                    kind=InAppNotification.Kind.CHAT_MESSAGE,
+                    title=title,
+                    body=body,
+                    payload={"conversation_id": str(conv_id), "message_id": str(msg.id)},
+                )
+        except Exception:
+            pass
 
 
 class ChatActivitySummaryView(APIView):

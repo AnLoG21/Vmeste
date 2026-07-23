@@ -135,21 +135,27 @@ class ConversationSerializer(serializers.ModelSerializer):
 def infer_message_kind(file_obj, explicit_kind=""):
     kind = (explicit_kind or "").strip().lower()
     allowed = {c.value for c in Message.Kind}
+    # Prefer client-provided kind for voice/circle/file uploads.
     if kind in allowed and kind != Message.Kind.TEXT:
         return kind
     if not file_obj:
         return Message.Kind.TEXT
     name = (getattr(file_obj, "name", "") or "").lower()
     ctype = (getattr(file_obj, "content_type", "") or "").lower()
-    if kind == Message.Kind.VIDEO_NOTE or name.endswith(".webm") and "video" in ctype:
-        if "video_note" in name or kind == Message.Kind.VIDEO_NOTE:
-            return Message.Kind.VIDEO_NOTE
+    if "video_note" in name:
+        return Message.Kind.VIDEO_NOTE
     if ctype.startswith("image/") or name.endswith((".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic")):
         return Message.Kind.IMAGE
-    if ctype.startswith("video/") or name.endswith((".mp4", ".mov", ".webm", ".mkv")):
-        return Message.Kind.VIDEO_NOTE if kind == Message.Kind.VIDEO_NOTE else Message.Kind.VIDEO
-    if ctype.startswith("audio/") or name.endswith((".ogg", ".oga", ".mp3", ".m4a", ".wav", ".webm")):
+    if ctype.startswith("audio/") or name.endswith((".ogg", ".oga", ".mp3", ".m4a", ".wav", ".aac", ".flac")):
         return Message.Kind.VOICE
+    if ctype.startswith("video/") or name.endswith((".mp4", ".mov", ".mkv")):
+        return Message.Kind.VIDEO
+    # Ambiguous container (.webm): default by mime family, else file.
+    if name.endswith(".webm"):
+        if ctype.startswith("video/"):
+            return Message.Kind.VIDEO
+        if ctype.startswith("audio/") or not ctype:
+            return Message.Kind.VOICE
     return Message.Kind.FILE
 
 
@@ -242,4 +248,15 @@ class MessageSerializer(serializers.ModelSerializer):
                 "name": getattr(attachment, "name", "") or "",
                 "size": getattr(attachment, "size", 0) or 0,
             }
+        if request is not None:
+            dur = request.data.get("duration_sec")
+            try:
+                dur_i = int(float(dur))
+            except (TypeError, ValueError):
+                dur_i = None
+            if dur_i and dur_i > 0:
+                validated_data["payload"] = {
+                    **(validated_data.get("payload") or {}),
+                    "duration_sec": dur_i,
+                }
         return super().create(validated_data)

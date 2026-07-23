@@ -1,6 +1,12 @@
-# HTTPS через Let's Encrypt (прямой доступ к Selectel, без Cloudflare proxy).
+# HTTPS via Let's Encrypt.
 {$DOMAIN}, www.{$DOMAIN} {
-	@backend path /api/* /admin* /media/* /static/*
+	# Uploaded media from shared Docker volume (fast path)
+	handle_path /media/* {
+		root * /srv/media
+		file_server
+	}
+
+	@backend path /api/* /admin* /static/*
 	handle @backend {
 		reverse_proxy web:8000 {
 			header_up Host {host}

@@ -166,6 +166,8 @@ SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "vmesteofficialsupport@gmail.com
 
 YOOKASSA_SHOP_ID = os.environ.get("YOOKASSA_SHOP_ID", "")
 YOOKASSA_SECRET_KEY = os.environ.get("YOOKASSA_SECRET_KEY", "")
+# Legacy FCM server key for Android/iOS push (Firebase Console → Cloud Messaging)
+FCM_SERVER_KEY = os.environ.get("FCM_SERVER_KEY", "")
 
 TEMPLATES = [
     {

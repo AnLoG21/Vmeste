@@ -6,13 +6,14 @@ http://{$DOMAIN}, http://www.{$DOMAIN} {
 
 	encode gzip
 
+	handle_path /media/* {
+		root * /srv/media
+		file_server
+	}
 	handle /api/* {
 		reverse_proxy web:8000
 	}
 	handle /admin* {
-		reverse_proxy web:8000
-	}
-	handle /media/* {
 		reverse_proxy web:8000
 	}
 	handle /static/* {

@@ -235,4 +235,17 @@ def book_time_window(provider_id: int, service_id: int, starts_at, ends_at, staf
         staff_id=staff_id or booked_slot.staff_id,
         comment=(comment or "")[:250],
     )
+    try:
+        from notifications.models import InAppNotification
+        from notifications.push import notify_users
+
+        notify_users(
+            [provider_id],
+            kind=InAppNotification.Kind.BOOKING,
+            title="Новая запись",
+            body=f"{getattr(service, 'name', 'Услуга')}: клиент записался",
+            payload={"booking_id": str(booking.id)},
+        )
+    except Exception:
+        pass
     return booking

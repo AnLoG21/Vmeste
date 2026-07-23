@@ -307,6 +307,19 @@ class BookingViewSet(viewsets.ModelViewSet):
             staff_id=int(staff_id) if staff_id not in (None, "", "null") else slot.staff_id,
             comment=comment,
         )
+        try:
+            from notifications.models import InAppNotification
+            from notifications.push import notify_users
+
+            notify_users(
+                [booking.provider_id],
+                kind=InAppNotification.Kind.BOOKING,
+                title="Новая запись",
+                body=f"{service.name}: клиент записался",
+                payload={"booking_id": str(booking.id)},
+            )
+        except Exception:
+            pass
         ser = self.get_serializer(booking)
         return Response(ser.data, status=status.HTTP_201_CREATED)
 

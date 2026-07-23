@@ -20,5 +20,5 @@ urlpatterns = [
     path("api/subscriptions/", include("subscriptions.urls")),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Media must be reachable in production too (Caddy proxies /media/* here as fallback).
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
