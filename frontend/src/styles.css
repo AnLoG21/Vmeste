@@ -5782,16 +5782,51 @@ html.native-app .page-logged .hero.top-row {
   inset: 0;
   top: 0;
   right: 0;
-  bottom: 0;
+  /* Leave compose bar clickable */
+  bottom: max(76px, calc(env(safe-area-inset-bottom, 0px) + 64px));
   left: 0;
   z-index: 10045;
   background: rgba(14, 18, 24, 0.78);
-  pointer-events: auto;
+  pointer-events: none;
+}
+
+.tg-circle-stage--overlay.tg-circle-stage--live {
+  /* During live record, keep full dim but still leave compose reachable for stop */
+  bottom: max(76px, calc(env(safe-area-inset-bottom, 0px) + 64px));
 }
 
 .tg-circle-stage .tg-circle-live-wrap,
-.tg-circle-stage .tg-circle-seek {
+.tg-circle-stage .tg-circle-seek,
+.tg-circle-stage-actions {
   pointer-events: auto;
+}
+
+.tg-circle-stage-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.tg-circle-stage-btn {
+  min-width: 112px;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tg-circle-stage-btn--discard {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.tg-circle-stage-btn--send {
+  background: #ff7a00;
+  color: #fff;
 }
 
 .tg-compose-circle-status {
@@ -5803,16 +5838,18 @@ html.native-app .page-logged .hero.top-row {
   position: absolute;
   top: 8px;
   right: 8px;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.65);
   color: #fff;
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1;
   cursor: pointer;
-  z-index: 2;
+  z-index: 5;
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 
 .tg-compose-recording-spacer {

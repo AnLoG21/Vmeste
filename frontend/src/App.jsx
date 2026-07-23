@@ -8656,44 +8656,72 @@ export default function App() {
                               <span className="tg-circle-live-timer">{formatRecordClock(chatRecordSecs)}</span>
                             </div>
                           ) : (
-                            <div
-                              className="tg-circle-seek"
-                              onPointerDown={(e) => {
-                                e.currentTarget.setPointerCapture?.(e.pointerId);
-                                onCircleSeekPointer(e, chatPreviewMediaRef.current);
-                              }}
-                              onPointerMove={(e) => {
-                                if (e.buttons || e.pressure > 0) onCircleSeekPointer(e, chatPreviewMediaRef.current);
-                              }}
-                            >
-                              <video
-                                key={chatMediaPreview.url}
-                                ref={chatPreviewMediaRef}
-                                className="tg-msg-video-note tg-msg-video-note--preview"
-                                src={chatMediaPreview.url}
-                                playsInline
-                                controls={false}
-                                preload="auto"
-                                onLoadedData={(e) => {
-                                  e.currentTarget.play?.().catch(() => {});
+                            <>
+                              <div
+                                className="tg-circle-seek"
+                                onPointerDown={(e) => {
+                                  if (e.target.closest("button")) return;
+                                  e.currentTarget.setPointerCapture?.(e.pointerId);
+                                  onCircleSeekPointer(e, chatPreviewMediaRef.current);
                                 }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const v = e.currentTarget;
-                                  if (v.paused) v.play();
-                                  else v.pause();
+                                onPointerMove={(e) => {
+                                  if (e.target.closest("button")) return;
+                                  if (e.buttons || e.pressure > 0) onCircleSeekPointer(e, chatPreviewMediaRef.current);
                                 }}
-                              />
-                              <span className="tg-circle-seek-ring" aria-hidden />
-                              <button
-                                type="button"
-                                className="tg-circle-preview-discard"
-                                aria-label="Удалить"
-                                onClick={discardChatMediaPreview}
                               >
-                                ×
-                              </button>
-                            </div>
+                                <video
+                                  key={chatMediaPreview.url}
+                                  ref={chatPreviewMediaRef}
+                                  className="tg-msg-video-note tg-msg-video-note--preview"
+                                  src={chatMediaPreview.url}
+                                  playsInline
+                                  controls={false}
+                                  preload="auto"
+                                  onLoadedData={(e) => {
+                                    e.currentTarget.play?.().catch(() => {});
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const v = e.currentTarget;
+                                    if (v.paused) v.play();
+                                    else v.pause();
+                                  }}
+                                />
+                                <span className="tg-circle-seek-ring" aria-hidden />
+                                <button
+                                  type="button"
+                                  className="tg-circle-preview-discard"
+                                  aria-label="Удалить кружок"
+                                  onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    discardChatMediaPreview();
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                              <div className="tg-circle-stage-actions">
+                                <button
+                                  type="button"
+                                  className="tg-circle-stage-btn tg-circle-stage-btn--discard"
+                                  onClick={discardChatMediaPreview}
+                                >
+                                  Удалить
+                                </button>
+                                <button
+                                  type="button"
+                                  className="tg-circle-stage-btn tg-circle-stage-btn--send"
+                                  onClick={sendChatMediaPreview}
+                                >
+                                  Отправить
+                                </button>
+                              </div>
+                            </>
                           )}
                         </div>,
                         document.body
