@@ -5,6 +5,7 @@ from .views import (
     AutomationRequestView,
     ChangeEmailView,
     ChangePasswordView,
+    ConfirmPasswordChangeView,
     MeView,
     PresencePingView,
     ResendVerificationView,
@@ -26,6 +27,7 @@ urlpatterns = [
     path("gallery/", ProviderGalleryView.as_view(), name="provider-gallery"),
     path("presence/ping/", PresencePingView.as_view(), name="user-presence-ping"),
     path("change-password/", ChangePasswordView.as_view(), name="user-change-password"),
+    path("confirm-password-change/", ConfirmPasswordChangeView.as_view(), name="user-confirm-password-change"),
     path("change-email/", ChangeEmailView.as_view(), name="user-change-email"),
     path("automation-request/", AutomationRequestView.as_view(), name="automation-request"),
 ]

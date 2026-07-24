@@ -59,6 +59,8 @@ class ProviderGalleryPhotoSerializer(serializers.ModelSerializer):
 class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     password_confirm = serializers.CharField(write_only=True)
+    first_name = serializers.CharField(required=True, allow_blank=False, max_length=150)
+    last_name = serializers.CharField(required=True, allow_blank=False, max_length=150)
     organization_address_details = serializers.CharField(required=False, allow_blank=True, write_only=True)
     entrance = serializers.CharField(required=False, allow_blank=True, write_only=True)
     apartment = serializers.CharField(required=False, allow_blank=True, write_only=True)
@@ -100,6 +102,18 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         if User.objects.filter(username__iexact=username).exists():
             raise serializers.ValidationError("Пользователь с таким логином уже существует.")
         return username
+
+    def validate_first_name(self, value):
+        name = (value or "").strip()
+        if len(name) < 1:
+            raise serializers.ValidationError("Укажите имя.")
+        return name
+
+    def validate_last_name(self, value):
+        name = (value or "").strip()
+        if len(name) < 1:
+            raise serializers.ValidationError("Укажите фамилию.")
+        return name
 
     def validate(self, attrs):
         if attrs["password"] != attrs.pop("password_confirm", None):

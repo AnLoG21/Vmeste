@@ -37,6 +37,9 @@ import {
   resetPushRegistration,
   showLocalBrowserNotification,
 } from "./pushNotifications.js";
+import { ensurePhonePlus7, phoneFieldProps } from "./phone.js";
+import { showToast } from "./toast.js";
+import { navigateView, viewFromPath } from "./viewRoutes.js";
 
 function formatWebsiteHref(url) {
   const s = String(url || "").trim();
@@ -568,7 +571,80 @@ function translateAddrSegToRu(seg) {
     if (b === "nenets") return "Ненецкий автономный округ";
   }
 
-  return t;
+  // Fallback: letter-by-letter latin → russian for leftover English OSM labels
+  return transliterateLatinToRussian(t);
+}
+
+const LATIN_TO_RU_CHARS = {
+  a: "а",
+  b: "б",
+  c: "к",
+  d: "д",
+  e: "е",
+  f: "ф",
+  g: "г",
+  h: "х",
+  i: "и",
+  j: "дж",
+  k: "к",
+  l: "л",
+  m: "м",
+  n: "н",
+  o: "о",
+  p: "п",
+  q: "к",
+  r: "р",
+  s: "с",
+  t: "т",
+  u: "у",
+  v: "в",
+  w: "в",
+  x: "кс",
+  y: "й",
+  z: "з",
+};
+
+function transliterateLatinToRussian(text) {
+  let s = String(text || "");
+  const digraphs = [
+    ["sch", "щ"],
+    ["sh", "ш"],
+    ["ch", "ч"],
+    ["zh", "ж"],
+    ["kh", "х"],
+    ["ts", "ц"],
+    ["yu", "ю"],
+    ["ya", "я"],
+    ["yo", "ё"],
+    ["ye", "е"],
+  ];
+  let out = "";
+  let i = 0;
+  const lower = s.toLowerCase();
+  while (i < lower.length) {
+    const ch = lower[i];
+    if (!/[a-z]/.test(ch)) {
+      out += s[i];
+      i += 1;
+      continue;
+    }
+    let matched = false;
+    for (const [lat, ru] of digraphs) {
+      if (lower.startsWith(lat, i)) {
+        const upper = s[i] === s[i].toUpperCase() && /[A-Z]/.test(s[i]);
+        out += upper ? ru[0].toUpperCase() + ru.slice(1) : ru;
+        i += lat.length;
+        matched = true;
+        break;
+      }
+    }
+    if (matched) continue;
+    const ru = LATIN_TO_RU_CHARS[ch] || ch;
+    const upper = /[A-Z]/.test(s[i]);
+    out += upper ? ru[0].toUpperCase() + ru.slice(1) : ru;
+    i += 1;
+  }
+  return out;
 }
 
 /** Латинские названия улиц из OSM (без кириллицы в сегменте) — типовые замены. */
@@ -890,7 +966,7 @@ const emptyRegisterForm = {
   last_name: "",
   patronymic: "",
   email: "",
-  phone: "",
+  phone: "+7",
   role: "client",
   password: "",
   password_confirm: "",
@@ -904,6 +980,24 @@ const emptyRegisterForm = {
   floor: "",
   organization_latitude: "55.751244",
   organization_longitude: "37.618423",
+};
+
+const BOOKING_MSG_PRESETS = {
+  confirm: [
+    "Здравствуйте! Ваша запись подтверждена на {date}. Ждём вас!",
+    "Запись на {date} подтверждена. Если планы изменятся — напишите нам заранее.",
+    "Подтверждаем запись на {date}. До встречи!",
+  ],
+  cancel: [
+    "К сожалению, запись на {date} отменена. При необходимости выберите другое время.",
+    "Ваша запись на {date} отменена. Будем рады видеть вас в другой день.",
+    "Запись на {date} снята. Если нужна помощь с новой записью — напишите нам.",
+  ],
+  done: [
+    "Спасибо, что были с нами {date}! Будем рады отзыву и новой встрече.",
+    "Услуга по записи на {date} оказана. Благодарим за визит!",
+    "Запись на {date} завершена. Спасибо, что выбрали нас!",
+  ],
 };
 
 function buildIntervalPopoverFixedStyle(anchorEl) {
@@ -1142,9 +1236,12 @@ function bookingStatusLabel(status) {
 function formatInAppNotificationText(n) {
   const title = (n?.payload?.title || "").trim();
   const body = (n?.payload?.body || "").trim();
-  if (title && body) return `${title}: ${body}`;
-  if (body) return body;
-  if (title) return title;
+  const when =
+    (n?.payload?.when || "").trim() ||
+    (n?.payload?.starts_at ? formatBookingDateTime(n.payload.starts_at) : "");
+  if (title && body) return [title, body, when].filter(Boolean).join(" · ");
+  if (body) return [body, when].filter(Boolean).join(" · ");
+  if (title) return [title, when].filter(Boolean).join(" · ");
   if (n?.kind === "staff_invite_accepted") {
     return `Сотрудник ${n.payload?.staff_name || ""} принял приглашение.`.trim();
   }
@@ -1264,6 +1361,7 @@ const bookingTokenDragRef = { el: null };
 const bookingTokenPointerRef = { active: false, token: null, editorRoot: null, onComplete: null };
 
 function stopBookingTokenPointerDrag() {
+  document.getElementById("booking-token-ghost")?.remove();
   if (!bookingTokenPointerRef.active) return;
   bookingTokenPointerRef.active = false;
   bookingTokenPointerRef.token = null;
@@ -1276,7 +1374,26 @@ function stopBookingTokenPointerDrag() {
 }
 
 function onBookingTokenPointerMove(e) {
-  if (bookingTokenPointerRef.active) e.preventDefault();
+  if (!bookingTokenPointerRef.active) return;
+  e.preventDefault();
+  let ghost = document.getElementById("booking-token-ghost");
+  if (!ghost) {
+    ghost = document.createElement("div");
+    ghost.id = "booking-token-ghost";
+    ghost.textContent = "Дата и время";
+    Object.assign(ghost.style, {
+      position: "fixed",
+      zIndex: "9999",
+      pointerEvents: "none",
+      padding: "6px 10px",
+      borderRadius: "999px",
+      background: "#fff",
+      boxShadow: "0 4px 16px rgba(0,0,0,.18)",
+    });
+    document.body.appendChild(ghost);
+  }
+  ghost.style.left = `${e.clientX + 12}px`;
+  ghost.style.top = `${e.clientY + 12}px`;
 }
 
 function onBookingTokenPointerUp(e) {
@@ -1293,6 +1410,7 @@ function startBookingTokenPointerDrag({ token, editorRoot, onComplete }) {
   bookingTokenPointerRef.editorRoot = editorRoot;
   bookingTokenPointerRef.onComplete = onComplete;
   token?.classList?.add("booking-msg-token--dragging");
+  token?.classList?.add("booking-msg-token--pointer-enabled");
   document.body.classList.add("booking-token-pointer-dragging");
   document.addEventListener("pointermove", onBookingTokenPointerMove, { passive: false });
   document.addEventListener("pointerup", onBookingTokenPointerUp);
@@ -1512,6 +1630,7 @@ function BookingMsgDateToken({ onPointerDown, onDragStart, onRemove, onClick, cl
       type="button"
       draggable
       className={["booking-msg-token", className].filter(Boolean).join(" ")}
+      style={{ touchAction: "none" }}
       onPointerDown={onPointerDown}
       onDragStart={onDragStart}
       onClick={onClick}
@@ -1546,7 +1665,7 @@ function BookingMsgDateToken({ onPointerDown, onDragStart, onRemove, onClick, cl
   );
 }
 
-function BookingMessageField({ id, label, value, onChange, placeholder, highlighted }) {
+function BookingMessageField({ id, label, value, onChange, placeholder, highlighted, presetKey }) {
   const editorRef = useRef(null);
   const syncingRef = useRef(false);
   const isEmpty = !value.trim();
@@ -1576,7 +1695,7 @@ function BookingMessageField({ id, label, value, onChange, placeholder, highligh
     const startY = e.clientY;
     const root = editorRef.current;
     startBookingTokenPointerDrag({
-      token: null,
+      token: e.currentTarget,
       editorRoot: root,
       onComplete: (x, y, editorRoot) => {
         if (Math.hypot(x - startX, y - startY) < 8) return;
@@ -1604,6 +1723,21 @@ function BookingMessageField({ id, label, value, onChange, placeholder, highligh
       <label className="field-label" htmlFor={id}>
         {label}
       </label>
+      {BOOKING_MSG_PRESETS[presetKey]?.length ? (
+        <div className="booking-msg-presets">
+          {BOOKING_MSG_PRESETS[presetKey].map((preset, index) => (
+            <button
+              key={preset}
+              type="button"
+              className="ghost-btn small"
+              aria-label={`Подсказка ${index + 1} для поля «${label}»`}
+              onClick={() => onChange(preset)}
+            >
+              Подсказка
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div
         id={id}
         ref={editorRef}
@@ -1913,11 +2047,17 @@ export default function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [registerStep, setRegisterStep] = useState(1);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [currentView, setCurrentView] = useState("bookings");
+  const [currentView, setCurrentViewState] = useState(() => viewFromPath(window.location.pathname) || "bookings");
+  const setCurrentView = useCallback((view) => {
+    setCurrentViewState(view);
+    navigateView(view);
+  }, []);
 
   const [accessToken, setAccessToken] = useState(localStorage.getItem("vmeste_access") || "");
   const [refreshToken, setRefreshToken] = useState(localStorage.getItem("vmeste_refresh") || "");
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [me, setMe] = useState(null);
 
   const [roles, setRoles] = useState([]);
@@ -2212,6 +2352,7 @@ export default function App() {
   const [chatSettingsMuteUntil, setChatSettingsMuteUntil] = useState("");
   const [incomingToasts, setIncomingToasts] = useState([]);
   const [chatActivity, setChatActivity] = useState(null);
+  const lastNotificationToastIdRef = useRef(null);
   const [chatReceiptsMode, setChatReceiptsMode] = useState(() => loadReceiptsPref());
   const currentViewRef = useRef(currentView);
   const meRef = useRef(me);
@@ -2353,6 +2494,7 @@ export default function App() {
     loadRoles();
     loadSpheres();
     handleVerifyEmailFromUrl();
+    handleConfirmPasswordChangeFromUrl();
   }, []);
 
   useEffect(() => {
@@ -2374,6 +2516,7 @@ export default function App() {
   }, [accessToken]);
 
   function openAuth(mode) {
+    destroyRegMap();
     setAuthMode(mode);
     setShowAuthModal(true);
     setRegisterStep(1);
@@ -2384,6 +2527,7 @@ export default function App() {
   }
 
   function closeAuth() {
+    destroyRegMap();
     setShowAuthModal(false);
     setVerifyEmailNotice(null);
     setResendStatus("");
@@ -2419,6 +2563,28 @@ export default function App() {
     initPushNotifications(authFetch, accessToken);
     maybeRequestWebNotificationPermission();
   }, [accessToken]);
+
+  useEffect(() => {
+    const notifications = chatActivity?.notifications || [];
+    if (!notifications.length) return;
+    const newest = [...notifications].sort((a, b) => {
+      const aTime = new Date(a.created_at || 0).getTime();
+      const bTime = new Date(b.created_at || 0).getTime();
+      return bTime - aTime || Number(b.id || 0) - Number(a.id || 0);
+    })[0];
+    if (!newest || newest.id === lastNotificationToastIdRef.current) return;
+    lastNotificationToastIdRef.current = newest.id;
+    showToast(newest.payload?.body || formatInAppNotificationText(newest));
+  }, [chatActivity?.notifications]);
+
+  useEffect(() => {
+    function onPop() {
+      const v = viewFromPath(window.location.pathname);
+      if (v) setCurrentViewState(v);
+    }
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   const chatActivityBadgeRef = useRef(0);
   useEffect(() => {
@@ -2859,7 +3025,7 @@ export default function App() {
   useEffect(() => {
     const map = clientDiscoverMapRef.current;
     if (!map || currentView !== "client_map" || me?.role !== "client") return;
-    const lockMap = Boolean(mapOrgPopup || clientBookModalOpen || clientFiltersOpen);
+    const lockMap = Boolean(clientBookModalOpen || clientFiltersOpen);
     try {
       if (lockMap) {
         map.behaviors.disable(["drag", "scrollZoom", "dblClickZoom", "multiTouch"]);
@@ -2869,7 +3035,7 @@ export default function App() {
     } catch {
       // ignore
     }
-  }, [mapOrgPopup, clientBookModalOpen, clientFiltersOpen, currentView, me?.role]);
+  }, [clientBookModalOpen, clientFiltersOpen, currentView, me?.role]);
 
   useEffect(() => {
     if (currentView !== "client_map" || me?.role !== "client") return undefined;
@@ -3102,7 +3268,8 @@ export default function App() {
 
   async function handleVerifyEmailFromUrl() {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get("verify_email");
+    const isVerifyPath = window.location.pathname.includes("/verify-email");
+    const token = params.get("verify_email") || (isVerifyPath ? params.get("token") : "");
     if (!token) return;
     const response = await fetch(`${API_URL}/users/verify-email/`, {
       method: "POST",
@@ -3113,8 +3280,29 @@ export default function App() {
     if (response.ok) {
       setAuthMode("login");
       setShowAuthModal(true);
+      window.history.replaceState({}, document.title, "/");
     }
-    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
+  async function handleConfirmPasswordChangeFromUrl() {
+    if (!window.location.pathname.includes("/confirm-password-change")) return;
+    const token = new URLSearchParams(window.location.search).get("token");
+    if (!token) return;
+    const response = await fetch(`${API_URL}/users/confirm-password-change/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    const data = await response.json().catch(() => ({}));
+    const detail = data.detail || (response.ok
+      ? "Пароль изменён. Теперь можно войти."
+      : "Ссылка подтверждения недействительна.");
+    setVerifyStatus(detail);
+    setAuthStatus(detail);
+    if (response.ok) {
+      window.history.replaceState({}, document.title, "/");
+    }
+    openAuth("login");
   }
 
   async function refreshAccessToken() {
@@ -3203,6 +3391,7 @@ export default function App() {
 
   async function onSubmit(event) {
     event.preventDefault();
+    setAuthStatus("");
     if (form.password !== form.password_confirm) {
       setStatus("Пароли не совпадают.");
       return;
@@ -3245,25 +3434,69 @@ export default function App() {
     setAuthMode("login");
   }
 
+  function continueProviderRegistration() {
+    const requiredFields = [
+      ["Фамилия", form.last_name],
+      ["Имя", form.first_name],
+      ["Логин", form.username],
+      ["Email", form.email],
+      ["Пароль", form.password],
+    ];
+    const missing = requiredFields.find(([, value]) => !String(value || "").trim());
+    if (missing) {
+      setAuthStatus(`Заполните поле «${missing[0]}».`);
+      return;
+    }
+    if (form.password !== form.password_confirm) {
+      setAuthStatus("Пароли не совпадают.");
+      return;
+    }
+    setAuthStatus("");
+    setRegisterStep(2);
+  }
+
   async function resendVerification() {
     setResendStatus("Отправляем письмо...");
     const email = me?.email || verifyEmailNotice?.email || form.email || "";
     await resendVerificationForEmail(email);
   }
 
+  function destroyRegMap() {
+    if (mapRef.current) {
+      try {
+        mapRef.current.destroy();
+      } catch {
+        // ignore map cleanup errors
+      }
+    }
+    mapRef.current = null;
+    placemarkRef.current = null;
+  }
+
   function initMap() {
+    const mapElement = document.getElementById("reg-map");
+    if (!mapElement) {
+      if (mapRef.current) destroyRegMap();
+      return;
+    }
     if (mapRef.current) return;
     void loadYandexMaps()
       .then(() => {
         const ymaps = window.ymaps;
         if (!ymaps || mapRef.current) return;
         ymaps.ready(() => {
+          const currentMapElement = document.getElementById("reg-map");
+          if (!currentMapElement) {
+            if (mapRef.current) destroyRegMap();
+            return;
+          }
           if (mapRef.current) return;
-          mapRef.current = new ymaps.Map("reg-map", {
+          const map = new ymaps.Map(currentMapElement, {
             center: [Number(form.organization_latitude), Number(form.organization_longitude)],
             zoom: 11,
           });
-          mapRef.current.events.add("click", (e) => {
+          mapRef.current = map;
+          map.events.add("click", (e) => {
             const coords = e.get("coords");
             const [lat, lon] = coords;
             reverseGeocodeByCoords(lat, lon).then((result) => {
@@ -5282,7 +5515,8 @@ export default function App() {
       body: JSON.stringify(profileForm),
     });
     if (!response.ok) return setStatus("Не удалось сохранить личные данные.");
-    setStatus("Личные данные обновлены.");
+    showToast("Данные сохранены");
+    setStatus("Данные сохранены.");
     loadMe();
   }
 
@@ -5292,8 +5526,11 @@ export default function App() {
       method: "POST",
       body: JSON.stringify(passwordForm),
     });
-    if (!response.ok) return setStatus("Не удалось сменить пароль.");
-    setStatus("Пароль успешно изменен.");
+    const data = await response.json().catch(() => ({}));
+    const detail = data.detail || (response.ok ? "Проверьте почту для подтверждения смены пароля." : "Не удалось сменить пароль.");
+    if (!response.ok) return setStatus(detail);
+    showToast(detail, { tone: "success" });
+    setStatus(detail);
     setPasswordForm({ old_password: "", new_password: "", new_password_confirm: "" });
   }
 
@@ -5303,8 +5540,11 @@ export default function App() {
       method: "POST",
       body: JSON.stringify(emailForm),
     });
-    if (!response.ok) return setStatus("Не удалось сменить email.");
-    setStatus("Email изменен. Подтверди его по письму.");
+    const data = await response.json().catch(() => ({}));
+    const detail = data.detail || (response.ok ? "Email изменен. Подтверди его по письму." : "Не удалось сменить email.");
+    if (!response.ok) return setStatus(detail);
+    showToast(detail, { tone: "success" });
+    setStatus(detail);
     loadMe();
   }
 
@@ -6086,6 +6326,7 @@ export default function App() {
       }),
     });
     if (response.ok) {
+      showToast("Сообщения сохранены", { tone: "success" });
       setProfileOrgStatus("Сообщения для записей сохранены.");
       loadMe();
     } else {
@@ -6976,6 +7217,7 @@ export default function App() {
             >
               <BookingMessageField
                   id="org-msg-confirm"
+                  presetKey="confirm"
                   label="Подтверждение записи"
                   placeholder="Текст клиенту при подтверждении"
                   value={orgBookingMessages.confirm}
@@ -6984,6 +7226,7 @@ export default function App() {
                 />
                 <BookingMessageField
                   id="org-msg-cancel"
+                  presetKey="cancel"
                   label="Отмена записи"
                   placeholder="Текст клиенту при отмене"
                   value={orgBookingMessages.cancel}
@@ -6992,6 +7235,7 @@ export default function App() {
                 />
                 <BookingMessageField
                   id="org-msg-done"
+                  presetKey="done"
                   label="Услуга оказана"
                   placeholder="Текст клиенту, когда услуга оказана"
                   value={orgBookingMessages.done}
@@ -8114,7 +8358,10 @@ export default function App() {
               {authMode === "login" ? (
                 <form onSubmit={onLogin} className="form">
                   <input placeholder="Логин" value={loginForm.username} onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })} required />
-                  <input placeholder="Пароль" type="password" value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} required />
+                  <input placeholder="Пароль" type={showLoginPassword ? "text" : "password"} value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} required />
+                  <button type="button" className="ghost-btn small" onClick={() => setShowLoginPassword((shown) => !shown)}>
+                    {showLoginPassword ? "Скрыть" : "Показать"}
+                  </button>
                   <button type="submit">Войти</button>
                 </form>
               ) : (
@@ -8126,19 +8373,25 @@ export default function App() {
                       <input placeholder="Отчество (если есть)" value={form.patronymic} onChange={(e) => setForm({ ...form, patronymic: e.target.value })} />
                       <input placeholder="Логин" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required />
                       <input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-                      <input placeholder="Телефон" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                      <input
+                        placeholder="Телефон"
+                        {...phoneFieldProps(form.phone, (phone) => setForm({ ...form, phone }))}
+                      />
                       <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                         {roleOptions.map((item) => <option key={item.key} value={item.key}>{item.value}</option>)}
                       </select>
-                      <input placeholder="Пароль" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+                      <input placeholder="Пароль" type={showRegisterPassword ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
                       <input
                         placeholder="Повторите пароль"
-                        type="password"
+                        type={showRegisterPassword ? "text" : "password"}
                         value={form.password_confirm}
                         onChange={(e) => setForm({ ...form, password_confirm: e.target.value })}
                         required
                       />
-                      {form.role === "provider" ? <button type="button" onClick={() => setRegisterStep(2)}>Продолжить</button> : <button type="submit">Создать аккаунт</button>}
+                      <button type="button" className="ghost-btn small" onClick={() => setShowRegisterPassword((shown) => !shown)}>
+                        {showRegisterPassword ? "Скрыть" : "Показать"}
+                      </button>
+                      {form.role === "provider" ? <button type="button" onClick={continueProviderRegistration}>Продолжить</button> : <button type="submit">Создать аккаунт</button>}
                     </>
                   )}
                   {registerStep === 2 && form.role === "provider" && (
@@ -8183,7 +8436,16 @@ export default function App() {
                         value={form.organization_address_details}
                         onChange={(e) => setForm({ ...form, organization_address_details: e.target.value })}
                       />
-                      <button type="button" className="ghost-btn" onClick={() => setRegisterStep(1)}>Назад</button>
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={() => {
+                          destroyRegMap();
+                          setRegisterStep(1);
+                        }}
+                      >
+                        Назад
+                      </button>
                       <button type="submit">Завершить регистрацию</button>
                     </>
                   )}
@@ -8193,7 +8455,7 @@ export default function App() {
               <button className="ghost-btn" type="button" onClick={() => setAuthMode((prev) => (prev === "login" ? "register" : "login"))}>
                 {authMode === "login" ? "Регистрация" : "Войти"}
               </button>
-              <p className="status">{authMode === "login" ? authStatus : status}</p>
+              <p className="status">{authMode === "login" ? authStatus : authStatus || status}</p>
                 </>
               )}
             </div>
@@ -8243,6 +8505,7 @@ export default function App() {
                 {chatActivity.notifications.map((n) => (
                   <div key={n.id} className="chat-notif-card">
                     <p>{formatInAppNotificationText(n)}</p>
+                    {n.payload?.when ? <p className="muted small">{n.payload.when}</p> : null}
                     <button type="button" className="ghost-btn" onClick={() => markInAppNotificationsRead([n.id])}>
                       Понятно
                     </button>
@@ -8255,8 +8518,22 @@ export default function App() {
               <input value={profileForm.last_name} onChange={(e) => setProfileForm({ ...profileForm, last_name: e.target.value })} placeholder="Фамилия" />
               <input value={profileForm.first_name} onChange={(e) => setProfileForm({ ...profileForm, first_name: e.target.value })} placeholder="Имя" />
               <input value={profileForm.patronymic} onChange={(e) => setProfileForm({ ...profileForm, patronymic: e.target.value })} placeholder="Отчество" />
-              <input value={profileForm.phone} onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} placeholder="Телефон" />
-              <button type="submit">Сохранить данные</button>
+              <input
+                placeholder="Телефон"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={profileForm.phone || "+7"}
+                onFocus={(e) => {
+                  if (!String(e.target.value || "").trim()) {
+                    setProfileForm({ ...profileForm, phone: "+7" });
+                  }
+                }}
+                onChange={(e) => setProfileForm({ ...profileForm, phone: ensurePhonePlus7(e.target.value) })}
+              />
+              <div className="profile-save-row">
+                <button type="submit">Сохранить данные</button>
+              </div>
             </form>
             <div className="row-2 profile-quick-nav">
               <button type="button" className="ghost-btn" onClick={() => setCurrentView("settings")}>Настройки</button>
@@ -10228,24 +10505,28 @@ function ServiceEditor({ service, draft, dirty, onDraftChange }) {
         <strong>{service.name}</strong>
         {dirty ? <span className="service-editor-dirty-mark">●</span> : null}
       </div>
-      <input
-        type="number"
-        min="0"
-        step="1"
-        value={local.price}
-        onChange={(e) => onDraftChange(service.id, { price: e.target.value })}
-        placeholder="Цена"
-        aria-label="Цена"
-      />
-      <input
-        type="number"
-        min="5"
-        step="5"
-        value={local.duration_minutes}
-        onChange={(e) => onDraftChange(service.id, { duration_minutes: e.target.value })}
-        placeholder="Мин"
-        aria-label="Минуты"
-      />
+      <label className="service-editor-field">
+        <span className="small-label">Цена</span>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          value={local.price}
+          onChange={(e) => onDraftChange(service.id, { price: e.target.value })}
+          placeholder="Цена"
+        />
+      </label>
+      <label className="service-editor-field">
+        <span className="small-label">Длительность (минуты)</span>
+        <input
+          type="number"
+          min="5"
+          step="5"
+          value={local.duration_minutes}
+          onChange={(e) => onDraftChange(service.id, { duration_minutes: e.target.value })}
+          placeholder="Мин"
+        />
+      </label>
       <label className="checkbox service-editor-active">
         <input
           type="checkbox"

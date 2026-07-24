@@ -6542,3 +6542,165 @@ html.native-app .page-logged .hero.top-row {
   }
 }
 
+/* Toasts */
+.vmeste-toast-host {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 30000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: min(360px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.vmeste-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #1f9d55;
+  color: #fff;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+  animation: vmeste-toast-in 0.2s ease;
+}
+
+.vmeste-toast--info {
+  background: #2f6fed;
+}
+
+.vmeste-toast--error {
+  background: #d64545;
+}
+
+.vmeste-toast--out {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.vmeste-toast-text {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.vmeste-toast-close {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+  opacity: 0.85;
+}
+
+@keyframes vmeste-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.password-field-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.password-field-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.password-toggle-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.profile-save-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.profile-save-row .primary,
+.profile-save-row button[type="submit"] {
+  margin: 0;
+}
+
+.profile-quick-nav {
+  margin-top: 12px;
+  clear: both;
+}
+
+#booking-token-ghost {
+  position: fixed;
+  z-index: 40000;
+  pointer-events: none;
+  transform: translate(-50%, -120%);
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #ff7a00;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(255, 122, 0, 0.45);
+  white-space: nowrap;
+}
+
+.booking-msg-token {
+  touch-action: none;
+}
+
+.booking-msg-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 8px;
+}
+
+.booking-msg-presets button {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.service-editor-labels,
+.service-editor-row .small-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #8d3e00;
+  margin-bottom: 2px;
+}
+
+@media (max-width: 900px) {
+  .vmeste-toast-host {
+    left: 12px;
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    max-width: none;
+  }
+
+  .profile-card .form > button[type="submit"],
+  .profile-save-row {
+    width: 100%;
+  }
+
+  .profile-quick-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+}
+

@@ -8,6 +8,7 @@ import {
   softwareApplicationJsonLd,
   websiteJsonLd,
 } from "./seo/schema.js";
+import { ensurePhonePlus7 } from "./phone.js";
 
 function formatPlanPrice(price) {
   const value = Number(price);
@@ -18,7 +19,7 @@ function formatPlanPrice(price) {
 export default function LandingPage({ onLogin, onRegister }) {
   const requestRef = useRef(null);
   const pricingRef = useRef(null);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", telegram: "", message: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "+7", telegram: "", message: "" });
   const [formStatus, setFormStatus] = useState("");
   const [plans, setPlans] = useState([]);
 
@@ -68,7 +69,7 @@ export default function LandingPage({ onLogin, onRegister }) {
       return;
     }
     setFormStatus(data.detail || "Заявка отправлена!");
-    setForm({ name: "", email: "", phone: "", telegram: "", message: "" });
+    setForm({ name: "", email: "", phone: "+7", telegram: "", message: "" });
   }
 
   return (
@@ -249,8 +250,12 @@ export default function LandingPage({ onLogin, onRegister }) {
           />
           <input
             placeholder="Телефон"
+            type="tel"
             value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            onChange={(e) => setForm({ ...form, phone: ensurePhonePlus7(e.target.value) })}
+            onFocus={() => {
+              if (!String(form.phone || "").trim()) setForm((p) => ({ ...p, phone: "+7" }));
+            }}
           />
           <input
             placeholder="Telegram (@username)"
