@@ -1009,6 +1009,34 @@ function isMobileChatLayout() {
   return window.matchMedia("(max-width: 900px)").matches;
 }
 
+function detectCameraFacingFromTrack(track, deviceLabel = "") {
+  const settings = track?.getSettings?.() || {};
+  if (settings.facingMode === "user" || settings.facingMode === "environment") {
+    return settings.facingMode;
+  }
+  const label = `${deviceLabel || ""} ${track?.label || ""}`.toLowerCase();
+  if (/back|rear|environment|задн|тыл|world/.test(label)) return "environment";
+  if (/front|user|face|перед|фронт|selfie/.test(label)) return "user";
+  return null;
+}
+
+async function pickOtherVideoDevice(currentDeviceId, wantFacing) {
+  if (!navigator.mediaDevices?.enumerateDevices) return null;
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const cams = devices.filter((d) => d.kind === "videoinput" && d.deviceId);
+  if (cams.length < 2) return null;
+  const others = cams.filter((d) => d.deviceId !== currentDeviceId);
+  if (!others.length) return null;
+  const byFacing = others.find((d) => detectCameraFacingFromTrack(null, d.label) === wantFacing);
+  if (byFacing) return byFacing;
+  // Round-robin to next camera in the list
+  const idx = Math.max(
+    0,
+    cams.findIndex((d) => d.deviceId === currentDeviceId)
+  );
+  return cams[(idx + 1) % cams.length] || others[0];
+}
+
 function buildIntervalPopoverFixedStyle(anchorEl) {
   if (!anchorEl || typeof window === "undefined") return null;
   const r = anchorEl.getBoundingClientRect();
@@ -5127,91 +5155,49 @@ export default function App() {
     return recorder;
   }
 
+  async function stopChatRecorderPreserveChunks() {
+    const rec = chatMediaRecorderRef.current;
+    if (!rec || rec.state === "inactive") {
+      chatMediaRecorderRef.current = null;
+      return;
+    }
+    await new Promise((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        chatMediaRecorderRef.current = null;
+        resolve();
+      };
+      rec.onstop = () => done();
+      try {
+        if (typeof rec.requestData === "function") rec.requestData();
+        rec.stop();
+      } catch {
+        done();
+      }
+      window.setTimeout(done, 500);
+    });
+  }
+
   async function switchChatCamera() {
     if (chatRecordingKind !== "video_note" || chatCameraSwitching) return;
     const stream = chatRecordStreamRef.current;
     if (!stream) return;
-    const nextFacing = chatCameraFacingRef.current === "user" ? "environment" : "user";
+    const wantFacing = chatCameraFacingRef.current === "user" ? "environment" : "user";
     setChatCameraSwitching(true);
     try {
-      const videoTrack = stream.getVideoTracks()[0];
-
-      // 1) Мягкое переключение — без остановки MediaRecorder
-      if (videoTrack?.applyConstraints) {
-        const softAttempts = [
-          { facingMode: { exact: nextFacing }, width: { ideal: 480 }, height: { ideal: 480 } },
-          { facingMode: { ideal: nextFacing }, width: { ideal: 480 }, height: { ideal: 480 } },
-        ];
-        for (const constraints of softAttempts) {
-          try {
-            await videoTrack.applyConstraints(constraints);
-            chatCameraFacingRef.current = nextFacing;
-            setChatCameraFacing(nextFacing);
-            return;
-          } catch {
-            /* try next */
-          }
-        }
-        try {
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const cams = devices.filter((d) => d.kind === "videoinput");
-          if (cams.length >= 2) {
-            const currentId = videoTrack.getSettings?.().deviceId;
-            const nextCam =
-              cams.find((d) => d.deviceId && d.deviceId !== currentId) || cams[cams.length - 1];
-            if (nextCam?.deviceId) {
-              await videoTrack.applyConstraints({
-                deviceId: { exact: nextCam.deviceId },
-                width: { ideal: 480 },
-                height: { ideal: 480 },
-              });
-              chatCameraFacingRef.current = nextFacing;
-              setChatCameraFacing(nextFacing);
-              return;
-            }
-          }
-        } catch {
-          /* hard switch below */
-        }
+      const oldVideo = stream.getVideoTracks()[0] || null;
+      const currentId = oldVideo?.getSettings?.().deviceId || "";
+      const nextCam = await pickOtherVideoDevice(currentId, wantFacing);
+      if (!nextCam?.deviceId) {
+        setChatStatus("Вторая камера не найдена на этом устройстве.");
+        return;
       }
 
-      // 2) Жёсткая смена дорожки: не завершаем кружок, а перезапускаем recorder
-      const fresh = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          facingMode: { ideal: nextFacing },
-          width: { ideal: 480 },
-          height: { ideal: 480 },
-        },
-      });
-      const newVideo = fresh.getVideoTracks()[0];
-      if (!newVideo) {
-        fresh.getTracks().forEach((t) => t.stop());
-        throw new Error("no video");
-      }
-
+      // Сначала останавливаем старое видео — иначе на телефоне часто нельзя открыть вторую камеру
       chatKeepRecordingRef.current = true;
-      const rec = chatMediaRecorderRef.current;
-      if (rec && rec.state !== "inactive") {
-        await new Promise((resolve) => {
-          const done = () => resolve();
-          const prevStop = rec.onstop;
-          rec.onstop = () => {
-            chatMediaRecorderRef.current = null;
-            if (typeof prevStop === "function" && chatKeepRecordingRef.current) {
-              /* keep recording — ignore finish */
-            }
-            done();
-          };
-          try {
-            if (typeof rec.requestData === "function") rec.requestData();
-            rec.stop();
-          } catch {
-            done();
-          }
-          window.setTimeout(done, 400);
-        });
-      }
+      await stopChatRecorderPreserveChunks();
 
       stream.getVideoTracks().forEach((t) => {
         try {
@@ -5225,14 +5211,60 @@ export default function App() {
           /* ignore */
         }
       });
+
+      let fresh = null;
+      let newVideo = null;
+      const videoTries = [
+        {
+          deviceId: { exact: nextCam.deviceId },
+          width: { ideal: 480 },
+          height: { ideal: 480 },
+        },
+        {
+          facingMode: { exact: wantFacing },
+          width: { ideal: 480 },
+          height: { ideal: 480 },
+        },
+        {
+          facingMode: { ideal: wantFacing },
+          width: { ideal: 480 },
+          height: { ideal: 480 },
+        },
+      ];
+      let lastErr = null;
+      for (const video of videoTries) {
+        try {
+          fresh = await navigator.mediaDevices.getUserMedia({ audio: false, video });
+          newVideo = fresh.getVideoTracks()[0] || null;
+          if (newVideo) break;
+          fresh.getTracks().forEach((t) => t.stop());
+          fresh = null;
+        } catch (err) {
+          lastErr = err;
+          fresh = null;
+          newVideo = null;
+        }
+      }
+      if (!newVideo || !fresh) {
+        throw lastErr || new Error("no video");
+      }
+
+      const newId = newVideo.getSettings?.().deviceId || "";
+      if (currentId && newId && currentId === newId) {
+        fresh.getTracks().forEach((t) => t.stop());
+        throw new Error("same camera");
+      }
+
       stream.addTrack(newVideo);
       fresh.getAudioTracks().forEach((t) => t.stop());
 
       bindChatMediaRecorder(stream);
-      chatKeepRecordingRef.current = false;
 
-      chatCameraFacingRef.current = nextFacing;
-      setChatCameraFacing(nextFacing);
+      const actualFacing =
+        detectCameraFacingFromTrack(newVideo, nextCam.label) || wantFacing;
+      chatCameraFacingRef.current = actualFacing;
+      setChatCameraFacing(actualFacing);
+
       if (chatLiveVideoRef.current) {
         chatLiveVideoRef.current.srcObject = stream;
         chatLiveVideoRef.current.muted = true;
@@ -5242,11 +5274,32 @@ export default function App() {
     } catch {
       chatKeepRecordingRef.current = false;
       setChatStatus("Не удалось переключить камеру.");
-      // Если recorder умер — попробуем продолжить на текущем stream
       const live = chatRecordStreamRef.current;
       if (live && (!chatMediaRecorderRef.current || chatMediaRecorderRef.current.state === "inactive")) {
         try {
+          // Если видео уже сняли — попробуем вернуть хотя бы фронт
+          if (!live.getVideoTracks().length) {
+            try {
+              const fallback = await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: {
+                  facingMode: { ideal: chatCameraFacingRef.current || "user" },
+                  width: { ideal: 480 },
+                  height: { ideal: 480 },
+                },
+              });
+              const vt = fallback.getVideoTracks()[0];
+              if (vt) live.addTrack(vt);
+              fallback.getAudioTracks().forEach((t) => t.stop());
+            } catch {
+              /* ignore */
+            }
+          }
           bindChatMediaRecorder(live);
+          if (chatLiveVideoRef.current) {
+            chatLiveVideoRef.current.srcObject = live;
+            chatLiveVideoRef.current.play?.().catch(() => {});
+          }
         } catch {
           /* ignore */
         }
@@ -5279,6 +5332,12 @@ export default function App() {
       chatRecordMimeRef.current = mime || (kind === "video_note" ? "video/webm" : "audio/webm");
       chatRecordKindRef.current = kind;
       chatKeepRecordingRef.current = false;
+      if (kind === "video_note") {
+        const vt = stream.getVideoTracks()[0];
+        const actual = detectCameraFacingFromTrack(vt) || facing || "user";
+        chatCameraFacingRef.current = actual;
+        setChatCameraFacing(actual);
+      }
       bindChatMediaRecorder(stream);
       chatRecordStartedAtRef.current = Date.now();
       setChatRecordingKind(kind);
