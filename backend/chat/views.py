@@ -240,6 +240,38 @@ class MessageViewSet(viewsets.ModelViewSet):
             .order_by("created_at", "id")
         )
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        try:
+            limit = int(request.query_params.get("limit") or 50)
+        except (TypeError, ValueError):
+            limit = 50
+        limit = max(1, min(limit, 100))
+
+        before_id = request.query_params.get("before_id")
+        after_id = request.query_params.get("after_id")
+
+        if before_id not in (None, ""):
+            try:
+                bid = int(before_id)
+            except (TypeError, ValueError):
+                return Response({"detail": "before_id must be an integer."}, status=400)
+            page = list(queryset.filter(id__lt=bid).order_by("-created_at", "-id")[:limit])
+            page.reverse()
+        elif after_id not in (None, ""):
+            try:
+                aid = int(after_id)
+            except (TypeError, ValueError):
+                return Response({"detail": "after_id must be an integer."}, status=400)
+            page = list(queryset.filter(id__gt=aid).order_by("created_at", "id")[:limit])
+        else:
+            # Latest N messages in chronological order (do not load full history).
+            page = list(queryset.order_by("-created_at", "-id")[:limit])
+            page.reverse()
+
+        serializer = self.get_serializer(page, many=True)
+        return Response(serializer.data)
+
     def perform_create(self, serializer):
         conv_id = serializer.validated_data["conversation"].id
         if not Conversation.objects.filter(pk=conv_id, members__user=self.request.user).exists():

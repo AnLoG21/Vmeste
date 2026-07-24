@@ -1001,16 +1001,34 @@ const BOOKING_MSG_PRESETS = {
   ],
 };
 
+const CHAT_MSG_PAGE_SIZE = 50;
+
+function isMobileChatLayout() {
+  if (typeof window === "undefined") return false;
+  if (document.documentElement.classList.contains("native-app")) return true;
+  return window.matchMedia("(max-width: 900px)").matches;
+}
+
 function buildIntervalPopoverFixedStyle(anchorEl) {
   if (!anchorEl || typeof window === "undefined") return null;
   const r = anchorEl.getBoundingClientRect();
   const vw = window.innerWidth;
-  const maxW = Math.min(300, Math.max(248, vw - 24));
+  const vh = window.innerHeight;
+  const width = Math.min(300, Math.max(240, Math.min(vw - 16, 300)));
+  const estimatedH = 220;
+  // На узком экране — по центру вьюпорта; на широком — у якоря, с clamp по краям
+  let left = vw <= 900 ? vw / 2 : r.left + r.width / 2;
+  const half = width / 2;
+  left = Math.max(half + 8, Math.min(vw - half - 8, left));
+  let top = r.bottom + 8;
+  if (top + estimatedH > vh - 8) {
+    top = Math.max(8, r.top - estimatedH - 8);
+  }
   return {
     position: "fixed",
-    top: `${Math.round(r.bottom + 8)}px`,
-    left: `${Math.round(r.left + r.width / 2)}px`,
-    width: `${maxW}px`,
+    top: `${Math.round(top)}px`,
+    left: `${Math.round(left)}px`,
+    width: `${Math.round(width)}px`,
     maxWidth: "calc(100vw - 16px)",
     transform: "translateX(-50%)",
     zIndex: 9000,
@@ -2232,6 +2250,9 @@ export default function App() {
   const [conversations, setConversations] = useState([]);
   const [selectedChatId, setSelectedChatId] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
+  const [chatHasMoreOlder, setChatHasMoreOlder] = useState(false);
+  const [chatLoadingOlder, setChatLoadingOlder] = useState(false);
+  const [chatShowJumpBottom, setChatShowJumpBottom] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatStatus, setChatStatus] = useState("");
   /** id чата для модалки оформления (открывается из ⋮ в списке, без смены выбранного чата). */
@@ -2262,6 +2283,11 @@ export default function App() {
   const tgMsgSearchWrapRef = useRef(null);
   const chatMsgSearchInputRef = useRef(null);
   const chatFileInputRef = useRef(null);
+  const chatMessagesRef = useRef([]);
+  const chatMessagesElRef = useRef(null);
+  const chatNearBottomRef = useRef(true);
+  const chatLoadingOlderRef = useRef(false);
+  const chatHasMoreOlderRef = useRef(false);
   const chatMediaRecorderRef = useRef(null);
   const chatRecordChunksRef = useRef([]);
   const chatRecordStreamRef = useRef(null);
@@ -2650,25 +2676,71 @@ export default function App() {
   }, [accessToken, currentView, me?.role]);
 
   useEffect(() => {
+    chatMessagesRef.current = chatMessages;
+  }, [chatMessages]);
+
+  useEffect(() => {
+    chatHasMoreOlderRef.current = chatHasMoreOlder;
+  }, [chatHasMoreOlder]);
+
+  useEffect(() => {
     if (!accessToken || !selectedChatId || currentView !== "chats") return;
     let cancelled = false;
-    async function tick() {
-      const res = await authFetch(`${API_URL}/chat/messages/?conversation=${selectedChatId}`);
-      if (!cancelled && res.ok) {
-        const msgs = await res.json();
-        setChatMessages(msgs);
-        const last = msgs.length ? msgs[msgs.length - 1] : null;
-        if (last) {
-          await authFetch(`${API_URL}/chat/conversations/${selectedChatId}/mark-read/`, {
-            method: "POST",
-            body: JSON.stringify({ message_id: last.id }),
-          });
-          loadChats();
-        }
+    setChatMessages([]);
+    setChatHasMoreOlder(false);
+    setChatShowJumpBottom(false);
+    chatNearBottomRef.current = true;
+
+    async function loadLatest() {
+      const msgs = await fetchChatMessagesPage(selectedChatId, { limit: CHAT_MSG_PAGE_SIZE });
+      if (cancelled || !msgs) return;
+      setChatMessages(msgs);
+      setChatHasMoreOlder(msgs.length >= CHAT_MSG_PAGE_SIZE);
+      requestAnimationFrame(() => scrollChatToBottom(false));
+      const last = msgs.length ? msgs[msgs.length - 1] : null;
+      if (last) {
+        await authFetch(`${API_URL}/chat/conversations/${selectedChatId}/mark-read/`, {
+          method: "POST",
+          body: JSON.stringify({ message_id: last.id }),
+        });
+        loadChats();
       }
     }
-    tick();
-    const id = setInterval(tick, 5000);
+
+    async function pollNewer() {
+      const current = chatMessagesRef.current;
+      const lastId = current.length ? current[current.length - 1].id : null;
+      if (!lastId) {
+        await loadLatest();
+        return;
+      }
+      const newer = await fetchChatMessagesPage(selectedChatId, {
+        afterId: lastId,
+        limit: CHAT_MSG_PAGE_SIZE,
+      });
+      if (cancelled || !newer?.length) return;
+      setChatMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        const add = newer.filter((m) => !seen.has(m.id));
+        return add.length ? [...prev, ...add] : prev;
+      });
+      if (chatNearBottomRef.current) {
+        requestAnimationFrame(() => scrollChatToBottom(true));
+      } else {
+        setChatShowJumpBottom(true);
+      }
+      const last = newer[newer.length - 1];
+      if (last) {
+        await authFetch(`${API_URL}/chat/conversations/${selectedChatId}/mark-read/`, {
+          method: "POST",
+          body: JSON.stringify({ message_id: last.id }),
+        });
+        loadChats();
+      }
+    }
+
+    loadLatest();
+    const id = setInterval(pollNewer, 5000);
     return () => {
       cancelled = true;
       clearInterval(id);
@@ -4769,12 +4841,103 @@ export default function App() {
     patchStaffPermissions(link.id, next);
   }
 
+  async function fetchChatMessagesPage(conversationId, { beforeId, afterId, limit = CHAT_MSG_PAGE_SIZE } = {}) {
+    if (!conversationId) return null;
+    const params = new URLSearchParams({
+      conversation: String(conversationId),
+      limit: String(limit),
+    });
+    if (beforeId) params.set("before_id", String(beforeId));
+    if (afterId) params.set("after_id", String(afterId));
+    const res = await authFetch(`${API_URL}/chat/messages/?${params}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  }
+
+  function scrollChatToBottom(smooth = false) {
+    const el = chatMessagesElRef.current;
+    if (!el) return;
+    chatNearBottomRef.current = true;
+    setChatShowJumpBottom(false);
+    if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    else el.scrollTop = el.scrollHeight;
+  }
+
+  function updateChatScrollUi(el) {
+    if (!el) return;
+    const distBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const nearBottom = distBottom < 100;
+    chatNearBottomRef.current = nearBottom;
+    setChatShowJumpBottom(!nearBottom && el.scrollHeight > el.clientHeight + 40);
+    if (el.scrollTop < 72) {
+      void loadOlderChatMessages();
+    }
+  }
+
+  async function loadOlderChatMessages() {
+    if (!selectedChatId || chatLoadingOlderRef.current || !chatHasMoreOlderRef.current) return;
+    const oldest = chatMessagesRef.current[0];
+    if (!oldest) return;
+    chatLoadingOlderRef.current = true;
+    setChatLoadingOlder(true);
+    const el = chatMessagesElRef.current;
+    const prevHeight = el?.scrollHeight || 0;
+    const prevTop = el?.scrollTop || 0;
+    try {
+      const older = await fetchChatMessagesPage(selectedChatId, {
+        beforeId: oldest.id,
+        limit: CHAT_MSG_PAGE_SIZE,
+      });
+      if (!older) return;
+      setChatHasMoreOlder(older.length >= CHAT_MSG_PAGE_SIZE);
+      if (!older.length) return;
+      setChatMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        const add = older.filter((m) => !seen.has(m.id));
+        return add.length ? [...add, ...prev] : prev;
+      });
+      requestAnimationFrame(() => {
+        const box = chatMessagesElRef.current;
+        if (!box) return;
+        box.scrollTop = prevTop + (box.scrollHeight - prevHeight);
+      });
+    } finally {
+      chatLoadingOlderRef.current = false;
+      setChatLoadingOlder(false);
+    }
+  }
+
   async function refreshChatMessages(conversationId = selectedChatId) {
     if (!conversationId) return;
-    const res = await authFetch(`${API_URL}/chat/messages/?conversation=${conversationId}`);
-    if (!res.ok) return;
-    const msgs = await res.json();
+    const current = chatMessagesRef.current;
+    const lastId = current.length ? current[current.length - 1].id : null;
+    if (lastId && Number(conversationId) === Number(selectedChatId)) {
+      const newer = await fetchChatMessagesPage(conversationId, {
+        afterId: lastId,
+        limit: CHAT_MSG_PAGE_SIZE,
+      });
+      if (newer?.length) {
+        setChatMessages((prev) => {
+          const seen = new Set(prev.map((m) => m.id));
+          const add = newer.filter((m) => !seen.has(m.id));
+          return add.length ? [...prev, ...add] : prev;
+        });
+        requestAnimationFrame(() => scrollChatToBottom(true));
+        const last = newer[newer.length - 1];
+        await authFetch(`${API_URL}/chat/conversations/${conversationId}/mark-read/`, {
+          method: "POST",
+          body: JSON.stringify({ message_id: last.id }),
+        });
+        loadChats();
+      }
+      return;
+    }
+    const msgs = await fetchChatMessagesPage(conversationId, { limit: CHAT_MSG_PAGE_SIZE });
+    if (!msgs) return;
     setChatMessages(msgs);
+    setChatHasMoreOlder(msgs.length >= CHAT_MSG_PAGE_SIZE);
+    requestAnimationFrame(() => scrollChatToBottom(false));
     const last = msgs.length ? msgs[msgs.length - 1] : null;
     if (last) {
       await authFetch(`${API_URL}/chat/conversations/${conversationId}/mark-read/`, {
@@ -5494,6 +5657,11 @@ export default function App() {
     const response = await authFetch(`${API_URL}/booking/slots/${slotId}/`, { method: "DELETE" });
     if (!response.ok) return setSellerStatus("Не удалось удалить интервал.");
     setSellerStatus("Интервал удален.");
+    setCalendarDayDetail((prev) => {
+      if (!prev || prev.mode !== "intervals") return prev;
+      const items = (prev.items || []).filter((x) => Number(x.id) !== Number(slotId));
+      return { ...prev, items };
+    });
     loadSellerData();
   }
 
@@ -6928,10 +7096,11 @@ export default function App() {
                   </div>
                   <div className="calendar-slots calendar-slots--mobile">
                     {(byDay[day] || []).slice(0, 3).map((s) => (
-                      <div key={s.id} className="calendar-slot-compact">
-                        <span aria-hidden>○</span>
-                        <span>
+                      <div key={s.id} className="calendar-slot-compact calendar-slot-compact--interval" title="Свободный интервал">
+                        <span className="calendar-slot-compact-time">
                           {new Date(s.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          –
+                          {new Date(s.ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </span>
                       </div>
                     ))}
@@ -8239,7 +8408,10 @@ export default function App() {
           <button
             type="button"
             className={["app-subnav-chat", currentView === "chats" && "active"].filter(Boolean).join(" ")}
-            onClick={() => setCurrentView("chats")}
+            onClick={() => {
+              if (isMobileChatLayout()) setSelectedChatId(null);
+              setCurrentView("chats");
+            }}
           >
             <span>Чаты</span>
             {unreadMessagesCount > 0 && (
@@ -8271,7 +8443,10 @@ export default function App() {
           <button
             type="button"
             className={["app-subnav-chat", currentView === "chats" && "active"].filter(Boolean).join(" ")}
-            onClick={() => setCurrentView("chats")}
+            onClick={() => {
+              if (isMobileChatLayout()) setSelectedChatId(null);
+              setCurrentView("chats");
+            }}
           >
             <span className="app-subnav-chat-inner" aria-hidden="true">
               <svg className="app-subnav-chat-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
@@ -8311,7 +8486,10 @@ export default function App() {
             <button
               type="button"
               className={["app-subnav-chat", currentView === "chats" && "active"].filter(Boolean).join(" ")}
-              onClick={() => setCurrentView("chats")}
+              onClick={() => {
+              if (isMobileChatLayout()) setSelectedChatId(null);
+              setCurrentView("chats");
+            }}
             >
               <span className="app-subnav-chat-inner" aria-hidden="true">
                 <svg className="app-subnav-chat-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
@@ -8586,7 +8764,12 @@ export default function App() {
         {accessToken && me?.role === "staff" && currentView === "bookings" && staffHasPerm("manage_bookings") && renderBookingsBlock("Записи")}
         {accessToken && currentView === "chats" && (me?.role === "client" || me?.role === "provider" || me?.role === "staff") && (
           <section className="card full-width tg-chats-card">
-            <div className="tg-body">
+            <div
+              className={[
+                "tg-body",
+                selectedChatId ? "tg-body--mobile-thread" : "tg-body--mobile-list",
+              ].join(" ")}
+            >
               <aside className="tg-sidebar">
                 <div className="tg-sidebar-head">
                   <span className="tg-sidebar-title">Чаты</span>
@@ -8764,7 +8947,22 @@ export default function App() {
                 <div className="tg-main-head">
                   {selectedChatId ? (
                     <div className="tg-main-head-bar">
-                      <div className="tg-main-head-left" />
+                      <div className="tg-main-head-left">
+                        <button
+                          type="button"
+                          className="tg-chat-back-btn"
+                          aria-label="К списку чатов"
+                          title="Назад к списку"
+                          onClick={() => setSelectedChatId(null)}
+                        >
+                          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                            <path
+                              fill="currentColor"
+                              d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"
+                            />
+                          </svg>
+                        </button>
+                      </div>
                       <button
                         type="button"
                         className="tg-main-head-peer"
@@ -8882,7 +9080,17 @@ export default function App() {
                 </div>
                 {selectedChatId ? (
                   <>
-                    <div className="tg-messages">
+                    <div className="tg-messages-wrap">
+                    <div
+                      className="tg-messages"
+                      ref={chatMessagesElRef}
+                      onScroll={(e) => updateChatScrollUi(e.currentTarget)}
+                    >
+                      {chatLoadingOlder ? (
+                        <div className="tg-messages-loading-older" aria-live="polite">
+                          Загрузка…
+                        </div>
+                      ) : null}
                       {chatMessages.map((m, idx) => {
                         const prev = chatMessages[idx - 1];
                         const showDay =
@@ -8922,6 +9130,20 @@ export default function App() {
                           </Fragment>
                         );
                       })}
+                    </div>
+                    {chatShowJumpBottom ? (
+                      <button
+                        type="button"
+                        className="tg-jump-bottom-btn"
+                        aria-label="К последним сообщениям"
+                        title="Вниз"
+                        onClick={() => scrollChatToBottom(true)}
+                      >
+                        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                          <path fill="currentColor" d="M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z" />
+                        </svg>
+                      </button>
+                    ) : null}
                     </div>
                     {(chatRecordingKind === "video_note" || chatMediaPreview?.kind === "video_note") &&
                       typeof document !== "undefined" &&
@@ -10470,6 +10692,18 @@ export default function App() {
                           </>
                         ) : (
                           <>
+                            <button
+                              type="button"
+                              className="calendar-day-sheet-item-delete"
+                              aria-label="Удалить интервал"
+                              title="Удалить"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteSlot(it.id);
+                              }}
+                            >
+                              ×
+                            </button>
                             <strong>
                               {new Date(it.starts_at).toLocaleTimeString([], {
                                 hour: "2-digit",

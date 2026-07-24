@@ -1399,6 +1399,68 @@ body.theme-dark button.staff-perms-toggle:hover,
   gap: 8px;
 }
 
+.tg-messages-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tg-messages-loading-older {
+  text-align: center;
+  font-size: 12px;
+  color: #8d8d8d;
+  padding: 4px 0 8px;
+}
+
+.tg-jump-bottom-btn {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 8;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff !important;
+  color: #444 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.tg-jump-bottom-btn:hover {
+  background: #f5f5f5 !important;
+}
+
+.tg-chat-back-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent !important;
+  color: inherit !important;
+  cursor: pointer;
+}
+
+.tg-chat-back-btn:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+.tg-main--dark .tg-chat-back-btn:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
 .tg-msg {
   align-self: flex-start;
   max-width: min(78%, 34rem);
@@ -1601,25 +1663,48 @@ body.theme-dark button.staff-perms-toggle:hover,
   .tg-chats-card.card.full-width {
     min-height: 0;
     max-height: none;
+    height: calc(100vh - 150px);
+    height: calc(100dvh - 150px);
     width: 100%;
     max-width: 100%;
     overflow: hidden;
   }
 
   .tg-body {
-    grid-template-columns: minmax(0, 1fr);
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: none;
     width: 100%;
     max-width: 100%;
     min-width: 0;
     min-height: 0 !important;
     max-height: none;
+    height: 100%;
     overflow: hidden;
   }
 
+  .tg-body--mobile-list .tg-main {
+    display: none;
+  }
+
+  .tg-body--mobile-thread .tg-sidebar {
+    display: none;
+  }
+
+  .tg-body--mobile-list .tg-sidebar,
+  .tg-body--mobile-thread .tg-main {
+    max-height: none;
+    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    border: none;
+  }
+
   .tg-sidebar {
-    max-height: min(38vh, 280px);
+    max-height: none;
     border-right: none;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: none;
     min-width: 0;
     width: 100%;
     overflow: hidden;
@@ -1629,6 +1714,10 @@ body.theme-dark button.staff-perms-toggle:hover,
     overflow-x: hidden;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .tg-chat-back-btn {
+    display: inline-flex !important;
   }
 
   .tg-folder-tabs {
@@ -2968,6 +3057,16 @@ body.theme-dark .tg-chat-item-row:hover {
   min-width: 0;
   width: auto;
   max-width: calc(100vw - 16px);
+}
+
+@media (max-width: 900px) {
+  .template-popover.template-popover--portal {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%);
+    width: min(300px, calc(100vw - 16px)) !important;
+    max-width: calc(100vw - 16px);
+  }
 }
 
 .template-popover .small-btn {
@@ -5600,11 +5699,16 @@ html.native-app body {
   padding-bottom: var(--safe-bottom);
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+  width: 100%;
 }
 
 html.native-app .hero.top-row.page-header-guest,
 html.native-app .page-logged .hero.top-row {
   padding-top: calc(8px + var(--safe-top));
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* Chat media + Telegram-like compose */
@@ -6506,10 +6610,37 @@ html.native-app .page-logged .hero.top-row {
 }
 
 .calendar-day-sheet-item {
+  position: relative;
   border: 1px solid #ffd9bd;
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 10px 36px 10px 12px;
   background: #fffdfb;
+}
+
+.calendar-day-sheet-item-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #e53935 !important;
+  color: #fff !important;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(229, 57, 53, 0.35);
+}
+
+.calendar-day-sheet-item-delete:hover {
+  background: #c62828 !important;
 }
 
 @media (max-width: 768px) {
@@ -6529,7 +6660,38 @@ html.native-app .page-logged .hero.top-row {
 
   .calendar-slots--mobile {
     display: grid;
-    gap: 3px;
+    gap: 2px;
+  }
+
+  .interval-calendar .calendar-slot-compact--interval,
+  .interval-calendar .calendar-slot-compact {
+    background: #ff9933;
+    color: #3d1a00;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.15;
+    padding: 2px 1px;
+    min-height: 0;
+    justify-content: center;
+    border: 1px solid #e86f00;
+  }
+
+  .interval-calendar .calendar-slot-compact-time {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: -0.03em;
+  }
+
+  .interval-calendar .slot-chip {
+    font-size: 10px;
+    padding: 2px 4px;
+  }
+
+  .interval-calendar .slot-chip-label {
+    font-size: 10px;
   }
 
   .calendar-grid {

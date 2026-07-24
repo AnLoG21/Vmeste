@@ -222,24 +222,51 @@
 }
 
 html.native-app .page {
-  padding: 8px 10px 20px;
+  padding: 0 0 20px;
   max-width: none;
+  width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 html.native-app .hero.top-row {
   position: sticky;
   top: 0;
   z-index: 200;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 8px;
   background: #fff8f2;
   border-bottom: 1px solid #ffe4cc;
-  margin: -8px -10px 8px;
-  padding-left: 10px;
-  padding-right: 10px;
+  padding-left: max(10px, env(safe-area-inset-left, 0px));
+  padding-right: max(10px, env(safe-area-inset-right, 0px));
 }
 
 html.native-app .page--guest .hero.top-row.page-header-guest,
 html.native-app .page-logged .hero.top-row {
   padding-top: calc(8px + var(--safe-top, 0px));
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+html.native-app .page-logged > .app-subnav,
+html.native-app .page-logged > section,
+html.native-app .page-logged > .card,
+html.native-app .page-logged > .status,
+html.native-app .page-logged > .verify-note {
+  margin-left: 10px;
+  margin-right: 10px;
+}
+
+html.native-app .tg-chats-card.card.full-width {
+  margin-left: 0;
+  margin-right: 0;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 0;
+  height: calc(100dvh - 130px);
 }
 
 html.native-app .app-subnav {
@@ -279,8 +306,32 @@ html.native-app .tg-sidebar {
 }
 
 html.native-app .tg-body {
+  display: flex;
+  flex-direction: column;
   min-height: 0 !important;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: none;
+  height: 100%;
+}
+
+html.native-app .tg-body--mobile-list .tg-main {
+  display: none;
+}
+
+html.native-app .tg-body--mobile-thread .tg-sidebar {
+  display: none;
+}
+
+html.native-app .tg-body--mobile-list .tg-sidebar,
+html.native-app .tg-body--mobile-thread .tg-main {
+  max-height: none;
+  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: none;
+}
+
+html.native-app .tg-chat-back-btn {
+  display: inline-flex !important;
 }
 
 html.native-app .tg-folder-tabs button {
@@ -353,4 +404,33 @@ html.native-app .tg-send-btn,
 html.native-app .tg-compose-icon-btn {
   flex: 0 0 auto;
   margin: 0;
+}
+
+html.native-app .template-popover.template-popover--portal {
+  left: 50% !important;
+  right: auto !important;
+  transform: translateX(-50%);
+  width: min(300px, calc(100vw - 16px)) !important;
+  max-width: calc(100vw - 16px);
+}
+
+html.native-app .interval-calendar .calendar-slot-compact--interval,
+html.native-app .interval-calendar .calendar-slot-compact {
+  background: #ff9933;
+  color: #3d1a00;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.15;
+  padding: 2px 1px;
+  min-height: 0;
+  border: 1px solid #e86f00;
+}
+
+html.native-app .interval-calendar .calendar-slot-compact-time {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.03em;
 }
