@@ -1193,9 +1193,14 @@ function renderChatMessageBody(m, opts = {}) {
     );
   }
   if (kind === "video_note" && url) {
+    const flip = m.payload?.display_flip;
     return (
       <div className="tg-msg-media tg-msg-media--circle">
-        <ChatVideoNotePlayer src={url} size={180} />
+        <ChatVideoNotePlayer
+          src={url}
+          size={180}
+          mirror={flip !== false}
+        />
         {m.text ? <div className="tg-msg-text">{m.text}</div> : null}
       </div>
     );
@@ -2335,6 +2340,8 @@ export default function App() {
   const chatRecordKindRef = useRef(null);
   const chatCameraFacingRef = useRef("user");
   const chatKeepRecordingRef = useRef(false);
+  const chatCameraStreamRef = useRef(null);
+  const chatMirrorPipelineRef = useRef(null);
   const [chatCameraFacing, setChatCameraFacing] = useState("user");
   const [chatCameraSwitching, setChatCameraSwitching] = useState(false);
   const [chatSettingsTitle, setChatSettingsTitle] = useState("");
@@ -4980,7 +4987,7 @@ export default function App() {
     }
   }
 
-  async function postChatMessage({ text = "", file = null, kind = "", durationSec = null }) {
+  async function postChatMessage({ text = "", file = null, kind = "", durationSec = null, displayFlip = null }) {
     if (!selectedChatId) return false;
     const hasText = Boolean(String(text || "").trim());
     if (!hasText && !file) return false;
@@ -4992,6 +4999,9 @@ export default function App() {
       if (kind) fd.append("kind", kind);
       if (durationSec != null && Number(durationSec) > 0) {
         fd.append("duration_sec", String(Math.round(Number(durationSec))));
+      }
+      if (displayFlip != null) {
+        fd.append("display_flip", displayFlip ? "true" : "false");
       }
       fd.append("attachment", file);
       response = await authFetch(`${API_URL}/chat/messages/`, { method: "POST", body: fd });
@@ -5092,10 +5102,101 @@ export default function App() {
     setChatRecordLiftHint(false);
   }
 
+  function stopMirrorPipeline() {
+    const pipe = chatMirrorPipelineRef.current;
+    chatMirrorPipelineRef.current = null;
+    if (!pipe) return;
+    if (pipe.raf) {
+      try {
+        cancelAnimationFrame(pipe.raf);
+      } catch {
+        /* ignore */
+      }
+    }
+    if (pipe.videoEl) {
+      try {
+        pipe.videoEl.srcObject = null;
+      } catch {
+        /* ignore */
+      }
+    }
+    if (pipe.canvasStream) {
+      try {
+        pipe.canvasStream.getTracks().forEach((t) => t.stop());
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  async function buildChatRecordStream(cameraStream, mirror) {
+    stopMirrorPipeline();
+    if (!mirror || !cameraStream) return cameraStream;
+
+    const videoEl = document.createElement("video");
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.setAttribute("playsinline", "true");
+    videoEl.srcObject = cameraStream;
+    await videoEl.play().catch(() => {});
+
+    const size = 480;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d", { alpha: false });
+    const pipe = { videoEl, canvas, canvasStream: null, raf: 0 };
+
+    const draw = () => {
+      const vw = videoEl.videoWidth || size;
+      const vh = videoEl.videoHeight || size;
+      if (vw > 0 && vh > 0 && ctx) {
+        ctx.save();
+        ctx.translate(size, 0);
+        ctx.scale(-1, 1);
+        const scale = Math.max(size / vw, size / vh);
+        const dw = vw * scale;
+        const dh = vh * scale;
+        ctx.drawImage(videoEl, (size - dw) / 2, (size - dh) / 2, dw, dh);
+        ctx.restore();
+      }
+      pipe.raf = requestAnimationFrame(draw);
+    };
+    draw();
+
+    const canvasStream = canvas.captureStream(30);
+    pipe.canvasStream = canvasStream;
+    chatMirrorPipelineRef.current = pipe;
+
+    return new MediaStream([
+      ...canvasStream.getVideoTracks(),
+      ...cameraStream.getAudioTracks(),
+    ]);
+  }
+
   function stopChatRecordTracks() {
-    const stream = chatRecordStreamRef.current;
+    stopMirrorPipeline();
+    const recordStream = chatRecordStreamRef.current;
     chatRecordStreamRef.current = null;
-    if (stream) stream.getTracks().forEach((t) => t.stop());
+    const cameraStream = chatCameraStreamRef.current;
+    chatCameraStreamRef.current = null;
+    if (recordStream) {
+      try {
+        recordStream.getTracks().forEach((t) => {
+          // audio tracks may be shared with cameraStream — stop once via camera
+          if (t.kind === "video") t.stop();
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+    if (cameraStream) {
+      try {
+        cameraStream.getTracks().forEach((t) => t.stop());
+      } catch {
+        /* ignore */
+      }
+    }
     if (chatLiveVideoRef.current) {
       try {
         chatLiveVideoRef.current.srcObject = null;
@@ -5110,6 +5211,9 @@ export default function App() {
     const mime = chatRecordMimeRef.current || "application/octet-stream";
     const kind = chatRecordKindRef.current || "voice";
     const elapsed = Date.now() - chatRecordStartedAtRef.current;
+    const facing = chatCameraFacingRef.current || "user";
+    // Front camera is baked mirrored into the file via canvas — never CSS-flip again
+    const fileMirrored = kind === "video_note" && facing === "user";
     chatMediaRecorderRef.current = null;
     chatRecordChunksRef.current = [];
     setChatRecordingKind(null);
@@ -5123,14 +5227,14 @@ export default function App() {
     const blob = new Blob(chunks, { type: mime });
     if (!blob.size) return;
     const url = URL.createObjectURL(blob);
-    const facing = chatCameraFacingRef.current || "user";
     setChatMediaPreview({
       blob,
       url,
       kind: kind === "video_note" ? "video_note" : "voice",
       mime,
       durationSec: Math.max(1, Math.round(elapsed / 1000)),
-      mirrored: facing === "user",
+      displayFlip: false,
+      fileMirrored,
     });
   }
 
@@ -5182,12 +5286,12 @@ export default function App() {
 
   async function switchChatCamera() {
     if (chatRecordingKind !== "video_note" || chatCameraSwitching) return;
-    const stream = chatRecordStreamRef.current;
-    if (!stream) return;
+    const cameraStream = chatCameraStreamRef.current;
+    if (!cameraStream) return;
     const wantFacing = chatCameraFacingRef.current === "user" ? "environment" : "user";
     setChatCameraSwitching(true);
     try {
-      const oldVideo = stream.getVideoTracks()[0] || null;
+      const oldVideo = cameraStream.getVideoTracks()[0] || null;
       const currentId = oldVideo?.getSettings?.().deviceId || "";
       const nextCam = await pickOtherVideoDevice(currentId, wantFacing);
       if (!nextCam?.deviceId) {
@@ -5195,13 +5299,13 @@ export default function App() {
         return;
       }
 
-      // Сначала останавливаем старое видео — иначе на телефоне часто нельзя открыть вторую камеру
       chatKeepRecordingRef.current = true;
       await stopChatRecorderPreserveChunks();
+      stopMirrorPipeline();
 
-      stream.getVideoTracks().forEach((t) => {
+      cameraStream.getVideoTracks().forEach((t) => {
         try {
-          stream.removeTrack(t);
+          cameraStream.removeTrack(t);
         } catch {
           /* ignore */
         }
@@ -5255,18 +5359,20 @@ export default function App() {
         throw new Error("same camera");
       }
 
-      stream.addTrack(newVideo);
+      cameraStream.addTrack(newVideo);
       fresh.getAudioTracks().forEach((t) => t.stop());
-
-      bindChatMediaRecorder(stream);
 
       const actualFacing =
         detectCameraFacingFromTrack(newVideo, nextCam.label) || wantFacing;
       chatCameraFacingRef.current = actualFacing;
       setChatCameraFacing(actualFacing);
 
+      const recordStream = await buildChatRecordStream(cameraStream, actualFacing === "user");
+      chatRecordStreamRef.current = recordStream;
+      bindChatMediaRecorder(recordStream);
+
       if (chatLiveVideoRef.current) {
-        chatLiveVideoRef.current.srcObject = stream;
+        chatLiveVideoRef.current.srcObject = cameraStream;
         chatLiveVideoRef.current.muted = true;
         chatLiveVideoRef.current.playsInline = true;
         await chatLiveVideoRef.current.play?.().catch(() => {});
@@ -5274,11 +5380,10 @@ export default function App() {
     } catch {
       chatKeepRecordingRef.current = false;
       setChatStatus("Не удалось переключить камеру.");
-      const live = chatRecordStreamRef.current;
-      if (live && (!chatMediaRecorderRef.current || chatMediaRecorderRef.current.state === "inactive")) {
+      const cam = chatCameraStreamRef.current;
+      if (cam && (!chatMediaRecorderRef.current || chatMediaRecorderRef.current.state === "inactive")) {
         try {
-          // Если видео уже сняли — попробуем вернуть хотя бы фронт
-          if (!live.getVideoTracks().length) {
+          if (!cam.getVideoTracks().length) {
             try {
               const fallback = await navigator.mediaDevices.getUserMedia({
                 audio: false,
@@ -5289,15 +5394,18 @@ export default function App() {
                 },
               });
               const vt = fallback.getVideoTracks()[0];
-              if (vt) live.addTrack(vt);
+              if (vt) cam.addTrack(vt);
               fallback.getAudioTracks().forEach((t) => t.stop());
             } catch {
               /* ignore */
             }
           }
-          bindChatMediaRecorder(live);
+          const facing = chatCameraFacingRef.current || "user";
+          const recordStream = await buildChatRecordStream(cam, facing === "user");
+          chatRecordStreamRef.current = recordStream;
+          bindChatMediaRecorder(recordStream);
           if (chatLiveVideoRef.current) {
-            chatLiveVideoRef.current.srcObject = live;
+            chatLiveVideoRef.current.srcObject = cam;
             chatLiveVideoRef.current.play?.().catch(() => {});
           }
         } catch {
@@ -5325,20 +5433,27 @@ export default function App() {
               },
             }
           : { audio: true };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      chatRecordStreamRef.current = stream;
+      const cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+      chatCameraStreamRef.current = kind === "video_note" ? cameraStream : null;
+      const actualFacing =
+        kind === "video_note"
+          ? detectCameraFacingFromTrack(cameraStream.getVideoTracks()[0]) || facing || "user"
+          : facing;
+      if (kind === "video_note") {
+        chatCameraFacingRef.current = actualFacing;
+        setChatCameraFacing(actualFacing);
+      }
+      const recordStream =
+        kind === "video_note"
+          ? await buildChatRecordStream(cameraStream, actualFacing === "user")
+          : cameraStream;
+      chatRecordStreamRef.current = recordStream;
       chatRecordChunksRef.current = [];
       const mime = pickRecorderMime(kind);
       chatRecordMimeRef.current = mime || (kind === "video_note" ? "video/webm" : "audio/webm");
       chatRecordKindRef.current = kind;
       chatKeepRecordingRef.current = false;
-      if (kind === "video_note") {
-        const vt = stream.getVideoTracks()[0];
-        const actual = detectCameraFacingFromTrack(vt) || facing || "user";
-        chatCameraFacingRef.current = actual;
-        setChatCameraFacing(actual);
-      }
-      bindChatMediaRecorder(stream);
+      bindChatMediaRecorder(recordStream);
       chatRecordStartedAtRef.current = Date.now();
       setChatRecordingKind(kind);
       chatRecordLockedRef.current = false;
@@ -5352,7 +5467,7 @@ export default function App() {
         const Ctx = window.AudioContext || window.webkitAudioContext;
         if (Ctx) {
           const ctx = new Ctx();
-          const source = ctx.createMediaStreamSource(stream);
+          const source = ctx.createMediaStreamSource(cameraStream);
           const analyser = ctx.createAnalyser();
           analyser.fftSize = 64;
           source.connect(analyser);
@@ -5378,7 +5493,7 @@ export default function App() {
 
       requestAnimationFrame(() => {
         if (kind === "video_note" && chatLiveVideoRef.current) {
-          chatLiveVideoRef.current.srcObject = stream;
+          chatLiveVideoRef.current.srcObject = cameraStream;
           chatLiveVideoRef.current.muted = true;
           chatLiveVideoRef.current.playsInline = true;
           chatLiveVideoRef.current.play?.().catch(() => {});
@@ -5448,14 +5563,19 @@ export default function App() {
 
   async function sendChatMediaPreview() {
     if (!chatMediaPreview) return;
-    const { blob, kind, mime, durationSec } = chatMediaPreview;
+    const { blob, kind, mime, durationSec, displayFlip } = chatMediaPreview;
     const file = await blobToFile(
       blob,
       kind === "video_note" ? `video_note_${Date.now()}.webm` : `voice_${Date.now()}.webm`,
       mime
     );
     discardChatMediaPreview();
-    await postChatMessage({ file, kind, durationSec });
+    await postChatMessage({
+      file,
+      kind,
+      durationSec,
+      displayFlip: kind === "video_note" ? Boolean(displayFlip) : null,
+    });
   }
 
   function onComposeActionPointerDown(e) {
@@ -9450,43 +9570,14 @@ export default function App() {
                             </>
                           ) : (
                             <>
-                              <div
-                                className="tg-circle-seek"
-                                onPointerDown={(e) => {
-                                  if (e.target.closest("button")) return;
-                                  e.currentTarget.setPointerCapture?.(e.pointerId);
-                                  onCircleSeekPointer(e, chatPreviewMediaRef.current);
-                                }}
-                                onPointerMove={(e) => {
-                                  if (e.target.closest("button")) return;
-                                  if (e.buttons || e.pressure > 0) onCircleSeekPointer(e, chatPreviewMediaRef.current);
-                                }}
-                              >
-                                <video
+                              <div className="tg-circle-preview-player">
+                                <ChatVideoNotePlayer
                                   key={chatMediaPreview.url}
-                                  ref={chatPreviewMediaRef}
-                                  className={[
-                                    "tg-msg-video-note",
-                                    "tg-msg-video-note--preview",
-                                    chatMediaPreview.mirrored !== false && "tg-msg-video-note--mirror",
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" ")}
                                   src={chatMediaPreview.url}
-                                  playsInline
-                                  controls={false}
-                                  preload="auto"
-                                  onLoadedData={(e) => {
-                                    e.currentTarget.play?.().catch(() => {});
-                                  }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const v = e.currentTarget;
-                                    if (v.paused) v.play();
-                                    else v.pause();
-                                  }}
+                                  size={Math.min(280, typeof window !== "undefined" ? window.innerWidth * 0.72 : 280)}
+                                  mirror={Boolean(chatMediaPreview.displayFlip)}
+                                  previewMode
                                 />
-                                <span className="tg-circle-seek-ring" aria-hidden />
                               </div>
                               <div className="tg-circle-stage-actions">
                                 <button

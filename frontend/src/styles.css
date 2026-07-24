@@ -6047,6 +6047,17 @@ html.native-app .page-logged .hero.top-row {
   justify-content: center;
 }
 
+.tg-circle-preview-player {
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+}
+
+.tg-circle-player--preview {
+  max-width: min(280px, 72vw);
+  max-height: min(280px, 72vw);
+}
+
 .tg-circle-seek {
   position: relative;
   width: min(280px, 72vw);

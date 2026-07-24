@@ -3,14 +3,21 @@ import { useEffect, useRef, useState } from "react";
 /**
  * Video note player: tap to play/pause with rim progress on first play,
  * then muted loop; next tap restarts from the beginning with sound.
+ * previewMode — сразу кольцо перемотки (превью перед отправкой).
  */
-export default function ChatVideoNotePlayer({ src, size = 180, className = "" }) {
+export default function ChatVideoNotePlayer({
+  src,
+  size = 180,
+  className = "",
+  mirror = true,
+  previewMode = false,
+}) {
   const videoRef = useRef(null);
   const rootRef = useRef(null);
   const [progress, setProgress] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [enlarged, setEnlarged] = useState(false);
-  const [showRing, setShowRing] = useState(false);
+  const [enlarged, setEnlarged] = useState(Boolean(previewMode));
+  const [showRing, setShowRing] = useState(Boolean(previewMode));
   const mutedLoopRef = useRef(false);
   const seekingRef = useRef(false);
   const rafRef = useRef(0);
@@ -18,8 +25,8 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
 
   useEffect(() => {
     mutedLoopRef.current = false;
-    setShowRing(false);
-    setEnlarged(false);
+    setShowRing(Boolean(previewMode));
+    setEnlarged(Boolean(previewMode));
     setProgress(0);
     progressRef.current = 0;
     const v = videoRef.current;
@@ -27,15 +34,30 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
       try {
         v.pause();
         v.currentTime = 0;
-        v.muted = false;
+        v.muted = Boolean(previewMode);
       } catch {
         /* ignore */
       }
     }
+    if (previewMode && v) {
+      const start = async () => {
+        try {
+          v.muted = true;
+          await v.play();
+          setPlaying(true);
+          startTick();
+        } catch {
+          /* autoplay may fail */
+        }
+      };
+      if (v.readyState >= 2) start();
+      else v.addEventListener("loadeddata", start, { once: true });
+    }
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [src]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startTick is stable enough via closure
+  }, [src, previewMode]);
 
   function setProgressSafe(p) {
     const v = Math.max(0, Math.min(1, Number(p) || 0));
@@ -87,7 +109,7 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
   }
 
   function onSeekPointerDown(e) {
-    if (!showRing || mutedLoopRef.current) return;
+    if (!showRing || (!previewMode && mutedLoopRef.current)) return;
     e.preventDefault();
     e.stopPropagation();
     seekingRef.current = true;
@@ -162,7 +184,26 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
     const v = videoRef.current;
     if (!v) return;
 
-    // After first ending (muted loop): tap restarts from the beginning with sound
+    if (previewMode) {
+      if (!v.paused && !v.ended) {
+        v.pause();
+        setPlaying(false);
+        stopTick();
+        return;
+      }
+      v.muted = false;
+      setShowRing(true);
+      setEnlarged(true);
+      try {
+        await v.play();
+        setPlaying(true);
+        startTick();
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+
     if (mutedLoopRef.current) {
       await playWithSoundFromStart();
       return;
@@ -203,6 +244,17 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
   function onEnded() {
     const v = videoRef.current;
     if (!v) return;
+    if (previewMode) {
+      try {
+        v.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
+      setProgressSafe(0);
+      v.play?.().catch(() => {});
+      setPlaying(true);
+      return;
+    }
     mutedLoopRef.current = true;
     v.muted = true;
     setEnlarged(false);
@@ -230,9 +282,10 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
       ref={rootRef}
       className={[
         "tg-circle-player",
-        enlarged && "tg-circle-player--enlarged",
+        (enlarged || previewMode) && "tg-circle-player--enlarged",
         playing && "tg-circle-player--playing",
         showRing && "tg-circle-player--ring",
+        previewMode && "tg-circle-player--preview",
         className,
       ]
         .filter(Boolean)
@@ -251,12 +304,13 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
     >
       <video
         ref={videoRef}
-        className="tg-msg-video-note tg-msg-video-note--mirror"
+        className={["tg-msg-video-note", mirror && "tg-msg-video-note--mirror"].filter(Boolean).join(" ")}
         src={src}
         playsInline
         webkit-playsinline="true"
         preload="auto"
         controls={false}
+        loop={Boolean(previewMode)}
         onEnded={onEnded}
         onPause={() => {
           if (!mutedLoopRef.current) setPlaying(false);

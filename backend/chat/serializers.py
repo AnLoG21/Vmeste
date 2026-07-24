@@ -259,4 +259,12 @@ class MessageSerializer(serializers.ModelSerializer):
                     **(validated_data.get("payload") or {}),
                     "duration_sec": dur_i,
                 }
+            # Circles recorded via mirrored canvas: do not CSS-flip again on clients
+            flip_raw = request.data.get("display_flip")
+            if flip_raw is not None and str(flip_raw).strip() != "":
+                flip_on = str(flip_raw).strip().lower() in ("1", "true", "yes", "on")
+                validated_data["payload"] = {
+                    **(validated_data.get("payload") or {}),
+                    "display_flip": flip_on,
+                }
         return super().create(validated_data)
