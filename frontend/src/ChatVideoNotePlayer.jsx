@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Video note player: tap to play/pause with rim progress on first play,
- * then muted loop; next tap restarts from the beginning with sound.
+ * Video note player: tap center to play/pause; drag the rim to seek.
  * previewMode — сразу кольцо перемотки (превью перед отправкой).
  */
 export default function ChatVideoNotePlayer({
@@ -20,6 +19,8 @@ export default function ChatVideoNotePlayer({
   const [showRing, setShowRing] = useState(Boolean(previewMode));
   const mutedLoopRef = useRef(false);
   const seekingRef = useRef(false);
+  const seekMovedRef = useRef(false);
+  const suppressClickRef = useRef(false);
   const rafRef = useRef(0);
   const progressRef = useRef(0);
 
@@ -29,6 +30,7 @@ export default function ChatVideoNotePlayer({
     setEnlarged(Boolean(previewMode));
     setProgress(0);
     progressRef.current = 0;
+    seekingRef.current = false;
     const v = videoRef.current;
     if (v) {
       try {
@@ -47,7 +49,7 @@ export default function ChatVideoNotePlayer({
           setPlaying(true);
           startTick();
         } catch {
-          /* autoplay may fail */
+          /* autoplay may fail — user can tap */
         }
       };
       if (v.readyState >= 2) start();
@@ -56,13 +58,12 @@ export default function ChatVideoNotePlayer({
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- startTick is stable enough via closure
   }, [src, previewMode]);
 
   function setProgressSafe(p) {
-    const v = Math.max(0, Math.min(1, Number(p) || 0));
-    progressRef.current = v;
-    setProgress(v);
+    const next = Math.max(0, Math.min(1, Number(p) || 0));
+    progressRef.current = next;
+    setProgress(next);
   }
 
   function tick() {
@@ -108,11 +109,36 @@ export default function ChatVideoNotePlayer({
     }
   }
 
+  async function resumeAfterSeek() {
+    const v = videoRef.current;
+    if (!v) return;
+    mutedLoopRef.current = false;
+    setShowRing(true);
+    setEnlarged(true);
+    try {
+      v.muted = Boolean(previewMode);
+      await v.play();
+      setPlaying(true);
+      startTick();
+    } catch {
+      try {
+        v.muted = true;
+        await v.play();
+        if (!previewMode) v.muted = false;
+        setPlaying(true);
+        startTick();
+      } catch {
+        setPlaying(false);
+      }
+    }
+  }
+
   function onSeekPointerDown(e) {
     if (!showRing || (!previewMode && mutedLoopRef.current)) return;
     e.preventDefault();
     e.stopPropagation();
     seekingRef.current = true;
+    seekMovedRef.current = false;
     e.currentTarget.setPointerCapture?.(e.pointerId);
     const x = e.clientX ?? e.touches?.[0]?.clientX;
     const y = e.clientY ?? e.touches?.[0]?.clientY;
@@ -123,6 +149,7 @@ export default function ChatVideoNotePlayer({
     if (!seekingRef.current) return;
     e.preventDefault();
     e.stopPropagation();
+    seekMovedRef.current = true;
     const x = e.clientX ?? e.touches?.[0]?.clientX;
     const y = e.clientY ?? e.touches?.[0]?.clientY;
     if (x != null && y != null) applySeek(x, y);
@@ -138,6 +165,12 @@ export default function ChatVideoNotePlayer({
     } catch {
       /* ignore */
     }
+    // After seek (tap on rim or drag) — continue playback from that point
+    suppressClickRef.current = true;
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 280);
+    void resumeAfterSeek();
   }
 
   async function playWithSoundFromStart() {
@@ -178,7 +211,7 @@ export default function ChatVideoNotePlayer({
   }
 
   async function togglePlay(e) {
-    if (seekingRef.current) return;
+    if (seekingRef.current || suppressClickRef.current) return;
     e?.preventDefault?.();
     e?.stopPropagation?.();
     const v = videoRef.current;
@@ -199,7 +232,14 @@ export default function ChatVideoNotePlayer({
         setPlaying(true);
         startTick();
       } catch {
-        /* ignore */
+        try {
+          v.muted = true;
+          await v.play();
+          setPlaying(true);
+          startTick();
+        } catch {
+          /* ignore */
+        }
       }
       return;
     }
@@ -253,6 +293,7 @@ export default function ChatVideoNotePlayer({
       setProgressSafe(0);
       v.play?.().catch(() => {});
       setPlaying(true);
+      startTick();
       return;
     }
     mutedLoopRef.current = true;
@@ -300,7 +341,7 @@ export default function ChatVideoNotePlayer({
           togglePlay(e);
         }
       }}
-      aria-label={playing && !mutedLoopRef.current ? "Пауза кружка" : "Смотреть кружок"}
+      aria-label={playing ? "Пауза" : "Смотреть кружок"}
     >
       <video
         ref={videoRef}
@@ -313,7 +354,7 @@ export default function ChatVideoNotePlayer({
         loop={Boolean(previewMode)}
         onEnded={onEnded}
         onPause={() => {
-          if (!mutedLoopRef.current) setPlaying(false);
+          if (!mutedLoopRef.current && !seekingRef.current) setPlaying(false);
         }}
         onPlay={() => setPlaying(true)}
       />
@@ -325,7 +366,6 @@ export default function ChatVideoNotePlayer({
           onPointerMove={onSeekPointerMove}
           onPointerUp={onSeekPointerUp}
           onPointerCancel={onSeekPointerUp}
-          onClick={(e) => e.stopPropagation()}
         >
           <circle className="tg-circle-progress-track" cx="50" cy="50" r={r} />
           <circle

@@ -2719,6 +2719,17 @@ export default function App() {
   }, [chatMessages]);
 
   useEffect(() => {
+    if (chatRecordingKind !== "video_note") return undefined;
+    attachLiveCameraPreview();
+    const t1 = window.setTimeout(attachLiveCameraPreview, 50);
+    const t2 = window.setTimeout(attachLiveCameraPreview, 250);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [chatRecordingKind, chatCameraFacing]);
+
+  useEffect(() => {
     chatHasMoreOlderRef.current = chatHasMoreOlder;
   }, [chatHasMoreOlder]);
 
@@ -5138,6 +5149,14 @@ export default function App() {
     videoEl.playsInline = true;
     videoEl.setAttribute("playsinline", "true");
     videoEl.srcObject = cameraStream;
+    await new Promise((resolve) => {
+      const done = () => resolve();
+      if (videoEl.readyState >= 1) done();
+      else {
+        videoEl.onloadedmetadata = done;
+        window.setTimeout(done, 1200);
+      }
+    });
     await videoEl.play().catch(() => {});
 
     const size = 480;
@@ -5172,6 +5191,19 @@ export default function App() {
       ...canvasStream.getVideoTracks(),
       ...cameraStream.getAudioTracks(),
     ]);
+  }
+
+  function attachLiveCameraPreview() {
+    const stream = chatCameraStreamRef.current;
+    const el = chatLiveVideoRef.current;
+    if (!stream || !el) return;
+    if (el.srcObject !== stream) {
+      el.srcObject = stream;
+    }
+    el.muted = true;
+    el.playsInline = true;
+    el.setAttribute("playsinline", "true");
+    el.play?.().catch(() => {});
   }
 
   function stopChatRecordTracks() {
@@ -5376,6 +5408,8 @@ export default function App() {
         chatLiveVideoRef.current.muted = true;
         chatLiveVideoRef.current.playsInline = true;
         await chatLiveVideoRef.current.play?.().catch(() => {});
+      } else {
+        attachLiveCameraPreview();
       }
     } catch {
       chatKeepRecordingRef.current = false;
@@ -5490,15 +5524,7 @@ export default function App() {
       } catch {
         /* analyser optional */
       }
-
-      requestAnimationFrame(() => {
-        if (kind === "video_note" && chatLiveVideoRef.current) {
-          chatLiveVideoRef.current.srcObject = cameraStream;
-          chatLiveVideoRef.current.muted = true;
-          chatLiveVideoRef.current.playsInline = true;
-          chatLiveVideoRef.current.play?.().catch(() => {});
-        }
-      });
+      // Live <video> mounts with overlay after setChatRecordingKind — attach in useEffect
     } catch (_e) {
       setChatStatus("Нет доступа к микрофону/камере.");
       setChatRecordingKind(null);
@@ -7041,10 +7067,15 @@ export default function App() {
             const weekend =
               day != null ? (offset + day - 1) % 7 >= 5 : col >= 5;
             const dayItems = day ? byDay[day] || [] : [];
+            const isToday =
+              day != null &&
+              year === new Date().getFullYear() &&
+              month === new Date().getMonth() + 1 &&
+              day === new Date().getDate();
             return (
             <div
               key={`${day ?? "empty"}-${idx}`}
-              className={`calendar-cell ${day ? "clickable calendar-cell--bookings" : "empty"} ${weekend ? "weekend-cell" : ""} ${dayItems.length ? "calendar-cell--has-items" : ""}`}
+              className={`calendar-cell ${day ? "clickable calendar-cell--bookings" : "empty"} ${weekend ? "weekend-cell" : ""} ${dayItems.length ? "calendar-cell--has-items" : ""} ${isToday ? "calendar-cell--today" : ""}`}
               onClick={() => {
                 if (!day) return;
                 setCalendarDayDetail({
@@ -7341,10 +7372,15 @@ export default function App() {
             const col = idx % 7;
             const weekend =
               day != null ? (offset + day - 1) % 7 >= 5 : col >= 5;
+            const isToday =
+              day != null &&
+              year === new Date().getFullYear() &&
+              month === new Date().getMonth() + 1 &&
+              day === new Date().getDate();
             return (
             <div
               key={`${day ?? "empty"}-${idx}`}
-              className={`calendar-cell ${day ? "clickable" : ""} ${day ? "" : "empty"} ${weekend ? "weekend-cell" : ""}`}
+              className={`calendar-cell ${day ? "clickable" : ""} ${day ? "" : "empty"} ${weekend ? "weekend-cell" : ""} ${isToday ? "calendar-cell--today" : ""}`}
               onClick={() => {
                 if (!day) return;
                 const selected = savedIntervals.find((x) => x.id === selectedIntervalId);
