@@ -1,4 +1,4 @@
-/** Lightweight toast notifications (auto-hide). */
+/** Lightweight toast notifications (auto-hide, dismissible). */
 
 let host = null;
 let lastPointerAt = Date.now();
@@ -30,30 +30,41 @@ export function showToast(message, opts = {}) {
   const elHost = ensureHost();
   if (!elHost || !message) return;
   const tone = opts.tone || "success";
-  const baseMs = opts.ms ?? 5000;
+  // Default ~12s so longer messages (e.g. password email hint) are readable
+  const baseMs = opts.ms ?? 12000;
+  const idleGraceMs = 5000;
   const card = document.createElement("div");
   card.className = `vmeste-toast vmeste-toast--${tone}`;
   card.innerHTML = `<span class="vmeste-toast-text"></span><button type="button" class="vmeste-toast-close" aria-label="Закрыть">×</button>`;
   card.querySelector(".vmeste-toast-text").textContent = message;
+  let closed = false;
+  let timer = null;
   const close = () => {
+    if (closed) return;
+    closed = true;
+    if (timer) window.clearTimeout(timer);
     card.classList.add("vmeste-toast--out");
     window.setTimeout(() => card.remove(), 220);
   };
   card.querySelector(".vmeste-toast-close").addEventListener("click", close);
   elHost.appendChild(card);
 
-  const schedule = () => {
-    const idle = Date.now() - lastPointerAt;
-    // If user is active, wait until 5s of idle after show; else hide after baseMs from now
-    const wait = Math.max(400, baseMs - Math.min(idle, baseMs));
-    window.setTimeout(() => {
-      if (Date.now() - lastPointerAt < 400) {
-        // still active — extend
-        window.setTimeout(close, baseMs);
-      } else {
-        close();
-      }
-    }, wait);
+  const shownAt = Date.now();
+  const tick = () => {
+    if (closed) return;
+    const now = Date.now();
+    const minElapsed = now - shownAt >= baseMs;
+    const idleFor = now - lastPointerAt;
+    // Stay at least baseMs; if user is still interacting, wait until idleGraceMs after last activity
+    if (!minElapsed) {
+      timer = window.setTimeout(tick, Math.min(1000, baseMs - (now - shownAt)));
+      return;
+    }
+    if (idleFor < idleGraceMs) {
+      timer = window.setTimeout(tick, idleGraceMs - idleFor + 50);
+      return;
+    }
+    close();
   };
-  schedule();
+  timer = window.setTimeout(tick, baseMs);
 }

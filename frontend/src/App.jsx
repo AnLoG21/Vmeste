@@ -38,6 +38,7 @@ import {
   showLocalBrowserNotification,
 } from "./pushNotifications.js";
 import { ensurePhonePlus7, phoneFieldProps } from "./phone.js";
+import PasswordInput from "./PasswordInput.jsx";
 import { showToast } from "./toast.js";
 import { navigateView, viewFromPath } from "./viewRoutes.js";
 
@@ -1666,6 +1667,8 @@ function BookingMsgDateToken({ onPointerDown, onDragStart, onRemove, onClick, cl
 }
 
 function BookingMessageField({ id, label, value, onChange, placeholder, highlighted, presetKey }) {
+  const hintPlaceholder =
+    placeholder || BOOKING_MSG_PRESETS[presetKey]?.[0] || "Текст сообщения клиенту…";
   const editorRef = useRef(null);
   const syncingRef = useRef(false);
   const isEmpty = !value.trim();
@@ -1723,21 +1726,6 @@ function BookingMessageField({ id, label, value, onChange, placeholder, highligh
       <label className="field-label" htmlFor={id}>
         {label}
       </label>
-      {BOOKING_MSG_PRESETS[presetKey]?.length ? (
-        <div className="booking-msg-presets">
-          {BOOKING_MSG_PRESETS[presetKey].map((preset, index) => (
-            <button
-              key={preset}
-              type="button"
-              className="ghost-btn small"
-              aria-label={`Подсказка ${index + 1} для поля «${label}»`}
-              onClick={() => onChange(preset)}
-            >
-              Подсказка
-            </button>
-          ))}
-        </div>
-      ) : null}
       <div
         id={id}
         ref={editorRef}
@@ -1754,7 +1742,7 @@ function BookingMessageField({ id, label, value, onChange, placeholder, highligh
         ]
           .filter(Boolean)
           .join(" ")}
-        data-placeholder={placeholder || ""}
+        data-placeholder={hintPlaceholder}
         onInput={emitFromEditor}
         onDragOver={(e) => {
           e.preventDefault();
@@ -2056,8 +2044,6 @@ export default function App() {
   const [accessToken, setAccessToken] = useState(localStorage.getItem("vmeste_access") || "");
   const [refreshToken, setRefreshToken] = useState(localStorage.getItem("vmeste_refresh") || "");
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
-  const [showLoginPassword, setShowLoginPassword] = useState(false);
-  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [me, setMe] = useState(null);
 
   const [roles, setRoles] = useState([]);
@@ -2695,7 +2681,7 @@ export default function App() {
       first_name: me.first_name || "",
       last_name: me.last_name || "",
       patronymic: me.patronymic || "",
-      phone: me.phone || "",
+      phone: ensurePhonePlus7(me.phone || "+7"),
     });
     setEmailForm({ new_email: me.email || "" });
   }, [me]);
@@ -3174,10 +3160,10 @@ export default function App() {
           setIncomingToasts((t) => [...t, { id: toastId, convId: c.id, title, text, fade: false }]);
           setTimeout(() => {
             setIncomingToasts((t) => t.map((x) => (x.id === toastId ? { ...x, fade: true } : x)));
-          }, 5000);
+          }, 12000);
           setTimeout(() => {
             setIncomingToasts((t) => t.filter((x) => x.id !== toastId));
-          }, 5600);
+          }, 12600);
         }
       }
       digestPrimedRef.current = true;
@@ -3480,6 +3466,9 @@ export default function App() {
       return;
     }
     if (mapRef.current) return;
+    const centerLat = Number(form.organization_latitude);
+    const centerLon = Number(form.organization_longitude);
+    const hasPoint = Number.isFinite(centerLat) && Number.isFinite(centerLon);
     void loadYandexMaps()
       .then(() => {
         const ymaps = window.ymaps;
@@ -3491,11 +3480,23 @@ export default function App() {
             return;
           }
           if (mapRef.current) return;
+          const center = hasPoint ? [centerLat, centerLon] : [55.751244, 37.618423];
+          const hadPin =
+            Boolean(String(form.organization_address || "").trim()) ||
+            (hasPoint &&
+              !(
+                Math.abs(centerLat - 55.751244) < 1e-6 &&
+                Math.abs(centerLon - 37.618423) < 1e-6
+              ));
           const map = new ymaps.Map(currentMapElement, {
-            center: [Number(form.organization_latitude), Number(form.organization_longitude)],
-            zoom: 11,
+            center,
+            zoom: hadPin ? 14 : 11,
           });
           mapRef.current = map;
+          if (hadPin) {
+            placemarkRef.current = new ymaps.Placemark(center);
+            map.geoObjects.add(placemarkRef.current);
+          }
           map.events.add("click", (e) => {
             const coords = e.get("coords");
             const [lat, lon] = coords;
@@ -5529,7 +5530,7 @@ export default function App() {
     const data = await response.json().catch(() => ({}));
     const detail = data.detail || (response.ok ? "Проверьте почту для подтверждения смены пароля." : "Не удалось сменить пароль.");
     if (!response.ok) return setStatus(detail);
-    showToast(detail, { tone: "success" });
+    showToast(detail, { tone: "success", ms: 14000 });
     setStatus(detail);
     setPasswordForm({ old_password: "", new_password: "", new_password_confirm: "" });
   }
@@ -5543,7 +5544,7 @@ export default function App() {
     const data = await response.json().catch(() => ({}));
     const detail = data.detail || (response.ok ? "Email изменен. Подтверди его по письму." : "Не удалось сменить email.");
     if (!response.ok) return setStatus(detail);
-    showToast(detail, { tone: "success" });
+    showToast(detail, { tone: "success", ms: 14000 });
     setStatus(detail);
     loadMe();
   }
@@ -7174,9 +7175,24 @@ export default function App() {
         </div>
         <form onSubmit={changePassword} className="form">
           <h3>Смена пароля</h3>
-          <input type="password" value={passwordForm.old_password} onChange={(e) => setPasswordForm({ ...passwordForm, old_password: e.target.value })} placeholder="Старый пароль" />
-          <input type="password" value={passwordForm.new_password} onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })} placeholder="Новый пароль" />
-          <input type="password" value={passwordForm.new_password_confirm} onChange={(e) => setPasswordForm({ ...passwordForm, new_password_confirm: e.target.value })} placeholder="Повтори новый пароль" />
+          <PasswordInput
+            value={passwordForm.old_password}
+            onChange={(e) => setPasswordForm({ ...passwordForm, old_password: e.target.value })}
+            placeholder="Старый пароль"
+            autoComplete="current-password"
+          />
+          <PasswordInput
+            value={passwordForm.new_password}
+            onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
+            placeholder="Новый пароль"
+            autoComplete="new-password"
+          />
+          <PasswordInput
+            value={passwordForm.new_password_confirm}
+            onChange={(e) => setPasswordForm({ ...passwordForm, new_password_confirm: e.target.value })}
+            placeholder="Повтори новый пароль"
+            autoComplete="new-password"
+          />
           <button type="submit">Сменить пароль</button>
         </form>
         <form onSubmit={changeEmail} className="form">
@@ -7219,7 +7235,6 @@ export default function App() {
                   id="org-msg-confirm"
                   presetKey="confirm"
                   label="Подтверждение записи"
-                  placeholder="Текст клиенту при подтверждении"
                   value={orgBookingMessages.confirm}
                   onChange={(v) => setOrgBookingMessages((p) => ({ ...p, confirm: v }))}
                   highlighted={orgSettingsHighlight === "confirm"}
@@ -7228,7 +7243,6 @@ export default function App() {
                   id="org-msg-cancel"
                   presetKey="cancel"
                   label="Отмена записи"
-                  placeholder="Текст клиенту при отмене"
                   value={orgBookingMessages.cancel}
                   onChange={(v) => setOrgBookingMessages((p) => ({ ...p, cancel: v }))}
                   highlighted={orgSettingsHighlight === "cancel"}
@@ -7237,7 +7251,6 @@ export default function App() {
                   id="org-msg-done"
                   presetKey="done"
                   label="Услуга оказана"
-                  placeholder="Текст клиенту, когда услуга оказана"
                   value={orgBookingMessages.done}
                   onChange={(v) => setOrgBookingMessages((p) => ({ ...p, done: v }))}
                   highlighted={orgSettingsHighlight === "done"}
@@ -8358,10 +8371,13 @@ export default function App() {
               {authMode === "login" ? (
                 <form onSubmit={onLogin} className="form">
                   <input placeholder="Логин" value={loginForm.username} onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })} required />
-                  <input placeholder="Пароль" type={showLoginPassword ? "text" : "password"} value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} required />
-                  <button type="button" className="ghost-btn small" onClick={() => setShowLoginPassword((shown) => !shown)}>
-                    {showLoginPassword ? "Скрыть" : "Показать"}
-                  </button>
+                  <PasswordInput
+                    placeholder="Пароль"
+                    value={loginForm.password}
+                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                    required
+                    autoComplete="current-password"
+                  />
                   <button type="submit">Войти</button>
                 </form>
               ) : (
@@ -8380,17 +8396,20 @@ export default function App() {
                       <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                         {roleOptions.map((item) => <option key={item.key} value={item.key}>{item.value}</option>)}
                       </select>
-                      <input placeholder="Пароль" type={showRegisterPassword ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
-                      <input
+                      <PasswordInput
+                        placeholder="Пароль"
+                        value={form.password}
+                        onChange={(e) => setForm({ ...form, password: e.target.value })}
+                        required
+                        autoComplete="new-password"
+                      />
+                      <PasswordInput
                         placeholder="Повторите пароль"
-                        type={showRegisterPassword ? "text" : "password"}
                         value={form.password_confirm}
                         onChange={(e) => setForm({ ...form, password_confirm: e.target.value })}
                         required
+                        autoComplete="new-password"
                       />
-                      <button type="button" className="ghost-btn small" onClick={() => setShowRegisterPassword((shown) => !shown)}>
-                        {showRegisterPassword ? "Скрыть" : "Показать"}
-                      </button>
                       {form.role === "provider" ? <button type="button" onClick={continueProviderRegistration}>Продолжить</button> : <button type="submit">Создать аккаунт</button>}
                     </>
                   )}
@@ -8520,16 +8539,7 @@ export default function App() {
               <input value={profileForm.patronymic} onChange={(e) => setProfileForm({ ...profileForm, patronymic: e.target.value })} placeholder="Отчество" />
               <input
                 placeholder="Телефон"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                value={profileForm.phone || "+7"}
-                onFocus={(e) => {
-                  if (!String(e.target.value || "").trim()) {
-                    setProfileForm({ ...profileForm, phone: "+7" });
-                  }
-                }}
-                onChange={(e) => setProfileForm({ ...profileForm, phone: ensurePhonePlus7(e.target.value) })}
+                {...phoneFieldProps(profileForm.phone, (phone) => setProfileForm({ ...profileForm, phone }))}
               />
               <div className="profile-save-row">
                 <button type="submit">Сохранить данные</button>

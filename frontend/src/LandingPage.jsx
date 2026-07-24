@@ -8,7 +8,7 @@ import {
   softwareApplicationJsonLd,
   websiteJsonLd,
 } from "./seo/schema.js";
-import { ensurePhonePlus7 } from "./phone.js";
+import { phoneFieldProps } from "./phone.js";
 
 function formatPlanPrice(price) {
   const value = Number(price);
@@ -250,12 +250,7 @@ export default function LandingPage({ onLogin, onRegister }) {
           />
           <input
             placeholder="Телефон"
-            type="tel"
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: ensurePhonePlus7(e.target.value) })}
-            onFocus={() => {
-              if (!String(form.phone || "").trim()) setForm((p) => ({ ...p, phone: "+7" }));
-            }}
+            {...phoneFieldProps(form.phone, (phone) => setForm({ ...form, phone }))}
           />
           <input
             placeholder="Telegram (@username)"

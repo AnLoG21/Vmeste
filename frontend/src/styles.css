@@ -6610,6 +6610,56 @@ html.native-app .page-logged .hero.top-row {
   }
 }
 
+.password-input-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.password-input-wrap .password-input-field,
+.password-input-wrap > input {
+  width: 100%;
+  padding-right: 44px;
+  box-sizing: border-box;
+}
+
+.password-eye-btn {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 8px;
+  background: transparent !important;
+  color: #8a5a2b !important;
+  font-weight: 400;
+  box-shadow: none;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.password-eye-btn:hover,
+.password-eye-btn:focus-visible {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+[data-theme="dark"] .password-eye-btn,
+body.theme-dark .password-eye-btn {
+  color: #f0c9a0;
+}
+
+[data-theme="dark"] .password-eye-btn:hover,
+body.theme-dark .password-eye-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .password-field-row {
   display: flex;
   gap: 8px;
@@ -6629,6 +6679,7 @@ html.native-app .page-logged .hero.top-row {
 .profile-save-row {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 10px;
   margin-top: 8px;
   margin-bottom: 4px;
@@ -6661,18 +6712,6 @@ html.native-app .page-logged .hero.top-row {
 
 .booking-msg-token {
   touch-action: none;
-}
-
-.booking-msg-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 6px 0 8px;
-}
-
-.booking-msg-presets button {
-  font-size: 12px;
-  padding: 4px 8px;
 }
 
 .service-editor-labels,
