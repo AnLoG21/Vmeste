@@ -1887,6 +1887,18 @@ body.theme-dark .interval-calendar .calendar-day {
   color: #1a0f08;
 }
 
+[data-theme="dark"] .calendar-cell--today,
+body.theme-dark .calendar-cell--today {
+  background: rgba(255, 122, 0, 0.14);
+  border-color: #ff8c33;
+}
+
+[data-theme="dark"] .calendar-cell--today .calendar-day,
+body.theme-dark .calendar-cell--today .calendar-day {
+  background: #ff8c33;
+  color: #1a1a1a;
+}
+
 [data-theme="dark"] .booking-calendar .calendar-head:not(.weekend-head),
 [data-theme="dark"] .interval-calendar .calendar-head:not(.weekend-head),
 body.theme-dark .booking-calendar .calendar-head:not(.weekend-head),
