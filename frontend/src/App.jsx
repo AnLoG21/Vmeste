@@ -2305,6 +2305,9 @@ export default function App() {
   const chatPreviewMediaRef = useRef(null);
   const chatRecordMimeRef = useRef("audio/webm");
   const chatRecordKindRef = useRef(null);
+  const chatCameraFacingRef = useRef("user");
+  const [chatCameraFacing, setChatCameraFacing] = useState("user");
+  const [chatCameraSwitching, setChatCameraSwitching] = useState(false);
   const [chatSettingsTitle, setChatSettingsTitle] = useState("");
   const [groupForm, setGroupForm] = useState({ title: "", staff_ids: [] });
   const [chatFabOpen, setChatFabOpen] = useState(false);
@@ -5091,21 +5094,71 @@ export default function App() {
     const blob = new Blob(chunks, { type: mime });
     if (!blob.size) return;
     const url = URL.createObjectURL(blob);
+    const facing = chatCameraFacingRef.current || "user";
     setChatMediaPreview({
       blob,
       url,
       kind: kind === "video_note" ? "video_note" : "voice",
       mime,
       durationSec: Math.max(1, Math.round(elapsed / 1000)),
+      mirrored: facing === "user",
     });
+  }
+
+  async function switchChatCamera() {
+    if (chatRecordingKind !== "video_note" || chatCameraSwitching) return;
+    const stream = chatRecordStreamRef.current;
+    if (!stream) return;
+    const nextFacing = chatCameraFacingRef.current === "user" ? "environment" : "user";
+    setChatCameraSwitching(true);
+    try {
+      const fresh = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: nextFacing },
+          width: { ideal: 480 },
+          height: { ideal: 480 },
+        },
+      });
+      const newVideo = fresh.getVideoTracks()[0];
+      if (!newVideo) {
+        fresh.getTracks().forEach((t) => t.stop());
+        throw new Error("no video");
+      }
+      const oldVideo = stream.getVideoTracks()[0];
+      if (oldVideo) {
+        stream.removeTrack(oldVideo);
+        oldVideo.stop();
+      }
+      stream.addTrack(newVideo);
+      fresh.getAudioTracks().forEach((t) => t.stop());
+      chatCameraFacingRef.current = nextFacing;
+      setChatCameraFacing(nextFacing);
+      if (chatLiveVideoRef.current) {
+        chatLiveVideoRef.current.srcObject = stream;
+        chatLiveVideoRef.current.play?.().catch(() => {});
+      }
+    } catch {
+      setChatStatus("Не удалось переключить камеру.");
+    } finally {
+      setChatCameraSwitching(false);
+    }
   }
 
   async function startChatRecording(kind) {
     if (chatRecordingKind || chatMediaPreview || !selectedChatId) return;
     try {
+      const facing = chatCameraFacingRef.current || "user";
       const constraints =
         kind === "video_note"
-          ? { audio: true, video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 480 } } }
+          ? {
+              audio: true,
+              video: {
+                facingMode: { ideal: facing },
+                width: { ideal: 480 },
+                height: { ideal: 480 },
+              },
+            }
           : { audio: true };
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       chatRecordStreamRef.current = stream;
@@ -9165,7 +9218,18 @@ export default function App() {
                           {chatRecordingKind === "video_note" ? (
                             <>
                               <div className="tg-circle-live-wrap">
-                                <video ref={chatLiveVideoRef} className="tg-circle-live-video" playsInline muted autoPlay />
+                                <video
+                                  ref={chatLiveVideoRef}
+                                  className={[
+                                    "tg-circle-live-video",
+                                    chatCameraFacing === "user" && "tg-circle-live-video--mirror",
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" ")}
+                                  playsInline
+                                  muted
+                                  autoPlay
+                                />
                                 <span className="tg-circle-live-timer">{formatRecordClock(chatRecordSecs)}</span>
                               </div>
                               <div className="tg-circle-stage-actions">
@@ -9194,6 +9258,25 @@ export default function App() {
                                     <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
                                   </svg>
                                 </button>
+                                <button
+                                  type="button"
+                                  className="tg-circle-stage-btn tg-circle-stage-btn--flip"
+                                  aria-label="Сменить камеру"
+                                  title="Сменить камеру"
+                                  disabled={chatCameraSwitching}
+                                  onClick={switchChatCamera}
+                                >
+                                  <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                                    <path
+                                      fill="currentColor"
+                                      d="M16 7h-1l-1-1h-4L9 7H8c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm-4 9c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"
+                                    />
+                                    <path
+                                      fill="currentColor"
+                                      d="M9.1 3.1 7.7 1.7 2 7.4l1.4 1.4 2.3-2.3V9h2V4.5L9.1 3.1zm12.5 12.1-1.4-1.4-2.3 2.3V15h-2v4.5l1.4 1.4 5.7-5.7z"
+                                    />
+                                  </svg>
+                                </button>
                               </div>
                             </>
                           ) : (
@@ -9213,7 +9296,13 @@ export default function App() {
                                 <video
                                   key={chatMediaPreview.url}
                                   ref={chatPreviewMediaRef}
-                                  className="tg-msg-video-note tg-msg-video-note--preview"
+                                  className={[
+                                    "tg-msg-video-note",
+                                    "tg-msg-video-note--preview",
+                                    chatMediaPreview.mirrored !== false && "tg-msg-video-note--mirror",
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" ")}
                                   src={chatMediaPreview.url}
                                   playsInline
                                   controls={false}

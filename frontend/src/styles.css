@@ -6128,10 +6128,31 @@ html.native-app .page-logged .hero.top-row {
   pointer-events: none;
 }
 
+.tg-msg-video-note--mirror,
+.tg-circle-live-video--mirror {
+  transform: scaleX(-1);
+}
+
 .tg-msg-video-note--preview {
   width: min(280px, 72vw);
   height: min(280px, 72vw);
   pointer-events: auto;
+}
+
+.tg-circle-stage-btn--flip {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.tg-circle-stage-btn--flip:hover,
+.tg-circle-stage-btn--flip:focus-visible {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.tg-circle-stage-btn--flip:disabled {
+  opacity: 0.5;
+  cursor: wait;
 }
 
 .tg-circle-player {

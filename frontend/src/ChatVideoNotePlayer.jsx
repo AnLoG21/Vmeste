@@ -251,7 +251,7 @@ export default function ChatVideoNotePlayer({ src, size = 180, className = "" })
     >
       <video
         ref={videoRef}
-        className="tg-msg-video-note"
+        className="tg-msg-video-note tg-msg-video-note--mirror"
         src={src}
         playsInline
         webkit-playsinline="true"
