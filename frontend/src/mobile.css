@@ -418,19 +418,47 @@ html.native-app .interval-calendar .calendar-slot-compact--interval,
 html.native-app .interval-calendar .calendar-slot-compact {
   background: #ff9933;
   color: #3d1a00;
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.1;
   padding: 2px 1px;
   min-height: 0;
   border: 1px solid #e86f00;
+  white-space: normal;
 }
 
 html.native-app .interval-calendar .calendar-slot-compact-time {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 100%;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+html.native-app .interval-calendar .calendar-slot-compact-start,
+html.native-app .interval-calendar .calendar-slot-compact-end {
+  display: block;
+  width: 100%;
+  text-align: center;
   white-space: nowrap;
-  letter-spacing: -0.03em;
+}
+
+@media (orientation: landscape) {
+  html.native-app .interval-calendar .calendar-slot-compact-time {
+    flex-direction: row;
+    gap: 1px;
+    font-size: 9px;
+    white-space: nowrap;
+  }
+
+  html.native-app .interval-calendar .calendar-slot-compact-start::after {
+    content: "–";
+  }
 }

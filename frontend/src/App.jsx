@@ -7098,9 +7098,12 @@ export default function App() {
                     {(byDay[day] || []).slice(0, 3).map((s) => (
                       <div key={s.id} className="calendar-slot-compact calendar-slot-compact--interval" title="Свободный интервал">
                         <span className="calendar-slot-compact-time">
-                          {new Date(s.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          –
-                          {new Date(s.ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          <span className="calendar-slot-compact-start">
+                            {new Date(s.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                          <span className="calendar-slot-compact-end">
+                            {new Date(s.ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
                         </span>
                       </div>
                     ))}
