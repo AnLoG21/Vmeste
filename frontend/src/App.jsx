@@ -5140,9 +5140,10 @@ export default function App() {
     }
   }
 
-  async function buildChatRecordStream(cameraStream, mirror) {
+  /** Continuous canvas capture — camera switch must NOT restart MediaRecorder. */
+  async function startCanvasRecordPipeline(cameraStream, mirror) {
     stopMirrorPipeline();
-    if (!mirror || !cameraStream) return cameraStream;
+    if (!cameraStream) return null;
 
     const videoEl = document.createElement("video");
     videoEl.muted = true;
@@ -5164,15 +5165,23 @@ export default function App() {
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext("2d", { alpha: false });
-    const pipe = { videoEl, canvas, canvasStream: null, raf: 0 };
+    const pipe = {
+      videoEl,
+      canvas,
+      canvasStream: null,
+      raf: 0,
+      mirror: Boolean(mirror),
+    };
 
     const draw = () => {
       const vw = videoEl.videoWidth || size;
       const vh = videoEl.videoHeight || size;
       if (vw > 0 && vh > 0 && ctx) {
         ctx.save();
-        ctx.translate(size, 0);
-        ctx.scale(-1, 1);
+        if (pipe.mirror) {
+          ctx.translate(size, 0);
+          ctx.scale(-1, 1);
+        }
         const scale = Math.max(size / vw, size / vh);
         const dw = vw * scale;
         const dh = vh * scale;
@@ -5191,6 +5200,27 @@ export default function App() {
       ...canvasStream.getVideoTracks(),
       ...cameraStream.getAudioTracks(),
     ]);
+  }
+
+  async function retargetCanvasPipeline(cameraStream, mirror) {
+    const pipe = chatMirrorPipelineRef.current;
+    if (!pipe?.videoEl) {
+      return startCanvasRecordPipeline(cameraStream, mirror);
+    }
+    pipe.mirror = Boolean(mirror);
+    // Force pick-up of replaced camera track (same MediaStream object)
+    pipe.videoEl.srcObject = null;
+    pipe.videoEl.srcObject = cameraStream;
+    await new Promise((resolve) => {
+      const done = () => resolve();
+      if (pipe.videoEl.readyState >= 1) done();
+      else {
+        pipe.videoEl.onloadedmetadata = done;
+        window.setTimeout(done, 800);
+      }
+    });
+    await pipe.videoEl.play().catch(() => {});
+    return null;
   }
 
   function attachLiveCameraPreview() {
@@ -5214,10 +5244,7 @@ export default function App() {
     chatCameraStreamRef.current = null;
     if (recordStream) {
       try {
-        recordStream.getTracks().forEach((t) => {
-          // audio tracks may be shared with cameraStream — stop once via camera
-          if (t.kind === "video") t.stop();
-        });
+        recordStream.getTracks().forEach((t) => t.stop());
       } catch {
         /* ignore */
       }
@@ -5243,9 +5270,6 @@ export default function App() {
     const mime = chatRecordMimeRef.current || "application/octet-stream";
     const kind = chatRecordKindRef.current || "voice";
     const elapsed = Date.now() - chatRecordStartedAtRef.current;
-    const facing = chatCameraFacingRef.current || "user";
-    // Front camera is baked mirrored into the file via canvas — never CSS-flip again
-    const fileMirrored = kind === "video_note" && facing === "user";
     chatMediaRecorderRef.current = null;
     chatRecordChunksRef.current = [];
     setChatRecordingKind(null);
@@ -5266,7 +5290,7 @@ export default function App() {
       mime,
       durationSec: Math.max(1, Math.round(elapsed / 1000)),
       displayFlip: false,
-      fileMirrored,
+      fileMirrored: true,
     });
   }
 
@@ -5291,31 +5315,6 @@ export default function App() {
     return recorder;
   }
 
-  async function stopChatRecorderPreserveChunks() {
-    const rec = chatMediaRecorderRef.current;
-    if (!rec || rec.state === "inactive") {
-      chatMediaRecorderRef.current = null;
-      return;
-    }
-    await new Promise((resolve) => {
-      let settled = false;
-      const done = () => {
-        if (settled) return;
-        settled = true;
-        chatMediaRecorderRef.current = null;
-        resolve();
-      };
-      rec.onstop = () => done();
-      try {
-        if (typeof rec.requestData === "function") rec.requestData();
-        rec.stop();
-      } catch {
-        done();
-      }
-      window.setTimeout(done, 500);
-    });
-  }
-
   async function switchChatCamera() {
     if (chatRecordingKind !== "video_note" || chatCameraSwitching) return;
     const cameraStream = chatCameraStreamRef.current;
@@ -5331,10 +5330,7 @@ export default function App() {
         return;
       }
 
-      chatKeepRecordingRef.current = true;
-      await stopChatRecorderPreserveChunks();
-      stopMirrorPipeline();
-
+      // Keep MediaRecorder running on canvas stream; only swap camera video feeding the canvas
       cameraStream.getVideoTracks().forEach((t) => {
         try {
           cameraStream.removeTrack(t);
@@ -5399,55 +5395,32 @@ export default function App() {
       chatCameraFacingRef.current = actualFacing;
       setChatCameraFacing(actualFacing);
 
-      const recordStream = await buildChatRecordStream(cameraStream, actualFacing === "user");
-      chatRecordStreamRef.current = recordStream;
-      bindChatMediaRecorder(recordStream);
-
-      if (chatLiveVideoRef.current) {
-        chatLiveVideoRef.current.srcObject = cameraStream;
-        chatLiveVideoRef.current.muted = true;
-        chatLiveVideoRef.current.playsInline = true;
-        await chatLiveVideoRef.current.play?.().catch(() => {});
-      } else {
-        attachLiveCameraPreview();
-      }
+      await retargetCanvasPipeline(cameraStream, actualFacing === "user");
+      attachLiveCameraPreview();
     } catch {
-      chatKeepRecordingRef.current = false;
       setChatStatus("Не удалось переключить камеру.");
       const cam = chatCameraStreamRef.current;
-      if (cam && (!chatMediaRecorderRef.current || chatMediaRecorderRef.current.state === "inactive")) {
+      if (cam && !cam.getVideoTracks().length) {
         try {
-          if (!cam.getVideoTracks().length) {
-            try {
-              const fallback = await navigator.mediaDevices.getUserMedia({
-                audio: false,
-                video: {
-                  facingMode: { ideal: chatCameraFacingRef.current || "user" },
-                  width: { ideal: 480 },
-                  height: { ideal: 480 },
-                },
-              });
-              const vt = fallback.getVideoTracks()[0];
-              if (vt) cam.addTrack(vt);
-              fallback.getAudioTracks().forEach((t) => t.stop());
-            } catch {
-              /* ignore */
-            }
-          }
+          const fallback = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              facingMode: { ideal: chatCameraFacingRef.current || "user" },
+              width: { ideal: 480 },
+              height: { ideal: 480 },
+            },
+          });
+          const vt = fallback.getVideoTracks()[0];
+          if (vt) cam.addTrack(vt);
+          fallback.getAudioTracks().forEach((t) => t.stop());
           const facing = chatCameraFacingRef.current || "user";
-          const recordStream = await buildChatRecordStream(cam, facing === "user");
-          chatRecordStreamRef.current = recordStream;
-          bindChatMediaRecorder(recordStream);
-          if (chatLiveVideoRef.current) {
-            chatLiveVideoRef.current.srcObject = cam;
-            chatLiveVideoRef.current.play?.().catch(() => {});
-          }
+          await retargetCanvasPipeline(cam, facing === "user");
+          attachLiveCameraPreview();
         } catch {
           /* ignore */
         }
       }
     } finally {
-      chatKeepRecordingRef.current = false;
       setChatCameraSwitching(false);
     }
   }
@@ -5479,8 +5452,9 @@ export default function App() {
       }
       const recordStream =
         kind === "video_note"
-          ? await buildChatRecordStream(cameraStream, actualFacing === "user")
+          ? await startCanvasRecordPipeline(cameraStream, actualFacing === "user")
           : cameraStream;
+      if (!recordStream) throw new Error("no record stream");
       chatRecordStreamRef.current = recordStream;
       chatRecordChunksRef.current = [];
       const mime = pickRecorderMime(kind);
@@ -5524,7 +5498,6 @@ export default function App() {
       } catch {
         /* analyser optional */
       }
-      // Live <video> mounts with overlay after setChatRecordingKind — attach in useEffect
     } catch (_e) {
       setChatStatus("Нет доступа к микрофону/камере.");
       setChatRecordingKind(null);
