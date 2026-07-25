@@ -1248,6 +1248,7 @@ function renderChatMessageBody(m, opts = {}) {
           src={url}
           size={180}
           mirror={flip !== false}
+          durationSec={Number(m.payload?.duration_sec) || 0}
         />
         {m.text ? <div className="tg-msg-text">{m.text}</div> : null}
       </div>
@@ -9339,46 +9340,18 @@ export default function App() {
                   <span className="tg-sidebar-title">Чаты</span>
                   {me?.role === "provider" && (
                     <div className="tg-fab-wrap">
-                      <button type="button" className="tg-fab" onClick={() => setChatFabOpen((v) => !v)}>+</button>
-                      {chatFabOpen && (
-                        <div className="tg-fab-menu">
-                          <form onSubmit={createOrgGroup} className="form tg-popover-form">
-                            <div className="tg-popover-title">Новая группа</div>
-                            <p className="muted tg-popover-hint">Можно не отмечать сотрудников — группа только для тебя. Или добавь участников.</p>
-                            <input
-                              placeholder="Название группы"
-                              value={groupForm.title}
-                              onChange={(e) => setGroupForm({ ...groupForm, title: e.target.value })}
-                              required
-                            />
-                            <div className="staff-pick-grid staff-pick-grid--people">
-                              {orgStaff
-                                .filter((l) => l.is_active && (l.invitation_status === "accepted" || !l.invitation_status))
-                                .map((link) => {
-                                  const name = formatStaffFullName(link.staff_user) || `id ${link.staff}`;
-                                  const title = (link.job_title || "").trim();
-                                  return (
-                                    <label key={link.id} className="staff-pick-person">
-                                      <input
-                                        type="checkbox"
-                                        checked={groupForm.staff_ids.includes(link.staff)}
-                                        onChange={() => toggleGroupStaff(link.staff)}
-                                      />
-                                      <span className="tg-avatar staff-pick-avatar" aria-hidden="true">
-                                        {name.slice(0, 1).toUpperCase()}
-                                      </span>
-                                      <span className="staff-pick-meta">
-                                        <span className="staff-pick-name">{name}</span>
-                                        {title ? <span className="staff-pick-job muted">{title}</span> : null}
-                                      </span>
-                                    </label>
-                                  );
-                                })}
-                            </div>
-                            <button type="submit">Создать группу</button>
-                          </form>
-                        </div>
-                      )}
+                      <button
+                        type="button"
+                        className="tg-fab"
+                        aria-label="Новая группа"
+                        title="Новая группа"
+                        onClick={() => {
+                          setChatFabOpen(true);
+                          loadSellerData();
+                        }}
+                      >
+                        +
+                      </button>
                     </div>
                   )}
                 </div>
@@ -9815,6 +9788,7 @@ export default function App() {
                                   size={Math.min(280, typeof window !== "undefined" ? window.innerWidth * 0.72 : 280)}
                                   mirror={Boolean(chatMediaPreview.displayFlip)}
                                   previewMode
+                                  durationSec={Number(chatMediaPreview.durationSec) || 0}
                                 />
                               </div>
                               <div className="tg-circle-stage-actions">
@@ -10202,6 +10176,89 @@ export default function App() {
                 </div>
               </div>
             )}
+            {chatFabOpen && me?.role === "provider" && (
+              <div
+                className="modal-backdrop"
+                onClick={() => {
+                  setChatFabOpen(false);
+                  setGroupForm({ title: "", staff_ids: [] });
+                }}
+              >
+                <div className="modal-card tg-group-create-card" onClick={(e) => e.stopPropagation()}>
+                  <div className="tg-group-create-head">
+                    <h3>Новая группа</h3>
+                    <button
+                      type="button"
+                      className="tg-chat-info-close"
+                      aria-label="Закрыть"
+                      onClick={() => {
+                        setChatFabOpen(false);
+                        setGroupForm({ title: "", staff_ids: [] });
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <form onSubmit={createOrgGroup} className="form">
+                    <p className="muted">Можно не отмечать сотрудников — группа только для тебя. Или добавь участников.</p>
+                    <input
+                      placeholder="Название группы"
+                      value={groupForm.title}
+                      onChange={(e) => setGroupForm({ ...groupForm, title: e.target.value })}
+                      required
+                      autoFocus
+                    />
+                    <div className="tg-group-create-staff-label">Участники</div>
+                    <div className="staff-pick-grid staff-pick-grid--people staff-pick-grid--modal">
+                      {orgStaff
+                        .filter(
+                          (l) =>
+                            l.is_active &&
+                            l.invitation_status !== "pending" &&
+                            l.invitation_status !== "rejected"
+                        )
+                        .map((link) => {
+                          const name = formatStaffFullName(link.staff_user) || `id ${link.staff}`;
+                          const title = (link.job_title || "").trim();
+                          return (
+                            <label key={link.id} className="staff-pick-person">
+                              <input
+                                type="checkbox"
+                                checked={groupForm.staff_ids.includes(link.staff)}
+                                onChange={() => toggleGroupStaff(link.staff)}
+                              />
+                              <span className="tg-avatar staff-pick-avatar" aria-hidden="true">
+                                {name.slice(0, 1).toUpperCase()}
+                              </span>
+                              <span className="staff-pick-meta">
+                                <span className="staff-pick-name">{name}</span>
+                                {title ? <span className="staff-pick-job muted">{title}</span> : null}
+                              </span>
+                            </label>
+                          );
+                        })}
+                    </div>
+                    {!orgStaff.filter(
+                      (l) =>
+                        l.is_active &&
+                        l.invitation_status !== "pending" &&
+                        l.invitation_status !== "rejected"
+                    ).length && (
+                      <p className="muted">Пока нет сотрудников — пригласи их в разделе «Сотрудники».</p>
+                    )}
+                    <div className="tg-group-create-actions">
+                      <button type="button" className="ghost-btn" onClick={() => {
+                        setChatFabOpen(false);
+                        setGroupForm({ title: "", staff_ids: [] });
+                      }}>
+                        Отмена
+                      </button>
+                      <button type="submit">Создать группу</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
             {chatInfoOpen && selectedChatId && (
               <div
                 className="modal-backdrop"
@@ -10362,7 +10419,7 @@ export default function App() {
                       <p className="muted small">Сотрудники, которых ещё нет в группе</p>
                       <div className="staff-pick-grid staff-pick-grid--people">
                         {orgStaff
-                          .filter((l) => l.is_active && (l.invitation_status === "accepted" || !l.invitation_status))
+                          .filter((l) => l.is_active && l.invitation_status !== "pending" && l.invitation_status !== "rejected")
                           .filter((l) => !(selectedConv.members || []).some((m) => Number(m.user) === Number(l.staff)))
                           .map((link) => {
                             const name = formatStaffFullName(link.staff_user) || `id ${link.staff}`;
@@ -10388,7 +10445,8 @@ export default function App() {
                       {!orgStaff.filter(
                         (l) =>
                           l.is_active &&
-                          (l.invitation_status === "accepted" || !l.invitation_status) &&
+                          l.invitation_status !== "pending" &&
+                          l.invitation_status !== "rejected" &&
                           !(selectedConv.members || []).some((m) => Number(m.user) === Number(l.staff))
                       ).length && <p className="muted">Все сотрудники уже в группе</p>}
                       {groupAddStatus ? <p className="status">{groupAddStatus}</p> : null}

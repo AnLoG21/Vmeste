@@ -8,6 +8,7 @@ class InAppNotification(models.Model):
         CHAT_MESSAGE = "chat_message", "Сообщение в чате"
         BOOKING = "booking", "Запись"
         REVIEW = "review", "Отзыв"
+        SUBSCRIPTION = "subscription", "Подписка"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

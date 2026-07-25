@@ -197,3 +197,9 @@ CELERY_TASK_ALWAYS_EAGER = os.environ.get("CELERY_TASK_ALWAYS_EAGER", "1" if DEB
     "true",
     "True",
 )
+CELERY_BEAT_SCHEDULE = {
+    "subscription-expiry-reminders-hourly": {
+        "task": "subscriptions.send_expiry_reminders",
+        "schedule": 3600.0,
+    },
+}

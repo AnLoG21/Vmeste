@@ -6651,6 +6651,45 @@ html.native-app .page-logged .hero.top-row {
   gap: 2px;
 }
 
+.staff-pick-grid--modal {
+  max-height: min(42vh, 320px);
+  border: 1px solid #eee;
+  border-radius: 10px;
+  background: #fafafa;
+  padding: 6px;
+}
+
+.tg-group-create-card {
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(90vh, 640px);
+  overflow: auto;
+}
+
+.tg-group-create-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.tg-group-create-head h3 {
+  margin: 0;
+}
+
+.tg-group-create-staff-label {
+  font-weight: 700;
+  font-size: 13px;
+  margin: 4px 0;
+}
+
+.tg-group-create-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
 .bookmark-settings-list {
   display: grid;
   gap: 8px;

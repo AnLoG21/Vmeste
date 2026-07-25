@@ -7,15 +7,26 @@ const STATUS_LABELS = {
   cancelled: "Отменена",
 };
 
+const SOURCE_LABELS = {
+  paid: "Оплата",
+  trial: "Пробный период",
+  promo: "Промокод",
+};
+
 const emptyRequestForm = { name: "", email: "", phone: "", telegram: "", message: "" };
 
 export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
   const [plans, setPlans] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
+  const [trialUsed, setTrialUsed] = useState(false);
   const [payments, setPayments] = useState([]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [showRequestForm, setShowRequestForm] = useState(false);
+  const [promoModalPlan, setPromoModalPlan] = useState(null);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoError, setPromoError] = useState("");
+  const [promoBusy, setPromoBusy] = useState(false);
   const [requestForm, setRequestForm] = useState({
     ...emptyRequestForm,
     email: me?.email || "",
@@ -26,12 +37,20 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
   async function loadAll() {
     setLoading(true);
     const [plansRes, subsRes, payRes] = await Promise.all([
-      fetch(`${apiUrl}/subscriptions/plans/`),
+      authFetch(`${apiUrl}/subscriptions/plans/`),
       authFetch(`${apiUrl}/subscriptions/mine/`),
       authFetch(`${apiUrl}/subscriptions/payments/`),
     ]);
     if (plansRes.ok) setPlans(await plansRes.json());
-    if (subsRes.ok) setSubscriptions(await subsRes.json());
+    if (subsRes.ok) {
+      const data = await subsRes.json();
+      if (Array.isArray(data)) {
+        setSubscriptions(data);
+      } else {
+        setSubscriptions(Array.isArray(data.subscriptions) ? data.subscriptions : []);
+        setTrialUsed(Boolean(data.trial_used));
+      }
+    }
     if (payRes.ok) setPayments(await payRes.json());
     setLoading(false);
   }
@@ -58,11 +77,62 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
     setShowRequestForm(false);
   }
 
-  async function payPlan(plan) {
-    if (Number(plan.price_monthly) <= 0) {
+  async function activateTrial(plan) {
+    setStatus("Активируем пробный период...");
+    const response = await authFetch(`${apiUrl}/subscriptions/trial/`, {
+      method: "POST",
+      body: JSON.stringify({ plan_id: plan.id }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setStatus(data.detail || "Не удалось активировать.");
+      return;
+    }
+    setStatus(data.detail || "Пробный период активирован.");
+    loadAll();
+  }
+
+  function openPayFlow(plan) {
+    if (Number(plan.price_monthly) <= 0 || plan.plan_type === "custom") {
       setShowRequestForm(true);
       return;
     }
+    if (plan.plan_type === "trial" || plan.slug === "starter") {
+      activateTrial(plan);
+      return;
+    }
+    setPromoCode("");
+    setPromoError("");
+    setPromoModalPlan(plan);
+  }
+
+  async function applyPromoAndClose() {
+    const code = promoCode.trim();
+    if (!code) {
+      setPromoError("Введите промокод.");
+      return;
+    }
+    setPromoBusy(true);
+    setPromoError("");
+    const response = await authFetch(`${apiUrl}/subscriptions/promo/`, {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setPromoBusy(false);
+    if (!response.ok) {
+      setPromoError(data.detail || "Не удалось применить промокод.");
+      return;
+    }
+    setPromoModalPlan(null);
+    setStatus(data.detail || "Промокод применён.");
+    loadAll();
+  }
+
+  async function skipPromoAndPay() {
+    const plan = promoModalPlan;
+    if (!plan) return;
+    setPromoModalPlan(null);
     setStatus("Создаём платёж...");
     const response = await authFetch(`${apiUrl}/subscriptions/pay/`, {
       method: "POST",
@@ -83,6 +153,16 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
 
   async function renewSubscription(sub) {
     setStatus("Продлеваем...");
+    setPromoCode("");
+    setPromoError("");
+    const plan = sub.plan?.plan_type === "trial"
+      ? plans.find((p) => p.slug === "business") || sub.plan
+      : sub.plan;
+    if (plan && Number(plan.price_monthly) > 0) {
+      setPromoModalPlan(plan);
+      setStatus("");
+      return;
+    }
     const response = await authFetch(`${apiUrl}/subscriptions/renew/`, {
       method: "POST",
       body: JSON.stringify({ subscription_id: sub.id }),
@@ -110,7 +190,7 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
 
   async function cancelSubscription(sub, immediate = false) {
     const msg = immediate
-      ? "Отключить подписку сразу? Доступ к тарифу прекратится немедленно."
+      ? "Отключить подписку сразу? Если оплата была сегодня (не пробный период и не промокод), деньги вернутся автоматически."
       : "Отключить автопродление? Подписка останется активной до конца оплаченного периода.";
     if (!window.confirm(msg)) return;
 
@@ -137,6 +217,12 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
     });
   }
 
+  function planActionLabel(plan) {
+    if (plan.plan_type === "trial" || plan.slug === "starter") return "Активировать бесплатно";
+    if (Number(plan.price_monthly) <= 0 || plan.plan_type === "custom") return "Оставить заявку";
+    return "Оплатить";
+  }
+
   if (loading) {
     return (
       <section className="card profile-card subscriptions-page">
@@ -147,6 +233,10 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
 
   const activeSub = subscriptions.find((s) => s.is_active_now);
   const pendingSub = subscriptions.find((s) => s.status === "pending");
+  const expiringSoon =
+    activeSub?.period_end &&
+    (new Date(activeSub.period_end) - Date.now()) / (1000 * 60 * 60 * 24) <= 3 &&
+    (new Date(activeSub.period_end) - Date.now()) > 0;
 
   return (
     <section className="card profile-card subscriptions-page full-width">
@@ -157,25 +247,49 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
         <a href="/offer" target="_blank" rel="noreferrer">
           публичной оферты
         </a>
-        . Реквизиты:{" "}
-        <a href="/contacts" target="_blank" rel="noreferrer">
-          контакты и ИНН
-        </a>
         .
       </p>
+
+      <div className="subscriptions-policy">
+        <h3>Важно знать</h3>
+        <ul>
+          <li>
+            <strong>Старт</strong> — бесплатная неделя полного доступа. Активируется{" "}
+            <strong>только один раз</strong>, после этого тариф пропадает из списка.
+          </li>
+          <li>
+            <strong>Бизнес</strong> — 990 ₽/мес, весь основной функционал платформы. Перед оплатой
+            можно ввести промокод или пропустить и перейти к оплате.
+          </li>
+          <li>
+            Если отключить оплаченную подписку <strong>досрочно в тот же день</strong>, когда была
+            оплата (не пробный период и не промокод), деньги возвращаются автоматически.
+          </li>
+          <li>За 3 дня и за 1 день до окончания подписки придёт напоминание в кабинет и на email.</li>
+        </ul>
+      </div>
+
+      {expiringSoon && activeSub && (
+        <div className="subscriptions-reminder-banner" role="status">
+          ⏰ Подписка «{activeSub.plan?.name}» истекает {formatDate(activeSub.period_end)}. Продлите
+          тариф, чтобы не потерять доступ.
+        </div>
+      )}
 
       {activeSub && (
         <div className="subscriptions-active">
           <h3>Текущая подписка</h3>
           <p>
             <strong>{activeSub.plan?.name}</strong> — активна до {formatDate(activeSub.period_end)}
+            {activeSub.source ? ` · ${SOURCE_LABELS[activeSub.source] || activeSub.source}` : ""}
+            {activeSub.promo_code ? ` (${activeSub.promo_code})` : ""}
           </p>
           {activeSub.cancel_at_period_end && (
             <p className="subscriptions-cancel-note">
               Автопродление отключено. После {formatDate(activeSub.period_end)} подписка не продлится.
             </p>
           )}
-          {!activeSub.cancel_at_period_end && (
+          {activeSub.source === "paid" && !activeSub.cancel_at_period_end && (
             <label className="subscriptions-auto-renew">
               <input
                 type="checkbox"
@@ -186,17 +300,24 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
             </label>
           )}
           <div className="subscriptions-active-actions">
-            {!activeSub.cancel_at_period_end && (
+            {activeSub.source === "paid" && !activeSub.cancel_at_period_end && (
               <button type="button" onClick={() => renewSubscription(activeSub)}>
                 Продлить сейчас
+              </button>
+            )}
+            {(activeSub.source === "trial" || activeSub.source === "promo" || activeSub.cancel_at_period_end) && (
+              <button type="button" onClick={() => renewSubscription(activeSub)}>
+                Перейти на «Бизнес»
               </button>
             )}
             <button
               type="button"
               className="ghost-btn subscriptions-cancel-btn"
-              onClick={() => cancelSubscription(activeSub, !!activeSub.cancel_at_period_end)}
+              onClick={() => cancelSubscription(activeSub, !!activeSub.cancel_at_period_end || activeSub.source !== "paid")}
             >
-              {activeSub.cancel_at_period_end ? "Отключить досрочно" : "Отключить подписку"}
+              {activeSub.cancel_at_period_end || activeSub.source !== "paid"
+                ? "Отключить досрочно"
+                : "Отключить подписку"}
             </button>
           </div>
         </div>
@@ -219,12 +340,22 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
       )}
 
       <h3>Тарифы</h3>
+      {trialUsed && (
+        <p className="muted">Пробный тариф «Старт» уже был активирован и больше недоступен.</p>
+      )}
       <div className="subscriptions-plans">
         {plans.map((plan) => (
           <article key={plan.id} className="subscriptions-plan-card">
-            <h4>{plan.name}</h4>
+            <h4>
+              {plan.plan_type === "trial" || plan.slug === "starter" ? "🎁 " : ""}
+              {plan.slug === "business" ? "💼 " : ""}
+              {plan.plan_type === "custom" ? "🛠️ " : ""}
+              {plan.name}
+            </h4>
             <p className="subscriptions-plan-desc">{plan.description}</p>
-            {Number(plan.price_monthly) > 0 ? (
+            {plan.plan_type === "trial" || plan.slug === "starter" ? (
+              <p className="subscriptions-plan-price">7 дней бесплатно</p>
+            ) : Number(plan.price_monthly) > 0 ? (
               <p className="subscriptions-plan-price">
                 {Number(plan.price_monthly).toLocaleString("ru-RU")} ₽ / мес
               </p>
@@ -238,10 +369,10 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
             </ul>
             <button
               type="button"
-              className={Number(plan.price_monthly) <= 0 ? "ghost-btn" : ""}
-              onClick={() => payPlan(plan)}
+              className={Number(plan.price_monthly) <= 0 && plan.plan_type !== "trial" ? "ghost-btn" : ""}
+              onClick={() => openPayFlow(plan)}
             >
-              {Number(plan.price_monthly) <= 0 ? "Оставить заявку" : "Оплатить"}
+              {planActionLabel(plan)}
             </button>
           </article>
         ))}
@@ -254,7 +385,9 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
             {subscriptions.map((sub) => (
               <li key={sub.id}>
                 {sub.plan?.name} — {STATUS_LABELS[sub.status] || sub.status}
+                {sub.source ? ` · ${SOURCE_LABELS[sub.source] || sub.source}` : ""}
                 {sub.period_end && ` · до ${formatDate(sub.period_end)}`}
+                {sub.refunded_at ? " · возврат оформлен" : ""}
               </li>
             ))}
           </ul>
@@ -269,6 +402,7 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
               <li key={p.id}>
                 {p.plan_name}: {Number(p.amount).toLocaleString("ru-RU")} ₽ — {p.status}
                 {p.paid_at && ` · ${formatDate(p.paid_at)}`}
+                {p.refunded_at && ` · возврат ${formatDate(p.refunded_at)}`}
               </li>
             ))}
           </ul>
@@ -288,6 +422,38 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
             <button type="button" className="ghost-btn" onClick={() => setShowRequestForm(false)}>Отмена</button>
           </form>
           {requestStatus && <p className="status">{requestStatus}</p>}
+        </div>
+      )}
+
+      {promoModalPlan && (
+        <div className="modal-backdrop" onClick={() => !promoBusy && setPromoModalPlan(null)}>
+          <div className="modal-card subscriptions-promo-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Промокод</h3>
+            <p className="muted">
+              Есть промокод? Введите его и нажмите «Применить». Или пропустите и перейдите к оплате
+              тарифа «{promoModalPlan.name}» за{" "}
+              {Number(promoModalPlan.price_monthly).toLocaleString("ru-RU")} ₽.
+            </p>
+            <input
+              value={promoCode}
+              onChange={(e) => {
+                setPromoCode(e.target.value.toUpperCase());
+                setPromoError("");
+              }}
+              placeholder="Промокод"
+              autoFocus
+              disabled={promoBusy}
+            />
+            {promoError ? <p className="status subscriptions-promo-error">{promoError}</p> : null}
+            <div className="subscriptions-promo-actions">
+              <button type="button" className="ghost-btn" disabled={promoBusy} onClick={skipPromoAndPay}>
+                Пропустить и оплатить
+              </button>
+              <button type="button" disabled={promoBusy} onClick={applyPromoAndClose}>
+                {promoBusy ? "Проверяем..." : "Применить"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

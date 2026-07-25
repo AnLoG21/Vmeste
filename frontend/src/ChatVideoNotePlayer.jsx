@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 /**
  * Video note player: tap center to play/pause; drag the rim to seek.
  * previewMode — сразу кольцо перемотки (превью перед отправкой).
+ * durationSec — запасная длительность (WebM из MediaRecorder часто без duration).
  */
 export default function ChatVideoNotePlayer({
   src,
@@ -10,6 +11,7 @@ export default function ChatVideoNotePlayer({
   className = "",
   mirror = true,
   previewMode = false,
+  durationSec = 0,
 }) {
   const videoRef = useRef(null);
   const rootRef = useRef(null);
@@ -24,7 +26,66 @@ export default function ChatVideoNotePlayer({
   const suppressClickRef = useRef(false);
   const rafRef = useRef(0);
   const progressRef = useRef(0);
-  const lastSeekCommitRef = useRef(0);
+  const durationRef = useRef(0);
+  const seekCommitTimerRef = useRef(0);
+  const discoveringRef = useRef(false);
+
+  function fallbackDuration() {
+    const n = Number(durationSec);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  function videoNativeDuration(v) {
+    if (!v) return 0;
+    const d = v.duration;
+    return Number.isFinite(d) && d > 0 && d !== Infinity ? d : 0;
+  }
+
+  function effectiveDuration() {
+    return videoNativeDuration(videoRef.current) || durationRef.current || fallbackDuration();
+  }
+
+  function adoptDuration(d) {
+    if (!(Number.isFinite(d) && d > 0)) return;
+    durationRef.current = Math.max(durationRef.current || 0, d);
+  }
+
+  /** Discover WebM duration without blocking playback (runs in background). */
+  function discoverDurationInBackground(v) {
+    if (!v || discoveringRef.current) return;
+    if (videoNativeDuration(v) > 0) {
+      adoptDuration(videoNativeDuration(v));
+      return;
+    }
+    if (fallbackDuration() > 0) adoptDuration(fallbackDuration());
+    discoveringRef.current = true;
+    const saved = v.currentTime || 0;
+    const wasPaused = v.paused;
+    const finish = (d) => {
+      discoveringRef.current = false;
+      try {
+        v.currentTime = saved;
+      } catch {
+        /* ignore */
+      }
+      if (!wasPaused) v.play?.().catch(() => {});
+      adoptDuration(d || fallbackDuration());
+    };
+    const onDone = () => {
+      const d = videoNativeDuration(v);
+      finish(d);
+    };
+    try {
+      v.addEventListener("seeked", onDone, { once: true });
+      v.currentTime = 1e101;
+      window.setTimeout(() => {
+        if (discoveringRef.current) onDone();
+      }, 600);
+    } catch {
+      discoveringRef.current = false;
+      adoptDuration(fallbackDuration());
+    }
+  }
 
   useEffect(() => {
     mutedLoopRef.current = false;
@@ -33,6 +94,8 @@ export default function ChatVideoNotePlayer({
     setProgress(0);
     progressRef.current = 0;
     seekingRef.current = false;
+    discoveringRef.current = false;
+    durationRef.current = fallbackDuration();
     const v = videoRef.current;
     if (v) {
       try {
@@ -43,24 +106,34 @@ export default function ChatVideoNotePlayer({
         /* ignore */
       }
     }
+
+    let cancelled = false;
     if (previewMode && v) {
       const start = async () => {
         try {
           v.muted = true;
           await v.play();
+          if (cancelled) return;
           setPlaying(true);
           startTick();
+          // After playback is up, quietly learn real duration if missing
+          window.setTimeout(() => {
+            if (!cancelled && !videoNativeDuration(v)) discoverDurationInBackground(v);
+          }, 120);
         } catch {
-          /* autoplay may fail — user can tap */
+          /* autoplay may fail */
         }
       };
       if (v.readyState >= 2) start();
       else v.addEventListener("loadeddata", start, { once: true });
     }
+
     return () => {
+      cancelled = true;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (seekCommitTimerRef.current) window.clearTimeout(seekCommitTimerRef.current);
     };
-  }, [src, previewMode]);
+  }, [src, previewMode, durationSec]);
 
   function setProgressSafe(p) {
     const next = Math.max(0, Math.min(1, Number(p) || 0));
@@ -70,8 +143,9 @@ export default function ChatVideoNotePlayer({
 
   function tick() {
     const v = videoRef.current;
-    if (!seekingRef.current && v && Number.isFinite(v.duration) && v.duration > 0) {
-      setProgressSafe(v.currentTime / v.duration);
+    const dur = effectiveDuration();
+    if (!seekingRef.current && v && dur > 0) {
+      setProgressSafe(v.currentTime / dur);
     }
     rafRef.current = requestAnimationFrame(tick);
   }
@@ -99,30 +173,56 @@ export default function ChatVideoNotePlayer({
     return angle / (Math.PI * 2);
   }
 
-  /** UI-only progress during drag — avoid thrashing video.currentTime every frame. */
   function previewSeek(clientX, clientY) {
-    const v = videoRef.current;
-    if (!v || !Number.isFinite(v.duration) || v.duration <= 0) return;
+    if (effectiveDuration() <= 0) return;
     setProgressSafe(angleToProgress(clientX, clientY));
   }
 
-  function commitSeek(force = false) {
+  function commitSeekNow() {
     const v = videoRef.current;
-    if (!v || !Number.isFinite(v.duration) || v.duration <= 0) return;
-    const now = performance.now();
-    if (!force && now - lastSeekCommitRef.current < 120) return;
-    lastSeekCommitRef.current = now;
+    const dur = effectiveDuration();
+    if (!v || dur <= 0) return;
     try {
-      v.currentTime = progressRef.current * v.duration;
+      v.currentTime = progressRef.current * dur;
     } catch {
       /* ignore */
     }
   }
 
+  function scheduleCommitSeek() {
+    if (seekCommitTimerRef.current) window.clearTimeout(seekCommitTimerRef.current);
+    seekCommitTimerRef.current = window.setTimeout(() => {
+      seekCommitTimerRef.current = 0;
+      commitSeekNow();
+    }, 90);
+  }
+
+  function waitSeeked(v) {
+    return new Promise((resolve) => {
+      if (!v) {
+        resolve();
+        return;
+      }
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        resolve();
+      };
+      v.addEventListener("seeked", finish, { once: true });
+      window.setTimeout(finish, 220);
+    });
+  }
+
   async function resumeAfterSeek() {
     const v = videoRef.current;
     if (!v) return;
-    commitSeek(true);
+    if (seekCommitTimerRef.current) {
+      window.clearTimeout(seekCommitTimerRef.current);
+      seekCommitTimerRef.current = 0;
+    }
+    commitSeekNow();
+    await waitSeeked(v);
     mutedLoopRef.current = false;
     setShowRing(true);
     setEnlarged(true);
@@ -151,13 +251,16 @@ export default function ChatVideoNotePlayer({
 
   function onSeekPointerDown(e) {
     if (!showRing || (!previewMode && mutedLoopRef.current)) return;
+    const v = videoRef.current;
+    if (effectiveDuration() <= 0) {
+      discoverDurationInBackground(v);
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
-    const v = videoRef.current;
     seekWasPlayingRef.current = Boolean(v && !v.paused && !v.ended) || Boolean(previewMode);
     seekingRef.current = true;
     seekMovedRef.current = false;
-    lastSeekCommitRef.current = 0;
     e.currentTarget.setPointerCapture?.(e.pointerId);
     try {
       v?.pause?.();
@@ -169,7 +272,7 @@ export default function ChatVideoNotePlayer({
     const y = e.clientY ?? e.touches?.[0]?.clientY;
     if (x != null && y != null) {
       previewSeek(x, y);
-      commitSeek(true);
+      commitSeekNow();
     }
   }
 
@@ -182,7 +285,7 @@ export default function ChatVideoNotePlayer({
     const y = e.clientY ?? e.touches?.[0]?.clientY;
     if (x != null && y != null) {
       previewSeek(x, y);
-      commitSeek(false);
+      scheduleCommitSeek();
     }
   }
 
@@ -223,6 +326,9 @@ export default function ChatVideoNotePlayer({
       await v.play();
       setPlaying(true);
       startTick();
+      if (!videoNativeDuration(v) && !fallbackDuration()) {
+        window.setTimeout(() => discoverDurationInBackground(v), 150);
+      }
     } catch {
       try {
         v.muted = true;
@@ -294,6 +400,9 @@ export default function ChatVideoNotePlayer({
       await v.play();
       setPlaying(true);
       startTick();
+      if (!videoNativeDuration(v) && !fallbackDuration()) {
+        window.setTimeout(() => discoverDurationInBackground(v), 150);
+      }
     } catch {
       try {
         v.muted = true;
@@ -383,6 +492,8 @@ export default function ChatVideoNotePlayer({
         controls={false}
         loop={Boolean(previewMode)}
         onEnded={onEnded}
+        onLoadedMetadata={() => adoptDuration(videoNativeDuration(videoRef.current) || fallbackDuration())}
+        onDurationChange={() => adoptDuration(videoNativeDuration(videoRef.current) || fallbackDuration())}
         onPause={() => {
           if (!mutedLoopRef.current && !seekingRef.current) setPlaying(false);
         }}

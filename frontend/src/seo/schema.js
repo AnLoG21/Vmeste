@@ -62,14 +62,15 @@ export function softwareApplicationJsonLd() {
       {
         "@type": "Offer",
         name: "Старт",
-        price: "990",
+        price: "0",
         priceCurrency: "RUB",
+        description: "Бесплатная неделя полного доступа (один раз)",
         url: `${SITE_ORIGIN}/#pricing`,
       },
       {
         "@type": "Offer",
         name: "Бизнес",
-        price: "2990",
+        price: "990",
         priceCurrency: "RUB",
         url: `${SITE_ORIGIN}/#pricing`,
       },

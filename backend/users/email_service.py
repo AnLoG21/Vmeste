@@ -196,3 +196,26 @@ def send_automation_request_email(*, name, email, phone="", telegram="", message
     )
     message.send(fail_silently=False)
     return True
+
+def send_subscription_reminder_email(user, *, days_left: int, period_end, plan_name: str) -> bool:
+    if not user.email:
+        return False
+    end_label = period_end.strftime("%d.%m.%Y") if period_end else "скоро"
+    day_word = "день" if days_left == 1 else "дня"
+    title = f"Подписка истекает через {days_left} {day_word}"
+    greeting = f"Здравствуйте, {user.first_name or user.username}!"
+    paragraphs = [
+        f"Ваша подписка «{plan_name}» действует до {end_label}.",
+        "Чтобы не потерять доступ к записи, чатам и календарю, продлите тариф в личном кабинете.",
+    ]
+    front = (getattr(settings, "FRONTEND_URL", "") or "https://vsevmeste.space").rstrip("/")
+    button_url = f"{front}/subscriptions"
+    html = _wrap_html(
+        title=title,
+        greeting=greeting,
+        paragraphs=paragraphs,
+        button_url=button_url,
+        button_label="Открыть подписки",
+    )
+    text = "\n".join([greeting, "", *paragraphs, "", button_url])
+    return _send_branded(to=user.email, subject=f"Вместе: {title}", text_body=text, html_body=html)

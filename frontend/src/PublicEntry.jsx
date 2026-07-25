@@ -1,4 +1,5 @@
 import App from "./App.jsx";
+import BusinessesPage from "./legal/BusinessesPage.jsx";
 import ContactsPage from "./legal/ContactsPage.jsx";
 import OfferPage from "./legal/OfferPage.jsx";
 import PrivacyPage from "./legal/PrivacyPage.jsx";
@@ -7,6 +8,7 @@ const LEGAL_ROUTES = {
   "/offer": OfferPage,
   "/contacts": ContactsPage,
   "/privacy": PrivacyPage,
+  "/businesses": BusinessesPage,
 };
 
 function normalizePath(pathname) {

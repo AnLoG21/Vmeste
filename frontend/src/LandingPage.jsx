@@ -10,8 +10,9 @@ import {
 } from "./seo/schema.js";
 import { phoneFieldProps } from "./phone.js";
 
-function formatPlanPrice(price) {
-  const value = Number(price);
+function formatPlanPrice(plan) {
+  if (plan?.plan_type === "trial" || plan?.slug === "starter") return "7 дней бесплатно";
+  const value = Number(plan?.price_monthly ?? plan);
   if (!value) return "По заявке";
   return `${value.toLocaleString("ru-RU")} ₽ / месяц`;
 }
@@ -87,7 +88,7 @@ export default function LandingPage({ onLogin, onRegister }) {
           </p>
           <div className="landing-hero-actions">
             <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
-              Начать бесплатно
+              7 дней бесплатно
             </button>
             <button type="button" className="landing-btn landing-btn--outline" onClick={scrollToPricing}>
               Тарифы
@@ -144,25 +145,69 @@ export default function LandingPage({ onLogin, onRegister }) {
           <article className="landing-feature landing-feature--accent">
             <h3>Подписка</h3>
             <p>
-              После регистрации выберите тариф и оплачивайте подписку онлайн через ЮKassa.
-              Продлевайте, управляйте автопродлением и следите за статусом в разделе «Подписки».
+              Сначала можно активировать <strong>бесплатную неделю «Старт»</strong> — один раз.
+              Дальше тариф «Бизнес» за 990 ₽/мес с полным функционалом. Оплата через ЮKassa, перед
+              оплатой можно ввести промокод.
             </p>
           </article>
         </div>
       </section>
 
+      <section className="landing-section landing-businesses" id="businesses">
+        <h2>Для каких бизнесов уже готово</h2>
+        <p className="landing-section-lead">
+          Подключайте готовую сферу с каталогом услуг — или закажите индивидуальную настройку.
+        </p>
+        <div className="landing-businesses-grid">
+          <a className="landing-biz-card" href="/businesses#hair_salon">
+            <span className="landing-biz-emoji" aria-hidden="true">
+              💇
+            </span>
+            <h3>Салон красоты</h3>
+            <p>Стрижки, окрашивание, маникюр, брови — запись и мастера в одном сервисе.</p>
+            <span className="landing-biz-link">Подробнее →</span>
+          </a>
+          <a className="landing-biz-card" href="/businesses#service_center">
+            <span className="landing-biz-emoji" aria-hidden="true">
+              🔧
+            </span>
+            <h3>Сервисный центр</h3>
+            <p>Ремонт техники, диагностика, статусы заказов и чат с клиентом.</p>
+            <span className="landing-biz-link">Подробнее →</span>
+          </a>
+          <a className="landing-biz-card landing-biz-card--more" href="/#automation-request">
+            <span className="landing-biz-emoji" aria-hidden="true">
+              ✨
+            </span>
+            <h3>Ваша сфера</h3>
+            <p>Нужен другой бизнес? Сделаем каталог и сценарии под вас.</p>
+            <span className="landing-biz-link">Оставить заявку →</span>
+          </a>
+        </div>
+        <p className="landing-note">
+          Полный обзор отраслей и услуг — на странице{" "}
+          <a href="/businesses">«Для бизнеса»</a>.
+        </p>
+      </section>
+
       <section className="landing-section landing-pricing" ref={pricingRef} id="pricing">
         <h2>Тарифы и цены</h2>
         <p className="landing-section-lead">
-          Фиксированная стоимость подписки на доступ к платформе. Оплата онлайн через ЮKassa после
-          регистрации в разделе «Подписки». Актуальные цены и описание услуг указаны ниже.
+          <strong>Старт</strong> — бесплатная неделя полного доступа (только один раз, потом
+          пропадает). <strong>Бизнес</strong> — 990 ₽/мес за весь основной функционал. Перед оплатой
+          можно ввести промокод или сразу перейти к ЮKassa.
         </p>
         <div className="subscriptions-plans landing-pricing-grid">
           {plans.map((plan) => (
             <article key={plan.id} className="subscriptions-plan-card">
-              <h3>{plan.name}</h3>
+              <h3>
+                {(plan.plan_type === "trial" || plan.slug === "starter") && "🎁 "}
+                {plan.slug === "business" && "💼 "}
+                {plan.plan_type === "custom" && "🛠️ "}
+                {plan.name}
+              </h3>
               <p className="subscriptions-plan-desc">{plan.description}</p>
-              <p className="subscriptions-plan-price">{formatPlanPrice(plan.price_monthly)}</p>
+              <p className="subscriptions-plan-price">{formatPlanPrice(plan)}</p>
               {Array.isArray(plan.features) && plan.features.length > 0 && (
                 <ul className="subscriptions-plan-features">
                   {plan.features.map((feature) => (
@@ -170,7 +215,11 @@ export default function LandingPage({ onLogin, onRegister }) {
                   ))}
                 </ul>
               )}
-              {Number(plan.price_monthly) > 0 ? (
+              {plan.plan_type === "trial" || plan.slug === "starter" ? (
+                <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
+                  Попробовать бесплатно
+                </button>
+              ) : Number(plan.price_monthly) > 0 ? (
                 <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
                   Выбрать тариф
                 </button>
@@ -184,7 +233,8 @@ export default function LandingPage({ onLogin, onRegister }) {
         </div>
         <p className="landing-note">
           Оплачивая подписку, вы принимаете условия{" "}
-          <a href="/offer">публичной оферты</a>.
+          <a href="/offer">публичной оферты</a>. При досрочной отмене в день оплаты (не пробный
+          период и не промокод) деньги возвращаются.
         </p>
       </section>
 
@@ -196,10 +246,9 @@ export default function LandingPage({ onLogin, onRegister }) {
         <ol className="landing-steps">
           <li>Зарегистрируйтесь на сайте и подтвердите email.</li>
           <li>Войдите в личный кабинет и откройте раздел «Подписки».</li>
-          <li>Выберите тариф и оплатите через ЮKassa.</li>
+          <li>Активируйте бесплатную неделю «Старт» или оплатите «Бизнес» через ЮKassa (можно с промокодом).</li>
           <li>
-            После успешной оплаты доступ активируется автоматически в течение нескольких минут —
-            статус подписки станет «Активна».
+            После активации доступ появляется сразу — статус подписки станет «Активна».
           </li>
         </ol>
       </section>

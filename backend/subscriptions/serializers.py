@@ -6,7 +6,16 @@ from .models import Payment, SubscriptionPlan, UserSubscription
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = SubscriptionPlan
-        fields = ["id", "slug", "name", "description", "price_monthly", "features"]
+        fields = [
+            "id",
+            "slug",
+            "name",
+            "description",
+            "price_monthly",
+            "features",
+            "plan_type",
+            "trial_days",
+        ]
 
 
 class UserSubscriptionSerializer(serializers.ModelSerializer):
@@ -19,11 +28,14 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
             "id",
             "plan",
             "status",
+            "source",
+            "promo_code",
             "period_start",
             "period_end",
             "auto_renew",
             "cancel_at_period_end",
             "is_active_now",
+            "refunded_at",
             "created_at",
         ]
 
@@ -41,4 +53,5 @@ class PaymentSerializer(serializers.ModelSerializer):
             "confirmation_url",
             "created_at",
             "paid_at",
+            "refunded_at",
         ]
