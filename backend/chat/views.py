@@ -97,6 +97,49 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         mem.refresh_from_db()
         return Response({"ok": True, "last_read_message_id": mem.last_read_message_id})
 
+    @action(detail=True, methods=["post"], url_path="add-members")
+    def add_members(self, request, pk=None):
+        """Добавить сотрудников организации в групповой чат."""
+        conv = self.get_object()
+        if not conv.is_group:
+            return Response({"detail": "Только для групп."}, status=status.HTTP_400_BAD_REQUEST)
+        if request.user.role != "provider" or conv.organization_id != request.user.id:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        staff_ids = request.data.get("staff_ids") or []
+        if not isinstance(staff_ids, list) or not staff_ids:
+            return Response({"detail": "staff_ids required"}, status=status.HTTP_400_BAD_REQUEST)
+        added = 0
+        with transaction.atomic():
+            for sid in staff_ids:
+                try:
+                    sid = int(sid)
+                except (TypeError, ValueError):
+                    continue
+                if sid == request.user.id:
+                    continue
+                if not ProviderStaff.objects.filter(
+                    provider=request.user,
+                    staff_id=sid,
+                    is_active=True,
+                    invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+                ).exists():
+                    continue
+                u = User.objects.filter(pk=sid).first()
+                if not u:
+                    continue
+                _, created = ConversationMember.objects.get_or_create(
+                    conversation=conv, user=u
+                )
+                if created:
+                    added += 1
+        conv = self.get_queryset().get(pk=conv.pk)
+        return Response(
+            {
+                "added": added,
+                "conversation": ConversationSerializer(conv, context={"request": request}).data,
+            }
+        )
+
     @action(detail=False, methods=["post"], url_path="create-direct")
     def create_direct(self, request):
         if request.user.role != "provider":

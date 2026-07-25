@@ -669,15 +669,16 @@ button:hover {
 
 .app-subnav {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   padding: 10px 24px 14px;
   background: #fffdfb;
   border-bottom: 1px solid #ffd9bd;
+  overflow-x: hidden;
+  align-items: center;
 }
 
 .app-subnav--scroll {
-  flex-wrap: nowrap;
   overflow-x: auto;
   overflow-y: visible;
   -webkit-overflow-scrolling: touch;
@@ -693,7 +694,10 @@ button:hover {
   color: #8d3e00;
   font-weight: 600;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 8px 14px;
 }
 
 .app-subnav button:hover {
@@ -899,6 +903,9 @@ body.theme-dark button.staff-perms-toggle:hover,
   padding: 10px 12px;
   border-bottom: 1px solid #e8e8e8;
   background: #f7f7f7;
+  position: relative;
+  z-index: 3;
+  flex-shrink: 0;
 }
 
 .tg-sidebar-title {
@@ -908,13 +915,17 @@ body.theme-dark button.staff-perms-toggle:hover,
 }
 
 .tg-chat-search {
-  margin: 0 10px 8px;
+  margin: 8px 10px;
   padding: 8px 12px;
   border-radius: 10px;
   border: 1px solid #e0e0e0;
   font: inherit;
   width: calc(100% - 20px);
   box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+  display: block;
+  flex-shrink: 0;
 }
 
 .tg-folder-tabs {
@@ -1281,9 +1292,9 @@ body.theme-dark button.staff-perms-toggle:hover,
 
 .tg-msg-search-panel {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 4px);
   right: 0;
-  margin-top: 6px;
+  margin-top: 0;
   width: min(360px, calc(100vw - 48px));
   max-height: min(420px, 52vh);
   display: flex;
@@ -1292,7 +1303,7 @@ body.theme-dark button.staff-perms-toggle:hover,
   border: 1px solid #e0e0e0;
   border-radius: 12px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
-  z-index: 40;
+  z-index: 80;
   padding: 10px 10px 8px;
   text-align: left;
 }
@@ -1685,11 +1696,29 @@ body.theme-dark button.staff-perms-toggle:hover,
   .tg-chats-card.card.full-width {
     min-height: 0;
     max-height: none;
-    height: calc(100vh - 150px);
-    height: calc(100dvh - 150px);
+    height: calc(100vh - 118px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    height: calc(100dvh - 118px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
     width: 100%;
     max-width: 100%;
     overflow: hidden;
+  }
+
+  .tg-msg-search-panel {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    top: calc(56px + env(safe-area-inset-top, 0px) + 52px);
+    width: auto;
+    max-width: none;
+    z-index: 120;
+  }
+
+  .page-logged {
+    padding-bottom: 0;
+  }
+
+  .page-logged > .grid {
+    margin-bottom: 0;
   }
 
   .tg-body {
@@ -6510,6 +6539,126 @@ html.native-app .page-logged .hero.top-row {
   background: #ff7a00;
   color: #fff;
   border-color: #ff7a00;
+}
+
+.tg-chat-info-members-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.tg-chat-members-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #ffd9bd;
+  background: #fff8f2;
+  color: #5a2800;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tg-chat-members-count.active,
+.tg-chat-members-add.active {
+  border-color: #ff7a00;
+  background: #ffe8d5;
+}
+
+.tg-chat-members-count-icon {
+  display: inline-flex;
+  color: #ff7a00;
+}
+
+.tg-chat-members-add {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid #ffd9bd;
+  background: #fff8f2;
+  color: #8d3e00;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.tg-chat-members-list,
+.tg-chat-members-add-panel {
+  margin: 8px 0 12px;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  background: #fafafa;
+  padding: 8px;
+}
+
+.tg-chat-members-row,
+.staff-pick-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-radius: 8px;
+}
+
+.staff-pick-person {
+  cursor: pointer;
+}
+
+.staff-pick-person input {
+  flex-shrink: 0;
+}
+
+.tg-chat-members-avatar,
+.staff-pick-avatar {
+  width: 36px;
+  height: 36px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.tg-chat-members-meta,
+.staff-pick-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.tg-chat-members-name,
+.staff-pick-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #222;
+}
+
+.staff-pick-job {
+  font-size: 12px;
+}
+
+.staff-pick-grid--people {
+  max-height: 220px;
+  gap: 2px;
+}
+
+.bookmark-settings-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.bookmark-settings-item {
+  padding: 6px 0;
 }
 
 .tg-chat-info-grid {

@@ -20,9 +20,11 @@ export default function ChatVideoNotePlayer({
   const mutedLoopRef = useRef(false);
   const seekingRef = useRef(false);
   const seekMovedRef = useRef(false);
+  const seekWasPlayingRef = useRef(false);
   const suppressClickRef = useRef(false);
   const rafRef = useRef(0);
   const progressRef = useRef(0);
+  const lastSeekCommitRef = useRef(0);
 
   useEffect(() => {
     mutedLoopRef.current = false;
@@ -97,13 +99,21 @@ export default function ChatVideoNotePlayer({
     return angle / (Math.PI * 2);
   }
 
-  function applySeek(clientX, clientY) {
+  /** UI-only progress during drag — avoid thrashing video.currentTime every frame. */
+  function previewSeek(clientX, clientY) {
     const v = videoRef.current;
     if (!v || !Number.isFinite(v.duration) || v.duration <= 0) return;
-    const p = angleToProgress(clientX, clientY);
-    setProgressSafe(p);
+    setProgressSafe(angleToProgress(clientX, clientY));
+  }
+
+  function commitSeek(force = false) {
+    const v = videoRef.current;
+    if (!v || !Number.isFinite(v.duration) || v.duration <= 0) return;
+    const now = performance.now();
+    if (!force && now - lastSeekCommitRef.current < 120) return;
+    lastSeekCommitRef.current = now;
     try {
-      v.currentTime = p * v.duration;
+      v.currentTime = progressRef.current * v.duration;
     } catch {
       /* ignore */
     }
@@ -112,9 +122,15 @@ export default function ChatVideoNotePlayer({
   async function resumeAfterSeek() {
     const v = videoRef.current;
     if (!v) return;
+    commitSeek(true);
     mutedLoopRef.current = false;
     setShowRing(true);
     setEnlarged(true);
+    if (!seekWasPlayingRef.current && !previewMode) {
+      setPlaying(false);
+      stopTick();
+      return;
+    }
     try {
       v.muted = Boolean(previewMode);
       await v.play();
@@ -137,12 +153,24 @@ export default function ChatVideoNotePlayer({
     if (!showRing || (!previewMode && mutedLoopRef.current)) return;
     e.preventDefault();
     e.stopPropagation();
+    const v = videoRef.current;
+    seekWasPlayingRef.current = Boolean(v && !v.paused && !v.ended) || Boolean(previewMode);
     seekingRef.current = true;
     seekMovedRef.current = false;
+    lastSeekCommitRef.current = 0;
     e.currentTarget.setPointerCapture?.(e.pointerId);
+    try {
+      v?.pause?.();
+    } catch {
+      /* ignore */
+    }
+    stopTick();
     const x = e.clientX ?? e.touches?.[0]?.clientX;
     const y = e.clientY ?? e.touches?.[0]?.clientY;
-    if (x != null && y != null) applySeek(x, y);
+    if (x != null && y != null) {
+      previewSeek(x, y);
+      commitSeek(true);
+    }
   }
 
   function onSeekPointerMove(e) {
@@ -152,7 +180,10 @@ export default function ChatVideoNotePlayer({
     seekMovedRef.current = true;
     const x = e.clientX ?? e.touches?.[0]?.clientX;
     const y = e.clientY ?? e.touches?.[0]?.clientY;
-    if (x != null && y != null) applySeek(x, y);
+    if (x != null && y != null) {
+      previewSeek(x, y);
+      commitSeek(false);
+    }
   }
 
   function onSeekPointerUp(e) {
@@ -165,7 +196,6 @@ export default function ChatVideoNotePlayer({
     } catch {
       /* ignore */
     }
-    // After seek (tap on rim or drag) — continue playback from that point
     suppressClickRef.current = true;
     window.setTimeout(() => {
       suppressClickRef.current = false;

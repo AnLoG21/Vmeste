@@ -207,7 +207,55 @@ const CHAT_WALL_OPTIONS = [
   { label: "Море", value: "linear-gradient(160deg,#b8dfe9,#6aa6b8)" },
 ];
 const APP_THEME_KEY = "vmeste_theme_v1";
+const SUBNAV_BOOKMARKS_KEY = "vmeste_subnav_bookmarks_v1";
 const CHAT_RECEIPTS_KEY = "vmeste_chat_receipts_v1";
+
+/** Закладки верхней панели / пункты меню (id → метаданные). */
+const BOOKMARK_CATALOG = [
+  { id: "client_map", label: "Карта", roles: ["client"] },
+  { id: "bookings", label: "Записи", labelClient: "Мои записи", roles: ["client", "provider", "staff"] },
+  { id: "reviews", label: "Отзывы", roles: ["provider", "staff"] },
+  { id: "intervals", label: "Календарь интервалов", roles: ["provider"], menuIcon: "calendar" },
+  { id: "services", label: "Услуги и категории", roles: ["provider"], menuIcon: "services" },
+  { id: "chats", label: "Чаты", roles: ["client", "provider", "staff"] },
+  { id: "settings", label: "Настройки", roles: ["client", "provider", "staff"] },
+  { id: "profile", label: "Личный кабинет", roles: ["client", "provider", "staff"] },
+  { id: "booking_history", label: "История записей", roles: ["client", "provider", "staff"] },
+  { id: "subscriptions", label: "Подписки", roles: ["client", "provider", "staff"] },
+  { id: "staff", label: "Сотрудники", roles: ["provider"] },
+  { id: "organization", label: "Организация", roles: ["provider"] },
+];
+
+const DEFAULT_SUBNAV_BOOKMARKS = {
+  client: ["client_map", "bookings", "chats"],
+  provider: ["bookings", "reviews", "chats"],
+  staff: ["bookings", "reviews", "chats"],
+};
+
+function loadSubnavBookmarks(role) {
+  const fallback = DEFAULT_SUBNAV_BOOKMARKS[role] || DEFAULT_SUBNAV_BOOKMARKS.client;
+  try {
+    const raw = localStorage.getItem(SUBNAV_BOOKMARKS_KEY);
+    if (!raw) return [...fallback];
+    const all = JSON.parse(raw);
+    const list = all?.[role];
+    if (!Array.isArray(list) || !list.length) return [...fallback];
+    const allowed = new Set(
+      BOOKMARK_CATALOG.filter((b) => b.roles.includes(role)).map((b) => b.id)
+    );
+    return list.filter((id) => allowed.has(id));
+  } catch {
+    return [...fallback];
+  }
+}
+
+function bookmarkLabel(id, role) {
+  const b = BOOKMARK_CATALOG.find((x) => x.id === id);
+  if (!b) return id;
+  if (role === "client" && b.labelClient) return b.labelClient;
+  return b.label;
+}
+
 const chatNotifyStorageKey = (id) => `vmeste_chat_notify_v1_${id}`;
 const CHAT_PINS_STORAGE_KEY = "vmeste_chat_pins_v1";
 const MAX_PINNED_CHATS = 5;
@@ -2299,6 +2347,12 @@ export default function App() {
   const [chatMsgSearchActiveIdx, setChatMsgSearchActiveIdx] = useState(0);
   const [chatInfoOpen, setChatInfoOpen] = useState(false);
   const [chatInfoTab, setChatInfoTab] = useState("photos");
+  const [chatMembersView, setChatMembersView] = useState(null); // null | "list" | "add"
+  const [groupAddStaffIds, setGroupAddStaffIds] = useState([]);
+  const [groupAddStatus, setGroupAddStatus] = useState("");
+  const [subnavBookmarks, setSubnavBookmarks] = useState(() =>
+    loadSubnavBookmarks(localStorage.getItem("vmeste_role_hint") || "client")
+  );
   const [chatInfoHeadMenuOpen, setChatInfoHeadMenuOpen] = useState(false);
   const [chatInfoPhotoMenuId, setChatInfoPhotoMenuId] = useState(null);
   const [chatComposeMode, setChatComposeMode] = useState(() => loadChatComposeMode());
@@ -3232,6 +3286,23 @@ export default function App() {
     document.documentElement.setAttribute("data-theme", appTheme);
     document.body.classList.toggle("theme-dark", appTheme === "dark");
   }, [appTheme]);
+
+  useEffect(() => {
+    if (!me?.role) return;
+    setSubnavBookmarks(loadSubnavBookmarks(me.role));
+  }, [me?.role]);
+
+  useEffect(() => {
+    if (!me?.role) return;
+    try {
+      const raw = localStorage.getItem(SUBNAV_BOOKMARKS_KEY);
+      const all = raw ? JSON.parse(raw) : {};
+      all[me.role] = subnavBookmarks;
+      localStorage.setItem(SUBNAV_BOOKMARKS_KEY, JSON.stringify(all));
+    } catch {
+      /* ignore */
+    }
+  }, [subnavBookmarks, me?.role]);
 
   useEffect(() => {
     if (!accessToken || currentView === "chats") return;
@@ -5712,6 +5783,195 @@ export default function App() {
     }));
   }
 
+  function toggleGroupAddStaff(id) {
+    const n = Number(id);
+    setGroupAddStaffIds((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
+  }
+
+  function staffJobTitleForUser(userId) {
+    const link = orgStaff.find((l) => Number(l.staff) === Number(userId));
+    return (link?.job_title || "").trim();
+  }
+
+  function memberDisplayName(member) {
+    return (
+      formatStaffFullName({
+        first_name: member?.first_name,
+        last_name: member?.last_name,
+        patronymic: member?.patronymic,
+        username: member?.username,
+      }) || `id ${member?.user}`
+    );
+  }
+
+  function memberInitial(member) {
+    const name = memberDisplayName(member);
+    return (name || "?").slice(0, 1).toUpperCase();
+  }
+
+  async function addMembersToSelectedGroup() {
+    if (!selectedChatId || !groupAddStaffIds.length) return;
+    setGroupAddStatus("");
+    const response = await authFetch(`${API_URL}/chat/conversations/${selectedChatId}/add-members/`, {
+      method: "POST",
+      body: JSON.stringify({ staff_ids: groupAddStaffIds.map(Number) }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      setGroupAddStatus(err.detail || "Не удалось добавить участников.");
+      return;
+    }
+    const data = await response.json();
+    if (data.conversation) {
+      setConversations((prev) =>
+        prev.map((c) => (Number(c.id) === Number(data.conversation.id) ? data.conversation : c))
+      );
+    } else {
+      await loadChats();
+    }
+    setGroupAddStaffIds([]);
+    setChatMembersView("list");
+    setGroupAddStatus(data.added ? `Добавлено: ${data.added}` : "Уже в группе.");
+  }
+
+  function isBookmarkAvailable(id) {
+    const role = me?.role;
+    if (!role) return false;
+    const def = BOOKMARK_CATALOG.find((b) => b.id === id);
+    if (!def || !def.roles.includes(role)) return false;
+    if (id === "reviews" && !canViewOrgReviews()) return false;
+    if (role === "staff") {
+      if (id === "bookings" && !staffHasPerm("manage_bookings")) return false;
+      if (id === "chats" && !staffHasPerm("manage_chats") && !staffHasPerm("manage_client_chats")) return false;
+    }
+    if ((id === "staff" || id === "organization") && !canManageOrgSettings) return false;
+    return true;
+  }
+
+  function navigateBookmark(id) {
+    setMenuOpen(false);
+    if (id === "chats" && isMobileChatLayout()) setSelectedChatId(null);
+    if (id === "reviews") {
+      openProviderReviews();
+      return;
+    }
+    setCurrentView(id);
+  }
+
+  function toggleSubnavBookmark(id) {
+    setSubnavBookmarks((prev) => {
+      if (prev.includes(id)) {
+        if (prev.length <= 1) return prev;
+        return prev.filter((x) => x !== id);
+      }
+      const order = BOOKMARK_CATALOG.map((b) => b.id);
+      const next = [...prev, id];
+      next.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+      return next;
+    });
+  }
+
+  function renderSubnavBookmarkButton(id) {
+    if (!isBookmarkAvailable(id)) return null;
+    const active = currentView === id;
+    const label = bookmarkLabel(id, me?.role);
+    if (id === "chats") {
+      return (
+        <button
+          key={id}
+          type="button"
+          className={["app-subnav-chat", active && "active"].filter(Boolean).join(" ")}
+          onClick={() => navigateBookmark(id)}
+        >
+          <span className="app-subnav-chat-inner" aria-hidden="true">
+            <svg className="app-subnav-chat-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
+            </svg>
+            <span>{label}</span>
+          </span>
+          {unreadMessagesCount > 0 && (
+            <span className="app-subnav-badge" aria-label={`Непрочитанных сообщений: ${unreadMessagesCount}`}>
+              {unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
+            </span>
+          )}
+        </button>
+      );
+    }
+    if (id === "reviews") {
+      return (
+        <button
+          key={id}
+          type="button"
+          className={["app-subnav-reviews", active && "active"].filter(Boolean).join(" ")}
+          onClick={() => navigateBookmark(id)}
+        >
+          <span>{label}</span>
+          {missedReviewsCount > 0 && (
+            <span className="app-subnav-badge" aria-label={`Непросмотренных отзывов: ${missedReviewsCount}`}>
+              {missedReviewsCount > 99 ? "99+" : missedReviewsCount}
+            </span>
+          )}
+        </button>
+      );
+    }
+    return (
+      <button key={id} type="button" className={active ? "active" : ""} onClick={() => navigateBookmark(id)}>
+        {label}
+      </button>
+    );
+  }
+
+  function bookmarkMenuIcon(id) {
+    if (id === "intervals") {
+      return (
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zM7 12h5v5H7z" />
+        </svg>
+      );
+    }
+    if (id === "services") {
+      return (
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" />
+        </svg>
+      );
+    }
+    if (id === "chats") {
+      return (
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
+        </svg>
+      );
+    }
+    if (id === "reviews") {
+      return (
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+        </svg>
+      );
+    }
+    if (id === "bookings" || id === "client_map") {
+      return (
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z" />
+        </svg>
+      );
+    }
+    return (
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+      </svg>
+    );
+  }
+
+  function menuOverflowBookmarkIds() {
+    const role = me?.role;
+    if (!role) return [];
+    const inSubnav = new Set(subnavBookmarks);
+    const preferred = ["intervals", "services", "bookings", "reviews", "chats", "client_map"];
+    return preferred.filter((id) => !inSubnav.has(id) && isBookmarkAvailable(id));
+  }
+
   async function loadClientBookings() {
     await reloadBookingsList();
   }
@@ -7673,6 +7933,8 @@ export default function App() {
   }, [conversations, chatFolder, chatSearchQuery, chatLocalPrefs, chatPins, me?.role]);
 
   function renderGeneralSettings() {
+    const role = me?.role;
+    const bookmarkOptions = BOOKMARK_CATALOG.filter((b) => role && b.roles.includes(role) && isBookmarkAvailable(b.id));
     return (
       <section className="card profile-card">
         <h2>Настройки</h2>
@@ -7687,6 +7949,31 @@ export default function App() {
             />
             Тёмная тема
           </label>
+        </div>
+        <div className="form">
+          <h3>Закладки главного меню</h3>
+          <p className="muted">
+            Отмеченные пункты показываются сверху в виде кнопок. Снятые переносятся в меню (под «Личный кабинет»).
+          </p>
+          <div className="bookmark-settings-list">
+            {bookmarkOptions.map((b) => (
+              <label key={b.id} className="checkbox bookmark-settings-item">
+                <input
+                  type="checkbox"
+                  checked={subnavBookmarks.includes(b.id)}
+                  onChange={() => toggleSubnavBookmark(b.id)}
+                />
+                <span>{bookmarkLabel(b.id, role)}</span>
+              </label>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="ghost-btn"
+            onClick={() => setSubnavBookmarks([...(DEFAULT_SUBNAV_BOOKMARKS[role] || DEFAULT_SUBNAV_BOOKMARKS.client)])}
+          >
+            Сбросить по умолчанию
+          </button>
         </div>
         <form onSubmit={changePassword} className="form">
           <h3>Смена пароля</h3>
@@ -8498,10 +8785,17 @@ export default function App() {
       setChatMsgSearchQuery("");
       setChatMsgSearchActiveIdx(0);
       setChatInfoOpen(false);
+      setChatMembersView(null);
+      setGroupAddStaffIds([]);
+      setGroupAddStatus("");
       setChatPendingFiles([]);
       setChatPendingKind("");
       discardChatMediaPreview();
       if (chatRecordingKind) cancelChatRecording();
+    } else {
+      setChatMembersView(null);
+      setGroupAddStaffIds([]);
+      setGroupAddStatus("");
     }
   }, [selectedChatId]);
 
@@ -8691,6 +8985,26 @@ export default function App() {
                     <span className="menu-item-badge">{chatActivity.badge_count > 99 ? "99+" : chatActivity.badge_count}</span>
                   )}
                 </button>
+                {menuOverflowBookmarkIds().map((id) => (
+                  <button
+                    key={`menu-overflow-${id}`}
+                    type="button"
+                    className="menu-dropdown-item"
+                    onClick={() => navigateBookmark(id)}
+                  >
+                    <span className="menu-item-icon" aria-hidden="true">
+                      {bookmarkMenuIcon(id)}
+                    </span>
+                    <span className="menu-item-label">{bookmarkLabel(id, me?.role)}</span>
+                    {id === "chats" && unreadMessagesCount > 0 && (
+                      <span className="menu-item-badge">{unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}</span>
+                    )}
+                    {id === "reviews" && missedReviewsCount > 0 && (
+                      <span className="menu-item-badge">{missedReviewsCount > 99 ? "99+" : missedReviewsCount}</span>
+                    )}
+                  </button>
+                ))}
+
                 <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("settings"); setMenuOpen(false); }}>
                   <span className="menu-item-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" /></svg>
@@ -8743,113 +9057,17 @@ export default function App() {
         </div>
       )}
 
-      {accessToken && me?.role === "client" && (
-        <nav className="app-subnav" aria-label="Разделы клиента">
-          <button type="button" className={currentView === "client_map" ? "active" : ""} onClick={() => setCurrentView("client_map")}>
-            Карта
-          </button>
-          <button type="button" className={currentView === "bookings" ? "active" : ""} onClick={() => setCurrentView("bookings")}>
-            Мои записи
-          </button>
-          <button
-            type="button"
-            className={["app-subnav-chat", currentView === "chats" && "active"].filter(Boolean).join(" ")}
-            onClick={() => {
-              if (isMobileChatLayout()) setSelectedChatId(null);
-              setCurrentView("chats");
-            }}
-          >
-            <span>Чаты</span>
-            {unreadMessagesCount > 0 && (
-              <span className="app-subnav-badge" aria-label={`Непрочитанных сообщений: ${unreadMessagesCount}`}>
-                {unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
-              </span>
-            )}
-          </button>
-        </nav>
-      )}
-
-      {accessToken && me?.role === "provider" && (
-        <nav className="app-subnav app-subnav--scroll" aria-label="Разделы исполнителя">
-          <button type="button" className={currentView === "bookings" ? "active" : ""} onClick={() => setCurrentView("bookings")}>Записи</button>
-          <button
-            type="button"
-            className={["app-subnav-reviews", currentView === "reviews" && "active"].filter(Boolean).join(" ")}
-            onClick={openProviderReviews}
-          >
-            <span>Отзывы</span>
-            {missedReviewsCount > 0 && (
-              <span className="app-subnav-badge" aria-label={`Непросмотренных отзывов: ${missedReviewsCount}`}>
-                {missedReviewsCount > 99 ? "99+" : missedReviewsCount}
-              </span>
-            )}
-          </button>
-          <button type="button" className={currentView === "intervals" ? "active" : ""} onClick={() => setCurrentView("intervals")}>Календарь интервалов</button>
-          <button type="button" className={currentView === "services" ? "active" : ""} onClick={() => setCurrentView("services")}>Услуги и категории</button>
-          <button
-            type="button"
-            className={["app-subnav-chat", currentView === "chats" && "active"].filter(Boolean).join(" ")}
-            onClick={() => {
-              if (isMobileChatLayout()) setSelectedChatId(null);
-              setCurrentView("chats");
-            }}
-          >
-            <span className="app-subnav-chat-inner" aria-hidden="true">
-              <svg className="app-subnav-chat-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
-              </svg>
-              <span>Чаты</span>
-            </span>
-            {unreadMessagesCount > 0 && (
-              <span className="app-subnav-badge" aria-label={`Непрочитанных сообщений: ${unreadMessagesCount}`}>
-                {unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
-              </span>
-            )}
-          </button>
-        </nav>
-      )}
-
-      {accessToken && me?.role === "staff" && (
-        <nav className="app-subnav app-subnav--scroll" aria-label="Разделы сотрудника">
-          {staffHasPerm("manage_bookings") && (
-            <button type="button" className={currentView === "bookings" ? "active" : ""} onClick={() => setCurrentView("bookings")}>Записи</button>
-          )}
-          {canViewOrgReviews() && (
-            <button
-              type="button"
-              className={["app-subnav-reviews", currentView === "reviews" && "active"].filter(Boolean).join(" ")}
-              onClick={openProviderReviews}
-            >
-              <span>Отзывы</span>
-              {missedReviewsCount > 0 && (
-                <span className="app-subnav-badge" aria-label={`Непросмотренных отзывов: ${missedReviewsCount}`}>
-                  {missedReviewsCount > 99 ? "99+" : missedReviewsCount}
-                </span>
-              )}
-            </button>
-          )}
-          {staffHasPerm("manage_chats") && (
-            <button
-              type="button"
-              className={["app-subnav-chat", currentView === "chats" && "active"].filter(Boolean).join(" ")}
-              onClick={() => {
-              if (isMobileChatLayout()) setSelectedChatId(null);
-              setCurrentView("chats");
-            }}
-            >
-              <span className="app-subnav-chat-inner" aria-hidden="true">
-                <svg className="app-subnav-chat-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                  <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
-                </svg>
-                <span>Чаты</span>
-              </span>
-              {unreadMessagesCount > 0 && (
-                <span className="app-subnav-badge" aria-label={`Непрочитанных сообщений: ${unreadMessagesCount}`}>
-                  {unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
-                </span>
-              )}
-            </button>
-          )}
+      {accessToken && me?.role && (
+        <nav
+          className={[
+            "app-subnav",
+            subnavBookmarks.filter((id) => isBookmarkAvailable(id)).length > 4 && "app-subnav--scroll",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          aria-label="Разделы"
+        >
+          {subnavBookmarks.map((id) => renderSubnavBookmarkButton(id))}
         </nav>
       )}
 
@@ -9133,19 +9351,29 @@ export default function App() {
                               onChange={(e) => setGroupForm({ ...groupForm, title: e.target.value })}
                               required
                             />
-                            <div className="staff-pick-grid">
+                            <div className="staff-pick-grid staff-pick-grid--people">
                               {orgStaff
                                 .filter((l) => l.is_active && (l.invitation_status === "accepted" || !l.invitation_status))
-                                .map((link) => (
-                                <label key={link.id} className="checkbox">
-                                  <input
-                                    type="checkbox"
-                                    checked={groupForm.staff_ids.includes(link.staff)}
-                                    onChange={() => toggleGroupStaff(link.staff)}
-                                  />
-                                  {formatStaffFullName(link.staff_user) || `id ${link.staff}`}
-                                </label>
-                              ))}
+                                .map((link) => {
+                                  const name = formatStaffFullName(link.staff_user) || `id ${link.staff}`;
+                                  const title = (link.job_title || "").trim();
+                                  return (
+                                    <label key={link.id} className="staff-pick-person">
+                                      <input
+                                        type="checkbox"
+                                        checked={groupForm.staff_ids.includes(link.staff)}
+                                        onChange={() => toggleGroupStaff(link.staff)}
+                                      />
+                                      <span className="tg-avatar staff-pick-avatar" aria-hidden="true">
+                                        {name.slice(0, 1).toUpperCase()}
+                                      </span>
+                                      <span className="staff-pick-meta">
+                                        <span className="staff-pick-name">{name}</span>
+                                        {title ? <span className="staff-pick-job muted">{title}</span> : null}
+                                      </span>
+                                    </label>
+                                  );
+                                })}
                             </div>
                             <button type="submit">Создать группу</button>
                           </form>
@@ -9160,6 +9388,7 @@ export default function App() {
                   placeholder="Поиск по чатам..."
                   value={chatSearchQuery}
                   onChange={(e) => setChatSearchQuery(e.target.value)}
+                  onFocus={() => setChatFabOpen(false)}
                 />
                 {(me?.role === "provider" || me?.role === "staff") && (
                 <div className="tg-folder-tabs">
@@ -9980,6 +10209,9 @@ export default function App() {
                   setChatInfoOpen(false);
                   setChatInfoHeadMenuOpen(false);
                   setChatInfoPhotoMenuId(null);
+                  setChatMembersView(null);
+                  setGroupAddStaffIds([]);
+                  setGroupAddStatus("");
                 }}
               >
                 <div className="modal-card tg-chat-info-card" onClick={(e) => e.stopPropagation()}>
@@ -10051,6 +10283,9 @@ export default function App() {
                           setChatInfoOpen(false);
                           setChatInfoHeadMenuOpen(false);
                           setChatInfoPhotoMenuId(null);
+                          setChatMembersView(null);
+                          setGroupAddStaffIds([]);
+                          setGroupAddStatus("");
                         }}
                       >
                         ×
@@ -10068,6 +10303,98 @@ export default function App() {
                       )}
                       {chatInfoPeer.organization_name ? <p>Организация: {chatInfoPeer.organization_name}</p> : null}
                       {chatInfoPeer.username ? <p className="muted">@{chatInfoPeer.username}</p> : null}
+                    </div>
+                  ) : null}
+                  {selectedConv?.is_group ? (
+                    <div className="tg-chat-info-members-bar">
+                      <button
+                        type="button"
+                        className={["tg-chat-members-count", chatMembersView === "list" && "active"].filter(Boolean).join(" ")}
+                        onClick={() => setChatMembersView((v) => (v === "list" ? null : "list"))}
+                      >
+                        <span className="tg-chat-members-count-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                            <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+                          </svg>
+                        </span>
+                        <span>{(selectedConv.members || []).length} участников</span>
+                      </button>
+                      {me?.role === "provider" && Number(selectedConv.organization) === Number(me?.id) ? (
+                        <button
+                          type="button"
+                          className={["tg-chat-members-add", chatMembersView === "add" && "active"].filter(Boolean).join(" ")}
+                          aria-label="Добавить участников"
+                          title="Добавить участников"
+                          onClick={() => {
+                            setGroupAddStatus("");
+                            setGroupAddStaffIds([]);
+                            setChatMembersView((v) => (v === "add" ? null : "add"));
+                          }}
+                        >
+                          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+                            <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                          </svg>
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {selectedConv?.is_group && chatMembersView === "list" ? (
+                    <ul className="tg-chat-members-list">
+                      {(selectedConv.members || []).map((m) => {
+                        const job = staffJobTitleForUser(m.user);
+                        return (
+                          <li key={m.id || m.user} className="tg-chat-members-row">
+                            <span className="tg-avatar tg-chat-members-avatar" aria-hidden="true">
+                              {memberInitial(m)}
+                            </span>
+                            <span className="tg-chat-members-meta">
+                              <span className="tg-chat-members-name">{memberDisplayName(m)}</span>
+                              {job ? <span className="muted small">{job}</span> : null}
+                              {m.role === "provider" ? <span className="muted small">Руководитель</span> : null}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+                  {selectedConv?.is_group && chatMembersView === "add" ? (
+                    <div className="tg-chat-members-add-panel">
+                      <p className="muted small">Сотрудники, которых ещё нет в группе</p>
+                      <div className="staff-pick-grid staff-pick-grid--people">
+                        {orgStaff
+                          .filter((l) => l.is_active && (l.invitation_status === "accepted" || !l.invitation_status))
+                          .filter((l) => !(selectedConv.members || []).some((m) => Number(m.user) === Number(l.staff)))
+                          .map((link) => {
+                            const name = formatStaffFullName(link.staff_user) || `id ${link.staff}`;
+                            const title = (link.job_title || "").trim();
+                            return (
+                              <label key={link.id} className="staff-pick-person">
+                                <input
+                                  type="checkbox"
+                                  checked={groupAddStaffIds.includes(link.staff)}
+                                  onChange={() => toggleGroupAddStaff(link.staff)}
+                                />
+                                <span className="tg-avatar staff-pick-avatar" aria-hidden="true">
+                                  {name.slice(0, 1).toUpperCase()}
+                                </span>
+                                <span className="staff-pick-meta">
+                                  <span className="staff-pick-name">{name}</span>
+                                  {title ? <span className="staff-pick-job muted">{title}</span> : null}
+                                </span>
+                              </label>
+                            );
+                          })}
+                      </div>
+                      {!orgStaff.filter(
+                        (l) =>
+                          l.is_active &&
+                          (l.invitation_status === "accepted" || !l.invitation_status) &&
+                          !(selectedConv.members || []).some((m) => Number(m.user) === Number(l.staff))
+                      ).length && <p className="muted">Все сотрудники уже в группе</p>}
+                      {groupAddStatus ? <p className="status">{groupAddStatus}</p> : null}
+                      <button type="button" disabled={!groupAddStaffIds.length} onClick={addMembersToSelectedGroup}>
+                        Добавить
+                      </button>
                     </div>
                   ) : null}
                   <div className="tg-chat-info-tabs">

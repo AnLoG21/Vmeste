@@ -169,10 +169,14 @@
   .app-subnav {
     padding: 8px 10px 10px;
     flex-wrap: nowrap;
-    overflow-x: auto;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     gap: 6px;
+  }
+
+  .app-subnav.app-subnav--scroll {
+    overflow-x: auto;
   }
 
   .app-subnav::-webkit-scrollbar {
@@ -183,6 +187,7 @@
     flex-shrink: 0;
     padding: 8px 12px;
     font-size: 13px;
+    border-radius: 999px;
   }
 
   .auth-modal-overlay {
@@ -266,7 +271,7 @@ html.native-app .tg-chats-card.card.full-width {
   width: 100%;
   max-width: 100%;
   border-radius: 0;
-  height: calc(100dvh - 130px);
+  height: calc(100dvh - 108px - var(--safe-top, 0px) - var(--safe-bottom, 0px));
 }
 
 html.native-app .app-subnav {
