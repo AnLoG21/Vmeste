@@ -10,6 +10,7 @@ export const VIEW_PATHS = {
   bookings: "/bookings",
   intervals: "/intervals",
   chats: "/chats",
+  analytics: "/analytics",
   client_map: "/map",
   client_book: "/book",
   client_bookings: "/my-bookings",

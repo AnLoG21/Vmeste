@@ -1,5 +1,7 @@
 from django.db.models import Q
 from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -8,8 +10,8 @@ from users.models import User
 from booking.booking_windows import filter_services_bookable_by_staff
 
 from .catalog_seed import provider_catalog_status, seed_provider_catalog
-from .models import Service, ServiceCategory
-from .serializers import ServiceCategorySerializer, ServiceSerializer
+from .models import Service, ServiceCategory, ServicePhoto
+from .serializers import ServiceCategorySerializer, ServicePhotoSerializer, ServiceSerializer
 from .sphere_templates import get_sphere_catalog, list_sphere_catalogs
 
 
@@ -46,9 +48,10 @@ class ServiceCategoryViewSet(viewsets.ModelViewSet):
 class ServiceViewSet(viewsets.ModelViewSet):
     serializer_class = ServiceSerializer
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_queryset(self):
-        qs = Service.objects.all().select_related("provider", "category", "subcategory")
+        qs = Service.objects.all().select_related("provider", "category", "subcategory").prefetch_related("photos")
         provider = self.request.query_params.get("provider")
         if provider:
             qs = qs.filter(provider_id=provider)
@@ -70,6 +73,42 @@ class ServiceViewSet(viewsets.ModelViewSet):
                 "Услуги добавляются из готового каталога сферы. Включите нужные позиции в разделе «Услуги и категории»."
             )
         serializer.save(provider=user)
+
+    @action(detail=True, methods=["post"], url_path="photos")
+    def upload_photos(self, request, pk=None):
+        service = self.get_object()
+        if request.user.role != "provider" or service.provider_id != request.user.id:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        files = request.FILES.getlist("photos") or request.FILES.getlist("photo")
+        if not files and request.FILES.get("image"):
+            files = [request.FILES["image"]]
+        if not files:
+            return Response({"detail": "Добавьте файлы photos."}, status=status.HTTP_400_BAD_REQUEST)
+        existing = service.photos.count()
+        created = []
+        for i, f in enumerate(files):
+            if existing + len(created) >= 12:
+                break
+            ph = ServicePhoto.objects.create(service=service, image=f, sort_order=existing + i)
+            created.append(ph)
+        return Response(
+            {
+                "photos": ServicePhotoSerializer(service.photos.all(), many=True, context={"request": request}).data,
+                "gallery": ServiceSerializer(service, context={"request": request}).data.get("gallery"),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["delete"], url_path=r"photos/(?P<photo_id>[^/.]+)")
+    def delete_photo(self, request, pk=None, photo_id=None):
+        service = self.get_object()
+        if request.user.role != "provider" or service.provider_id != request.user.id:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        ph = service.photos.filter(pk=photo_id).first()
+        if not ph:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        ph.delete()
+        return Response({"ok": True})
 
 
 class SphereCatalogTemplateView(APIView):

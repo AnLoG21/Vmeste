@@ -140,6 +140,20 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             }
         )
 
+    @action(detail=True, methods=["post"], url_path="delete-group")
+    def delete_group(self, request, pk=None):
+        """Удалить групповой чат (только владелец-организация)."""
+        conv = self.get_object()
+        if not conv.is_group:
+            return Response({"detail": "Только для групп."}, status=status.HTTP_400_BAD_REQUEST)
+        if request.user.role != "provider" or conv.organization_id != request.user.id:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if conv.is_saved_messages or conv.is_client_correspondence:
+            return Response({"detail": "Этот чат нельзя удалить."}, status=status.HTTP_400_BAD_REQUEST)
+        conv_id = conv.id
+        conv.delete()
+        return Response({"ok": True, "deleted_id": conv_id})
+
     @action(detail=False, methods=["post"], url_path="create-direct")
     def create_direct(self, request):
         if request.user.role != "provider":

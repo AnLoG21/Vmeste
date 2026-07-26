@@ -3,6 +3,8 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import logoMain from "./assets/logo-main.png";
 import LandingPage from "./LandingPage.jsx";
 import SubscriptionsPage from "./SubscriptionsPage.jsx";
+import AnalyticsPage from "./AnalyticsPage.jsx";
+import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
 import "./landing.css";
 import {
@@ -224,6 +226,7 @@ const BOOKMARK_CATALOG = [
   { id: "subscriptions", label: "Подписки", roles: ["client", "provider", "staff"] },
   { id: "staff", label: "Сотрудники", roles: ["provider"] },
   { id: "organization", label: "Организация", roles: ["provider"] },
+  { id: "analytics", label: "Аналитика", roles: ["provider", "staff"], menuIcon: "analytics" },
 ];
 
 const DEFAULT_SUBNAV_BOOKMARKS = {
@@ -2254,6 +2257,9 @@ export default function App() {
   const clientDiscoverMapRef = useRef(null);
   const clientDiscoverMapClickBoundRef = useRef(false);
   const clientDiscoverMapZoomTimerRef = useRef(null);
+  const clientMyLocationPlacemarkRef = useRef(null);
+  const clientMyLocationCoordsRef = useRef(null);
+  const clientMyLocationWatchIdRef = useRef(null);
   const clientMeBootstrappedRef = useRef(false);
   const [providerServices, setProviderServices] = useState([]);
   const [clientBookWindows, setClientBookWindows] = useState([]);
@@ -3244,6 +3250,7 @@ export default function App() {
               });
             }
             paintClientDiscoverMapMarkers(allLocationsRef.current, { fitView: true });
+            startClientMyLocationTracking();
           });
         })
         .catch(() => {});
@@ -4170,6 +4177,16 @@ export default function App() {
   }
 
   function destroyClientDiscoverMap() {
+    if (clientMyLocationWatchIdRef.current != null && navigator.geolocation?.clearWatch) {
+      try {
+        navigator.geolocation.clearWatch(clientMyLocationWatchIdRef.current);
+      } catch {
+        /* ignore */
+      }
+      clientMyLocationWatchIdRef.current = null;
+    }
+    clientMyLocationPlacemarkRef.current = null;
+    clientMyLocationCoordsRef.current = null;
     if (clientDiscoverMapRef.current) {
       try {
         clientDiscoverMapRef.current.destroy();
@@ -4186,6 +4203,68 @@ export default function App() {
     resetOrgPinLayoutClass();
   }
 
+  function ensureClientMyLocationMarker(coords) {
+    const ymaps = window.ymaps;
+    const map = clientDiscoverMapRef.current;
+    if (!ymaps || !map || !coords) return;
+    const [lat, lon] = coords;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    clientMyLocationCoordsRef.current = [lat, lon];
+    if (clientMyLocationPlacemarkRef.current) {
+      try {
+        clientMyLocationPlacemarkRef.current.geometry.setCoordinates([lat, lon]);
+      } catch {
+        /* ignore */
+      }
+      try {
+        map.geoObjects.remove(clientMyLocationPlacemarkRef.current);
+      } catch {
+        /* ignore */
+      }
+      try {
+        map.geoObjects.add(clientMyLocationPlacemarkRef.current);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    const pm = new ymaps.Placemark(
+      [lat, lon],
+      { hintContent: "Вы здесь" },
+      {
+        preset: "islands#blueCircleDotIcon",
+        zIndex: 700,
+        zIndexHover: 700,
+      },
+    );
+    clientMyLocationPlacemarkRef.current = pm;
+    map.geoObjects.add(pm);
+  }
+
+  function startClientMyLocationTracking() {
+    if (!navigator.geolocation || clientMyLocationWatchIdRef.current != null) return;
+    const apply = (pos) => {
+      const lat = pos?.coords?.latitude;
+      const lon = pos?.coords?.longitude;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      ensureClientMyLocationMarker([lat, lon]);
+    };
+    navigator.geolocation.getCurrentPosition(apply, () => {}, {
+      enableHighAccuracy: false,
+      timeout: 10000,
+      maximumAge: 30000,
+    });
+    try {
+      clientMyLocationWatchIdRef.current = navigator.geolocation.watchPosition(
+        apply,
+        () => {},
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 15000 },
+      );
+    } catch {
+      /* ignore */
+    }
+  }
+
   function paintClientDiscoverMapMarkers(locations, { fitView = false } = {}) {
     const ymaps = window.ymaps;
     const map = clientDiscoverMapRef.current;
@@ -4200,6 +4279,7 @@ export default function App() {
     }
     const zoom = map.getZoom();
     map.geoObjects.removeAll();
+    clientMyLocationPlacemarkRef.current = null;
     const coordsList = [];
     for (const loc of locations) {
       const lat = Number(loc.latitude);
@@ -4211,11 +4291,18 @@ export default function App() {
       map.geoObjects.add(pm);
       coordsList.push([lat, lon]);
     }
+    if (clientMyLocationCoordsRef.current) {
+      ensureClientMyLocationMarker(clientMyLocationCoordsRef.current);
+    } else {
+      startClientMyLocationTracking();
+    }
     if (!fitView) return;
     if (coordsList.length === 1) {
       map.setCenter(coordsList[0], 14);
     } else if (coordsList.length > 1) {
       map.setBounds(ymaps.util.bounds.fromPoints(coordsList), { checkZoomRange: true, zoomMargin: 52 });
+    } else if (clientMyLocationCoordsRef.current) {
+      map.setCenter(clientMyLocationCoordsRef.current, 14);
     } else {
       map.setCenter([55.751244, 37.618423], 10);
     }
@@ -5835,12 +5922,35 @@ export default function App() {
     setGroupAddStatus(data.added ? `Добавлено: ${data.added}` : "Уже в группе.");
   }
 
+  async function deleteSelectedGroupChat() {
+    if (!selectedChatId || !selectedConv?.is_group) return;
+    if (me?.role !== "provider" || Number(selectedConv.organization) !== Number(me?.id)) return;
+    if (!window.confirm("Удалить группу для всех участников? Это действие нельзя отменить.")) return;
+    setChatInfoHeadMenuOpen(false);
+    const response = await authFetch(`${API_URL}/chat/conversations/${selectedChatId}/delete-group/`, {
+      method: "POST",
+      body: "{}",
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      showToast(err.detail || "Не удалось удалить группу.");
+      return;
+    }
+    const deletedId = selectedChatId;
+    setChatInfoOpen(false);
+    setChatMembersView(null);
+    setSelectedChatId(null);
+    setConversations((prev) => prev.filter((c) => Number(c.id) !== Number(deletedId)));
+    showToast("Группа удалена.");
+  }
+
   function isBookmarkAvailable(id) {
     const role = me?.role;
     if (!role) return false;
     const def = BOOKMARK_CATALOG.find((b) => b.id === id);
     if (!def || !def.roles.includes(role)) return false;
     if (id === "reviews" && !canViewOrgReviews()) return false;
+    if (id === "analytics" && role === "staff" && !staffHasPerm("manage_bookings")) return false;
     if (role === "staff") {
       if (id === "bookings" && !staffHasPerm("manage_bookings")) return false;
       if (id === "chats" && !staffHasPerm("manage_chats") && !staffHasPerm("manage_client_chats")) return false;
@@ -5969,7 +6079,7 @@ export default function App() {
     const role = me?.role;
     if (!role) return [];
     const inSubnav = new Set(subnavBookmarks);
-    const preferred = ["intervals", "services", "bookings", "reviews", "chats", "client_map"];
+    const preferred = ["intervals", "services", "analytics", "bookings", "reviews", "chats", "client_map"];
     return preferred.filter((id) => !inSubnav.has(id) && isBookmarkAvailable(id));
   }
 
@@ -6021,6 +6131,51 @@ export default function App() {
         prev[serviceId] ?? buildServiceDraftFromService(services.find((s) => Number(s.id) === Number(serviceId)) || {});
       return { ...prev, [serviceId]: { ...base, ...patch } };
     });
+  }
+
+  async function uploadServicePhotos(serviceId, fileList) {
+    const files = Array.from(fileList || []).filter(Boolean);
+    if (!files.length) return;
+    const fd = new FormData();
+    files.forEach((f) => fd.append("photos", f));
+    const res = await authFetch(`${API_URL}/catalog/services/${serviceId}/photos/`, {
+      method: "POST",
+      body: fd,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setSellerStatus(err.detail || "Не удалось загрузить фото услуги.");
+      return;
+    }
+    const data = await res.json();
+    setServices((prev) =>
+      prev.map((s) =>
+        Number(s.id) === Number(serviceId)
+          ? { ...s, photos: data.photos || s.photos, gallery: data.gallery || s.gallery }
+          : s,
+      ),
+    );
+    setSellerStatus("Фото услуги добавлены.");
+  }
+
+  async function deleteServicePhoto(serviceId, photoId) {
+    const res = await authFetch(`${API_URL}/catalog/services/${serviceId}/photos/${photoId}/`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      setSellerStatus("Не удалось удалить фото.");
+      return;
+    }
+    setServices((prev) =>
+      prev.map((s) => {
+        if (Number(s.id) !== Number(serviceId)) return s;
+        const photos = (s.photos || []).filter((p) => Number(p.id) !== Number(photoId));
+        const gallery = (s.gallery || []).filter(
+          (p) => !(p.source === "service" && Number(p.id) === Number(photoId)),
+        );
+        return { ...s, photos, gallery };
+      }),
+    );
   }
 
   const dirtyServiceCount = useMemo(
@@ -7846,6 +8001,8 @@ export default function App() {
                                   draft={serviceDrafts[srv.id]}
                                   dirty={!serviceDraftEqualsService(serviceDrafts[srv.id], srv)}
                                   onDraftChange={updateServiceDraft}
+                                  onUploadPhotos={uploadServicePhotos}
+                                  onDeletePhoto={deleteServicePhoto}
                                 />
                               ))}
                             </div>
@@ -7864,6 +8021,8 @@ export default function App() {
                               draft={serviceDrafts[srv.id]}
                               dirty={!serviceDraftEqualsService(serviceDrafts[srv.id], srv)}
                               onDraftChange={updateServiceDraft}
+                              onUploadPhotos={uploadServicePhotos}
+                              onDeletePhoto={deleteServicePhoto}
                             />
                           ))}
                         </div>
@@ -9040,6 +9199,14 @@ export default function App() {
                     <span className="menu-item-label">Организация</span>
                   </button>
                 )}
+                {isBookmarkAvailable("analytics") && (
+                  <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("analytics"); setMenuOpen(false); }}>
+                    <span className="menu-item-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z" /></svg>
+                    </span>
+                    <span className="menu-item-label">Аналитика</span>
+                  </button>
+                )}
                 <button type="button" className="menu-dropdown-item" onClick={logout}>
                   <span className="menu-item-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" /></svg>
@@ -9317,6 +9484,10 @@ export default function App() {
             authFetch={authFetch}
             me={me}
           />
+        )}
+
+        {accessToken && (me?.role === "provider" || me?.role === "staff") && currentView === "analytics" && (
+          <AnalyticsPage apiUrl={API_URL} authFetch={authFetch} />
         )}
 
         {accessToken && currentView === "settings" && renderGeneralSettings()}
@@ -10329,6 +10500,20 @@ export default function App() {
                             >
                               Прочтение сообщений
                             </button>
+                            {selectedConv?.is_group &&
+                            me?.role === "provider" &&
+                            Number(selectedConv.organization) === Number(me?.id) ? (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="tg-chat-info-danger"
+                                onClick={() => {
+                                  void deleteSelectedGroupChat();
+                                }}
+                              >
+                                Удалить группу
+                              </button>
+                            ) : null}
                           </div>
                         )}
                       </div>
@@ -11315,6 +11500,25 @@ export default function App() {
                     <option key={s.id} value={s.id}>{s.name} — {s.price} ₽</option>
                   ))}
                 </select>
+                {(() => {
+                  const selected = providerServices.find(
+                    (s) => String(s.id) === String(clientBookingForm.serviceId),
+                  );
+                  const gallery = selected?.gallery || [];
+                  if (!gallery.length) return null;
+                  return (
+                    <ServicePhotoCarousel
+                      items={gallery}
+                      className="client-book-service-carousel"
+                      onOpen={(items, idx) =>
+                        openOrgPhotoLightbox(
+                          items.map((it) => ({ id: it.id, url: it.url || it.image })),
+                          idx,
+                        )
+                      }
+                    />
+                  );
+                })()}
                 {clientBookingForm.provider && providerServices.length === 0 ? (
                   <p className="muted small">Нет услуг, которые оказывают мастера организации. Назначьте услуги в настройках сотрудников.</p>
                 ) : null}
@@ -11477,14 +11681,17 @@ export default function App() {
   );
 }
 
-function ServiceEditor({ service, draft, dirty, onDraftChange }) {
+function ServiceEditor({ service, draft, dirty, onDraftChange, onUploadPhotos, onDeletePhoto }) {
   const local = draft ?? buildServiceDraftFromService(service);
+  const photos = service.photos || [];
+  const gallery = service.gallery || [];
 
   return (
     <div
       className={[
         "service-editor",
         "service-editor-row",
+        "service-editor--with-photos",
         !local.is_active && "service-editor--inactive",
         dirty && "service-editor--dirty",
       ]
@@ -11525,6 +11732,40 @@ function ServiceEditor({ service, draft, dirty, onDraftChange }) {
         />
         Оказываем
       </label>
+      <div className="service-editor-photos">
+        <ServicePhotoCarousel items={gallery} className="service-editor-carousel" />
+        <div className="service-editor-photo-actions">
+          <label className="ghost-btn service-editor-photo-upload">
+            Фото
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={(e) => {
+                void onUploadPhotos?.(service.id, e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {photos.length > 0 && (
+            <div className="service-editor-photo-list">
+              {photos.map((ph) => (
+                <button
+                  key={ph.id}
+                  type="button"
+                  className="service-editor-photo-chip"
+                  title="Удалить фото"
+                  onClick={() => void onDeletePhoto?.(service.id, ph.id)}
+                >
+                  <img src={ph.image} alt="" />
+                  <span aria-hidden="true">×</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -69,3 +69,13 @@ class Service(models.Model):
                 name="uniq_provider_service_template_slug",
             ),
         ]
+
+
+class ServicePhoto(models.Model):
+    service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name="photos")
+    image = models.ImageField(upload_to="service_photos/%Y/%m/")
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
