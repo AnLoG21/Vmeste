@@ -208,6 +208,20 @@
 
   .modal-card {
     width: min(520px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    box-sizing: border-box;
+  }
+
+  .client-filters-modal {
+    width: min(440px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+  }
+
+  .client-filters-modal .form,
+  .client-filters-modal input,
+  .client-filters-modal select {
+    max-width: 100%;
+    min-width: 0;
   }
 }
 

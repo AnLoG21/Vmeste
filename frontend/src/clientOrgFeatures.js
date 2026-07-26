@@ -259,6 +259,125 @@ export function sphereMapIconHref(sphere) {
   return svgDataUrl(defaultStickerSvg());
 }
 
+function compactIconSvg(paths, bg = "#fff3e8", fg = "#8d3e00") {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+  <rect width="40" height="40" rx="10" fill="${bg}"/>
+  <g fill="none" stroke="${fg}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</g>
+</svg>`;
+}
+
+/** Иконка подкатегории/категории услуг для фильтра. */
+export function serviceCategoryIconHref(slugOrName = "") {
+  const key = String(slugOrName || "").toLowerCase();
+  if (/cut|стриж|ножниц|hair-cut|scissors/.test(key)) {
+    return svgDataUrl(
+      compactIconSvg(
+        `<circle cx="14" cy="14" r="4"/><circle cx="14" cy="26" r="4"/><path d="M17.5 16.5 L28 28 M17.5 23.5 L28 12"/>`,
+        "#FFF8E1",
+        "#C9A227",
+      ),
+    );
+  }
+  if (/color|окраш|мелир|тонир|балаяж|омбре/.test(key)) {
+    return svgDataUrl(
+      compactIconSvg(
+        `<circle cx="14" cy="16" r="5"/><circle cx="22" cy="22" r="5"/><circle cx="26" cy="14" r="4"/>`,
+        "#F3E5F5",
+        "#7B1FA2",
+      ),
+    );
+  }
+  if (/nail|маник|педик|ногт/.test(key)) {
+    return svgDataUrl(
+      compactIconSvg(`<path d="M16 10c0-2 2-4 4-4s4 2 4 4v16c0 2-2 4-4 4s-4-2-4-4V10z"/>`, "#FCE4EC", "#C2185B"),
+    );
+  }
+  if (/brow|бров|lash|ресниц/.test(key)) {
+    return svgDataUrl(compactIconSvg(`<path d="M8 22c4-8 20-8 24 0"/><circle cx="16" cy="20" r="2"/><circle cx="24" cy="20" r="2"/>`, "#E3F2FD", "#1565C0"));
+  }
+  if (/massag|массаж|spa|уход|face|космет/.test(key)) {
+    return svgDataUrl(compactIconSvg(`<path d="M12 24c0-6 4-10 8-10s8 4 8 10"/><circle cx="20" cy="12" r="3"/>`, "#E8F5E9", "#2E7D32"));
+  }
+  if (/beard|бород|брить|barber/.test(key)) {
+    return svgDataUrl(compactIconSvg(`<path d="M12 14c0 8 3 12 8 12s8-4 8-12"/><path d="M14 14h12"/>`, "#EFEBE9", "#5D4037"));
+  }
+  if (/wheel|шин|авто|диагност|service|ремонт/.test(key)) {
+    return svgDataUrl(compactIconSvg(`<circle cx="20" cy="20" r="10"/><circle cx="20" cy="20" r="3"/><path d="M20 10v4M20 26v4M10 20h4M26 20h4"/>`, "#E3F2FD", "#1565C0"));
+  }
+  if (/makeup|макияж|визаж/.test(key)) {
+    return svgDataUrl(compactIconSvg(`<path d="M14 28 L26 12"/><circle cx="27" cy="11" r="3"/>`, "#FCE4EC", "#AD1457"));
+  }
+  return svgDataUrl(compactIconSvg(`<circle cx="20" cy="20" r="6"/><path d="M20 10v4M20 26v4M10 20h4M26 20h4"/>`, "#FFF3E8", "#C45C26"));
+}
+
+/**
+ * Группы услуг из шаблона сферы для UI фильтра.
+ * @returns {{ id: string, name: string, icon: string, services: { value: string, label: string }[] }[]}
+ */
+export function filterServiceGroupsFromCatalog(catalog) {
+  const groups = [];
+  const seen = new Set();
+  for (const cat of catalog?.categories || []) {
+    const subs = Array.isArray(cat.subcategories) ? cat.subcategories : [];
+    if (subs.length) {
+      for (const sub of subs) {
+        const services = [];
+        for (const srv of sub.services || []) {
+          const name = String(srv.name || "").trim();
+          const slug = String(srv.slug || "").trim();
+          const key = slug || name;
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          services.push({ value: slug || name, label: name });
+        }
+        if (!services.length) continue;
+        groups.push({
+          id: String(sub.slug || sub.name || `${cat.slug}-${groups.length}`),
+          name: String(sub.name || cat.name || "Услуги"),
+          icon: serviceCategoryIconHref(`${sub.slug || ""} ${sub.name || ""} ${cat.slug || ""}`),
+          services,
+        });
+      }
+    } else {
+      const services = [];
+      for (const srv of cat.services || []) {
+        const name = String(srv.name || "").trim();
+        const slug = String(srv.slug || "").trim();
+        const key = slug || name;
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        services.push({ value: slug || name, label: name });
+      }
+      if (!services.length) continue;
+      groups.push({
+        id: String(cat.slug || cat.name || `cat-${groups.length}`),
+        name: String(cat.name || "Услуги"),
+        icon: serviceCategoryIconHref(`${cat.slug || ""} ${cat.name || ""}`),
+        services,
+      });
+    }
+  }
+  return groups;
+}
+
+/** Подобрать услугу провайдера под значение фильтра (slug или название). */
+export function matchProviderServiceByFilter(services, filterValue) {
+  const raw = String(filterValue || "").trim();
+  if (!raw || !Array.isArray(services) || !services.length) return null;
+  const lower = raw.toLowerCase();
+  const bySlug = services.find((s) => String(s.template_slug || "") === raw);
+  if (bySlug) return bySlug;
+  const byExactName = services.find((s) => String(s.name || "").trim().toLowerCase() === lower);
+  if (byExactName) return byExactName;
+  const byIncludes = services.find((s) => String(s.name || "").toLowerCase().includes(lower));
+  if (byIncludes) return byIncludes;
+  const bySlugIncludes = services.find((s) => {
+    const slug = String(s.template_slug || "");
+    return slug && (slug.includes(raw) || raw.includes(slug));
+  });
+  return bySlugIncludes || null;
+}
+
 /** Одна запись на организацию для списка поиска (предпочитаем главный офис / обложку). */
 export function uniqueDiscoverOrgs(locations) {
   if (!Array.isArray(locations)) return [];

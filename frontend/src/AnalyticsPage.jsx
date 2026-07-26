@@ -4,6 +4,7 @@ const WIDGETS_KEY = "vmeste_analytics_widgets_v1";
 
 const DEFAULT_WIDGETS = {
   kpis: true,
+  statuses: true,
   bookingsChart: true,
   revenueChart: true,
   servicesChart: true,
@@ -256,6 +257,7 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
         <div className="analytics-widgets-panel">
           {[
             ["kpis", "Сводка"],
+            ["statuses", "По статусам"],
             ["bookingsChart", "Записи по дням"],
             ["revenueChart", "Выручка по дням"],
             ["servicesChart", "По услугам"],
@@ -292,12 +294,20 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
             <span className="analytics-kpi-label">Отзывов</span>
             <strong>{data.totals.reviews_count}</strong>
           </div>
-          {Object.entries(data.totals.by_status || {}).map(([st, cnt]) => (
-            <div key={st} className="analytics-kpi analytics-kpi--sm">
-              <span className="analytics-kpi-label">{STATUS_LABELS[st] || st}</span>
-              <strong>{cnt}</strong>
-            </div>
-          ))}
+        </div>
+      )}
+
+      {widgets.statuses && data?.totals?.by_status && (
+        <div className="analytics-panel analytics-status-panel">
+          <h3>По статусам</h3>
+          <div className="analytics-status-grid">
+            {Object.entries(data.totals.by_status).map(([st, cnt]) => (
+              <div key={st} className="analytics-kpi analytics-kpi--sm">
+                <span className="analytics-kpi-label">{STATUS_LABELS[st] || st}</span>
+                <strong>{cnt}</strong>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

@@ -4275,39 +4275,262 @@ body.theme-dark .tg-chat-search {
 
 .client-filters-modal {
   max-width: 440px;
+  width: min(440px, calc(100vw - 32px));
   max-height: min(90vh, 720px);
   overflow-x: hidden;
   overflow-y: auto;
   box-sizing: border-box;
+  padding: 16px;
+}
+
+.client-filters-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.client-filters-modal-head h3 {
+  margin: 0;
+  padding-right: 8px;
+  min-width: 0;
 }
 
 .client-filters-modal .form {
-  overflow: visible;
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .client-filters-modal .row-2 {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .client-filters-modal .row-2 > div {
   min-width: 0;
+  max-width: 100%;
+}
+
+.client-filters-modal .field-label {
+  max-width: 100%;
 }
 
 .client-filters-modal input,
 .client-filters-modal select,
-.client-filters-modal .mini-date-picker {
+.client-filters-modal .mini-date-picker,
+.client-filters-modal .filter-sphere-grid,
+.client-filters-modal .filter-service-tree {
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
+}
+
+.client-filters-modal select {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .client-filters-modal .mini-date-picker-btn {
   max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.client-filters-modal .mini-date-picker-popover,
+.client-filters-modal .mini-date-picker-popover--inline {
+  position: static;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  box-shadow: none;
 }
 
 .client-filters-modal .mini-date-picker-clear {
   margin-top: 6px;
   padding: 0;
   font-size: 0.85rem;
+  width: auto;
+}
+
+.client-filters-actions .ghost-btn,
+.client-filters-actions > button {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.filter-sphere-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.filter-sphere-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid #ffe4cf;
+  background: #fff;
+  color: #3d1a00;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.filter-sphere-chip span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-sphere-chip--active {
+  border-color: #ff7a00;
+  background: #fff3e8;
+  box-shadow: inset 0 0 0 1px #ff7a00;
+}
+
+.filter-sphere-chip-icon {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.filter-sphere-chip-icon--any {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff3e8;
+  color: #c45c26;
+  font-size: 14px;
+}
+
+.filter-service-tree {
+  display: grid;
+  gap: 12px;
+  max-height: min(42vh, 360px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.filter-service-any {
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: 1px dashed #e0c2a8;
+  color: #8d3e00;
+}
+
+.filter-service-any--active {
+  border-style: solid;
+  border-color: #ff7a00;
+  background: #fff3e8;
+}
+
+.filter-service-group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.filter-service-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.filter-service-group-head strong {
+  font-size: 0.95rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-service-group-icon {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 8px;
+}
+
+.filter-service-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.filter-service-chip {
+  max-width: 100%;
+  width: auto;
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid #e0c2a8;
+  background: #fff;
+  color: #3d1a00;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-service-chip--active {
+  border-color: #ff7a00;
+  background: #ff7a00;
+  color: #fff;
+}
+
+.client-book-overlay-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.client-book-overlay-head h3 {
+  margin: 0;
+  min-width: 0;
+  padding-right: 4px;
+}
+
+.modal-close-btn,
+.map-org-sheet-close,
+.review-modal-close,
+.auth-modal-close,
+.photo-lightbox-close,
+.tg-chat-info-close,
+.calendar-day-sheet-close {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  padding: 0 !important;
+  line-height: 1 !important;
+  text-align: center;
+  box-sizing: border-box;
 }
 
 .org-settings-highlight {
@@ -5070,17 +5293,45 @@ body.theme-dark .field-label {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
 .mini-date-picker-month {
   font-weight: 700;
   font-size: 14px;
+  flex: 1 1 auto;
+  text-align: center;
+  min-width: 0;
 }
 
 .mini-date-nav-btn {
-  min-width: 36px;
-  padding: 4px 10px;
+  width: 28px;
+  min-width: 28px;
+  max-width: 28px;
+  height: 28px;
+  padding: 0;
+  flex: 0 0 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  line-height: 1;
+  font-size: 18px;
+  border: 1px solid #e0c2a8;
+  background: #fff;
+  color: #8d3e00;
+  cursor: pointer;
+}
+
+.mini-date-nav-btn:hover {
+  background: #fff3e8;
+}
+
+.mini-date-picker-nav .ghost-btn.mini-date-nav-btn {
+  width: 28px;
+  min-width: 28px;
+  padding: 0;
 }
 
 .mini-date-picker-weekdays,
@@ -5112,7 +5363,14 @@ body.theme-dark .field-label {
 }
 
 .mini-date-cell--today {
-  box-shadow: inset 0 0 0 2px rgba(255, 122, 0, 0.45);
+  box-shadow: inset 0 0 0 2px #ff7a00;
+  font-weight: 800;
+  color: #c45c00;
+}
+
+.mini-date-cell--today.mini-date-cell--selected {
+  color: #fff;
+  box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px #ff7a00;
 }
 
 .mini-date-cell--selected {
@@ -5121,7 +5379,7 @@ body.theme-dark .field-label {
   font-weight: 800;
 }
 
-.mini-date-cell:hover:not(.mini-date-cell--empty):not(.mini-date-cell--selected) {
+.mini-date-cell:hover:not(.mini-date-cell--empty):not(.mini-date-cell--selected):not(:disabled) {
   background: rgba(255, 122, 0, 0.12);
 }
 
@@ -7216,10 +7474,24 @@ body.theme-dark .password-eye-btn:hover {
 
 .analytics-toolbar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   align-items: center;
   margin-left: auto;
+  flex-shrink: 0;
+}
+
+.analytics-toolbar > .ghost-btn {
+  flex: 0 0 auto;
+  width: auto;
+  white-space: nowrap;
+  order: 1;
+}
+
+.analytics-filters-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  order: 2;
 }
 
 .analytics-date {
@@ -7588,6 +7860,10 @@ body.theme-dark .password-eye-btn:hover {
 .analytics-toolbar {
   position: relative;
   margin-left: auto;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  align-items: center;
 }
 
 .analytics-filters-wrap {
@@ -7652,8 +7928,25 @@ body.theme-dark .password-eye-btn:hover {
   box-shadow: none;
 }
 
+.mini-date-cell--today.mini-date-cell--disabled,
+.mini-date-cell--today:disabled {
+  opacity: 0.85;
+  box-shadow: inset 0 0 0 2px #ff7a00;
+  color: #c45c00;
+}
+
 .map-org-carousel-main {
   touch-action: pan-y;
   user-select: none;
+}
+
+.analytics-status-panel {
+  grid-column: 1 / -1;
+}
+
+.analytics-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
 }
 

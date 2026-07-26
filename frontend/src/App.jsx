@@ -15,7 +15,9 @@ import {
   resetOrgPinLayoutClass,
   defaultOrgWorkingHours,
   formatOrgWorkingHoursText,
+  filterServiceGroupsFromCatalog,
   getOrgWorkingHoursStatus,
+  matchProviderServiceByFilter,
   normalizeOrgWorkingHours,
   sphereMapIconHref,
   uniqueDiscoverOrgs,
@@ -1965,7 +1967,8 @@ function MiniDatePicker({
       <div className="mini-date-picker-nav">
         <button
           type="button"
-          className="ghost-btn mini-date-nav-btn"
+          className="mini-date-nav-btn"
+          aria-label="Предыдущий месяц"
           onClick={() => {
             const d = new Date(vy, vm - 2, 1);
             setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
@@ -1978,7 +1981,8 @@ function MiniDatePicker({
         </span>
         <button
           type="button"
-          className="ghost-btn mini-date-nav-btn"
+          className="mini-date-nav-btn"
+          aria-label="Следующий месяц"
           onClick={() => {
             const d = new Date(vy, vm, 1);
             setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
@@ -2223,7 +2227,7 @@ export default function App() {
   const [clientDiscoverFilters, setClientDiscoverFilters] = useState(emptyClientFilters);
   const [clientFilterModalDraft, setClientFilterModalDraft] = useState(emptyClientFilters);
   const [clientFiltersOpen, setClientFiltersOpen] = useState(false);
-  const [clientFilterServiceOptions, setClientFilterServiceOptions] = useState([]);
+  const [clientFilterServiceGroups, setClientFilterServiceGroups] = useState([]);
   const [clientBookModalOpen, setClientBookModalOpen] = useState(false);
   const [bookAvailableDates, setBookAvailableDates] = useState([]);
   const mapOrgCarouselTouchX = useRef(null);
@@ -3269,41 +3273,18 @@ export default function App() {
     if (!clientFiltersOpen) return undefined;
     const sphere = clientFilterModalDraft.sphere;
     if (!sphere) {
-      setClientFilterServiceOptions([]);
+      setClientFilterServiceGroups([]);
       return undefined;
     }
     let cancelled = false;
     (async () => {
       const res = await authFetch(`${API_URL}/catalog/sphere-template/?sphere=${encodeURIComponent(sphere)}`);
       if (cancelled || !res.ok) {
-        if (!cancelled) setClientFilterServiceOptions([]);
+        if (!cancelled) setClientFilterServiceGroups([]);
         return;
       }
       const catalog = await res.json();
-      const opts = [];
-      const seen = new Set();
-      for (const cat of catalog?.categories || []) {
-        for (const sub of cat.subcategories || []) {
-          for (const srv of sub.services || []) {
-            const name = String(srv.name || "").trim();
-            const slug = String(srv.slug || "").trim();
-            const key = slug || name;
-            if (!key || seen.has(key)) continue;
-            seen.add(key);
-            opts.push({ value: slug || name, label: name });
-          }
-        }
-        for (const srv of cat.services || []) {
-          const name = String(srv.name || "").trim();
-          const slug = String(srv.slug || "").trim();
-          const key = slug || name;
-          if (!key || seen.has(key)) continue;
-          seen.add(key);
-          opts.push({ value: slug || name, label: name });
-        }
-      }
-      opts.sort((a, b) => a.label.localeCompare(b.label, "ru"));
-      setClientFilterServiceOptions(opts);
+      setClientFilterServiceGroups(filterServiceGroupsFromCatalog(catalog));
     })();
     return () => {
       cancelled = true;
@@ -6759,6 +6740,7 @@ export default function App() {
     }
     const pid = String(loc.provider);
     const bookDate = presetDate || clientDiscoverFiltersRef.current?.slot_date || clientBookingForm.bookDate || todayIsoDate();
+    const filterService = String(clientDiscoverFiltersRef.current?.service || "").trim();
     setClientBookingForm((p) => ({
       ...p,
       locationId: String(loc.id),
@@ -6769,8 +6751,19 @@ export default function App() {
     }));
     const servicesRes = await authFetch(`${API_URL}/catalog/services/?provider=${encodeURIComponent(pid)}`);
     if (servicesRes.ok) {
-      const list = await servicesRes.json();
-      setProviderServices(list.filter((s) => s.is_active));
+      const list = (await servicesRes.json()).filter((s) => s.is_active);
+      setProviderServices(list);
+      const matched = matchProviderServiceByFilter(list, filterService);
+      if (matched) {
+        setClientBookingForm((p) => ({
+          ...p,
+          locationId: String(loc.id),
+          provider: pid,
+          serviceId: String(matched.id),
+          windowKey: "",
+          bookDate,
+        }));
+      }
     } else {
       setProviderServices([]);
     }
@@ -11315,41 +11308,106 @@ export default function App() {
             onClick={() => setClientFiltersOpen(false)}
           >
             <div className="modal-card client-filters-modal" onClick={(e) => e.stopPropagation()}>
-              <h3 id="client-filters-title">Фильтры</h3>
-              <div className="form">
-                <label className="field-label" htmlFor="client-filter-sphere">
-                  Сфера услуг
-                </label>
-                <select
-                  id="client-filter-sphere"
-                  value={clientFilterModalDraft.sphere}
-                  onChange={(e) =>
-                    setClientFilterModalDraft((d) => ({ ...d, sphere: e.target.value, service: "" }))
-                  }
+              <div className="client-filters-modal-head">
+                <h3 id="client-filters-title">Фильтры</h3>
+                <button
+                  type="button"
+                  className="modal-close-btn"
+                  aria-label="Закрыть"
+                  onClick={() => setClientFiltersOpen(false)}
                 >
-                  <option value="">Любая</option>
-                  {sphereOptions.map((s) => (
-                    <option key={s.key} value={s.key}>
-                      {s.value}
-                    </option>
-                  ))}
-                </select>
-                <label className="field-label" htmlFor="client-filter-service">
-                  Услуга
-                </label>
-                {clientFilterModalDraft.sphere && clientFilterServiceOptions.length > 0 ? (
-                  <select
-                    id="client-filter-service"
-                    value={clientFilterModalDraft.service}
-                    onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, service: e.target.value }))}
+                  ×
+                </button>
+              </div>
+              <div className="form">
+                <p className="field-label">Сфера услуг</p>
+                <div className="filter-sphere-grid" role="listbox" aria-label="Сфера услуг">
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={!clientFilterModalDraft.sphere}
+                    className={["filter-sphere-chip", !clientFilterModalDraft.sphere && "filter-sphere-chip--active"]
+                      .filter(Boolean)
+                      .join(" ")}
+                    onClick={() => setClientFilterModalDraft((d) => ({ ...d, sphere: "", service: "" }))}
                   >
-                    <option value="">Любая</option>
-                    {clientFilterServiceOptions.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
+                    <span className="filter-sphere-chip-icon filter-sphere-chip-icon--any" aria-hidden="true">
+                      ✦
+                    </span>
+                    <span>Любая</span>
+                  </button>
+                  {sphereOptions.map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      role="option"
+                      aria-selected={clientFilterModalDraft.sphere === s.key}
+                      className={[
+                        "filter-sphere-chip",
+                        clientFilterModalDraft.sphere === s.key && "filter-sphere-chip--active",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onClick={() =>
+                        setClientFilterModalDraft((d) => ({
+                          ...d,
+                          sphere: s.key,
+                          service: d.sphere === s.key ? d.service : "",
+                        }))
+                      }
+                    >
+                      <img className="filter-sphere-chip-icon" src={sphereMapIconHref(s.key)} alt="" />
+                      <span>{s.value}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="field-label">Услуга</p>
+                {clientFilterModalDraft.sphere && clientFilterServiceGroups.length > 0 ? (
+                  <div className="filter-service-tree">
+                    <button
+                      type="button"
+                      className={[
+                        "filter-service-any",
+                        !clientFilterModalDraft.service && "filter-service-any--active",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onClick={() => setClientFilterModalDraft((d) => ({ ...d, service: "" }))}
+                    >
+                      Любая услуга
+                    </button>
+                    {clientFilterServiceGroups.map((group) => (
+                      <div key={group.id} className="filter-service-group">
+                        <div className="filter-service-group-head">
+                          <img src={group.icon} alt="" className="filter-service-group-icon" />
+                          <strong>{group.name}</strong>
+                        </div>
+                        <div className="filter-service-chips">
+                          {group.services.map((s) => (
+                            <button
+                              key={s.value}
+                              type="button"
+                              className={[
+                                "filter-service-chip",
+                                clientFilterModalDraft.service === s.value && "filter-service-chip--active",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                              title={s.label}
+                              onClick={() =>
+                                setClientFilterModalDraft((d) => ({
+                                  ...d,
+                                  service: d.service === s.value ? "" : s.value,
+                                }))
+                              }
+                            >
+                              {s.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     ))}
-                  </select>
+                  </div>
                 ) : (
                   <input
                     id="client-filter-service"
@@ -11671,7 +11729,17 @@ export default function App() {
         {clientBookModalOpen && typeof document !== "undefined" && createPortal(
           <div className="modal-backdrop modal-backdrop--app-overlay" onClick={() => setClientBookModalOpen(false)}>
             <div className="modal-card client-book-overlay" onClick={(e) => e.stopPropagation()}>
-              <h3>Запись{mapOrgPopup?.organization_name ? ` · ${mapOrgPopup.organization_name}` : ""}</h3>
+              <div className="client-book-overlay-head">
+                <h3>Запись{mapOrgPopup?.organization_name ? ` · ${mapOrgPopup.organization_name}` : ""}</h3>
+                <button
+                  type="button"
+                  className="modal-close-btn"
+                  aria-label="Закрыть"
+                  onClick={() => setClientBookModalOpen(false)}
+                >
+                  ×
+                </button>
+              </div>
               {mapOrgProfile?.phones?.length > 0 && (
                 <div className="client-book-phones">
                   {mapOrgProfile.phones.map((ph) => (
