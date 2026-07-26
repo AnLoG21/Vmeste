@@ -330,13 +330,13 @@
   position: absolute;
   top: 12px;
   right: 12px;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border-radius: 50%;
   background: #fff3e8;
   color: #8d3e00;
-  font-size: 20px;
+  font-size: 24px;
   line-height: 1;
   border: 1px solid #ffbf8a;
 }

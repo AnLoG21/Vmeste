@@ -3815,12 +3815,12 @@ body.theme-dark .tg-chat-search {
   position: absolute;
   top: 8px;
   right: 10px;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border: none;
   background: #f5f5f5;
   border-radius: 50%;
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1;
   cursor: pointer;
   z-index: 10;
@@ -4027,14 +4027,14 @@ body.theme-dark .tg-chat-search {
 
 .review-modal-close {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: none;
   border-radius: 50%;
   background: #f5f5f5;
   color: #333;
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1;
   cursor: pointer;
 }
@@ -4531,6 +4531,11 @@ body.theme-dark .tg-chat-search {
   line-height: 1 !important;
   text-align: center;
   box-sizing: border-box;
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px;
+  min-height: 40px;
+  font-size: 24px !important;
 }
 
 .org-settings-highlight {
@@ -5861,8 +5866,8 @@ body.theme-dark .field-label {
   position: absolute;
   top: -8px;
   right: -8px;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   border: none;
   background: #fff;
@@ -6760,13 +6765,13 @@ html.native-app .page-logged .hero.top-row {
 }
 
 .tg-chat-info-close {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   border: 1px solid rgba(0, 0, 0, 0.12);
   background: #f5f5f5;
   color: #444;
-  font-size: 20px;
+  font-size: 24px;
   line-height: 1;
   cursor: pointer;
   flex-shrink: 0;
@@ -7097,13 +7102,13 @@ html.native-app .page-logged .hero.top-row {
 }
 
 .calendar-day-sheet-close {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   border: 1px solid rgba(0, 0, 0, 0.12);
   background: #f5f5f5;
   color: #444;
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1;
   cursor: pointer;
   flex-shrink: 0;

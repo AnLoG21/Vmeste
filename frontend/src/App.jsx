@@ -225,7 +225,7 @@ const BOOKMARK_CATALOG = [
   { id: "settings", label: "Настройки", roles: ["client", "provider", "staff"] },
   { id: "profile", label: "Личный кабинет", roles: ["client", "provider", "staff"] },
   { id: "booking_history", label: "История записей", roles: ["client", "provider", "staff"] },
-  { id: "subscriptions", label: "Подписки", roles: ["client", "provider", "staff"] },
+  { id: "subscriptions", label: "Подписки", roles: ["provider", "staff"] },
   { id: "staff", label: "Сотрудники", roles: ["provider"] },
   { id: "organization", label: "Организация", roles: ["provider"] },
   { id: "analytics", label: "Аналитика", roles: ["provider", "staff"], menuIcon: "analytics" },
@@ -2666,7 +2666,7 @@ export default function App() {
       .then((r) => r.json())
       .then((data) => {
         setVerifyStatus(data.detail || "Оплата обработана.");
-        setCurrentView("subscriptions");
+        if (me?.role !== "client") setCurrentView("subscriptions");
       })
       .catch(() => {});
     window.history.replaceState({}, document.title, window.location.pathname);
@@ -3051,6 +3051,12 @@ export default function App() {
     document.addEventListener("mousedown", onDoc, true);
     return () => document.removeEventListener("mousedown", onDoc, true);
   }, [menuOpen]);
+
+  useEffect(() => {
+    if (me?.role === "client" && currentView === "subscriptions") {
+      setCurrentView("client_map");
+    }
+  }, [me?.role, currentView]);
 
   useEffect(() => {
     if (!chatAttachMenuOpen) return;
@@ -9301,12 +9307,14 @@ export default function App() {
                   </span>
                   <span className="menu-item-label">История записей</span>
                 </button>
-                <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("subscriptions"); setMenuOpen(false); }}>
-                  <span className="menu-item-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" /></svg>
-                  </span>
-                  <span className="menu-item-label">Подписки</span>
-                </button>
+                {me?.role !== "client" && (
+                  <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("subscriptions"); setMenuOpen(false); }}>
+                    <span className="menu-item-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" /></svg>
+                    </span>
+                    <span className="menu-item-label">Подписки</span>
+                  </button>
+                )}
                 {canManageOrgSettings && (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("staff"); setMenuOpen(false); }}>
                     <span className="menu-item-icon" aria-hidden="true">
@@ -9573,7 +9581,9 @@ export default function App() {
             </form>
             <div className="row-2 profile-quick-nav">
               <button type="button" className="ghost-btn" onClick={() => setCurrentView("settings")}>Настройки</button>
-              <button type="button" className="ghost-btn" onClick={() => setCurrentView("subscriptions")}>Подписки</button>
+              {me?.role !== "client" && (
+                <button type="button" className="ghost-btn" onClick={() => setCurrentView("subscriptions")}>Подписки</button>
+              )}
               {canManageOrgSettings && (
                 <button type="button" className="ghost-btn" onClick={() => setCurrentView("organization")}>Организация</button>
               )}
@@ -9594,7 +9604,7 @@ export default function App() {
           </section>
         )}
 
-        {accessToken && currentView === "subscriptions" && (
+        {accessToken && me?.role !== "client" && currentView === "subscriptions" && (
           <SubscriptionsPage
             apiUrl={API_URL}
             authFetch={authFetch}
