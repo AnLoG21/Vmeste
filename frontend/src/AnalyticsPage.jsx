@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const WIDGETS_KEY = "vmeste_analytics_widgets_v1";
 
@@ -95,8 +95,12 @@ function LineChart({ points, valueKey = "value", color = "#1f6feb" }) {
 }
 
 export default function AnalyticsPage({ apiUrl, authFetch }) {
-  const [from, setFrom] = useState(() => daysAgoIso(30));
-  const [to, setTo] = useState(() => todayIso());
+  const [appliedFrom, setAppliedFrom] = useState(() => daysAgoIso(30));
+  const [appliedTo, setAppliedTo] = useState(() => todayIso());
+  const [draftFrom, setDraftFrom] = useState(() => daysAgoIso(30));
+  const [draftTo, setDraftTo] = useState(() => todayIso());
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersRef = useRef(null);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -110,7 +114,7 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
-    const qs = new URLSearchParams({ from, to });
+    const qs = new URLSearchParams({ from: appliedFrom, to: appliedTo });
     const res = await authFetch(`${apiUrl}/booking/analytics/?${qs}`);
     if (!res.ok) {
       setError("Не удалось загрузить аналитику.");
@@ -120,11 +124,27 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
     }
     setData(await res.json());
     setLoading(false);
-  }, [apiUrl, authFetch, from, to]);
+  }, [apiUrl, authFetch, appliedFrom, appliedTo]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!filtersOpen) return undefined;
+    function onDoc(e) {
+      if (filtersRef.current?.contains(e.target)) return;
+      setFiltersOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc, true);
+    return () => document.removeEventListener("mousedown", onDoc, true);
+  }, [filtersOpen]);
+
+  function applyFilters() {
+    setAppliedFrom(draftFrom);
+    setAppliedTo(draftTo);
+    setFiltersOpen(false);
+  }
 
   function toggleWidget(key) {
     setWidgets((prev) => {
@@ -183,28 +203,52 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
     .map(([k, v]) => ({ label: `${k}★`, value: v, id: k }))
     .sort((a, b) => Number(b.id) - Number(a.id));
 
+  const periodLabel = `${new Date(`${appliedFrom}T12:00:00`).toLocaleDateString("ru-RU")} – ${new Date(`${appliedTo}T12:00:00`).toLocaleDateString("ru-RU")}`;
+
   return (
     <section className="card full-width analytics-page">
       <div className="analytics-head">
         <div>
           <h2>Аналитика</h2>
-          <p className="muted small">Записи, выручка и отзывы за выбранный период</p>
+          <p className="muted small">Записи, выручка и отзывы · {periodLabel}</p>
         </div>
         <div className="analytics-toolbar">
-          <label className="analytics-date">
-            <span>С</span>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </label>
-          <label className="analytics-date">
-            <span>По</span>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </label>
-          <button type="button" className="ghost-btn" onClick={load} disabled={loading}>
-            {loading ? "Загрузка…" : "Обновить"}
-          </button>
           <button type="button" className="ghost-btn" onClick={() => setWidgetsOpen((v) => !v)}>
             Виджеты
           </button>
+          <div className="analytics-filters-wrap" ref={filtersRef}>
+            <button
+              type="button"
+              className={["analytics-filter-btn", filtersOpen && "active"].filter(Boolean).join(" ")}
+              aria-label="Фильтры периода"
+              aria-expanded={filtersOpen}
+              title="Фильтры"
+              onClick={() => {
+                setDraftFrom(appliedFrom);
+                setDraftTo(appliedTo);
+                setFiltersOpen((v) => !v);
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+                <path d="M3 5h18v2.17L14 15v5l-4 1v-6L3 7.17V5zm2.83 2L11 12.83V18.5l2-.5v-5.17L18.17 7H5.83z" />
+              </svg>
+            </button>
+            {filtersOpen && (
+              <div className="analytics-filters-popover" role="dialog" aria-label="Фильтр по датам">
+                <label className="analytics-date">
+                  <span>С</span>
+                  <input type="date" value={draftFrom} onChange={(e) => setDraftFrom(e.target.value)} />
+                </label>
+                <label className="analytics-date">
+                  <span>По</span>
+                  <input type="date" value={draftTo} onChange={(e) => setDraftTo(e.target.value)} />
+                </label>
+                <button type="button" onClick={applyFilters} disabled={loading}>
+                  Применить
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -228,6 +272,7 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
       )}
 
       {error ? <p className="status">{error}</p> : null}
+      {loading && !data ? <p className="muted">Загрузка…</p> : null}
 
       {widgets.kpis && data?.totals && (
         <div className="analytics-kpis">

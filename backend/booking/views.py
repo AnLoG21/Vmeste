@@ -1,8 +1,11 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Prefetch, Q
 
 from reviews.models import Review
+from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -11,7 +14,7 @@ from rest_framework.response import Response
 from catalog.models import Service
 from notifications.models import InAppNotification
 
-from .booking_windows import book_time_window, list_available_windows
+from .booking_windows import book_time_window, list_available_dates, list_available_windows
 from .models import AvailabilitySlot, Booking, ProviderStaff
 from .serializers import AvailabilitySlotSerializer, BookingSerializer, ProviderStaffSerializer
 
@@ -177,12 +180,31 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
         data = list_available_windows(int(provider), int(service), book_date)
         return Response(data)
 
+    @action(detail=False, methods=["get"], url_path="available-dates")
+    def available_dates(self, request):
+        if request.user.role != "client":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        provider = (request.query_params.get("provider") or "").strip()
+        service = (request.query_params.get("service") or "").strip()
+        date_from_raw = (request.query_params.get("from") or "").strip()
+        date_to_raw = (request.query_params.get("to") or "").strip()
+        if not provider or not service:
+            return Response(
+                {"detail": "Укажите provider и service."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        today = timezone.localdate()
+        date_from = parse_date(date_from_raw) or today
+        date_to = parse_date(date_to_raw) or (today + timedelta(days=60))
+        dates = list_available_dates(int(provider), int(service), date_from, date_to)
+        return Response({"dates": dates})
+
     @action(detail=False, methods=["delete"], url_path="delete-series")
     def delete_series(self, request):
         group = (request.query_params.get("recurrence_group") or "").strip()
         if not group:
             return Response({"detail": "recurrence_group required"}, status=status.HTTP_400_BAD_REQUEST)
-        qs = AvailabilitySlot.objects.filter(provider=request.user, recurrence_group=group, is_booked=False)
+        qs = AvailabilitySlot.objects.filter(provider=self.request.user, recurrence_group=group, is_booked=False)
         n = qs.count()
         qs.delete()
         return Response({"deleted": n})

@@ -1899,10 +1899,23 @@ function BookingMessageField({ id, label, value, onChange, placeholder, highligh
   );
 }
 
-function MiniDatePicker({ id, label, value, onChange, allowClear = false }) {
-  const [open, setOpen] = useState(false);
+function MiniDatePicker({
+  id,
+  label,
+  value,
+  onChange,
+  allowClear = false,
+  alwaysOpen = false,
+  availableDates = null,
+}) {
+  const [open, setOpen] = useState(alwaysOpen);
   const wrapRef = useRef(null);
   const today = todayIsoDate();
+  const availableSet = useMemo(() => {
+    if (!availableDates) return null;
+    if (availableDates instanceof Set) return availableDates;
+    return new Set(Array.isArray(availableDates) ? availableDates.map(String) : []);
+  }, [availableDates]);
   const parsed = value ? new Date(`${value}T12:00:00`) : null;
   const initialMonth = parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date();
   const [viewMonth, setViewMonth] = useState(
@@ -1910,14 +1923,18 @@ function MiniDatePicker({ id, label, value, onChange, allowClear = false }) {
   );
 
   useEffect(() => {
-    if (!open) return;
+    if (alwaysOpen || !open) return undefined;
     function onDoc(e) {
       if (wrapRef.current?.contains(e.target)) return;
       setOpen(false);
     }
     document.addEventListener("mousedown", onDoc, true);
     return () => document.removeEventListener("mousedown", onDoc, true);
-  }, [open]);
+  }, [open, alwaysOpen]);
+
+  useEffect(() => {
+    if (alwaysOpen) setOpen(true);
+  }, [alwaysOpen]);
 
   useEffect(() => {
     if (!value) return;
@@ -1939,97 +1956,116 @@ function MiniDatePicker({ id, label, value, onChange, allowClear = false }) {
     ? new Date(`${value}T12:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })
     : "Выбрать дату";
 
+  const calendar = (
+    <div
+      className={["mini-date-picker-popover", alwaysOpen && "mini-date-picker-popover--inline"].filter(Boolean).join(" ")}
+      role="dialog"
+      aria-label="Календарь"
+    >
+      <div className="mini-date-picker-nav">
+        <button
+          type="button"
+          className="ghost-btn mini-date-nav-btn"
+          onClick={() => {
+            const d = new Date(vy, vm - 2, 1);
+            setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+          }}
+        >
+          ‹
+        </button>
+        <span className="mini-date-picker-month">
+          {first.toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}
+        </span>
+        <button
+          type="button"
+          className="ghost-btn mini-date-nav-btn"
+          onClick={() => {
+            const d = new Date(vy, vm, 1);
+            setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+          }}
+        >
+          ›
+        </button>
+      </div>
+      <div className="mini-date-picker-weekdays">
+        {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((wd) => (
+          <span key={wd} className="mini-date-wd">
+            {wd}
+          </span>
+        ))}
+      </div>
+      <div className="mini-date-picker-grid">
+        {cells.map((day, idx) => {
+          if (!day) return <span key={`e-${idx}`} className="mini-date-cell mini-date-cell--empty" />;
+          const iso = `${vy}-${String(vm).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const isToday = iso === today;
+          const isSelected = iso === value;
+          const isBookable = !availableSet || availableSet.has(iso);
+          const isPast = iso < today;
+          const disabled = Boolean(availableSet) && (!isBookable || isPast);
+          return (
+            <button
+              key={iso}
+              type="button"
+              disabled={disabled}
+              className={[
+                "mini-date-cell",
+                isToday && "mini-date-cell--today",
+                isSelected && "mini-date-cell--selected",
+                isBookable && availableSet && "mini-date-cell--available",
+                disabled && "mini-date-cell--disabled",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              onClick={() => {
+                if (disabled) return;
+                onChange(iso);
+                if (!alwaysOpen) setOpen(false);
+              }}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="mini-date-picker" ref={wrapRef}>
+    <div className={["mini-date-picker", alwaysOpen && "mini-date-picker--open"].filter(Boolean).join(" ")} ref={wrapRef}>
       {label ? (
         <label className="field-label" htmlFor={id}>
           {label}
         </label>
       ) : null}
-      <button
-        id={id}
-        type="button"
-        className={`mini-date-picker-btn${value ? "" : " mini-date-picker-btn--empty"}`}
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
-        {displayLabel}
-      </button>
+      {alwaysOpen ? (
+        <div id={id} className={`mini-date-picker-btn${value ? "" : " mini-date-picker-btn--empty"}`} aria-live="polite">
+          {displayLabel}
+        </div>
+      ) : (
+        <button
+          id={id}
+          type="button"
+          className={`mini-date-picker-btn${value ? "" : " mini-date-picker-btn--empty"}`}
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+        >
+          {displayLabel}
+        </button>
+      )}
       {allowClear && value ? (
         <button
           type="button"
           className="ghost-btn mini-date-picker-clear"
           onClick={() => {
             onChange("");
-            setOpen(false);
+            if (!alwaysOpen) setOpen(false);
           }}
         >
           Не учитывать дату
         </button>
       ) : null}
-      {open && (
-        <div className="mini-date-picker-popover" role="dialog" aria-label="Календарь">
-          <div className="mini-date-picker-nav">
-            <button
-              type="button"
-              className="ghost-btn mini-date-nav-btn"
-              onClick={() => {
-                const d = new Date(vy, vm - 2, 1);
-                setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-              }}
-            >
-              ‹
-            </button>
-            <span className="mini-date-picker-month">
-              {first.toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}
-            </span>
-            <button
-              type="button"
-              className="ghost-btn mini-date-nav-btn"
-              onClick={() => {
-                const d = new Date(vy, vm, 1);
-                setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-              }}
-            >
-              ›
-            </button>
-          </div>
-          <div className="mini-date-picker-weekdays">
-            {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((wd) => (
-              <span key={wd} className="mini-date-wd">
-                {wd}
-              </span>
-            ))}
-          </div>
-          <div className="mini-date-picker-grid">
-            {cells.map((day, idx) => {
-              if (!day) return <span key={`e-${idx}`} className="mini-date-cell mini-date-cell--empty" />;
-              const iso = `${vy}-${String(vm).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-              const isToday = iso === today;
-              const isSelected = iso === value;
-              return (
-                <button
-                  key={iso}
-                  type="button"
-                  className={[
-                    "mini-date-cell",
-                    isToday && "mini-date-cell--today",
-                    isSelected && "mini-date-cell--selected",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  onClick={() => {
-                    onChange(iso);
-                    setOpen(false);
-                  }}
-                >
-                  {day}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {(alwaysOpen || open) && calendar}
     </div>
   );
 }
@@ -2176,6 +2212,7 @@ export default function App() {
   const [clientDiscoverSearch, setClientDiscoverSearch] = useState("");
   const emptyClientFilters = () => ({
     sphere: "",
+    service: "",
     min_price: "",
     max_price: "",
     slot_date: "",
@@ -2186,7 +2223,10 @@ export default function App() {
   const [clientDiscoverFilters, setClientDiscoverFilters] = useState(emptyClientFilters);
   const [clientFilterModalDraft, setClientFilterModalDraft] = useState(emptyClientFilters);
   const [clientFiltersOpen, setClientFiltersOpen] = useState(false);
+  const [clientFilterServiceOptions, setClientFilterServiceOptions] = useState([]);
   const [clientBookModalOpen, setClientBookModalOpen] = useState(false);
+  const [bookAvailableDates, setBookAvailableDates] = useState([]);
+  const mapOrgCarouselTouchX = useRef(null);
   const [mapOrgPopup, setMapOrgPopup] = useState(null);
   const [mapOrgSummary, setMapOrgSummary] = useState(null);
   const [mapOrgReviewsOpen, setMapOrgReviewsOpen] = useState(false);
@@ -2345,6 +2385,7 @@ export default function App() {
   const [chatStatus, setChatStatus] = useState("");
   /** id чата для модалки оформления (открывается из ⋮ в списке, без смены выбранного чата). */
   const [chatSettingsForId, setChatSettingsForId] = useState(null);
+  const [chatRowMenuId, setChatRowMenuId] = useState(null);
   const [chatReceiptsSettingsOpen, setChatReceiptsSettingsOpen] = useState(false);
   const [chatPins, setChatPins] = useState(() => loadChatPinsFromStorage());
   const [chatDragPinConvId, setChatDragPinConvId] = useState(null);
@@ -3077,6 +3118,7 @@ export default function App() {
     if (q) p.set("search", q);
     const f = clientDiscoverFilters;
     if (f.sphere) p.set("sphere", f.sphere);
+    if (String(f.service || "").trim()) p.set("service", String(f.service).trim());
     if (String(f.min_price).trim() !== "") p.set("min_price", String(f.min_price).trim());
     if (String(f.max_price).trim() !== "") p.set("max_price", String(f.max_price).trim());
     if (f.slot_date) {
@@ -3190,6 +3232,93 @@ export default function App() {
       cancelled = true;
     };
   }, [clientBookingForm.provider, clientBookingForm.serviceId, clientBookingForm.bookDate, me?.role]);
+
+  useEffect(() => {
+    if (me?.role !== "client" || !clientBookModalOpen) return undefined;
+    const { provider, serviceId } = clientBookingForm;
+    if (!provider || !serviceId) {
+      setBookAvailableDates([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const from = todayIsoDate();
+    const toDate = new Date();
+    toDate.setDate(toDate.getDate() + 60);
+    const to = `${toDate.getFullYear()}-${String(toDate.getMonth() + 1).padStart(2, "0")}-${String(toDate.getDate()).padStart(2, "0")}`;
+    (async () => {
+      const res = await authFetch(
+        `${API_URL}/booking/slots/available-dates/?provider=${encodeURIComponent(provider)}&service=${encodeURIComponent(serviceId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      );
+      if (cancelled || !res.ok) return;
+      const data = await res.json();
+      const dates = Array.isArray(data?.dates) ? data.dates.map(String) : [];
+      setBookAvailableDates(dates);
+      setClientBookingForm((p) => {
+        if (p.bookDate && dates.includes(p.bookDate)) return p;
+        const nextDate = dates[0] || "";
+        if (p.bookDate === nextDate) return p;
+        return { ...p, bookDate: nextDate, windowKey: "" };
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [clientBookModalOpen, clientBookingForm.provider, clientBookingForm.serviceId, me?.role]);
+
+  useEffect(() => {
+    if (!clientFiltersOpen) return undefined;
+    const sphere = clientFilterModalDraft.sphere;
+    if (!sphere) {
+      setClientFilterServiceOptions([]);
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      const res = await authFetch(`${API_URL}/catalog/sphere-template/?sphere=${encodeURIComponent(sphere)}`);
+      if (cancelled || !res.ok) {
+        if (!cancelled) setClientFilterServiceOptions([]);
+        return;
+      }
+      const catalog = await res.json();
+      const opts = [];
+      const seen = new Set();
+      for (const cat of catalog?.categories || []) {
+        for (const sub of cat.subcategories || []) {
+          for (const srv of sub.services || []) {
+            const name = String(srv.name || "").trim();
+            const slug = String(srv.slug || "").trim();
+            const key = slug || name;
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            opts.push({ value: slug || name, label: name });
+          }
+        }
+        for (const srv of cat.services || []) {
+          const name = String(srv.name || "").trim();
+          const slug = String(srv.slug || "").trim();
+          const key = slug || name;
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          opts.push({ value: slug || name, label: name });
+        }
+      }
+      opts.sort((a, b) => a.label.localeCompare(b.label, "ru"));
+      setClientFilterServiceOptions(opts);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [clientFiltersOpen, clientFilterModalDraft.sphere]);
+
+  useEffect(() => {
+    if (chatRowMenuId == null) return undefined;
+    function onDoc(e) {
+      if (e.target?.closest?.(".tg-chat-row-menu-wrap")) return;
+      setChatRowMenuId(null);
+    }
+    document.addEventListener("mousedown", onDoc, true);
+    return () => document.removeEventListener("mousedown", onDoc, true);
+  }, [chatRowMenuId]);
 
   useEffect(() => {
     const map = clientDiscoverMapRef.current;
@@ -5922,12 +6051,15 @@ export default function App() {
     setGroupAddStatus(data.added ? `Добавлено: ${data.added}` : "Уже в группе.");
   }
 
-  async function deleteSelectedGroupChat() {
-    if (!selectedChatId || !selectedConv?.is_group) return;
-    if (me?.role !== "provider" || Number(selectedConv.organization) !== Number(me?.id)) return;
+  async function deleteGroupChat(conv) {
+    const target = conv || selectedConv;
+    const chatId = target?.id ?? selectedChatId;
+    if (!chatId || !target?.is_group) return;
+    if (me?.role !== "provider" || Number(target.organization) !== Number(me?.id)) return;
     if (!window.confirm("Удалить группу для всех участников? Это действие нельзя отменить.")) return;
     setChatInfoHeadMenuOpen(false);
-    const response = await authFetch(`${API_URL}/chat/conversations/${selectedChatId}/delete-group/`, {
+    setChatRowMenuId(null);
+    const response = await authFetch(`${API_URL}/chat/conversations/${chatId}/delete-group/`, {
       method: "POST",
       body: "{}",
     });
@@ -5936,11 +6068,10 @@ export default function App() {
       showToast(err.detail || "Не удалось удалить группу.");
       return;
     }
-    const deletedId = selectedChatId;
     setChatInfoOpen(false);
     setChatMembersView(null);
-    setSelectedChatId(null);
-    setConversations((prev) => prev.filter((c) => Number(c.id) !== Number(deletedId)));
+    if (Number(selectedChatId) === Number(chatId)) setSelectedChatId(null);
+    setConversations((prev) => prev.filter((c) => Number(c.id) !== Number(chatId)));
     showToast("Группа удалена.");
   }
 
@@ -9199,14 +9330,6 @@ export default function App() {
                     <span className="menu-item-label">Организация</span>
                   </button>
                 )}
-                {isBookmarkAvailable("analytics") && (
-                  <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("analytics"); setMenuOpen(false); }}>
-                    <span className="menu-item-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z" /></svg>
-                    </span>
-                    <span className="menu-item-label">Аналитика</span>
-                  </button>
-                )}
                 <button type="button" className="menu-dropdown-item" onClick={logout}>
                   <span className="menu-item-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" /></svg>
@@ -9641,20 +9764,53 @@ export default function App() {
                             />
                           </svg>
                         </button>
-                        <button
-                          type="button"
-                          className="tg-chat-row-icon-btn"
-                          aria-label="Настройки чата"
-                          title="Настройки чата"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setChatSettingsForId(c.id);
-                          }}
-                        >
-                          <span className="tg-chat-row-dots" aria-hidden="true">
-                            ⋯
-                          </span>
-                        </button>
+                        <div className="tg-chat-row-menu-wrap">
+                          <button
+                            type="button"
+                            className="tg-chat-row-icon-btn"
+                            aria-label="Ещё"
+                            title="Ещё"
+                            aria-expanded={chatRowMenuId === c.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setChatRowMenuId((id) => (id === c.id ? null : c.id));
+                            }}
+                          >
+                            <span className="tg-chat-row-dots" aria-hidden="true">
+                              ⋯
+                            </span>
+                          </button>
+                          {chatRowMenuId === c.id && (
+                            <div className="tg-chat-row-dropdown" role="menu">
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setChatRowMenuId(null);
+                                  setChatSettingsForId(c.id);
+                                }}
+                              >
+                                Настройки чата
+                              </button>
+                              {c.is_group &&
+                              me?.role === "provider" &&
+                              Number(c.organization) === Number(me?.id) ? (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="tg-chat-info-danger"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void deleteGroupChat(c);
+                                  }}
+                                >
+                                  Удалить группу
+                                </button>
+                              ) : null}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -10508,7 +10664,7 @@ export default function App() {
                                 role="menuitem"
                                 className="tg-chat-info-danger"
                                 onClick={() => {
-                                  void deleteSelectedGroupChat();
+                                  void deleteGroupChat(selectedConv);
                                 }}
                               >
                                 Удалить группу
@@ -10895,62 +11051,67 @@ export default function App() {
                   </div>
 
                   {buildOrgCarouselItems(mapOrgProfile).length > 0 && (
-
                     <div className="map-org-carousel">
-
                       <button
-
                         type="button"
-
                         className="map-org-carousel-main"
-
                         onClick={() => {
+                          if (Math.abs(mapOrgCarouselTouchX.current?.delta || 0) > 28) return;
                           const items = buildOrgCarouselItems(mapOrgProfile);
                           openOrgPhotoLightbox(items, mapOrgCarouselIndex);
                         }}
-
+                        onTouchStart={(e) => {
+                          mapOrgCarouselTouchX.current = {
+                            x: e.changedTouches?.[0]?.clientX ?? 0,
+                            delta: 0,
+                          };
+                        }}
+                        onTouchMove={(e) => {
+                          const start = mapOrgCarouselTouchX.current;
+                          if (!start) return;
+                          const x = e.changedTouches?.[0]?.clientX ?? start.x;
+                          start.delta = x - start.x;
+                        }}
+                        onTouchEnd={() => {
+                          const start = mapOrgCarouselTouchX.current;
+                          const items = buildOrgCarouselItems(mapOrgProfile);
+                          const n = items.length;
+                          if (!start || n < 2) {
+                            mapOrgCarouselTouchX.current = null;
+                            return;
+                          }
+                          const dx = start.delta || 0;
+                          if (Math.abs(dx) > 40) {
+                            setMapOrgCarouselIndex((idx) =>
+                              dx < 0 ? (idx + 1) % n : (idx - 1 + n) % n,
+                            );
+                          }
+                          window.setTimeout(() => {
+                            mapOrgCarouselTouchX.current = null;
+                          }, 0);
+                        }}
                       >
-
                         <img
-
                           src={buildOrgCarouselItems(mapOrgProfile)[mapOrgCarouselIndex]?.url}
-
                           alt=""
-
+                          draggable={false}
                         />
-
                       </button>
-
                       {buildOrgCarouselItems(mapOrgProfile).length > 1 && (
-
                         <div className="map-org-carousel-thumbs">
-
                           {buildOrgCarouselItems(mapOrgProfile).map((ph, idx) => (
-
                             <button
-
                               key={ph.id}
-
                               type="button"
-
                               className={["map-org-carousel-thumb", idx === mapOrgCarouselIndex && "map-org-carousel-thumb--active"].filter(Boolean).join(" ")}
-
                               onClick={() => setMapOrgCarouselIndex(idx)}
-
                             >
-
                               <img src={ph.url} alt="" />
-
                             </button>
-
                           ))}
-
                         </div>
-
                       )}
-
                     </div>
-
                   )}
 
                   {(mapOrgProfile?.phones?.length > 0 || mapOrgProfile?.websites?.length > 0) && (
@@ -11162,7 +11323,9 @@ export default function App() {
                 <select
                   id="client-filter-sphere"
                   value={clientFilterModalDraft.sphere}
-                  onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, sphere: e.target.value }))}
+                  onChange={(e) =>
+                    setClientFilterModalDraft((d) => ({ ...d, sphere: e.target.value, service: "" }))
+                  }
                 >
                   <option value="">Любая</option>
                   {sphereOptions.map((s) => (
@@ -11171,6 +11334,31 @@ export default function App() {
                     </option>
                   ))}
                 </select>
+                <label className="field-label" htmlFor="client-filter-service">
+                  Услуга
+                </label>
+                {clientFilterModalDraft.sphere && clientFilterServiceOptions.length > 0 ? (
+                  <select
+                    id="client-filter-service"
+                    value={clientFilterModalDraft.service}
+                    onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, service: e.target.value }))}
+                  >
+                    <option value="">Любая</option>
+                    {clientFilterServiceOptions.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="client-filter-service"
+                    type="search"
+                    placeholder="Название услуги"
+                    value={clientFilterModalDraft.service}
+                    onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, service: e.target.value }))}
+                  />
+                )}
                 <div className="row-2">
                   <div>
                     <label className="field-label" htmlFor="client-filter-minp">
@@ -11522,7 +11710,16 @@ export default function App() {
                 {clientBookingForm.provider && providerServices.length === 0 ? (
                   <p className="muted small">Нет услуг, которые оказывают мастера организации. Назначьте услуги в настройках сотрудников.</p>
                 ) : null}
-                <MiniDatePicker label="Дата" value={clientBookingForm.bookDate} onChange={(iso) => setClientBookingForm((p) => ({ ...p, bookDate: iso, windowKey: "" }))} />
+                <MiniDatePicker
+                  label="Дата"
+                  value={clientBookingForm.bookDate}
+                  alwaysOpen
+                  availableDates={clientBookingForm.serviceId ? bookAvailableDates : null}
+                  onChange={(iso) => setClientBookingForm((p) => ({ ...p, bookDate: iso, windowKey: "" }))}
+                />
+                {!clientBookingForm.serviceId ? (
+                  <p className="muted small">Выберите услугу — доступные даты подсветятся в календаре.</p>
+                ) : null}
                 {clientBookingForm.serviceId && clientBookingForm.bookDate && (
                   <>
                     <p className="field-label">Свободное время</p>

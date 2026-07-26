@@ -177,6 +177,26 @@ def list_available_windows(provider_id: int, service_id: int, book_date) -> list
     return windows
 
 
+def list_available_dates(provider_id: int, service_id: int, date_from, date_to) -> list[str]:
+    """ISO dates in [date_from, date_to] that have at least one bookable window."""
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
+    slot_days = (
+        AvailabilitySlot.objects.filter(
+            provider_id=provider_id,
+            is_booked=False,
+            starts_at__date__gte=date_from,
+            starts_at__date__lte=date_to,
+        )
+        .dates("starts_at", "day")
+    )
+    out = []
+    for day in slot_days:
+        if list_available_windows(provider_id, service_id, day):
+            out.append(day.isoformat())
+    return out
+
+
 def book_time_window(provider_id: int, service_id: int, starts_at, ends_at, staff_id, client, comment: str):
     """Забронировать подынтервал внутри свободного слота (при необходимости разрезает слот)."""
     service = Service.objects.get(pk=service_id, provider_id=provider_id, is_active=True)

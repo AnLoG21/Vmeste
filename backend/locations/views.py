@@ -120,6 +120,16 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
         if sphere:
             qs = qs.filter(provider__provider_sphere=sphere)
 
+        service_filter = (request.query_params.get("service") or "").strip()
+        if service_filter:
+            service_provider_ids = (
+                Service.objects.filter(is_active=True)
+                .filter(Q(name__icontains=service_filter) | Q(template_slug=service_filter))
+                .values_list("provider_id", flat=True)
+                .distinct()
+            )
+            qs = qs.filter(provider_id__in=service_provider_ids)
+
         def _decimal_param(name):
             raw = (request.query_params.get(name) or "").strip()
             if raw == "":
@@ -217,6 +227,15 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
         sphere = (request.query_params.get("sphere") or "").strip()
         if sphere:
             providers_qs = providers_qs.filter(provider_sphere=sphere)
+
+        service_filter = (request.query_params.get("service") or "").strip()
+        if service_filter:
+            service_provider_ids = set(
+                Service.objects.filter(is_active=True)
+                .filter(Q(name__icontains=service_filter) | Q(template_slug=service_filter))
+                .values_list("provider_id", flat=True)
+            )
+            providers_qs = providers_qs.filter(id__in=service_provider_ids)
 
         extra_providers = list(providers_qs)
         cover_by_provider = {}
