@@ -37,6 +37,7 @@ class ReviewSerializer(serializers.ModelSerializer):
             "booking",
             "staff",
             "rating",
+            "staff_rating",
             "text",
             "supplemented_at",
             "created_at",
@@ -99,12 +100,22 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = ["provider", "booking", "staff", "staff_user", "rating", "text"]
-        extra_kwargs = {"staff": {"required": False, "allow_null": True}}
+        fields = ["provider", "booking", "staff", "staff_user", "rating", "staff_rating", "text"]
+        extra_kwargs = {
+            "staff": {"required": False, "allow_null": True},
+            "staff_rating": {"required": False, "allow_null": True},
+        }
 
     def validate_rating(self, value):
         if value < 1 or value > 5:
             raise serializers.ValidationError("Оценка от 1 до 5.")
+        return value
+
+    def validate_staff_rating(self, value):
+        if value is None:
+            return value
+        if value < 1 or value > 5:
+            raise serializers.ValidationError("Оценка сотрудника от 1 до 5.")
         return value
 
     def validate(self, attrs):
@@ -115,9 +126,10 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"booking": "Это не ваша запись."})
 
         staff_user_id = attrs.pop("staff_user", None)
+        provider = attrs["provider"]
+        provider_id = provider.id if hasattr(provider, "id") else provider
+
         if not attrs.get("staff") and staff_user_id:
-            provider = attrs["provider"]
-            provider_id = provider.id if hasattr(provider, "id") else provider
             link = ProviderStaff.objects.filter(
                 provider_id=provider_id,
                 staff_id=staff_user_id,
@@ -125,6 +137,21 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
             ).first()
             if link:
                 attrs["staff"] = link
+
+        # После услуги привязываем отзыв к мастеру записи, если не указан явно.
+        if not attrs.get("staff") and booking and booking.staff_id:
+            link = ProviderStaff.objects.filter(
+                provider_id=provider_id,
+                staff_id=booking.staff_id,
+                is_active=True,
+            ).first()
+            if link:
+                attrs["staff"] = link
+
+        # Отзыв только на сотрудника (без записи): staff_rating = rating.
+        if attrs.get("staff") and attrs.get("staff_rating") is None and not booking:
+            attrs["staff_rating"] = attrs.get("rating")
+
         return attrs
 
 

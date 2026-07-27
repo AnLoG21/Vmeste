@@ -46,7 +46,13 @@ class Booking(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="provider_bookings"
     )
     service = models.ForeignKey("catalog.Service", on_delete=models.PROTECT, related_name="bookings")
-    slot = models.OneToOneField(AvailabilitySlot, on_delete=models.PROTECT, related_name="booking")
+    slot = models.OneToOneField(
+        AvailabilitySlot,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="booking",
+    )
     staff = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

@@ -4035,6 +4035,14 @@ body.theme-dark .tg-chat-search {
 
 .map-org-staff-card-meta {
   min-width: 0;
+  flex: 1;
+}
+
+.map-org-staff-card-name-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .map-org-staff-card-name {
@@ -4043,6 +4051,14 @@ body.theme-dark .tg-chat-search {
   font-size: 13px;
   line-height: 1.2;
   word-break: break-word;
+}
+
+.map-org-staff-card-rating {
+  flex-shrink: 0;
+  font-weight: 800;
+  font-size: 13px;
+  color: #b45309;
+  white-space: nowrap;
 }
 
 .map-org-staff-card-bio {
@@ -4059,6 +4075,10 @@ body.theme-dark .tg-chat-search {
 .map-org-staff-card-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.map-org-staff-reviews-btn {
+  font-weight: 700;
 }
 
 .map-org-staff-portfolio .service-photo-carousel-main img {
@@ -4368,6 +4388,12 @@ body.theme-dark .tg-chat-search {
   color: #f5b301;
   letter-spacing: 1px;
   font-size: 14px;
+}
+
+.review-stars--staff {
+  margin-left: 8px;
+  color: #b45309;
+  font-size: 12px;
 }
 
 .review-stars-empty {

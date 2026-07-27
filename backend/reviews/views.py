@@ -62,6 +62,14 @@ class ReviewViewSet(viewsets.ModelViewSet):
         else:
             qs = qs.none()
 
+        staff_link_id = (self.request.query_params.get("staff") or "").strip()
+        if staff_link_id.isdigit():
+            link = ProviderStaff.objects.filter(pk=int(staff_link_id)).first()
+            if link:
+                qs = qs.filter(
+                    Q(staff_id=link.id) | Q(booking__staff_id=link.staff_id, booking__isnull=False)
+                ).filter(provider_id=link.provider_id)
+
         if user.is_authenticated:
             qs = qs.annotate(
                 _liked_by_me=Exists(

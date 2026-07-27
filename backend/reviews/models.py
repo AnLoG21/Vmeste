@@ -33,6 +33,11 @@ class Review(models.Model):
     rating = models.PositiveSmallIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(5)]
     )
+    staff_rating = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+    )
     text = models.TextField(blank=True, default="")
     provider_seen_at = models.DateTimeField(null=True, blank=True)
     supplemented_at = models.DateTimeField(null=True, blank=True)

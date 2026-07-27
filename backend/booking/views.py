@@ -344,6 +344,8 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
             released = release_manual_hold(slot)
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        if released is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
         return Response(AvailabilitySlotSerializer(released, context={"request": request}).data)
 
     @action(detail=False, methods=["delete"], url_path="delete-series")

@@ -2360,9 +2360,6 @@ export default function App() {
   const [orgPhotoLightbox, setOrgPhotoLightbox] = useState(null);
 
   const [staffReviewModal, setStaffReviewModal] = useState(null);
-  const [staffReviewForm, setStaffReviewForm] = useState({ rating: 5, text: "" });
-  const [staffReviewBusy, setStaffReviewBusy] = useState(false);
-  const [staffReviewStatus, setStaffReviewStatus] = useState("");
 
   function openOrgPhotoLightbox(items, index = 0) {
     if (!items?.length) return;
@@ -2412,7 +2409,7 @@ export default function App() {
   const [bookingMessageError, setBookingMessageError] = useState(null);
   const [reviewModalBooking, setReviewModalBooking] = useState(null);
   const [reviewModalReview, setReviewModalReview] = useState(null);
-  const [reviewForm, setReviewForm] = useState({ rating: 5, text: "" });
+  const [reviewForm, setReviewForm] = useState({ rating: 5, staff_rating: 5, text: "" });
   const [reviewSubmitError, setReviewSubmitError] = useState("");
   const [providerReviews, setProviderReviews] = useState([]);
   const [providerReviewsOrdering, setProviderReviewsOrdering] = useState("-created_at");
@@ -6632,7 +6629,7 @@ export default function App() {
       method: "POST",
       body: "{}",
     });
-    if (!response.ok) {
+    if (!(response.ok || response.status === 204)) {
       const err = await response.json().catch(() => ({}));
       setSellerStatus(err.detail || "Не удалось снять бронь.");
       return;
@@ -7338,10 +7335,15 @@ export default function App() {
     if (res.ok) setOrgGalleryPhotos((p) => p.filter((x) => Number(x.id) !== Number(id)));
   }
 
-  async function loadMapOrgReviews(providerId, ordering) {
-    const res = await authFetch(
-      `${API_URL}/reviews/?provider=${encodeURIComponent(providerId)}&ordering=${encodeURIComponent(ordering || "-created_at")}`,
-    );
+  async function loadMapOrgReviews(providerId, ordering, staffLinkId = null) {
+    const params = new URLSearchParams({
+      provider: String(providerId),
+      ordering: ordering || "-created_at",
+    });
+    if (staffLinkId != null && staffLinkId !== "") {
+      params.set("staff", String(staffLinkId));
+    }
+    const res = await authFetch(`${API_URL}/reviews/?${params.toString()}`);
     if (res.ok) setMapOrgReviews(normalizeReviewsList(await res.json()));
   }
 
@@ -7534,6 +7536,12 @@ export default function App() {
             {"★".repeat(r.rating)}
             <span className="review-stars-empty">{"☆".repeat(Math.max(0, 5 - r.rating))}</span>
           </span>
+          {r.staff_rating ? (
+            <span className="review-stars review-stars--staff" aria-label={`Оценка мастера ${r.staff_rating}`}>
+              мастер {"★".repeat(r.staff_rating)}
+              <span className="review-stars-empty">{"☆".repeat(Math.max(0, 5 - r.staff_rating))}</span>
+            </span>
+          ) : null}
         </div>
         {r.staff_name ? <p className="muted small">Мастер: {r.staff_name}</p> : null}
         <ReviewTextContent review={r} />
@@ -7740,7 +7748,7 @@ export default function App() {
         });
         setReviewModalBooking(null);
         setReviewModalReview(null);
-        setReviewForm({ rating: 5, text: "" });
+        setReviewForm({ rating: 5, staff_rating: 5, text: "" });
         if (input) input.value = "";
         setReviewSubmitError("");
         setClientStatus("Отзыв дополнен.");
@@ -7759,6 +7767,9 @@ export default function App() {
       fd.append("staff_user", String(reviewModalBooking.staff_user_id));
     }
     fd.append("rating", String(reviewForm.rating));
+    if (reviewModalBooking.staff_user_id && reviewForm.staff_rating) {
+      fd.append("staff_rating", String(reviewForm.staff_rating));
+    }
     fd.append("text", reviewForm.text || "");
     if (input?.files) {
       for (const f of input.files) fd.append("photos", f);
@@ -7788,7 +7799,7 @@ export default function App() {
       );
       setReviewModalBooking(null);
       setReviewModalReview(null);
-      setReviewForm({ rating: 5, text: "" });
+      setReviewForm({ rating: 5, staff_rating: 5, text: "" });
       if (input) input.value = "";
       setReviewSubmitError("");
       setClientStatus("Отзыв отправлен.");
@@ -7998,10 +8009,14 @@ export default function App() {
     setReviewSubmitError("");
     if (existingReview) {
       setReviewModalReview(existingReview);
-      setReviewForm({ rating: existingReview.rating, text: "" });
+      setReviewForm({
+        rating: existingReview.rating,
+        staff_rating: existingReview.staff_rating || 5,
+        text: "",
+      });
     } else {
       setReviewModalReview(null);
-      setReviewForm({ rating: 5, text: "" });
+      setReviewForm({ rating: 5, staff_rating: 5, text: "" });
     }
     setReviewModalBooking({ ...booking, staff_user_id: booking.staff || null });
   }
@@ -11698,6 +11713,11 @@ export default function App() {
                             image: p.image,
                             source: "portfolio",
                           }));
+                          const reviewsCount = Number(st.reviews_count) || 0;
+                          const avgRating =
+                            st.average_rating != null && Number.isFinite(Number(st.average_rating))
+                              ? Number(st.average_rating).toFixed(2).replace(".", ",")
+                              : null;
                           return (
                             <div key={st.id} className="map-org-staff-card">
                               <div className="map-org-staff-card-head">
@@ -11709,32 +11729,46 @@ export default function App() {
                                   </div>
                                 )}
                                 <div className="map-org-staff-card-meta">
-                                  <p className="map-org-staff-card-name">{staffName}</p>
+                                  <div className="map-org-staff-card-name-row">
+                                    <p className="map-org-staff-card-name">{staffName}</p>
+                                    {avgRating ? (
+                                      <span className="map-org-staff-card-rating" title="Рейтинг сотрудника">
+                                        {avgRating} <span aria-hidden>★</span>
+                                      </span>
+                                    ) : null}
+                                  </div>
                                   {st.job_title ? <p className="muted small">{st.job_title}</p> : null}
                                 </div>
                               </div>
                               {st.bio ? <p className="map-org-staff-card-bio">{st.bio}</p> : null}
                               {portfolioItems.length > 0 && (
-                                <ServicePhotoCarousel items={portfolioItems} className="map-org-staff-portfolio" />
+                                <ServicePhotoCarousel
+                                  items={portfolioItems}
+                                  className="map-org-staff-portfolio"
+                                  onOpen={(items, index) => openOrgPhotoLightbox(items, index)}
+                                />
                               )}
                               <div className="map-org-staff-card-actions">
                                 <button
                                   type="button"
-                                  className="ghost-btn small"
+                                  className="ghost-btn small map-org-staff-reviews-btn"
                                   onClick={() => {
-                                    setStaffReviewForm({ rating: 5, text: "" });
-                                    setStaffReviewStatus("");
-                                    setStaffReviewBusy(false);
                                     setStaffReviewModal({
                                       providerId: mapOrgPopup.provider,
                                       staffLinkId: st.id,
                                       staffUserId: st.staff,
                                       staffName,
+                                      reviewsCount,
+                                      averageRating: avgRating,
                                     });
-                                    void loadMapOrgReviews(mapOrgPopup.provider, mapOrgReviewsOrdering);
+                                    void loadMapOrgReviews(
+                                      mapOrgPopup.provider,
+                                      mapOrgReviewsOrdering,
+                                      st.id,
+                                    );
                                   }}
                                 >
-                                  Отзыв
+                                  Отзывы{reviewsCount > 0 ? ` +${reviewsCount}` : ""}
                                 </button>
                               </div>
                             </div>
@@ -11752,102 +11786,30 @@ export default function App() {
                       className="modal-backdrop"
                       onClick={() => {
                         setStaffReviewModal(null);
-                        setStaffReviewStatus("");
                       }}
                     >
                       <div className="modal-card staff-review-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="staff-review-modal-head">
-                          <h3>Отзыв о {staffReviewModal.staffName}</h3>
+                          <h3>
+                            Отзывы о {staffReviewModal.staffName}
+                            {staffReviewModal.averageRating
+                              ? ` · ${staffReviewModal.averageRating} ★`
+                              : ""}
+                          </h3>
                           <button
                             type="button"
                             className="small-btn"
                             onClick={() => {
                               setStaffReviewModal(null);
-                              setStaffReviewStatus("");
                             }}
                           >
                             ✕
                           </button>
                         </div>
 
-                        <div className="staff-review-modal-form">
-                          <div className="row-2">
-                            <label className="field-label">
-                              Оценка
-                              <input
-                                type="number"
-                                min="1"
-                                max="5"
-                                step="1"
-                                value={staffReviewForm.rating}
-                                onChange={(e) => setStaffReviewForm((p) => ({ ...p, rating: Number(e.target.value) }))}
-                              />
-                            </label>
-                          </div>
-                          <label className="field-label">
-                            Текст (необязательно)
-                            <textarea
-                              rows={3}
-                              value={staffReviewForm.text}
-                              onChange={(e) => setStaffReviewForm((p) => ({ ...p, text: e.target.value }))}
-                            />
-                          </label>
-                          {staffReviewStatus ? <p className="status">{staffReviewStatus}</p> : null}
-                          <div className="staff-review-modal-actions">
-                            <button
-                              type="button"
-                              className="ghost-btn"
-                              onClick={() => {
-                                setStaffReviewModal(null);
-                                setStaffReviewStatus("");
-                              }}
-                            >
-                              Отмена
-                            </button>
-                            <button
-                              type="button"
-                              disabled={staffReviewBusy}
-                              onClick={async () => {
-                                if (!staffReviewModal) return;
-                                const rating = Number(staffReviewForm.rating);
-                                if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
-                                  setStaffReviewStatus("Укажите оценку от 1 до 5.");
-                                  return;
-                                }
-                                const text = (staffReviewForm.text || "").trim();
-                                setStaffReviewStatus("");
-                                setStaffReviewBusy(true);
-                                const res = await authFetch(`${API_URL}/reviews/`, {
-                                  method: "POST",
-                                  body: JSON.stringify({
-                                    provider: staffReviewModal.providerId,
-                                    staff_user: staffReviewModal.staffUserId,
-                                    rating,
-                                    text,
-                                  }),
-                                });
-                                if (!res.ok) {
-                                  const err = await res.json().catch(() => ({}));
-                                  setStaffReviewStatus(err.detail || "Не удалось отправить отзыв.");
-                                  setStaffReviewBusy(false);
-                                  return;
-                                }
-                                await loadMapOrgReviews(staffReviewModal.providerId, mapOrgReviewsOrdering);
-                                setStaffReviewModal(null);
-                                setStaffReviewStatus("");
-                                setStaffReviewBusy(false);
-                              }}
-                            >
-                              {staffReviewBusy ? "Отправка…" : "Отправить"}
-                            </button>
-                          </div>
-                        </div>
-
                         <div className="staff-review-modal-list">
                           {(() => {
-                            const list = (mapOrgReviews || []).filter(
-                              (r) => r?.staff != null && Number(r.staff) === Number(staffReviewModal.staffLinkId),
-                            );
+                            const list = mapOrgReviews || [];
                             if (!list.length) return <p className="muted">Пока нет отзывов.</p>;
                             return (
                               <ul className="list review-list">
@@ -12412,6 +12374,9 @@ export default function App() {
                 {reviewModalReview?.id ? (
                   <p className="muted small review-modal-existing">
                     Текущая оценка: {"★".repeat(reviewModalReview.rating)}
+                    {reviewModalReview.staff_rating
+                      ? ` · мастер ${"★".repeat(reviewModalReview.staff_rating)}`
+                      : ""}
                     {reviewModalReview.text ? (
                       <>
                         <br />
@@ -12421,11 +12386,20 @@ export default function App() {
                   </p>
                 ) : (
                   <>
-                    <p className="field-label">Оценка</p>
+                    <p className="field-label">Оценка услуги</p>
                     <StarRating
                       value={reviewForm.rating}
                       onChange={(rating) => setReviewForm((p) => ({ ...p, rating }))}
                     />
+                    {reviewModalBooking.staff_user_id ? (
+                      <>
+                        <p className="field-label">Оценка сотрудника</p>
+                        <StarRating
+                          value={reviewForm.staff_rating}
+                          onChange={(staff_rating) => setReviewForm((p) => ({ ...p, staff_rating }))}
+                        />
+                      </>
+                    ) : null}
                   </>
                 )}
                 <textarea

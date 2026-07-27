@@ -17,11 +17,46 @@ def client_display_name(user) -> str:
 
 
 def format_booking_when(booking) -> str:
-    start = booking.slot.starts_at
+    slot = getattr(booking, "slot", None)
+    start = getattr(slot, "starts_at", None) if slot else None
     if not start:
         return ""
     local = timezone.localtime(start)
     return local.strftime("%d.%m.%Y %H:%M")
+
+
+def release_booking_occupancy(booking):
+    """
+    Освободить время после отмены записи.
+    Если поверх остался исходный свободный интервал — удаляем слот-занятость.
+    Иначе (старые записи, когда бронь заняла сам интервал) — просто снимаем is_booked.
+    """
+    from .models import AvailabilitySlot
+
+    slot = getattr(booking, "slot", None)
+    if not slot:
+        return
+    covered_by_free = (
+        AvailabilitySlot.objects.filter(
+            provider_id=slot.provider_id,
+            is_booked=False,
+            starts_at__lte=slot.starts_at,
+            ends_at__gte=slot.ends_at,
+        )
+        .exclude(pk=slot.pk)
+        .exists()
+    )
+    if covered_by_free:
+        booking.slot = None
+        booking.save(update_fields=["slot"])
+        slot.delete()
+        return
+    slot.is_booked = False
+    if getattr(slot, "hold_label", None):
+        slot.hold_label = ""
+        slot.save(update_fields=["is_booked", "hold_label"])
+    else:
+        slot.save(update_fields=["is_booked"])
 
 
 def booking_notification_payload(booking, *, extra=None) -> dict:
@@ -101,20 +136,20 @@ def cancel_booking_by_org(booking, actor):
     msg_tpl = (getattr(provider, "booking_cancel_message_default", None) or "").strip()
     if not msg_tpl:
         return False, "cancel_message_not_set"
+    when = format_booking_when(booking)
     booking.status = Booking.Status.CANCELLED
     booking.save(update_fields=["status"])
-    if booking.slot_id:
-        booking.slot.is_booked = False
-        booking.slot.save(update_fields=["is_booked"])
-    text = msg_tpl.replace("{date}", format_booking_when(booking))
+    release_booking_occupancy(booking)
+    text = msg_tpl.replace("{date}", when)
     post_booking_message(provider, booking.client, text, sender=actor)
     return True, None
 
 
 def mark_booking_done(booking, actor):
     provider = booking.provider
-    if booking.slot_id:
-        start = booking.slot.starts_at
+    slot = getattr(booking, "slot", None)
+    if slot:
+        start = slot.starts_at
         if start and start > timezone.now():
             return False, "booking_not_started_yet"
     msg_tpl = (getattr(provider, "booking_done_message_default", None) or "").strip()
@@ -135,9 +170,7 @@ def cancel_booking_by_client(booking):
     text = f"Клиент отменил запись на {when}."
     booking.status = Booking.Status.CANCELLED
     booking.save(update_fields=["status"])
-    if booking.slot_id:
-        booking.slot.is_booked = False
-        booking.slot.save(update_fields=["is_booked"])
+    release_booking_occupancy(booking)
     post_booking_message(provider, client, text, sender=client)
     try:
         from notifications.models import InAppNotification

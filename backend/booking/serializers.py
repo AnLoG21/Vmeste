@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db.models import Avg, Q
 from rest_framework import serializers
 
 from catalog.models import Service, ServiceCategory
@@ -7,6 +8,21 @@ from .booking_actions import client_display_name
 from .models import AvailabilitySlot, Booking, ProviderStaff
 
 User = get_user_model()
+
+
+def staff_review_stats(link: ProviderStaff) -> tuple[float | None, int]:
+    """Средний рейтинг сотрудника (по staff_rating) и число отзывов (услуга мастера + оценка мастера)."""
+    from reviews.models import Review
+
+    qs = Review.objects.filter(
+        Q(staff_id=link.id) | Q(booking__staff_id=link.staff_id, booking__isnull=False)
+    ).filter(provider_id=link.provider_id)
+    count = qs.count()
+    if not count:
+        return None, 0
+    agg = qs.filter(staff_rating__isnull=False).aggregate(avg=Avg("staff_rating"))
+    avg = agg.get("avg")
+    return (round(float(avg), 2) if avg is not None else None), count
 
 
 class ProviderStaffSerializer(serializers.ModelSerializer):
@@ -21,6 +37,8 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
         child=serializers.IntegerField(), required=False, allow_empty=True
     )
     portfolio_photos = serializers.SerializerMethodField(read_only=True)
+    average_rating = serializers.SerializerMethodField(read_only=True)
+    reviews_count = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ProviderStaff
@@ -42,6 +60,8 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
             "staff_user",
             "provider_user",
             "portfolio_photos",
+            "average_rating",
+            "reviews_count",
         ]
         read_only_fields = [
             "provider",
@@ -50,6 +70,8 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
             "staff_user",
             "provider_user",
             "invitation_status",
+            "average_rating",
+            "reviews_count",
         ]
 
     def get_provider_user(self, obj):
@@ -87,6 +109,18 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
                 url = request.build_absolute_uri(url)
             out.append({"id": row.id, "image": url})
         return out
+
+    def get_average_rating(self, obj):
+        if hasattr(obj, "_average_rating"):
+            return obj._average_rating
+        avg, _ = staff_review_stats(obj)
+        return avg
+
+    def get_reviews_count(self, obj):
+        if hasattr(obj, "_reviews_count"):
+            return obj._reviews_count
+        _, count = staff_review_stats(obj)
+        return count
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -179,8 +213,8 @@ class BookingSerializer(serializers.ModelSerializer):
     client_display_name = serializers.SerializerMethodField()
     staff_display_name = serializers.SerializerMethodField()
     staff_job_title = serializers.SerializerMethodField()
-    slot_starts_at = serializers.DateTimeField(source="slot.starts_at", read_only=True)
-    slot_ends_at = serializers.DateTimeField(source="slot.ends_at", read_only=True)
+    slot_starts_at = serializers.SerializerMethodField()
+    slot_ends_at = serializers.SerializerMethodField()
     review = serializers.SerializerMethodField()
 
     class Meta:
@@ -265,6 +299,7 @@ class BookingSerializer(serializers.ModelSerializer):
         return {
             "id": review.id,
             "rating": review.rating,
+            "staff_rating": review.staff_rating,
             "text": review.text,
             "created_at": review.created_at,
             "supplemented_at": review.supplemented_at,
@@ -305,3 +340,11 @@ class BookingSerializer(serializers.ModelSerializer):
             .first()
         )
         return (getattr(link, "job_title", "") or "").strip()
+
+    def get_slot_starts_at(self, obj):
+        slot = getattr(obj, "slot", None)
+        return getattr(slot, "starts_at", None)
+
+    def get_slot_ends_at(self, obj):
+        slot = getattr(obj, "slot", None)
+        return getattr(slot, "ends_at", None)
