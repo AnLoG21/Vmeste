@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { API_URL } from "./config.js";
-import JsonLd from "./seo/JsonLd.jsx";
-import { SITE_ORIGIN, breadcrumbListJsonLd, organizationJsonLd } from "./seo/schema.js";
-import { setPageMeta } from "./seo/setPageMeta.js";
-import "./landing.css";
+import { API_URL } from "../config.js";
+import JsonLd from "../seo/JsonLd.jsx";
+import { SITE_ORIGIN, breadcrumbListJsonLd, organizationJsonLd } from "../seo/schema.js";
+import { setPageMeta } from "../seo/setPageMeta.js";
+import "../landing.css";
 
 function localBusinessJsonLd(org) {
   const type =
