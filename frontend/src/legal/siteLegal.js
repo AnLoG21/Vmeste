@@ -9,4 +9,9 @@ export const SITE_LEGAL = {
   inn: "971500759750",
   city: "Москва",
   metrikaId: "109821476",
+  /** Должны совпадать с backend/users/legal_versions.py */
+  privacyVersion: "2026-07-27",
+  privacyPublishedAt: "2026-07-27",
+  offerVersion: "2026-07-27",
+  offerPublishedAt: "2026-07-27",
 };

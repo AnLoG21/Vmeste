@@ -4,7 +4,10 @@ import { SITE_LEGAL } from "./siteLegal.js";
 export default function OfferPage() {
   return (
     <LegalLayout title="Публичная оферта" path="/offer">
-      <p className="legal-updated">Дата публикации: 27 июля 2026 г. (редакция)</p>
+      <p className="legal-updated">
+        Дата публикации: 27 июля 2026 г. · Версия {SITE_LEGAL.offerVersion} ·{" "}
+        <a href={`/legal/archive/offer-${SITE_LEGAL.offerVersion}.md`}>архив текста</a>
+      </p>
 
       <p>
         Настоящий документ является официальным предложением (публичной офертой){" "}

@@ -73,7 +73,22 @@ class User(AbstractUser):
     consent_privacy_at = models.DateTimeField(null=True, blank=True)
     consent_offer_at = models.DateTimeField(null=True, blank=True)
     age_confirmed_at = models.DateTimeField(null=True, blank=True)
+    consent_privacy_version = models.CharField(max_length=32, blank=True, default="")
+    consent_offer_version = models.CharField(max_length=32, blank=True, default="")
+    consent_ip = models.GenericIPAddressField(null=True, blank=True)
+    consent_user_agent = models.CharField(max_length=512, blank=True, default="")
     account_deleted_at = models.DateTimeField(null=True, blank=True)
+    provider_authority_confirmed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Подтверждение права оказывать услуги / лицензии (если требуется).",
+    )
+    provider_license_number = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Номер лицензии организации (необязательно).",
+    )
 
 
 class ProviderGalleryPhoto(models.Model):

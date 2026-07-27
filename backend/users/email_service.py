@@ -164,7 +164,7 @@ def send_password_change_email(user, token: str) -> bool:
     return _send_branded(to=user.email, subject=subject, text_body=text, html_body=html)
 
 
-def send_automation_request_email(*, name, email, phone="", telegram="", message="") -> bool:
+def send_automation_request_email(*, name, email, phone="", telegram="", message="", privacy_version="") -> bool:
     support = settings.SUPPORT_EMAIL
     subject = f"[{SITE_BRAND}] Заявка на автоматизацию — {name}"
     lines = [
@@ -177,6 +177,8 @@ def send_automation_request_email(*, name, email, phone="", telegram="", message
         lines.append(f"Телефон: {phone}")
     if telegram:
         lines.append(f"Telegram: {telegram}")
+    if privacy_version:
+        lines.append(f"Версия политики при согласии: {privacy_version}")
     if message:
         lines.append("")
         lines.append("Описание:")

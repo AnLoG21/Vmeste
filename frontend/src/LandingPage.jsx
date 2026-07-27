@@ -69,7 +69,10 @@ export default function LandingPage({ onLogin, onRegister }) {
     const response = await fetch(`${API_URL}/users/automation-request/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...form,
+        privacy_version: SITE_LEGAL.privacyVersion,
+      }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -335,7 +338,8 @@ export default function LandingPage({ onLogin, onRegister }) {
               Согласен(на) на обработку персональных данных согласно{" "}
               <a href="/privacy" target="_blank" rel="noopener noreferrer">
                 политике конфиденциальности
-              </a>
+              </a>{" "}
+              (версия {SITE_LEGAL.privacyVersion})
             </span>
           </label>
           <button type="submit" className="landing-btn landing-btn--primary">

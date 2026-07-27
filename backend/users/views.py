@@ -51,7 +51,7 @@ class UserRegisterView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        ser = UserRegisterSerializer(data=request.data)
+        ser = UserRegisterSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
         need_email = not settings.SKIP_EMAIL_VERIFICATION
         if need_email and not _can_send():
@@ -221,6 +221,7 @@ class DeleteAccountView(APIView):
         user.organization_phones = []
         user.organization_websites = []
         user.organization_working_hours = {}
+        user.provider_license_number = ""
         user.email_verification_token = ""
         user.is_active = False
         user.account_deleted_at = now

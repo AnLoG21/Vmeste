@@ -24,6 +24,7 @@ import {
 } from "./clientOrgFeatures.js";
 import { loadYandexMaps } from "./yandexMapsLoader.js";
 import { API_URL, AUTH_URL, BASE_URL, REFRESH_URL } from "./config.js";
+import { SITE_LEGAL } from "./legal/siteLegal.js";
 import {
   blobToFile,
   formatRecordClock,
@@ -1037,6 +1038,8 @@ const emptyRegisterForm = {
   accept_privacy: false,
   accept_offer: false,
   age_confirmed: false,
+  confirm_provider_authority: false,
+  provider_license_number: "",
 };
 
 const BOOKING_MSG_PRESETS = {
@@ -3932,6 +3935,10 @@ export default function App() {
       setStatus("Нужно принять оферту и политику конфиденциальности.");
       return;
     }
+    if (form.role === "provider" && !form.confirm_provider_authority) {
+      setStatus("Подтвердите право оказывать услуги (и лицензию, если она требуется).");
+      return;
+    }
     setStatus("Сохраняем...");
     const payload = {
       ...form,
@@ -3939,6 +3946,10 @@ export default function App() {
       accept_privacy: Boolean(form.accept_privacy),
       accept_offer: Boolean(form.accept_offer),
       age_confirmed: Boolean(form.age_confirmed),
+      confirm_provider_authority: Boolean(form.confirm_provider_authority),
+      provider_license_number: (form.provider_license_number || "").trim(),
+      privacy_version: SITE_LEGAL.privacyVersion,
+      offer_version: SITE_LEGAL.offerVersion,
     };
     const response = await fetch(`${API_URL}/users/register/`, {
       method: "POST",
@@ -3951,6 +3962,10 @@ export default function App() {
         setStatus(Array.isArray(error.email) ? error.email[0] : error.email);
       } else if (error.username) {
         setStatus(Array.isArray(error.username) ? error.username[0] : error.username);
+      } else if (error.confirm_provider_authority) {
+        setStatus(Array.isArray(error.confirm_provider_authority) ? error.confirm_provider_authority[0] : error.confirm_provider_authority);
+      } else if (error.accept_privacy || error.accept_offer || error.age_confirmed) {
+        setStatus("Нужно подтвердить возраст и принять оферту с политикой конфиденциальности.");
       } else {
         setStatus(error.detail || "Проверь поля регистрации.");
       }
@@ -10298,7 +10313,8 @@ export default function App() {
                           Принимаю{" "}
                           <a href="/offer" target="_blank" rel="noopener noreferrer">
                             публичную оферту
-                          </a>
+                          </a>{" "}
+                          (версия {SITE_LEGAL.offerVersion})
                         </span>
                       </label>
                       <label className="checkbox auth-consent-item">
@@ -10312,7 +10328,8 @@ export default function App() {
                           Согласен(на) на обработку персональных данных согласно{" "}
                           <a href="/privacy" target="_blank" rel="noopener noreferrer">
                             политике конфиденциальности
-                          </a>
+                          </a>{" "}
+                          (версия {SITE_LEGAL.privacyVersion})
                         </span>
                       </label>
                       {form.role === "provider" ? <button type="button" onClick={continueProviderRegistration}>Продолжить</button> : <button type="submit">Создать аккаунт</button>}
@@ -10321,9 +10338,8 @@ export default function App() {
                   {registerStep === 2 && form.role === "provider" && (
                     <>
                       <p className="muted small auth-provider-disclaimer">
-                        Размещая услуги, вы подтверждаете, что организация вправе их оказывать (лицензии и
-                        разрешения — ваша ответственность). Платформа «Вместе» предоставляет только ПО для
-                        записи и не оказывает конечные услуги клиентам.
+                        Платформа «Вместе» предоставляет только ПО для записи и не оказывает конечные услуги
+                        клиентам. Лицензии и разрешения — ответственность организации.
                       </p>
                       <select value={form.provider_sphere} onChange={(e) => setForm({ ...form, provider_sphere: e.target.value })} required>
                         <option value="">Выбери сферу услуг</option>
@@ -10365,6 +10381,23 @@ export default function App() {
                         value={form.organization_address_details}
                         onChange={(e) => setForm({ ...form, organization_address_details: e.target.value })}
                       />
+                      <input
+                        placeholder="Номер лицензии (если есть)"
+                        value={form.provider_license_number}
+                        onChange={(e) => setForm({ ...form, provider_license_number: e.target.value })}
+                      />
+                      <label className="checkbox auth-consent-item">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(form.confirm_provider_authority)}
+                          onChange={(e) => setForm({ ...form, confirm_provider_authority: e.target.checked })}
+                          required
+                        />
+                        <span>
+                          Подтверждаю, что организация вправе оказывать размещаемые услуги и имеет необходимые
+                          лицензии/разрешения, если они требуются законом
+                        </span>
+                      </label>
                       <button
                         type="button"
                         className="ghost-btn"

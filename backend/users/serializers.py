@@ -2,7 +2,23 @@ from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
+from .legal_versions import OFFER_VERSION, PRIVACY_VERSION
 from .models import ProviderGalleryPhoto, User
+
+
+def _client_ip(request):
+    if not request:
+        return None
+    forwarded = (request.META.get("HTTP_X_FORWARDED_FOR") or "").split(",")[0].strip()
+    if forwarded:
+        return forwarded[:45]
+    return request.META.get("REMOTE_ADDR") or None
+
+
+def _client_ua(request):
+    if not request:
+        return ""
+    return (request.META.get("HTTP_USER_AGENT") or "")[:512]
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -36,6 +52,7 @@ class UserSerializer(serializers.ModelSerializer):
             "organization_websites",
             "organization_card_note",
             "anonymous_seat_count",
+            "provider_license_number",
         ]
         read_only_fields = ["id", "username", "email", "role", "email_verified"]
 
@@ -70,6 +87,8 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     accept_privacy = serializers.BooleanField(write_only=True)
     accept_offer = serializers.BooleanField(write_only=True)
     age_confirmed = serializers.BooleanField(write_only=True)
+    confirm_provider_authority = serializers.BooleanField(write_only=True, required=False, default=False)
+    provider_license_number = serializers.CharField(required=False, allow_blank=True, max_length=120)
 
     class Meta:
         model = User
@@ -96,6 +115,8 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             "accept_privacy",
             "accept_offer",
             "age_confirmed",
+            "confirm_provider_authority",
+            "provider_license_number",
         ]
 
     def validate_email(self, value):
@@ -122,6 +143,9 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Укажите фамилию.")
         return name
 
+    def validate_provider_license_number(self, value):
+        return (value or "").strip()[:120]
+
     def validate(self, attrs):
         if attrs["password"] != attrs.pop("password_confirm", None):
             raise serializers.ValidationError({"password_confirm": "Пароли не совпадают."})
@@ -132,6 +156,20 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"accept_offer": "Нужно принять публичную оферту."})
         if not attrs.pop("age_confirmed", False):
             raise serializers.ValidationError({"age_confirmed": "Подтвердите, что вам исполнилось 18 лет."})
+        role = attrs.get("role") or User.Role.CLIENT
+        confirm_authority = attrs.pop("confirm_provider_authority", False)
+        if role == User.Role.PROVIDER:
+            if not confirm_authority:
+                raise serializers.ValidationError(
+                    {
+                        "confirm_provider_authority": (
+                            "Подтвердите право оказывать услуги и наличие лицензии, если она требуется."
+                        )
+                    }
+                )
+            attrs["_provider_authority_confirmed"] = True
+        else:
+            attrs.pop("provider_license_number", None)
         return attrs
 
     def create(self, validated_data):
@@ -143,7 +181,9 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         floor = validated_data.pop("floor", "") or ""
         apartment = validated_data.pop("apartment", "") or ""
         intercom = validated_data.pop("intercom", "") or ""
+        authority_ok = validated_data.pop("_provider_authority_confirmed", False)
         now = timezone.now()
+        request = self.context.get("request")
         user = User(**validated_data)
         user.organization_entrance = entrance
         user.organization_floor = floor
@@ -153,6 +193,12 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         user.consent_privacy_at = now
         user.consent_offer_at = now
         user.age_confirmed_at = now
+        user.consent_privacy_version = PRIVACY_VERSION
+        user.consent_offer_version = OFFER_VERSION
+        user.consent_ip = _client_ip(request)
+        user.consent_user_agent = _client_ua(request)
+        if authority_ok:
+            user.provider_authority_confirmed_at = now
         user.set_password(pwd)
         if settings.SKIP_EMAIL_VERIFICATION:
             user.email_verified = True
@@ -191,4 +237,5 @@ class AutomationRequestSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         attrs.pop("accept_privacy", None)
+        attrs["privacy_version"] = PRIVACY_VERSION
         return attrs
