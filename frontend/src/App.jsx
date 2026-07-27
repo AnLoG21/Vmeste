@@ -258,9 +258,10 @@ function loadSubnavBookmarks(role) {
   }
 }
 
-function bookmarkLabel(id, role) {
+function bookmarkLabel(id, role, sphere) {
   const b = BOOKMARK_CATALOG.find((x) => x.id === id);
   if (!b) return id;
+  if (id === "bookings" && role === "provider" && sphere === "cafe_restaurant") return "Заказы";
   if (role === "client" && b.labelClient) return b.labelClient;
   return b.label;
 }
@@ -2357,6 +2358,7 @@ export default function App() {
     setCurrentViewState(view);
     navigateView(view);
   }, []);
+  const [cafeWorkspaceTab, setCafeWorkspaceTab] = useState("floor");
 
   const [accessToken, setAccessToken] = useState(localStorage.getItem("vmeste_access") || "");
   const [refreshToken, setRefreshToken] = useState(localStorage.getItem("vmeste_refresh") || "");
@@ -2904,6 +2906,17 @@ export default function App() {
     if (accessToken) loadMe();
     else setMe(null);
   }, [accessToken]);
+
+  useEffect(() => {
+    if (
+      me?.role === "provider" &&
+      me?.provider_sphere === "cafe_restaurant" &&
+      currentView === "bookings"
+    ) {
+      setCafeWorkspaceTab("orders");
+      setCurrentView("cafe");
+    }
+  }, [me?.role, me?.provider_sphere, currentView, setCurrentView]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -6437,6 +6450,7 @@ export default function App() {
       if (id === "chats" && !staffHasPerm("manage_chats") && !staffHasPerm("manage_client_chats")) return false;
     }
     if ((id === "staff" || id === "organization") && !canManageOrgSettings) return false;
+    if (me?.provider_sphere === "cafe_restaurant" && id === "intervals") return false;
     return true;
   }
 
@@ -6447,6 +6461,12 @@ export default function App() {
       openProviderReviews();
       return;
     }
+    if (id === "bookings" && me?.role === "provider" && me?.provider_sphere === "cafe_restaurant") {
+      setCafeWorkspaceTab("orders");
+      setCurrentView("cafe");
+      return;
+    }
+    if (id === "cafe") setCafeWorkspaceTab("floor");
     setCurrentView(id);
   }
 
@@ -6465,8 +6485,13 @@ export default function App() {
 
   function renderSubnavBookmarkButton(id) {
     if (!isBookmarkAvailable(id)) return null;
-    const active = currentView === id;
-    const label = bookmarkLabel(id, me?.role);
+    const cafeOrdersActive =
+      id === "bookings" &&
+      currentView === "cafe" &&
+      me?.provider_sphere === "cafe_restaurant" &&
+      cafeWorkspaceTab === "orders";
+    const active = currentView === id || cafeOrdersActive;
+    const label = bookmarkLabel(id, me?.role, me?.provider_sphere);
     if (id === "chats") {
       return (
         <button
@@ -9118,7 +9143,7 @@ export default function App() {
                   checked={subnavBookmarks.includes(b.id)}
                   onChange={() => toggleSubnavBookmark(b.id)}
                 />
-                <span>{bookmarkLabel(b.id, role)}</span>
+                <span>{bookmarkLabel(b.id, role, me?.provider_sphere)}</span>
               </label>
             ))}
           </div>
@@ -10150,7 +10175,7 @@ export default function App() {
                     <span className="menu-item-icon" aria-hidden="true">
                       {bookmarkMenuIcon(id)}
                     </span>
-                    <span className="menu-item-label">{bookmarkLabel(id, me?.role)}</span>
+                    <span className="menu-item-label">{bookmarkLabel(id, me?.role, me?.provider_sphere)}</span>
                     {id === "chats" && unreadMessagesCount > 0 && (
                       <span className="menu-item-badge">{unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}</span>
                     )}
@@ -10668,7 +10693,12 @@ export default function App() {
         {accessToken && currentView === "settings" && renderGeneralSettings()}
         {accessToken && currentView === "organization" && canManageOrgSettings && renderOrganizationSettings()}
         {accessToken && currentView === "cafe" && me?.role === "provider" && me?.provider_sphere === "cafe_restaurant" && (
-          <CafeProviderWorkspace authFetch={authFetch} API_URL={API_URL} />
+          <CafeProviderWorkspace
+            authFetch={authFetch}
+            API_URL={API_URL}
+            initialTab={cafeWorkspaceTab}
+            onTabChange={setCafeWorkspaceTab}
+          />
         )}
         {accessToken && currentView === "staff" && canManageOrgSettings && renderStaffManagement()}
 

@@ -61,7 +61,7 @@ class CafeFloorPlanSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CafeFloorPlan
-        fields = ["id", "name", "width", "height", "tables", "created_at", "updated_at"]
+        fields = ["id", "name", "width", "height", "drawings", "tables", "created_at", "updated_at"]
         read_only_fields = ["created_at", "updated_at", "tables"]
 
 

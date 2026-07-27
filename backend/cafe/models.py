@@ -39,6 +39,11 @@ class CafeFloorPlan(models.Model):
     name = models.CharField(max_length=120, default="Основной зал")
     width = models.PositiveIntegerField(default=800)
     height = models.PositiveIntegerField(default=600)
+    drawings = models.JSONField(
+        blank=True,
+        default=list,
+        help_text="Чертёж зала: стены [{type:'wall',x1,y1,x2,y2}] и т.п.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
