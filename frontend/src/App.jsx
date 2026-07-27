@@ -46,6 +46,7 @@ import { ensurePhonePlus7, phoneFieldProps } from "./phone.js";
 import PasswordInput from "./PasswordInput.jsx";
 import { showToast } from "./toast.js";
 import { navigateView, viewFromPath } from "./viewRoutes.js";
+import { setNoIndexAppMeta, setPageMeta } from "./seo/setPageMeta.js";
 
 function formatWebsiteHref(url) {
   const s = String(url || "").trim();
@@ -2901,6 +2902,19 @@ export default function App() {
     if (accessToken) loadMe();
     else setMe(null);
   }, [accessToken]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setPageMeta({
+        title: "Вместе — онлайн-запись клиентов и автоматизация бизнеса",
+        description:
+          "Вместе — платформа для онлайн-записи клиентов, каталога услуг и чатов. Старт — 7 дней бесплатно, Бизнес — 990 ₽/мес.",
+        path: "/",
+      });
+      return;
+    }
+    setNoIndexAppMeta();
+  }, [accessToken, currentView]);
 
   useEffect(() => {
     if (!accessToken) {

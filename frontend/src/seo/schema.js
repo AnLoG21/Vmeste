@@ -1,6 +1,7 @@
 /** Shared SEO / Schema.org helpers for Yandex & Google. */
 
 export const SITE_ORIGIN = "https://vsevmeste.space";
+export const OG_IMAGE = `${SITE_ORIGIN}/og-cover.png`;
 
 export function organizationJsonLd() {
   return {
@@ -11,6 +12,7 @@ export function organizationJsonLd() {
     alternateName: ["Vmeste", "vsevmeste"],
     url: SITE_ORIGIN,
     logo: `${SITE_ORIGIN}/favicon.png`,
+    image: OG_IMAGE,
     email: "vmesteofficialsupport@gmail.com",
     telephone: "+7-967-074-46-76",
     address: {
@@ -40,11 +42,6 @@ export function websiteJsonLd() {
     url: SITE_ORIGIN,
     inLanguage: "ru-RU",
     publisher: { "@id": `${SITE_ORIGIN}/#organization` },
-    potentialAction: {
-      "@type": "SearchAction",
-      target: `${SITE_ORIGIN}/?q={search_term_string}`,
-      "query-input": "required name=search_term_string",
-    },
   };
 }
 
@@ -56,6 +53,7 @@ export function softwareApplicationJsonLd() {
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web, Android",
     url: SITE_ORIGIN,
+    image: OG_IMAGE,
     description:
       "Платформа для онлайн-записи клиентов, каталога услуг, чатов и карты организаций.",
     offers: [
@@ -72,6 +70,7 @@ export function softwareApplicationJsonLd() {
         name: "Бизнес",
         price: "990",
         priceCurrency: "RUB",
+        description: "Полный функционал платформы",
         url: `${SITE_ORIGIN}/#pricing`,
       },
     ],
@@ -95,6 +94,45 @@ export function breadcrumbListJsonLd(crumbs) {
     itemListElement,
   };
 }
+
+/** @param {{ question: string, answer: string }[]} items */
+export function faqPageJsonLd(items) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: (items || []).map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: item.answer,
+      },
+    })),
+  };
+}
+
+export const HOME_FAQ = [
+  {
+    question: "Что такое Вместе?",
+    answer:
+      "Вместе — облачная платформа (SaaS) для онлайн-записи клиентов, каталога услуг, чатов и карты организаций. Подходит салонам красоты, сервисным центрам и другим сервисным бизнесам.",
+  },
+  {
+    question: "Сколько стоит подписка?",
+    answer:
+      "Тариф «Старт» — бесплатная неделя полного доступа один раз. Тариф «Бизнес» — 990 ₽ в месяц. Есть индивидуальная автоматизация по заявке.",
+  },
+  {
+    question: "Как начать пользоваться?",
+    answer:
+      "Зарегистрируйтесь на сайте, подтвердите email, активируйте «Старт» или оплатите «Бизнес» через ЮKassa в разделе «Подписки». Доступ появляется сразу после активации.",
+  },
+  {
+    question: "Для каких бизнесов подходит сервис?",
+    answer:
+      "Уже есть готовые сценарии для салонов красоты и сервисных центров. Другие сферы можно подключить через индивидуальную автоматизацию.",
+  },
+];
 
 export function toJsonLdScript(data) {
   return JSON.stringify(data);

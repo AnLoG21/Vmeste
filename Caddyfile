@@ -1,5 +1,9 @@
-# HTTPS via Let's Encrypt.
-{$DOMAIN}, www.{$DOMAIN} {
+# HTTPS via Let's Encrypt. Canonical host without www.
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}
+
+{$DOMAIN} {
 	# Uploaded media from shared Docker volume (fast path)
 	handle_path /media/* {
 		root * /srv/media

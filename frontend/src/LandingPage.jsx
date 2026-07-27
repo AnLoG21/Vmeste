@@ -7,7 +7,10 @@ import {
   organizationJsonLd,
   softwareApplicationJsonLd,
   websiteJsonLd,
+  faqPageJsonLd,
+  HOME_FAQ,
 } from "./seo/schema.js";
+import { setPageMeta } from "./seo/setPageMeta.js";
 import { phoneFieldProps } from "./phone.js";
 
 function formatPlanPrice(plan) {
@@ -32,9 +35,18 @@ export default function LandingPage({ onLogin, onRegister }) {
   const [plans, setPlans] = useState([]);
 
   const homeJsonLd = useMemo(
-    () => [organizationJsonLd(), websiteJsonLd(), softwareApplicationJsonLd()],
+    () => [organizationJsonLd(), websiteJsonLd(), softwareApplicationJsonLd(), faqPageJsonLd(HOME_FAQ)],
     []
   );
+
+  useEffect(() => {
+    setPageMeta({
+      title: "Вместе — онлайн-запись клиентов и автоматизация бизнеса",
+      description:
+        "Вместе — платформа для онлайн-записи клиентов, каталога услуг и чатов. Старт — 7 дней бесплатно, Бизнес — 990 ₽/мес.",
+      path: "/",
+    });
+  }, []);
 
   useEffect(() => {
     fetch(`${API_URL}/subscriptions/plans/`)
@@ -91,6 +103,7 @@ export default function LandingPage({ onLogin, onRegister }) {
   return (
     <div className="landing">
       <JsonLd id="vmeste-home-jsonld" data={homeJsonLd} />
+      <main>
       <section className="landing-hero">
         <div className="landing-hero-content">
           <h1 className="landing-hero-title">
@@ -404,6 +417,18 @@ export default function LandingPage({ onLogin, onRegister }) {
         </div>
       </section>
 
+      <section className="landing-section landing-faq" id="faq">
+        <h2>Частые вопросы</h2>
+        <p className="landing-section-lead">Коротко о сервисе, тарифах и запуске.</p>
+        {HOME_FAQ.map((item) => (
+          <details key={item.question} className="landing-faq-item">
+            <summary>{item.question}</summary>
+            <p>{item.answer}</p>
+          </details>
+        ))}
+      </section>
+      </main>
+
       <footer className="landing-footer">
         <p>
           {SITE_LEGAL.serviceName} · ИНН {SITE_LEGAL.inn} ·{" "}
@@ -414,7 +439,9 @@ export default function LandingPage({ onLogin, onRegister }) {
           {SITE_LEGAL.executorName} · {SITE_LEGAL.status} · {SITE_LEGAL.city}
         </p>
         <nav className="landing-footer-nav" aria-label="Разделы сайта">
+          <a href="/businesses">Для бизнеса</a>
           <a href="/#pricing">Тарифы</a>
+          <a href="/#faq">Вопросы</a>
           <a href="/#automation-request">Заявка на автоматизацию</a>
           <a href="/contacts">Контакты и реквизиты</a>
           <a href="/offer">Публичная оферта</a>

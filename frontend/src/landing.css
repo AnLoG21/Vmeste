@@ -744,6 +744,24 @@
 .landing-biz-link { margin-top: auto; color: #c45c00; font-weight: 700; font-size: 0.95rem; }
 .landing-biz-card--more { background: linear-gradient(165deg, #fff8f2, #ffe8d5); }
 
+.landing-faq-item {
+  border: 1px solid #ffd9bd;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 0 0 10px;
+  background: #fffdfb;
+}
+.landing-faq-item summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: #3d2718;
+}
+.landing-faq-item p {
+  margin: 10px 0 0;
+  color: #5a3a22;
+  line-height: 1.5;
+}
+
 .businesses-page { max-width: 920px; margin: 0 auto; padding: 24px 16px 48px; }
 .businesses-hero { margin-bottom: 28px; }
 .businesses-back { color: #c45c00; font-weight: 600; text-decoration: none; }
