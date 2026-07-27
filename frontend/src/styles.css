@@ -454,9 +454,9 @@ button:hover {
 }
 
 .interval-calendar .slot-chip--booked {
-  background: #d8f0e3;
-  border-color: #3dad6e;
-  color: #1a4d32;
+  background: #c0c0c0;
+  border-color: #a8a8a8;
+  color: #444;
 }
 
 .slot-chip-booking {
@@ -804,6 +804,50 @@ button:hover {
 .staff-job-col {
   flex: 1;
   min-width: 0;
+}
+
+.staff-media-block {
+  margin-top: 10px;
+  border-top: 1px dashed #ffd6b5;
+  padding-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.staff-media-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.staff-media-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid #ffd9bd;
+  background: #fff3e8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  color: #8d3e00;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.staff-media-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.staff-media-portfolio input[type="file"] {
+  display: block;
+}
+
+.staff-media-upload-btn {
+  width: auto;
 }
 
 .staff-job-deact-row .staff-deactivate-btn {
@@ -3867,6 +3911,121 @@ body.theme-dark .tg-chat-search {
   pointer-events: auto;
 }
 
+.map-org-staff-section {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed #ffd6b5;
+}
+
+.map-org-staff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.map-org-staff-cards {
+  display: grid;
+  gap: 10px;
+}
+
+.map-org-staff-card {
+  border: 1px solid #ffe4cf;
+  border-radius: 12px;
+  background: #fffdfb;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.map-org-staff-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.map-org-staff-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #f2f2f2;
+  flex-shrink: 0;
+}
+
+.map-org-staff-avatar--ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  color: #8d3e00;
+  border: 1px dashed #ffd9bd;
+}
+
+.map-org-staff-card-meta {
+  min-width: 0;
+}
+
+.map-org-staff-card-name {
+  margin: 0;
+  font-weight: 900;
+  font-size: 13px;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.map-org-staff-card-bio {
+  margin: 0;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.map-org-staff-card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.map-org-staff-portfolio .service-photo-carousel-main img {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.staff-review-modal {
+  width: min(560px, 96vw);
+}
+
+.staff-review-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.staff-review-modal-form {
+  display: grid;
+  gap: 10px;
+}
+
+.staff-review-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.staff-review-modal-list {
+  margin-top: 14px;
+}
+
 .map-org-reviews {
   margin-top: 10px;
   max-height: none;
@@ -3982,6 +4141,12 @@ body.theme-dark .tg-chat-search {
   background: #e25555;
   border-color: #c73a3a;
   color: #fff;
+}
+
+.booking-calendar .calendar-slot.booking.booking-slot--manual-hold {
+  background: #c0c0c0;
+  border-color: #a8a8a8;
+  color: #444;
 }
 
 .booking-calendar .calendar-slot.booking.booking-slot--done {
@@ -5096,6 +5261,10 @@ body.theme-dark .field-label {
   opacity: 0.72;
 }
 
+.booking-history-item.booking-slot--manual-hold {
+  opacity: 0.72;
+}
+
 .booking-history-top {
   display: flex;
   align-items: flex-start;
@@ -5162,6 +5331,11 @@ body.theme-dark .field-label {
 .booking-history-status--cancelled {
   background: rgba(198, 40, 40, 0.1);
   color: #c62828;
+}
+
+.booking-history-status--manual-hold {
+  background: rgba(0, 0, 0, 0.06);
+  color: #444;
 }
 
 .booking-history-review {
@@ -7078,7 +7252,8 @@ html.native-app .page-logged .hero.top-row {
 }
 
 .calendar-slot-compact--booked,
-.calendar-slot-compact.booking-slot--cancelled {
+.calendar-slot-compact.booking-slot--cancelled,
+.calendar-slot-compact.booking-slot--manual-hold {
   background: #c0c0c0;
   color: #444;
   opacity: 1;
@@ -7833,6 +8008,8 @@ body.theme-dark .password-eye-btn:hover {
 }
 
 .interval-manual-hold {
+  position: relative;
+  z-index: 5;
   margin-bottom: 14px;
   padding: 12px 14px;
   border-radius: 12px;
@@ -7857,14 +8034,19 @@ body.theme-dark .password-eye-btn:hover {
   color: #1a1a1a;
 }
 
+.interval-manual-hold .field-label select {
+  width: 100%;
+  min-width: 0;
+}
+
 .slot-chip--booked {
   background: #ffe8e0;
   border-color: #f0a090;
 }
 
 .calendar-slot-compact--booked {
-  background: #ffe8e0;
-  color: #8b2e1a;
+  background: #c0c0c0;
+  color: #444;
 }
 
 .service-editor-camera-btn {

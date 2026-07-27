@@ -1311,6 +1311,7 @@ function bookingSlotStatusModifier(bookingOrStatus, endsAt) {
       : endsAt;
   if (status === "cancelled") return "booking-slot--cancelled";
   if (status === "done") return "booking-slot--done";
+  if (status === "manual_hold") return "booking-slot--manual-hold";
   const endMs = endRaw ? new Date(endRaw).getTime() : NaN;
   if (Number.isFinite(endMs) && endMs < Date.now() && (status === "new" || status === "confirmed")) {
     return "booking-slot--overdue";
@@ -1325,6 +1326,7 @@ function bookingSlotCompactIcon(statusModifier) {
   if (statusModifier === "booking-slot--done") return "✓";
   if (statusModifier === "booking-slot--overdue") return "!";
   if (statusModifier === "booking-slot--confirmed") return "●";
+  if (statusModifier === "booking-slot--manual-hold") return "○";
   return "○";
 }
 
@@ -1333,6 +1335,7 @@ const BOOKING_STATUS_LABELS = {
   confirmed: "Подтверждена",
   cancelled: "Отменена",
   done: "Оказана",
+  manual_hold: "Ручная бронь",
 };
 
 function bookingStatusLabel(status) {
@@ -2296,9 +2299,15 @@ export default function App() {
   const [mapOrgReviews, setMapOrgReviews] = useState([]);
   const [mapOrgReviewsOrdering, setMapOrgReviewsOrdering] = useState("-created_at");
   const [mapOrgProfile, setMapOrgProfile] = useState(null);
+  const [mapOrgStaff, setMapOrgStaff] = useState([]);
   const [mapOrgCarouselIndex, setMapOrgCarouselIndex] = useState(0);
   const [mapMarkersTick, setMapMarkersTick] = useState(0);
   const [orgPhotoLightbox, setOrgPhotoLightbox] = useState(null);
+
+  const [staffReviewModal, setStaffReviewModal] = useState(null);
+  const [staffReviewForm, setStaffReviewForm] = useState({ rating: 5, text: "" });
+  const [staffReviewBusy, setStaffReviewBusy] = useState(false);
+  const [staffReviewStatus, setStaffReviewStatus] = useState("");
 
   function openOrgPhotoLightbox(items, index = 0) {
     if (!items?.length) return;
@@ -5135,6 +5144,29 @@ export default function App() {
     else loadStaffWorkspace();
   }
 
+  async function uploadStaffCard(linkId, { avatarFile, portfolioFiles } = {}) {
+    const fd = new FormData();
+    if (avatarFile) fd.append("avatar", avatarFile);
+    if (Array.isArray(portfolioFiles)) {
+      for (const f of portfolioFiles) {
+        if (f) fd.append("portfolio_photos", f);
+      }
+    }
+    if (!avatarFile && (!Array.isArray(portfolioFiles) || portfolioFiles.length === 0)) return;
+
+    const response = await authFetch(`${API_URL}/booking/staff/${linkId}/card/`, {
+      method: "POST",
+      body: fd,
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      setStaffInviteStatus(err.detail || "Не удалось загрузить фото сотрудника.");
+      return;
+    }
+    setStaffInviteStatus("Фото сохранены.");
+    if (me?.role === "provider") loadSellerData();
+  }
+
   async function createOrgGroup(event) {
     event.preventDefault();
     setChatStatus("");
@@ -6629,7 +6661,9 @@ export default function App() {
 
     const startMs = start.getTime();
     const endMs = end.getTime();
-    const daySlots = slots.filter((s) => s.starts_at?.slice(0, 10) === date);
+    // Разрешаем пересечение с уже занятими слотами (запись внутри рабочего интервала).
+    // Запрещаем только перекрытие с существующими свободными интервалами.
+    const daySlots = slots.filter((s) => s.starts_at?.slice(0, 10) === date && !s.is_booked);
     for (const slot of daySlots) {
       if (!intervalStaffConflicts(template.staff_id, slot.staff)) continue;
       const slotStartMs = new Date(slot.starts_at).getTime();
@@ -6958,19 +6992,69 @@ export default function App() {
   function bookingSlotSecondaryLabel(it) {
     if (me?.role === "client") {
       const master = (it.staff_display_name || "").trim();
-      if (master) return master;
+      if (master) {
+        const job = (it.staff_job_title || "").trim();
+        return job ? `${master} · ${job}` : master;
+      }
       return (it.service_name || "").trim() || "Мастер";
     }
     const client = bookingClientLabel(it);
     const service = (it.service_name || "").trim();
-    if (client && service) return `${client} · ${service}`;
-    return client || service || "Запись";
+    const staffName = (it.staff_display_name || "").trim();
+    const staffJob = (it.staff_job_title || "").trim();
+    const staff = [staffName, staffJob].filter(Boolean).join(" · ");
+    const parts = [client, service, staff].filter(Boolean);
+    return parts.length ? parts.join(" · ") : "Запись";
   }
 
   async function reloadBookingsList() {
     const bookingsRes = await authFetch(`${API_URL}/booking/`);
     if (!bookingsRes.ok) return [];
-    const list = normalizeBookingsList(await bookingsRes.json());
+    let list = normalizeBookingsList(await bookingsRes.json());
+
+    // В блоке "Записи клиентов" хотим показывать ручные брони (ручные отметки в интервалах).
+    // Они хранятся как AvailabilitySlot.is_booked=true, без созданной записи Booking.
+    if (canManageBookings()) {
+      const slotsRes = await authFetch(`${API_URL}/booking/slots/`);
+      if (slotsRes.ok) {
+        const slots = normalizeBookingsList(await slotsRes.json());
+        const manualSlots = (slots || []).filter((s) => s?.is_manual_hold);
+
+        const staffLinkByStaffId = new Map((orgStaff || []).map((l) => [Number(l.staff), l]));
+        const staffDisplayNameById = (staffId) => {
+          const sid = staffId == null || staffId === "" ? null : Number(staffId);
+          if (!sid) return "";
+          const link = staffLinkByStaffId.get(sid);
+          return link ? formatStaffFullName(link.staff_user) || `id ${sid}` : `id ${sid}`;
+        };
+
+        const manualItems = manualSlots.map((s) => {
+          const staffId = s?.staff ?? null;
+          return {
+            id: s.id,
+            // Под единый интерфейс календаря/истории
+            slot_starts_at: s.starts_at,
+            slot_ends_at: s.ends_at,
+            status: "manual_hold",
+            is_manual_hold: true,
+            service_name: (s.booking_service_name || "").trim() || "Ручная бронь",
+            service_price: "",
+            client_display_name: (s.booking_client_name || "").trim(),
+            client_username: "",
+            client: null,
+            provider: me?.id,
+            staff: staffId,
+            staff_display_name: staffDisplayNameById(staffId),
+            staff_job_title: staffJobTitleForUser(staffId),
+          };
+        });
+
+        const existingIds = new Set((list || []).map((b) => Number(b.id)));
+        const merged = [...(list || []), ...manualItems.filter((x) => !existingIds.has(Number(x.id)))];
+        list = merged;
+      }
+    }
+
     setBookings(list);
     return list;
   }
@@ -7061,6 +7145,16 @@ export default function App() {
     return data;
   }
 
+  async function loadMapOrgStaff(providerId) {
+    const res = await authFetch(`${API_URL}/booking/staff/?provider=${encodeURIComponent(providerId)}`);
+    if (!res.ok) {
+      setMapOrgStaff([]);
+      return;
+    }
+    const data = await res.json();
+    setMapOrgStaff(Array.isArray(data) ? data : data.results || []);
+  }
+
   function fitClientDiscoverMapViewport() {
     const map = clientDiscoverMapRef.current;
     if (!map) return;
@@ -7075,8 +7169,11 @@ export default function App() {
   function closeMapOrgSheet() {
     setMapOrgPopup(null);
     setMapOrgProfile(null);
+    setMapOrgStaff([]);
     setMapOrgReviewsOpen(false);
     setMapOrgReviews([]);
+    setStaffReviewModal(null);
+    setStaffReviewStatus("");
     window.setTimeout(fitClientDiscoverMapViewport, 0);
     window.setTimeout(fitClientDiscoverMapViewport, 120);
   }
@@ -7103,6 +7200,8 @@ export default function App() {
       setMapOrgReviews([]);
     }
     loadMapOrgSummary(loc.provider);
+    // Публично показываем карточки сотрудников организации
+    void loadMapOrgStaff(loc.provider);
     window.setTimeout(fitClientDiscoverMapViewport, 0);
   }
 
@@ -7615,6 +7714,7 @@ export default function App() {
 
   function renderBookingSlotActions(it) {
     if (!it?.id) return null;
+    if (it?.is_manual_hold || it?.status === "manual_hold") return null;
     const isOrg = canManageBookings();
     const isClient = me?.role === "client";
     const cancelled = it.status === "cancelled";
@@ -7746,7 +7846,7 @@ export default function App() {
                           {new Date(it.slot_ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </div>
                         <div className="booking-slot-name">{bookingSlotSecondaryLabel(it)}</div>
-                        {it.status && it.status !== "confirmed" && (
+                        {it.status && it.status !== "confirmed" && !it.is_manual_hold && it.status !== "manual_hold" && (
                           <div className="booking-slot-status">{bookingStatusLabel(it.status)}</div>
                         )}
                         {renderBookingSlotActions(it)}
@@ -7874,6 +7974,10 @@ export default function App() {
         ) : (
           <ul className="booking-history-list">
             {sorted.map((b) => {
+              const isManualHold = Boolean(b?.is_manual_hold || b?.status === "manual_hold");
+              const staffName = (b.staff_display_name || "").trim();
+              const staffJob = (b.staff_job_title || "").trim();
+              const staffLine = [staffName, staffJob].filter(Boolean).join(" · ");
               const counterpartyLabel = isClient
                 ? (b.organization_name || "Организация")
                 : bookingClientLabel(b);
@@ -7884,7 +7988,7 @@ export default function App() {
                       <p className="booking-history-datetime">{formatBookingDateTime(b.slot_starts_at)}</p>
                       <p className="booking-history-service muted small">
                         {(b.service_name || "Услуга").trim()}
-                        {b.staff_display_name ? ` · ${b.staff_display_name}` : ""}
+                        {staffLine ? ` · ${staffLine}` : ""}
                       </p>
                       <p className="booking-history-price">{formatBookingPrice(b.service_price)}</p>
                       <p className="booking-history-counterparty">
@@ -7897,13 +8001,19 @@ export default function App() {
                             {counterpartyLabel}
                           </button>
                         ) : (
-                          <button
-                            type="button"
-                            className="booking-history-link"
-                            onClick={() => openChatWithClient(b.client)}
-                          >
-                            {counterpartyLabel}
-                          </button>
+                          isManualHold || !b.client ? (
+                            <span className="booking-history-link" role="note">
+                              {counterpartyLabel}
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="booking-history-link"
+                              onClick={() => openChatWithClient(b.client)}
+                            >
+                              {counterpartyLabel}
+                            </button>
+                          )
                         )}
                       </p>
                     </div>
@@ -7913,6 +8023,7 @@ export default function App() {
                         b.status === "cancelled" && "booking-history-status--cancelled",
                         b.status === "done" && "booking-history-status--done",
                         b.status === "confirmed" && "booking-history-status--confirmed",
+                        b.status === "manual_hold" && "booking-history-status--manual-hold",
                       ]
                         .filter(Boolean)
                         .join(" ")}
@@ -8157,7 +8268,7 @@ export default function App() {
                     )}
                   </div>
                   <div className="calendar-slots calendar-slots--desktop">
-                    {(byDay[day] || []).slice(0, 5).map((s) => (
+                    {(byDay[day] || []).map((s) => (
                       <div
                         key={s.id}
                         className={["slot-chip", s.is_booked && "slot-chip--booked"].filter(Boolean).join(" ")}
@@ -8201,7 +8312,6 @@ export default function App() {
                         ) : null}
                       </div>
                     ))}
-                    {(byDay[day] || []).length > 5 && <div className="muted">+{(byDay[day] || []).length - 5}</div>}
                     {(byDay[day] || []).some((s) => !s.is_booked && s.recurrence_group) && (
                       <button
                         type="button"
@@ -8217,7 +8327,7 @@ export default function App() {
                     )}
                   </div>
                   <div className="calendar-slots calendar-slots--mobile">
-                    {(byDay[day] || []).slice(0, 3).map((s) => (
+                    {(byDay[day] || []).map((s) => (
                       <div
                         key={s.id}
                         className={[
@@ -8243,9 +8353,6 @@ export default function App() {
                         </span>
                       </div>
                     ))}
-                    {(byDay[day] || []).length > 3 ? (
-                      <div className="calendar-slot-more">+{(byDay[day] || []).length - 3}</div>
-                    ) : null}
                   </div>
                 </>
               )}
@@ -9215,6 +9322,17 @@ export default function App() {
                         if (v !== (link.job_title || "").trim()) patchStaffMeta(link.id, { job_title: v });
                       }}
                     />
+                    <label className="muted small-label" style={{ marginTop: 10 }}>
+                      Кратко о сотруднике
+                    </label>
+                    <textarea
+                      rows={2}
+                      defaultValue={link.bio || ""}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v !== (link.bio || "").trim()) patchStaffMeta(link.id, { bio: v });
+                      }}
+                    />
                   </div>
                   {me?.role === "provider" && link.is_active && link.invitation_status !== "pending" && (
                     <div className="staff-deact-cell">
@@ -9224,6 +9342,45 @@ export default function App() {
                     </div>
                   )}
                 </div>
+                {me?.role === "provider" && link.is_active && (
+                  <div className="staff-media-block">
+                    <div className="staff-media-row">
+                      <div className="staff-media-avatar">
+                        {link.avatar_image ? (
+                          <img src={reviewImageUrl(link.avatar_image)} alt="" />
+                        ) : (
+                          <span aria-hidden>{String(rowName || "?").slice(0, 1).toUpperCase()}</span>
+                        )}
+                      </div>
+                      <label className="ghost-btn small staff-media-upload-btn" title="Загрузить аватарку">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          hidden
+                          onChange={(e) => {
+                            const f = e.target.files?.[0] || null;
+                            void uploadStaffCard(link.id, { avatarFile: f });
+                            e.target.value = "";
+                          }}
+                        />
+                        Аватар
+                      </label>
+                    </div>
+                    <div className="staff-media-portfolio">
+                      <label className="muted small-label">Портфолио</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          void uploadStaffCard(link.id, { portfolioFiles: files });
+                          e.target.value = "";
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
                 {link.is_active && (me?.role === "provider" || staffEffectivePerms.can_delegate_permissions) && (
                   <div className="staff-perms">
                     <button
@@ -11379,6 +11536,184 @@ export default function App() {
                   ) : null}
 
                   {mapOrgPopup.address && <p className="muted small">{mapOrgPopup.address}</p>}
+
+                  {mapOrgStaff?.length > 0 && (
+                    <div className="map-org-staff-section">
+                      <div className="map-org-staff-head">
+                        <p className="field-label" style={{ margin: 0 }}>
+                          Сотрудники
+                        </p>
+                      </div>
+                      <div className="map-org-staff-cards">
+                        {mapOrgStaff.slice(0, 3).map((st) => {
+                          const staffName = formatStaffFullName(st.staff_user) || st.display_name || "Сотрудник";
+                          const avatarUrl = st.avatar_image ? reviewImageUrl(st.avatar_image) : "";
+                          const portfolioItems = (st.portfolio_photos || []).map((p) => ({
+                            id: p.id,
+                            image: p.image,
+                            source: "portfolio",
+                          }));
+                          return (
+                            <div key={st.id} className="map-org-staff-card">
+                              <div className="map-org-staff-card-head">
+                                {avatarUrl ? (
+                                  <img src={avatarUrl} alt="" className="map-org-staff-avatar" />
+                                ) : (
+                                  <div className="map-org-staff-avatar map-org-staff-avatar--ph" aria-hidden>
+                                    {String(staffName || "?").slice(0, 1).toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="map-org-staff-card-meta">
+                                  <p className="map-org-staff-card-name">{staffName}</p>
+                                  {st.job_title ? <p className="muted small">{st.job_title}</p> : null}
+                                </div>
+                              </div>
+                              {st.bio ? <p className="map-org-staff-card-bio">{st.bio}</p> : null}
+                              {portfolioItems.length > 0 && (
+                                <ServicePhotoCarousel items={portfolioItems} className="map-org-staff-portfolio" />
+                              )}
+                              <div className="map-org-staff-card-actions">
+                                <button
+                                  type="button"
+                                  className="ghost-btn small"
+                                  onClick={() => {
+                                    setStaffReviewForm({ rating: 5, text: "" });
+                                    setStaffReviewStatus("");
+                                    setStaffReviewBusy(false);
+                                    setStaffReviewModal({
+                                      providerId: mapOrgPopup.provider,
+                                      staffLinkId: st.id,
+                                      staffUserId: st.staff,
+                                      staffName,
+                                    });
+                                    void loadMapOrgReviews(mapOrgPopup.provider, mapOrgReviewsOrdering);
+                                  }}
+                                >
+                                  Отзыв
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {mapOrgStaff.length > 3 && (
+                        <p className="muted small">Ещё {mapOrgStaff.length - 3} сотрудника(ов)</p>
+                      )}
+                    </div>
+                  )}
+
+                  {staffReviewModal && (
+                    <div
+                      className="modal-backdrop"
+                      onClick={() => {
+                        setStaffReviewModal(null);
+                        setStaffReviewStatus("");
+                      }}
+                    >
+                      <div className="modal-card staff-review-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="staff-review-modal-head">
+                          <h3>Отзыв о {staffReviewModal.staffName}</h3>
+                          <button
+                            type="button"
+                            className="small-btn"
+                            onClick={() => {
+                              setStaffReviewModal(null);
+                              setStaffReviewStatus("");
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        <div className="staff-review-modal-form">
+                          <div className="row-2">
+                            <label className="field-label">
+                              Оценка
+                              <input
+                                type="number"
+                                min="1"
+                                max="5"
+                                step="1"
+                                value={staffReviewForm.rating}
+                                onChange={(e) => setStaffReviewForm((p) => ({ ...p, rating: Number(e.target.value) }))}
+                              />
+                            </label>
+                          </div>
+                          <label className="field-label">
+                            Текст (необязательно)
+                            <textarea
+                              rows={3}
+                              value={staffReviewForm.text}
+                              onChange={(e) => setStaffReviewForm((p) => ({ ...p, text: e.target.value }))}
+                            />
+                          </label>
+                          {staffReviewStatus ? <p className="status">{staffReviewStatus}</p> : null}
+                          <div className="staff-review-modal-actions">
+                            <button
+                              type="button"
+                              className="ghost-btn"
+                              onClick={() => {
+                                setStaffReviewModal(null);
+                                setStaffReviewStatus("");
+                              }}
+                            >
+                              Отмена
+                            </button>
+                            <button
+                              type="button"
+                              disabled={staffReviewBusy}
+                              onClick={async () => {
+                                if (!staffReviewModal) return;
+                                const rating = Number(staffReviewForm.rating);
+                                if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+                                  setStaffReviewStatus("Укажите оценку от 1 до 5.");
+                                  return;
+                                }
+                                const text = (staffReviewForm.text || "").trim();
+                                setStaffReviewStatus("");
+                                setStaffReviewBusy(true);
+                                const res = await authFetch(`${API_URL}/reviews/`, {
+                                  method: "POST",
+                                  body: JSON.stringify({
+                                    provider: staffReviewModal.providerId,
+                                    staff_user: staffReviewModal.staffUserId,
+                                    rating,
+                                    text,
+                                  }),
+                                });
+                                if (!res.ok) {
+                                  const err = await res.json().catch(() => ({}));
+                                  setStaffReviewStatus(err.detail || "Не удалось отправить отзыв.");
+                                  setStaffReviewBusy(false);
+                                  return;
+                                }
+                                await loadMapOrgReviews(staffReviewModal.providerId, mapOrgReviewsOrdering);
+                                setStaffReviewModal(null);
+                                setStaffReviewStatus("");
+                                setStaffReviewBusy(false);
+                              }}
+                            >
+                              {staffReviewBusy ? "Отправка…" : "Отправить"}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="staff-review-modal-list">
+                          {(() => {
+                            const list = (mapOrgReviews || []).filter(
+                              (r) => r?.staff != null && Number(r.staff) === Number(staffReviewModal.staffLinkId),
+                            );
+                            if (!list.length) return <p className="muted">Пока нет отзывов.</p>;
+                            return (
+                              <ul className="list review-list">
+                                {list.map((r) => renderReviewListItem(r, { reviewsForGallery: list }))}
+                              </ul>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="map-org-sheet-actions row-2">
 

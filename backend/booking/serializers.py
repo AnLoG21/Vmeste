@@ -20,6 +20,7 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
     assigned_category_ids = serializers.ListField(
         child=serializers.IntegerField(), required=False, allow_empty=True
     )
+    portfolio_photos = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ProviderStaff
@@ -31,6 +32,8 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
             "staff_email",
             "display_name",
             "job_title",
+            "bio",
+            "avatar_image",
             "is_active",
             "invitation_status",
             "permissions",
@@ -38,6 +41,7 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
             "assigned_category_ids",
             "staff_user",
             "provider_user",
+            "portfolio_photos",
         ]
         read_only_fields = [
             "provider",
@@ -67,6 +71,18 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
             "last_name": obj.staff.last_name,
             "patronymic": getattr(obj.staff, "patronymic", "") or "",
         }
+
+    def get_portfolio_photos(self, obj):
+        photos = getattr(obj, "portfolio_photos", None)
+        if photos is None:
+            return []
+        rows = photos.all().order_by("id")
+        out = []
+        for row in rows:
+            if not row.image:
+                continue
+            out.append({"id": row.id, "image": row.image})
+        return out
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -158,6 +174,7 @@ class BookingSerializer(serializers.ModelSerializer):
     client_username = serializers.CharField(source="client.username", read_only=True)
     client_display_name = serializers.SerializerMethodField()
     staff_display_name = serializers.SerializerMethodField()
+    staff_job_title = serializers.SerializerMethodField()
     slot_starts_at = serializers.DateTimeField(source="slot.starts_at", read_only=True)
     slot_ends_at = serializers.DateTimeField(source="slot.ends_at", read_only=True)
     review = serializers.SerializerMethodField()
@@ -180,6 +197,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "client_username",
             "client_display_name",
             "staff_display_name",
+            "staff_job_title",
             "slot_starts_at",
             "slot_ends_at",
             "review",
@@ -193,6 +211,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "client_username",
             "client_display_name",
             "staff_display_name",
+            "staff_job_title",
             "slot_starts_at",
             "slot_ends_at",
             "review",
@@ -263,3 +282,22 @@ class BookingSerializer(serializers.ModelSerializer):
         if fn and ln:
             return f"{fn} {ln[0].upper()}."
         return fn or ln or (u.username or "")
+
+    def get_staff_job_title(self, obj):
+        staff_user = getattr(obj, "staff", None)
+        if not staff_user:
+            return ""
+        provider_id = getattr(obj, "provider_id", None)
+        if provider_id is None:
+            return ""
+        link = (
+            ProviderStaff.objects.filter(
+                provider_id=provider_id,
+                staff=staff_user,
+                is_active=True,
+                invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+            )
+            .select_related("staff")
+            .first()
+        )
+        return (getattr(link, "job_title", "") or "").strip()

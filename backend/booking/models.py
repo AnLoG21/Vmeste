@@ -73,6 +73,12 @@ class ProviderStaff(models.Model):
     )
     display_name = models.CharField(max_length=120, blank=True)
     job_title = models.CharField(max_length=120, blank=True)
+    avatar_image = models.ImageField(
+        upload_to="staff_avatars/%Y/%m/",
+        null=True,
+        blank=True,
+    )
+    bio = models.TextField(blank=True, default="")
     is_active = models.BooleanField(default=True)
     invitation_status = models.CharField(
         max_length=20,
@@ -89,3 +95,13 @@ class ProviderStaff(models.Model):
 
     class Meta:
         unique_together = [("provider", "staff")]
+
+
+class ProviderStaffPortfolioPhoto(models.Model):
+    staff_link = models.ForeignKey(
+        ProviderStaff,
+        on_delete=models.CASCADE,
+        related_name="portfolio_photos",
+    )
+    image = models.ImageField(upload_to="staff_portfolio_photos/%Y/%m/")
+    created_at = models.DateTimeField(auto_now_add=True)

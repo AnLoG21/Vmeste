@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from catalog.models import Service
@@ -21,7 +22,7 @@ from .booking_windows import (
     manual_hold_window,
     release_manual_hold,
 )
-from .models import AvailabilitySlot, Booking, ProviderStaff
+from .models import AvailabilitySlot, Booking, ProviderStaff, ProviderStaffPortfolioPhoto
 from .serializers import AvailabilitySlotSerializer, BookingSerializer, ProviderStaffSerializer
 
 User = get_user_model()
@@ -35,12 +36,60 @@ def _staff_display_name(u: User) -> str:
 class ProviderStaffViewSet(viewsets.ModelViewSet):
     serializer_class = ProviderStaffSerializer
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_queryset(self):
+        provider_id = (self.request.query_params.get("provider") or "").strip()
+        if provider_id:
+            return (
+                ProviderStaff.objects.filter(
+                    provider_id=provider_id,
+                    is_active=True,
+                    invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+                )
+                .select_related("staff", "provider")
+                .prefetch_related("portfolio_photos")
+            )
+
         user = self.request.user
         if user.role == "provider":
             return ProviderStaff.objects.filter(provider=user).select_related("staff", "provider")
         return ProviderStaff.objects.filter(staff=user).select_related("staff", "provider")
+
+    @action(detail=True, methods=["post"], url_path="card")
+    def upload_card(self, request, pk=None):
+        """Загрузка аватарки/портфолио и bio для карточки сотрудника организации."""
+        if request.user.role != "provider":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        link = self.get_object()
+        if link.provider_id != request.user.id:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        bio = request.data.get("bio", None)
+        if bio is not None:
+            link.bio = str(bio).strip()
+
+        avatar_file = request.FILES.get("avatar", None)
+        if avatar_file:
+            link.avatar_image = avatar_file
+
+        if bio is not None or avatar_file:
+            update_fields = []
+            if bio is not None:
+                update_fields.append("bio")
+            if avatar_file:
+                update_fields.append("avatar_image")
+            if update_fields:
+                link.save(update_fields=update_fields)
+
+        portfolio_files = request.FILES.getlist("portfolio_photos")
+        created = 0
+        for f in portfolio_files:
+            ProviderStaffPortfolioPhoto.objects.create(staff_link=link, image=f)
+            created += 1
+
+        ser = self.get_serializer(link)
+        return Response({"staff": ser.data, "created": created}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="accept-invite")
     def accept_invite(self, request, pk=None):
