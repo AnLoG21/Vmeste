@@ -35,6 +35,7 @@ class UserSerializer(serializers.ModelSerializer):
             "organization_phones",
             "organization_websites",
             "organization_card_note",
+            "anonymous_seat_count",
         ]
         read_only_fields = ["id", "username", "email", "role", "email_verified"]
 

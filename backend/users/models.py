@@ -66,6 +66,10 @@ class User(AbstractUser):
         default="",
         help_text="Дополнительная информация в карточке организации.",
     )
+    anonymous_seat_count = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Сколько мест «Без сотрудников N» доступно в календаре интервалов.",
+    )
 
 
 class ProviderGalleryPhoto(models.Model):

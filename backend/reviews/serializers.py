@@ -39,6 +39,7 @@ class ReviewSerializer(serializers.ModelSerializer):
             "rating",
             "staff_rating",
             "text",
+            "staff_text",
             "supplemented_at",
             "created_at",
             "client_name",
@@ -100,10 +101,11 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = ["provider", "booking", "staff", "staff_user", "rating", "staff_rating", "text"]
+        fields = ["provider", "booking", "staff", "staff_user", "rating", "staff_rating", "text", "staff_text"]
         extra_kwargs = {
             "staff": {"required": False, "allow_null": True},
             "staff_rating": {"required": False, "allow_null": True},
+            "staff_text": {"required": False, "allow_blank": True},
         }
 
     def validate_rating(self, value):

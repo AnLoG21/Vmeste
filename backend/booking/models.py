@@ -29,6 +29,11 @@ class AvailabilitySlot(models.Model):
     ends_at = models.DateTimeField()
     is_booked = models.BooleanField(default=False)
     hold_label = models.CharField(max_length=120, blank=True, default="")
+    anonymous_index = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Номер «Без сотрудников N» при staff=null.",
+    )
     recurrence_group = models.CharField(max_length=64, blank=True, default="")
 
 

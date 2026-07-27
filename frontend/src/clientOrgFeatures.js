@@ -429,6 +429,7 @@ function getOrgPinLayoutClass(ymaps) {
         const pinName = props.get("pinName") || "";
         const pinRating = props.get("pinRating");
         const pinClosed = Number(props.get("pinClosed")) === 1;
+        const pinSelected = Number(props.get("pinSelected")) === 1;
         const tier = props.get("pinZoomTier") || "near";
         const iconSize = mapPinIconSizeForTier(tier);
         const hideLabel = tier !== "near";
@@ -453,6 +454,7 @@ function getOrgPinLayoutClass(ymaps) {
         const pinClass = [
           "ymap-org-pin",
           pinClosed && "ymap-org-pin--closed",
+          pinSelected && "ymap-org-pin--selected",
           tier !== "near" && `ymap-org-pin--${tier}`,
         ]
           .filter(Boolean)
@@ -479,7 +481,7 @@ function getOrgPinLayoutClass(ymaps) {
   return orgPinLayoutClass;
 }
 
-export function buildYmapOrgPlacemark(ymaps, loc, onClick, now = new Date(), zoom = 14) {
+export function buildYmapOrgPlacemark(ymaps, loc, onClick, now = new Date(), zoom = 14, opts = {}) {
   const lat = Number(loc.latitude);
   const lon = Number(loc.longitude);
   const name = escapeMapHtml(
@@ -491,6 +493,7 @@ export function buildYmapOrgPlacemark(ymaps, loc, onClick, now = new Date(), zoo
   const pinZoomTier = getMapPinZoomTier(zoom);
   const iconHref = sphereMapIconHref(loc.provider_sphere);
   const layout = getOrgPinLayoutClass(ymaps);
+  const selected = Boolean(opts?.selected);
 
   const pm = new ymaps.Placemark(
     [lat, lon],
@@ -500,6 +503,7 @@ export function buildYmapOrgPlacemark(ymaps, loc, onClick, now = new Date(), zoo
       pinRating,
       pinClosed: pinClosed ? 1 : 0,
       pinZoomTier,
+      pinSelected: selected ? 1 : 0,
       vmesteLoc: loc,
       hintContent: (loc.organization_name && String(loc.organization_name).trim()) || loc.title || "",
     },
@@ -507,7 +511,7 @@ export function buildYmapOrgPlacemark(ymaps, loc, onClick, now = new Date(), zoo
       iconLayout: layout,
       iconLayoutWidth: 220,
       iconLayoutHeight: 56,
-      zIndex: 1000,
+      zIndex: selected ? 2000 : 1000,
       cursor: "pointer",
       hasHint: true,
       openBalloonOnClick: false,

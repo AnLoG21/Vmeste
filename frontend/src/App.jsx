@@ -1547,11 +1547,45 @@ function staffIntervalOptionLabel(link) {
   return title ? `${name} — ${title}` : name;
 }
 
-function intervalStaffConflicts(templateStaffId, slotStaffId) {
-  const tSid = templateStaffId == null || templateStaffId === "" ? null : Number(templateStaffId);
-  const sSid = slotStaffId == null || slotStaffId === "" ? null : Number(slotStaffId);
-  if (tSid == null || sSid == null) return true;
-  return tSid === sSid;
+function parseIntervalAssignee(value) {
+  const raw = String(value || "");
+  if (raw.startsWith("anon:")) {
+    const n = Number(raw.slice(5));
+    return { staff_id: null, anonymous_index: Number.isFinite(n) && n > 0 ? n : null };
+  }
+  if (raw.startsWith("staff:")) {
+    const n = Number(raw.slice(6));
+    return { staff_id: Number.isFinite(n) ? n : null, anonymous_index: null };
+  }
+  if (raw && !Number.isNaN(Number(raw))) {
+    return { staff_id: Number(raw), anonymous_index: null };
+  }
+  return { staff_id: null, anonymous_index: null };
+}
+
+function intervalAssigneeValue(staffId, anonymousIndex) {
+  if (anonymousIndex != null && anonymousIndex !== "") return `anon:${Number(anonymousIndex)}`;
+  if (staffId != null && staffId !== "") return `staff:${Number(staffId)}`;
+  return "";
+}
+
+function intervalStaffConflicts(template, slot) {
+  const tStaff =
+    template?.staff_id == null || template?.staff_id === "" ? null : Number(template.staff_id);
+  const tAnon =
+    template?.anonymous_index == null || template?.anonymous_index === ""
+      ? null
+      : Number(template.anonymous_index);
+  const sStaff = slot?.staff == null || slot?.staff === "" ? null : Number(slot.staff);
+  const sAnon =
+    slot?.anonymous_index == null || slot?.anonymous_index === ""
+      ? null
+      : Number(slot.anonymous_index);
+  if (tStaff != null && sStaff != null) return tStaff === sStaff;
+  if (tStaff == null && sStaff == null) {
+    return Number(tAnon ?? 0) === Number(sAnon ?? 0);
+  }
+  return false;
 }
 
 /** Group saved interval templates by staff for per-employee rows. */
@@ -1559,20 +1593,34 @@ function groupSavedIntervalsByStaff(intervals, orgStaff) {
   const linkByStaffId = new Map((orgStaff || []).map((l) => [Number(l.staff), l]));
   const map = new Map();
   for (const t of intervals || []) {
-    const sid = t.staff_id == null || t.staff_id === "" ? "none" : String(t.staff_id);
+    const anon =
+      t.anonymous_index != null && t.anonymous_index !== "" ? Number(t.anonymous_index) : null;
+    const sid =
+      anon != null
+        ? `anon:${anon}`
+        : t.staff_id == null || t.staff_id === ""
+          ? "none"
+          : String(t.staff_id);
     if (!map.has(sid)) {
       let staff_label = "Без сотрудника";
       let job_title = "";
-      if (sid !== "none") {
+      if (sid.startsWith("anon:")) {
+        staff_label = `Без сотрудников ${anon}`;
+      } else if (sid !== "none") {
         const link = linkByStaffId.get(Number(t.staff_id));
         staff_label = formatStaffFullName(link?.staff_user) || `Мастер ${t.staff_id}`;
         job_title = (link?.job_title || "").trim();
       }
-      map.set(sid, { staff_id: t.staff_id ?? null, staff_label, job_title, templates: [] });
+      map.set(sid, { staff_id: t.staff_id ?? null, anonymous_index: anon, staff_label, job_title, templates: [] });
     }
     map.get(sid).templates.push(t);
   }
   return [...map.values()].sort((a, b) => {
+    if (a.anonymous_index != null && b.anonymous_index == null) return 1;
+    if (a.anonymous_index == null && b.anonymous_index != null) return -1;
+    if (a.anonymous_index != null && b.anonymous_index != null) {
+      return Number(a.anonymous_index) - Number(b.anonymous_index);
+    }
     if (a.staff_id == null && b.staff_id != null) return 1;
     if (a.staff_id != null && b.staff_id == null) return -1;
     return String(a.staff_label).localeCompare(String(b.staff_label), "ru");
@@ -2378,6 +2426,7 @@ export default function App() {
   }
 
   const orgPhotoLightboxTouchX = useRef(0);
+  const mapOrgSheetTouchY = useRef(null);
 
   useEffect(() => {
     if (!orgPhotoLightbox?.items?.length) return undefined;
@@ -2409,7 +2458,7 @@ export default function App() {
   const [bookingMessageError, setBookingMessageError] = useState(null);
   const [reviewModalBooking, setReviewModalBooking] = useState(null);
   const [reviewModalReview, setReviewModalReview] = useState(null);
-  const [reviewForm, setReviewForm] = useState({ rating: 5, staff_rating: 5, text: "" });
+  const [reviewForm, setReviewForm] = useState({ rating: 5, staff_rating: 5, text: "", staff_text: "" });
   const [reviewSubmitError, setReviewSubmitError] = useState("");
   const [providerReviews, setProviderReviews] = useState([]);
   const [providerReviewsOrdering, setProviderReviewsOrdering] = useState("-created_at");
@@ -2447,7 +2496,7 @@ export default function App() {
     end_time: "18:00",
     repeat_type: "none",
     repeat_count: "1",
-    staff_id: "",
+    assignee: "",
   });
   const [manualHoldForm, setManualHoldForm] = useState(() => ({
     date: todayIsoDate(),
@@ -3523,6 +3572,14 @@ export default function App() {
   }, [mapMarkersTick, currentView, me?.role]);
 
   useEffect(() => {
+    if (currentView !== "client_map" || me?.role !== "client" || !clientDiscoverMapRef.current) return;
+    paintClientDiscoverMapMarkers(allLocations, {
+      fitView: false,
+      selectedId: mapOrgPopup?.id ?? null,
+    });
+  }, [mapOrgPopup?.id, currentView, me?.role]);
+
+  useEffect(() => {
     currentViewRef.current = currentView;
   }, [currentView]);
 
@@ -4510,7 +4567,7 @@ export default function App() {
     }
   }
 
-  function paintClientDiscoverMapMarkers(locations, { fitView = false } = {}) {
+  function paintClientDiscoverMapMarkers(locations, { fitView = false, selectedId = null } = {}) {
     const ymaps = window.ymaps;
     const map = clientDiscoverMapRef.current;
     if (!ymaps || !map || !Array.isArray(locations)) return;
@@ -4523,6 +4580,7 @@ export default function App() {
       });
     }
     const zoom = map.getZoom();
+    const selected = selectedId != null ? selectedId : mapOrgPopup?.id;
     map.geoObjects.removeAll();
     clientMyLocationPlacemarkRef.current = null;
     const coordsList = [];
@@ -4530,9 +4588,16 @@ export default function App() {
       const lat = Number(loc.latitude);
       const lon = Number(loc.longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      const pm = buildYmapOrgPlacemark(ymaps, loc, () => {
-        openOrgOnMap(loc);
-      }, new Date(), zoom);
+      const pm = buildYmapOrgPlacemark(
+        ymaps,
+        loc,
+        () => {
+          openOrgOnMap(loc);
+        },
+        new Date(),
+        zoom,
+        { selected: selected != null && String(loc.id) === String(selected) },
+      );
       map.geoObjects.add(pm);
       coordsList.push([lat, lon]);
     }
@@ -6638,6 +6703,22 @@ export default function App() {
     await loadSellerData();
   }
 
+  async function addAnonymousSeat() {
+    const next = (Number(me?.anonymous_seat_count) || 0) + 1;
+    const response = await authFetch(`${API_URL}/users/me/`, {
+      method: "PATCH",
+      body: JSON.stringify({ anonymous_seat_count: next }),
+    });
+    if (!response.ok) {
+      setSellerStatus("Не удалось добавить место «Без сотрудников».");
+      return;
+    }
+    const data = await response.json();
+    setMe((prev) => ({ ...prev, ...data }));
+    setIntervalForm((p) => ({ ...p, assignee: `anon:${next}` }));
+    setSellerStatus(`Добавлено: Без сотрудников ${next}`);
+  }
+
   async function createSlot(event) {
     event.preventDefault();
     const response = await authFetch(`${API_URL}/booking/slots/`, { method: "POST", body: JSON.stringify(slotForm) });
@@ -6657,12 +6738,15 @@ export default function App() {
     const baseStart = new Date(`${baseDate}T${intervalForm.start_time}:00`);
     const baseEnd = new Date(`${baseDate}T${intervalForm.end_time}:00`);
     if (baseStart >= baseEnd) return setSellerStatus("Время начала должно быть раньше окончания.");
-    const templateStaffId = intervalForm.staff_id ? Number(intervalForm.staff_id) : null;
+    const assignee = parseIntervalAssignee(intervalForm.assignee);
+    const templateStaffId = assignee.staff_id;
+    const templateAnon = assignee.anonymous_index;
     const hasDuplicate = savedIntervals.some(
       (s) =>
         s.start_time === intervalForm.start_time &&
         s.end_time === intervalForm.end_time &&
-        (s.staff_id ?? null) === templateStaffId
+        (s.staff_id ?? null) === templateStaffId &&
+        (s.anonymous_index ?? null) === templateAnon,
     );
     if (hasDuplicate) {
       const msg = "Такой интервал уже есть в сохранённых — выбери другой диапазон времени или сотрудника.";
@@ -6670,11 +6754,16 @@ export default function App() {
       showIntervalToast(msg);
       return;
     }
+    if (templateStaffId == null && templateAnon == null) {
+      setSellerStatus("Выбери сотрудника или место «Без сотрудников».");
+      return;
+    }
     const template = {
       id: `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       start_time: intervalForm.start_time,
       end_time: intervalForm.end_time,
       staff_id: templateStaffId,
+      anonymous_index: templateAnon,
     };
     setSavedIntervals((prev) => [template, ...prev]);
     setSelectedIntervalId(template.id);
@@ -6702,6 +6791,7 @@ export default function App() {
         starts_at: start.toISOString(),
         ends_at: end.toISOString(),
         ...(template.staff_id != null ? { staff: template.staff_id } : {}),
+        ...(template.anonymous_index != null ? { anonymous_index: template.anonymous_index } : {}),
       }),
     });
     if (!response.ok) {
@@ -6749,6 +6839,7 @@ export default function App() {
           starts_at: start.toISOString(),
           ends_at: end.toISOString(),
           ...(template.staff_id != null ? { staff: template.staff_id } : {}),
+          ...(template.anonymous_index != null ? { anonymous_index: template.anonymous_index } : {}),
         }),
       });
       if (response.ok) {
@@ -6779,7 +6870,7 @@ export default function App() {
     // Запрещаем только перекрытие с существующими свободными интервалами.
     const daySlots = slots.filter((s) => s.starts_at?.slice(0, 10) === date && !s.is_booked);
     for (const slot of daySlots) {
-      if (!intervalStaffConflicts(template.staff_id, slot.staff)) continue;
+      if (!intervalStaffConflicts(template, slot)) continue;
       const slotStartMs = new Date(slot.starts_at).getTime();
       const slotEndMs = new Date(slot.ends_at).getTime();
       const sameBounds = slotStartMs === startMs && slotEndMs === endMs;
@@ -7257,7 +7348,6 @@ export default function App() {
     setMapOrgReviewsOpen(false);
     setMapOrgReviews([]);
     setStaffReviewModal(null);
-    setStaffReviewStatus("");
     window.setTimeout(fitClientDiscoverMapViewport, 0);
     window.setTimeout(fitClientDiscoverMapViewport, 120);
   }
@@ -7545,6 +7635,12 @@ export default function App() {
         </div>
         {r.staff_name ? <p className="muted small">Мастер: {r.staff_name}</p> : null}
         <ReviewTextContent review={r} />
+        {r.staff_text ? (
+          <p className="review-item-text review-item-text--staff">
+            <span className="muted small">Отзыв о сотруднике: </span>
+            {r.staff_text}
+          </p>
+        ) : null}
         {r.photos?.length > 0 && (
           <div className="review-photos">
             {r.photos.map((p, photoIdx) => (
@@ -7748,7 +7844,7 @@ export default function App() {
         });
         setReviewModalBooking(null);
         setReviewModalReview(null);
-        setReviewForm({ rating: 5, staff_rating: 5, text: "" });
+        setReviewForm({ rating: 5, staff_rating: 5, text: "", staff_text: "" });
         if (input) input.value = "";
         setReviewSubmitError("");
         setClientStatus("Отзыв дополнен.");
@@ -7771,6 +7867,9 @@ export default function App() {
       fd.append("staff_rating", String(reviewForm.staff_rating));
     }
     fd.append("text", reviewForm.text || "");
+    if (reviewModalBooking.staff_user_id) {
+      fd.append("staff_text", reviewForm.staff_text || "");
+    }
     if (input?.files) {
       for (const f of input.files) fd.append("photos", f);
     }
@@ -7799,7 +7898,7 @@ export default function App() {
       );
       setReviewModalBooking(null);
       setReviewModalReview(null);
-      setReviewForm({ rating: 5, staff_rating: 5, text: "" });
+      setReviewForm({ rating: 5, staff_rating: 5, text: "", staff_text: "" });
       if (input) input.value = "";
       setReviewSubmitError("");
       setClientStatus("Отзыв отправлен.");
@@ -8013,10 +8112,11 @@ export default function App() {
         rating: existingReview.rating,
         staff_rating: existingReview.staff_rating || 5,
         text: "",
+        staff_text: "",
       });
     } else {
       setReviewModalReview(null);
-      setReviewForm({ rating: 5, staff_rating: 5, text: "" });
+      setReviewForm({ rating: 5, staff_rating: 5, text: "", staff_text: "" });
     }
     setReviewModalBooking({ ...booking, staff_user_id: booking.staff || null });
   }
@@ -8290,22 +8390,39 @@ export default function App() {
                 <input type="time" value={intervalForm.start_time} onChange={(e) => setIntervalForm({ ...intervalForm, start_time: e.target.value })} required />
                 <input type="time" value={intervalForm.end_time} onChange={(e) => setIntervalForm({ ...intervalForm, end_time: e.target.value })} required />
               </div>
-              {activeIntervalStaff.length > 0 ? (
-                <label className="field-label interval-free-staff-field">
-                  <span>Сотрудник</span>
+              <label className="field-label interval-free-staff-field">
+                <span>Сотрудник</span>
+                <div className="interval-free-staff-row">
                   <select
-                    value={intervalForm.staff_id}
-                    onChange={(e) => setIntervalForm({ ...intervalForm, staff_id: e.target.value })}
+                    value={intervalForm.assignee}
+                    onChange={(e) => setIntervalForm({ ...intervalForm, assignee: e.target.value })}
+                    required
                   >
-                    <option value="">Без сотрудника</option>
+                    <option value="" disabled>
+                      Выберите…
+                    </option>
+                    {Array.from({ length: Number(me?.anonymous_seat_count) || 0 }, (_, i) => i + 1).map((n) => (
+                      <option key={`anon-${n}`} value={`anon:${n}`}>
+                        Без сотрудников {n}
+                      </option>
+                    ))}
                     {activeIntervalStaff.map((link) => (
-                      <option key={link.id} value={link.staff}>
+                      <option key={link.id} value={`staff:${link.staff}`}>
                         {staffIntervalOptionLabel(link)}
                       </option>
                     ))}
                   </select>
-                </label>
-              ) : null}
+                  <button
+                    type="button"
+                    className="interval-anon-seat-btn"
+                    title="Добавить «Без сотрудников»"
+                    aria-label="Добавить место без сотрудника"
+                    onClick={() => void addAnonymousSeat()}
+                  >
+                    👤+
+                  </button>
+                </div>
+              </label>
               <button type="submit">Создать интервал</button>
             </form>
             <p className="status">{sellerStatus}</p>
@@ -8317,7 +8434,14 @@ export default function App() {
           {savedIntervals.length === 0 && <p className="muted">Пока нет сохранённых интервалов.</p>}
           <div className="interval-staff-groups">
             {groupedSavedIntervals.map((group) => (
-              <div key={group.staff_id ?? "none"} className="interval-staff-group">
+              <div
+                key={
+                  group.anonymous_index != null
+                    ? `anon:${group.anonymous_index}`
+                    : group.staff_id ?? "none"
+                }
+                className="interval-staff-group"
+              >
                 <p className="interval-staff-group-name">
                   {group.staff_label}
                   {group.job_title ? <span className="interval-staff-group-job"> · {group.job_title}</span> : null}
@@ -11580,19 +11704,28 @@ export default function App() {
                   role="dialog"
                   aria-label="Организация на карте"
                 >
-                  <div className="map-org-sheet-sticky-top">
-                    <button
-                      type="button"
-                      className="map-org-sheet-close map-org-sheet-close--float"
-                      aria-label="Закрыть"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        closeMapOrgSheet();
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className="map-org-sheet-handle"
+                    aria-label="Свернуть карточку"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closeMapOrgSheet();
+                    }}
+                    onTouchStart={(e) => {
+                      mapOrgSheetTouchY.current = e.touches?.[0]?.clientY ?? 0;
+                    }}
+                    onTouchEnd={(e) => {
+                      const startY = mapOrgSheetTouchY.current;
+                      mapOrgSheetTouchY.current = null;
+                      if (startY == null) return;
+                      const endY = e.changedTouches?.[0]?.clientY ?? startY;
+                      if (endY - startY > 56) closeMapOrgSheet();
+                    }}
+                  >
+                    <span className="map-org-sheet-handle-bar" aria-hidden />
+                  </button>
+                  <div className="map-org-sheet-body">
                   <div className="map-org-sheet-header">
                     {(() => {
                       const sphereKey = mapOrgPopup.provider_sphere || mapOrgProfile?.provider_sphere;
@@ -11813,7 +11946,37 @@ export default function App() {
                             if (!list.length) return <p className="muted">Пока нет отзывов.</p>;
                             return (
                               <ul className="list review-list">
-                                {list.map((r) => renderReviewListItem(r, { reviewsForGallery: list }))}
+                                {list.map((r) => (
+                                  <li
+                                    key={r.id}
+                                    className={["review-item", r.is_new && "review-item--new"]
+                                      .filter(Boolean)
+                                      .join(" ")}
+                                  >
+                                    <div className="review-item-head">
+                                      <strong>{r.client_name || "Клиент"}</strong>
+                                      {(r.staff_rating || r.rating) ? (
+                                        <span
+                                          className="review-stars"
+                                          aria-label={`Оценка ${r.staff_rating || r.rating}`}
+                                        >
+                                          {"★".repeat(r.staff_rating || r.rating)}
+                                          <span className="review-stars-empty">
+                                            {"☆".repeat(Math.max(0, 5 - (r.staff_rating || r.rating)))}
+                                          </span>
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    {r.staff_text ? (
+                                      <p className="review-item-text">{r.staff_text}</p>
+                                    ) : (
+                                      <ReviewTextContent review={r} />
+                                    )}
+                                    {r.staff_text && r.text ? (
+                                      <p className="muted small review-item-text">Об услуге: {r.text}</p>
+                                    ) : null}
+                                  </li>
+                                ))}
                               </ul>
                             );
                           })()}
@@ -11902,6 +12065,7 @@ export default function App() {
 
                   )}
 
+                  </div>
                 </div>
               )}
             </div>
@@ -12403,11 +12567,19 @@ export default function App() {
                   </>
                 )}
                 <textarea
-                  placeholder={reviewModalReview?.id ? "Дополнительный текст к отзыву" : "Комментарий (необязательно)"}
+                  placeholder={reviewModalReview?.id ? "Дополнительный текст к отзыву" : "Комментарий об услуге (необязательно)"}
                   value={reviewForm.text}
                   onChange={(e) => setReviewForm((p) => ({ ...p, text: e.target.value }))}
-                  rows={4}
+                  rows={3}
                 />
+                {!reviewModalReview?.id && reviewModalBooking.staff_user_id ? (
+                  <textarea
+                    placeholder="Отзыв о сотруднике (необязательно)"
+                    value={reviewForm.staff_text}
+                    onChange={(e) => setReviewForm((p) => ({ ...p, staff_text: e.target.value }))}
+                    rows={3}
+                  />
+                ) : null}
                 <label className="field-label" htmlFor="review-photos-input">
                   {reviewModalReview?.id ? "Добавить фото" : "Фото (необязательно)"}
                 </label>

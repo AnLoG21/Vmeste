@@ -3891,10 +3891,10 @@ body.theme-dark .tg-chat-search {
 }
 
 .client-discover-map-wrap--has-sheet .client-discover-map {
-  flex: 1 1 42%;
-  height: auto;
-  min-height: 140px;
-  max-height: 48vh;
+  flex: 1 1 auto;
+  height: min(520px, 62vh);
+  min-height: 280px;
+  max-height: none;
 }
 
 .client-discover-map-wrap:not(.client-discover-map-wrap--has-sheet) .client-discover-map {
@@ -3906,14 +3906,17 @@ body.theme-dark .tg-chat-search {
 }
 
 .client-discover-map-wrap--org-reviews .client-discover-map {
-  flex: 0 0 auto;
-  min-height: 100px;
-  max-height: 32vh;
+  flex: 1 1 auto;
+  min-height: 280px;
+  max-height: none;
 }
 
 .map-org-sheet {
-  position: relative;
-  flex: 0 0 auto;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 10px;
+  bottom: 0;
   z-index: 5000;
   width: 100%;
   height: auto;
@@ -3922,32 +3925,65 @@ body.theme-dark .tg-chat-search {
   background: #fff;
   border-radius: 16px 16px 0 0;
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.18);
-  padding: 12px 16px 20px;
-  overflow: visible;
+  padding: 0;
+  overflow: hidden;
   pointer-events: auto;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .map-org-sheet--reviews-open {
+  overflow: hidden;
+}
+
+.map-org-sheet-handle {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  padding: 8px 0 4px;
+  border: none;
+  background: transparent !important;
+  box-shadow: none !important;
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+  user-select: none;
+  touch-action: none;
+}
+
+.map-org-sheet-handle:hover,
+.map-org-sheet-handle:active,
+.map-org-sheet-handle:focus,
+.map-org-sheet-handle:focus-visible {
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none;
+  transform: none;
+}
+
+.map-org-sheet-handle-bar {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: #d1d5db;
+  pointer-events: none;
+}
+
+.map-org-sheet-body {
   flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  padding: 4px 16px 20px;
 }
 
 .map-org-sheet-close {
-  position: absolute;
-  top: 8px;
-  right: 10px;
-  width: 40px;
-  height: 40px;
-  border: none;
-  background: #f5f5f5;
-  border-radius: 50%;
-  font-size: 24px;
-  line-height: 1;
-  cursor: pointer;
-  z-index: 10;
-  pointer-events: auto;
+  display: none;
 }
 
 .map-org-sheet-header {
@@ -4400,9 +4436,10 @@ body.theme-dark .tg-chat-search {
   color: #d4d0cb;
 }
 
-.review-item-text {
-  margin: 6px 0 0;
-  white-space: pre-wrap;
+.review-item-text--staff {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #f0e6dc;
 }
 
 .review-photos {
@@ -5840,31 +5877,27 @@ body.theme-dark .field-label {
   font-size: 11px;
 }
 
+.ymap-org-pin--selected .ymap-org-pin-icon {
+  transform: scale(1.12);
+  filter: drop-shadow(0 0 0 2px #ff7a00) drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
+}
+
+.ymap-org-pin--selected .ymap-org-pin-label {
+  box-shadow: 0 0 0 2px #ff7a00, 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
 .map-org-sheet {
-  max-height: min(78vh, 640px);
-  overflow-y: auto;
-  position: relative;
+  max-height: none;
+  overflow: hidden;
+  position: absolute;
 }
 
 .map-org-sheet-sticky-top {
-  position: sticky;
-  top: 0;
-  z-index: 40;
-  display: flex;
-  justify-content: flex-end;
-  margin: -4px 0 0;
-  padding: 4px 0 8px;
-  background: linear-gradient(to bottom, #fff 70%, rgba(255, 255, 255, 0));
-  pointer-events: none;
+  display: none;
 }
 
 .map-org-sheet-close--float {
-  pointer-events: auto;
-  position: relative;
-  top: auto;
-  right: auto;
-  flex-shrink: 0;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  display: none;
 }
 
 .map-org-carousel {
@@ -8152,6 +8185,37 @@ body.theme-dark .password-eye-btn:hover {
   box-sizing: border-box;
   position: relative;
   z-index: 1;
+}
+
+.interval-free-staff-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.interval-free-staff-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.interval-anon-seat-btn {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid #ffd9bd;
+  background: #fff7f0 !important;
+  color: #8d3e00;
+  font-size: 15px;
+  line-height: 1;
+  box-shadow: none !important;
+}
+
+.interval-anon-seat-btn:hover,
+.interval-anon-seat-btn:active {
+  background: #ffe8d6 !important;
 }
 
 .interval-calendar .interval-templates {

@@ -39,6 +39,7 @@ class Review(models.Model):
         validators=[MinValueValidator(1), MaxValueValidator(5)],
     )
     text = models.TextField(blank=True, default="")
+    staff_text = models.TextField(blank=True, default="")
     provider_seen_at = models.DateTimeField(null=True, blank=True)
     supplemented_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -1,7 +1,8 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.db.models import Q
+from django.db.models import F
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from catalog.models import Service
@@ -13,7 +14,7 @@ User = get_user_model()
 
 def staff_booking_label(user) -> str:
     if not user:
-        return "Мастер"
+        return "Без сотрудника"
     fn = (user.first_name or "").strip() or user.username
     ln = (user.last_name or "").strip()
     if ln:
@@ -91,7 +92,7 @@ def _staff_ids_for_service(provider_id: int, service: Service) -> list[int | Non
 
 
 def _booked_ranges(provider_id: int, book_date):
-    """Busy ranges for a day: client bookings and manual holds (is_booked slots)."""
+    """Busy ranges: (starts, ends, staff_id, anonymous_index)."""
     qs = AvailabilitySlot.objects.filter(
         provider_id=provider_id,
         is_booked=True,
@@ -106,20 +107,34 @@ def _booked_ranges(provider_id: int, book_date):
         except Booking.DoesNotExist:
             booking = None
         sid = (booking.staff_id if booking and booking.staff_id else None) or slot.staff_id
-        out.append((slot.starts_at, slot.ends_at, sid))
+        out.append((slot.starts_at, slot.ends_at, sid, slot.anonymous_index))
     return out
 
 
-def _overlaps(start, end, staff_id, booked):
-    for bs, be, b_staff in booked:
-        if bs < end and be > start:
-            if staff_id is None and b_staff is None:
-                return True
-            if staff_id is not None and b_staff is not None and staff_id == b_staff:
-                return True
-            if staff_id is None or b_staff is None:
-                return True
+def _overlaps_named(start, end, staff_id, booked):
+    """Именованный сотрудник конфликтует только с тем же staff_id."""
+    if staff_id is None:
+        return False
+    for bs, be, b_staff, _anon in booked:
+        if bs < end and be > start and b_staff is not None and b_staff == staff_id:
+            return True
     return False
+
+
+def _anon_busy_count(start, end, booked) -> int:
+    n = 0
+    for bs, be, b_staff, _anon in booked:
+        if bs < end and be > start and b_staff is None:
+            n += 1
+    return n
+
+
+def _anon_busy_indexes(start, end, booked) -> set:
+    indexes = set()
+    for bs, be, b_staff, anon in booked:
+        if bs < end and be > start and b_staff is None:
+            indexes.add(anon if anon is not None else 0)
+    return indexes
 
 
 def list_available_windows(provider_id: int, service_id: int, book_date) -> list[dict]:
@@ -129,7 +144,7 @@ def list_available_windows(provider_id: int, service_id: int, book_date) -> list
         return []
 
     duration = timedelta(minutes=max(1, int(service.duration_minutes or 30)))
-    slots = (
+    slots = list(
         AvailabilitySlot.objects.filter(
             provider_id=provider_id,
             is_booked=False,
@@ -145,30 +160,23 @@ def list_available_windows(provider_id: int, service_id: int, book_date) -> list
     booked = _booked_ranges(provider_id, book_date)
     windows = []
     now = timezone.now()
+    allowed = _staff_ids_for_service(provider_id, service)
 
-    for slot in slots:
-        eligible = []
-        if slot.staff_id:
-            allowed = _staff_ids_for_service(provider_id, service)
-            if slot.staff_id in allowed or (None in allowed and not _org_uses_staff_assignments(provider_id)):
-                eligible = [slot.staff_id]
-        else:
-            allowed = _staff_ids_for_service(provider_id, service)
-            eligible = [x for x in allowed if x is not None]
-            if not eligible and None in allowed:
-                eligible = [None]
+    named_slots = [s for s in slots if s.staff_id]
+    anon_slots = [s for s in slots if not s.staff_id]
 
+    for slot in named_slots:
+        if _org_uses_staff_assignments(provider_id) and slot.staff_id not in allowed:
+            continue
+        sid = slot.staff_id
         cur = slot.starts_at
         while cur + duration <= slot.ends_at:
             w_end = cur + duration
-            # Skip windows that already started (or start in the past)
             if cur < now:
                 cur += duration
                 continue
-            for sid in eligible:
-                if _overlaps(cur, w_end, sid, booked):
-                    continue
-                user = staff_by_id.get(sid) if sid else None
+            if not _overlaps_named(cur, w_end, sid, booked):
+                user = staff_by_id.get(sid)
                 windows.append(
                     {
                         "starts_at": cur.isoformat(),
@@ -176,6 +184,35 @@ def list_available_windows(provider_id: int, service_id: int, book_date) -> list
                         "staff_id": sid,
                         "staff_label": staff_booking_label(user),
                         "parent_slot_id": slot.id,
+                    }
+                )
+            cur += duration
+
+    # Одна клиентская полоса «Без сотрудника»: окно доступно, пока есть свободная ёмкость.
+    seen_anon_times: set[tuple[str, str]] = set()
+    for slot in anon_slots:
+        cur = slot.starts_at
+        while cur + duration <= slot.ends_at:
+            w_end = cur + duration
+            if cur < now:
+                cur += duration
+                continue
+            key = (cur.isoformat(), w_end.isoformat())
+            if key in seen_anon_times:
+                cur += duration
+                continue
+            covering = [s for s in anon_slots if s.starts_at <= cur and s.ends_at >= w_end]
+            remaining = len(covering) - _anon_busy_count(cur, w_end, booked)
+            if remaining > 0:
+                seen_anon_times.add(key)
+                windows.append(
+                    {
+                        "starts_at": cur.isoformat(),
+                        "ends_at": w_end.isoformat(),
+                        "staff_id": None,
+                        "staff_label": "Без сотрудника",
+                        "parent_slot_id": covering[0].id,
+                        "remaining": remaining,
                     }
                 )
             cur += duration
@@ -207,30 +244,55 @@ def list_available_dates(provider_id: int, service_id: int, date_from, date_to) 
 def book_time_window(provider_id: int, service_id: int, starts_at, ends_at, staff_id, client, comment: str):
     """Забронировать окно внутри свободного интервала без разрезания исходного слота."""
     service = Service.objects.get(pk=service_id, provider_id=provider_id, is_active=True)
-    container = (
-        AvailabilitySlot.objects.filter(
-            provider_id=provider_id,
-            is_booked=False,
-            starts_at__lte=starts_at,
-            ends_at__gte=ends_at,
+    booked = _booked_ranges(provider_id, starts_at.date())
+    anon_index = None
+
+    if staff_id:
+        container = (
+            AvailabilitySlot.objects.filter(
+                provider_id=provider_id,
+                is_booked=False,
+                staff_id=staff_id,
+                starts_at__lte=starts_at,
+                ends_at__gte=ends_at,
+            )
+            .order_by("starts_at")
+            .first()
         )
-        .order_by("starts_at")
-        .first()
-    )
-    if not container:
-        raise ValueError("Интервал недоступен.")
+        if not container:
+            raise ValueError("Интервал недоступен.")
+        if _overlaps_named(starts_at, ends_at, staff_id, booked):
+            raise ValueError("Это время уже занято.")
+        sid = staff_id
+    else:
+        containers = list(
+            AvailabilitySlot.objects.filter(
+                provider_id=provider_id,
+                is_booked=False,
+                staff__isnull=True,
+                starts_at__lte=starts_at,
+                ends_at__gte=ends_at,
+            ).order_by(models_order_anon(), "starts_at")
+        )
+        busy_idx = _anon_busy_indexes(starts_at, ends_at, booked)
+        container = None
+        for c in containers:
+            idx = c.anonymous_index if c.anonymous_index is not None else 0
+            if idx not in busy_idx:
+                container = c
+                anon_index = c.anonymous_index
+                break
+        if not container:
+            raise ValueError("Интервал недоступен.")
+        sid = None
 
-    sid = staff_id or container.staff_id
-    if _overlaps(starts_at, ends_at, sid, _booked_ranges(provider_id, starts_at.date())):
-        raise ValueError("Это время уже занято.")
-
-    # Свободный интервал организатора остаётся целым; занятость — отдельный слот.
     booked_slot = AvailabilitySlot.objects.create(
         provider_id=provider_id,
         staff_id=sid,
         starts_at=starts_at,
         ends_at=ends_at,
         is_booked=True,
+        anonymous_index=anon_index,
     )
 
     booking = Booking.objects.create(
@@ -250,36 +312,83 @@ def book_time_window(provider_id: int, service_id: int, starts_at, ends_at, staf
     return booking
 
 
+def models_order_anon():
+    """Order anonymous seats by index."""
+    return Coalesce(F("anonymous_index"), 0)
+
+
 def manual_hold_window(provider_id: int, starts_at, ends_at, guest_name: str = ""):
     """Забронировать интервал организацией без клиентской записи (hold_label = ФИО/заметка)."""
     if ends_at <= starts_at:
         raise ValueError("Время начала должно быть раньше окончания.")
-    container = (
+    booked = _booked_ranges(provider_id, starts_at.date())
+    # Prefer matching named container if any cover; else anon capacity
+    named = (
         AvailabilitySlot.objects.filter(
             provider_id=provider_id,
             is_booked=False,
+            staff__isnull=False,
             starts_at__lte=starts_at,
             ends_at__gte=ends_at,
         )
         .order_by("starts_at")
         .first()
     )
-    if not container:
-        raise ValueError("В выбранном диапазоне нет свободного интервала.")
+    if named and not _overlaps_named(starts_at, ends_at, named.staff_id, booked):
+        return AvailabilitySlot.objects.create(
+            provider_id=provider_id,
+            staff_id=named.staff_id,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            is_booked=True,
+            hold_label=(guest_name or "").strip()[:120],
+        )
 
-    label = (guest_name or "").strip()[:120]
-    sid = container.staff_id
-    if _overlaps(starts_at, ends_at, sid, _booked_ranges(provider_id, starts_at.date())):
-        raise ValueError("Это время уже занято.")
-
-    return AvailabilitySlot.objects.create(
-        provider_id=provider_id,
-        staff_id=sid,
-        starts_at=starts_at,
-        ends_at=ends_at,
-        is_booked=True,
-        hold_label=label,
+    containers = list(
+        AvailabilitySlot.objects.filter(
+            provider_id=provider_id,
+            is_booked=False,
+            staff__isnull=True,
+            starts_at__lte=starts_at,
+            ends_at__gte=ends_at,
+        ).order_by(models_order_anon(), "starts_at")
     )
+    busy_idx = _anon_busy_indexes(starts_at, ends_at, booked)
+    for c in containers:
+        idx = c.anonymous_index if c.anonymous_index is not None else 0
+        if idx in busy_idx:
+            continue
+        return AvailabilitySlot.objects.create(
+            provider_id=provider_id,
+            staff_id=None,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            is_booked=True,
+            hold_label=(guest_name or "").strip()[:120],
+            anonymous_index=c.anonymous_index,
+        )
+
+    # Fallback: any covering free named seat that isn't busy
+    for c in AvailabilitySlot.objects.filter(
+        provider_id=provider_id,
+        is_booked=False,
+        starts_at__lte=starts_at,
+        ends_at__gte=ends_at,
+    ).order_by("starts_at"):
+        if c.staff_id and _overlaps_named(starts_at, ends_at, c.staff_id, booked):
+            continue
+        if not c.staff_id:
+            continue
+        return AvailabilitySlot.objects.create(
+            provider_id=provider_id,
+            staff_id=c.staff_id,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            is_booked=True,
+            hold_label=(guest_name or "").strip()[:120],
+        )
+
+    raise ValueError("В выбранном диапазоне нет свободного интервала.")
 
 
 def release_manual_hold(slot: AvailabilitySlot) -> AvailabilitySlot | None:
