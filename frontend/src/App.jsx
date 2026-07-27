@@ -1139,6 +1139,61 @@ function normalizeBookingsList(data) {
   return [];
 }
 
+function normalizeSlotsList(data) {
+  return normalizeBookingsList(data);
+}
+
+/** Manual org holds live as booked slots without a Booking row — map them into booking calendar items. */
+function manualHoldBookingItems(slots, { orgStaff = [], providerId = null, staffJobTitleForUser } = {}) {
+  const staffLinkByStaffId = new Map((orgStaff || []).map((l) => [Number(l.staff), l]));
+  const staffDisplayNameById = (staffId) => {
+    const sid = staffId == null || staffId === "" ? null : Number(staffId);
+    if (!sid) return "";
+    const link = staffLinkByStaffId.get(sid);
+    return link ? formatStaffFullName(link.staff_user) || `id ${sid}` : `id ${sid}`;
+  };
+  return (slots || [])
+    .filter(
+      (s) =>
+        Boolean(s?.is_manual_hold) ||
+        (Boolean(s?.is_booked) && String(s?.booking_service_name || "").trim() === "Ручная бронь"),
+    )
+    .map((s) => {
+      const staffId = s?.staff ?? null;
+      const job =
+        typeof staffJobTitleForUser === "function" ? staffJobTitleForUser(staffId) : "";
+      return {
+        id: `hold-${s.id}`,
+        slot_id: s.id,
+        slot_starts_at: s.starts_at,
+        slot_ends_at: s.ends_at,
+        status: "manual_hold",
+        is_manual_hold: true,
+        service_name: (s.booking_service_name || "").trim() || "Ручная бронь",
+        service_price: "",
+        client_display_name: (s.booking_client_name || s.hold_label || "").trim() || "Ручная бронь",
+        client_username: "",
+        client: null,
+        provider: providerId,
+        staff: staffId,
+        staff_display_name: staffDisplayNameById(staffId),
+        staff_job_title: job || "",
+      };
+    });
+}
+
+function mergeBookingsWithManualHolds(bookingsList, slotsList, opts = {}) {
+  const list = Array.isArray(bookingsList) ? [...bookingsList] : [];
+  const holds = manualHoldBookingItems(slotsList, opts);
+  const existingHoldSlotIds = new Set(
+    list.filter((b) => b?.is_manual_hold).map((b) => Number(b.slot_id || String(b.id).replace(/^hold-/, ""))),
+  );
+  for (const h of holds) {
+    if (!existingHoldSlotIds.has(Number(h.slot_id))) list.push(h);
+  }
+  return list;
+}
+
 function formatApiError(err, status) {
   if (!err || typeof err !== "object") {
     if (status === 500) return "Ошибка сервера. Попробуйте позже.";
@@ -4880,10 +4935,24 @@ export default function App() {
     ]);
     if (catRes.ok) setCategories(await catRes.json());
     if (servRes.ok) setServices(await servRes.json());
-    if (slotRes.ok) setSlots(await slotRes.json());
-    if (bookingRes.ok) setBookings(normalizeBookingsList(await bookingRes.json()));
+    const slotsData = slotRes.ok ? normalizeSlotsList(await slotRes.json()) : [];
+    if (slotRes.ok) setSlots(slotsData);
+    const staffData = staffRes.ok ? await staffRes.json() : orgStaff;
+    if (staffRes.ok) setOrgStaff(staffData);
+    if (bookingRes.ok) {
+      const bookingsData = normalizeBookingsList(await bookingRes.json());
+      setBookings(
+        mergeBookingsWithManualHolds(bookingsData, slotsData, {
+          orgStaff: staffData,
+          providerId: me?.id,
+          staffJobTitleForUser: (userId) => {
+            const link = (staffData || []).find((l) => Number(l.staff) === Number(userId));
+            return (link?.job_title || "").trim();
+          },
+        }),
+      );
+    }
     if (locRes.ok) setLocation(await locRes.json());
-    if (staffRes.ok) setOrgStaff(await staffRes.json());
   }
 
   useEffect(() => {
@@ -4972,16 +5041,32 @@ export default function App() {
       authFetch(`${API_URL}/booking/staff/`),
       authFetch(`${API_URL}/chat/conversations/`),
       authFetch(`${API_URL}/booking/`),
+      authFetch(`${API_URL}/booking/slots/`),
     ];
     if (me?.role === "staff" && staffEffectivePerms.can_delegate_permissions) {
       reqs.push(authFetch(`${API_URL}/catalog/categories/`), authFetch(`${API_URL}/catalog/services/`));
     }
     const results = await Promise.all(reqs);
-    if (results[0].ok) setOrgStaff(await results[0].json());
+    const staffData = results[0].ok ? await results[0].json() : orgStaff;
+    if (results[0].ok) setOrgStaff(staffData);
     if (results[1].ok) setConversations(await results[1].json());
-    if (results[2].ok) setBookings(normalizeBookingsList(await results[2].json()));
-    if (results[3]?.ok) setCategories(await results[3].json());
-    if (results[4]?.ok) setServices(await results[4].json());
+    const slotsData = results[3]?.ok ? normalizeSlotsList(await results[3].json()) : [];
+    if (results[3]?.ok) setSlots(slotsData);
+    if (results[2].ok) {
+      const bookingsData = normalizeBookingsList(await results[2].json());
+      setBookings(
+        mergeBookingsWithManualHolds(bookingsData, slotsData, {
+          orgStaff: staffData,
+          providerId: null,
+          staffJobTitleForUser: (userId) => {
+            const link = (staffData || []).find((l) => Number(l.staff) === Number(userId));
+            return (link?.job_title || "").trim();
+          },
+        }),
+      );
+    }
+    if (results[4]?.ok) setCategories(await results[4].json());
+    if (results[5]?.ok) setServices(await results[5].json());
   }
 
   async function loadChats() {
@@ -6542,7 +6627,8 @@ export default function App() {
   }
 
   async function releaseManualHold(slotId) {
-    const response = await authFetch(`${API_URL}/booking/slots/${slotId}/release-hold/`, {
+    const rawId = String(slotId ?? "").replace(/^hold-/, "");
+    const response = await authFetch(`${API_URL}/booking/slots/${rawId}/release-hold/`, {
       method: "POST",
       body: "{}",
     });
@@ -7043,46 +7129,16 @@ export default function App() {
     if (!bookingsRes.ok) return [];
     let list = normalizeBookingsList(await bookingsRes.json());
 
-    // В блоке "Записи клиентов" хотим показывать ручные брони (ручные отметки в интервалах).
-    // Они хранятся как AvailabilitySlot.is_booked=true, без созданной записи Booking.
     if (canManageBookings()) {
       const slotsRes = await authFetch(`${API_URL}/booking/slots/`);
       if (slotsRes.ok) {
-        const slots = normalizeBookingsList(await slotsRes.json());
-        const manualSlots = (slots || []).filter((s) => s?.is_manual_hold);
-
-        const staffLinkByStaffId = new Map((orgStaff || []).map((l) => [Number(l.staff), l]));
-        const staffDisplayNameById = (staffId) => {
-          const sid = staffId == null || staffId === "" ? null : Number(staffId);
-          if (!sid) return "";
-          const link = staffLinkByStaffId.get(sid);
-          return link ? formatStaffFullName(link.staff_user) || `id ${sid}` : `id ${sid}`;
-        };
-
-        const manualItems = manualSlots.map((s) => {
-          const staffId = s?.staff ?? null;
-          return {
-            id: s.id,
-            // Под единый интерфейс календаря/истории
-            slot_starts_at: s.starts_at,
-            slot_ends_at: s.ends_at,
-            status: "manual_hold",
-            is_manual_hold: true,
-            service_name: (s.booking_service_name || "").trim() || "Ручная бронь",
-            service_price: "",
-            client_display_name: (s.booking_client_name || "").trim(),
-            client_username: "",
-            client: null,
-            provider: me?.id,
-            staff: staffId,
-            staff_display_name: staffDisplayNameById(staffId),
-            staff_job_title: staffJobTitleForUser(staffId),
-          };
+        const slotsData = normalizeSlotsList(await slotsRes.json());
+        setSlots(slotsData);
+        list = mergeBookingsWithManualHolds(list, slotsData, {
+          orgStaff,
+          providerId: me?.id,
+          staffJobTitleForUser,
         });
-
-        const existingIds = new Set((list || []).map((b) => Number(b.id)));
-        const merged = [...(list || []), ...manualItems.filter((x) => !existingIds.has(Number(x.id)))];
-        list = merged;
       }
     }
 
@@ -7745,7 +7801,24 @@ export default function App() {
 
   function renderBookingSlotActions(it) {
     if (!it?.id) return null;
-    if (it?.is_manual_hold || it?.status === "manual_hold") return null;
+    if (it?.is_manual_hold || it?.status === "manual_hold") {
+      if (!canManageBookings()) return null;
+      return (
+        <div className="booking-actions-bar" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className="booking-action-btn booking-action-btn--cancel"
+            title="Снять ручную бронь"
+            onClick={(e) => {
+              e.stopPropagation();
+              void releaseManualHold(it.slot_id || it.id);
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      );
+    }
     const isOrg = canManageBookings();
     const isClient = me?.role === "client";
     const cancelled = it.status === "cancelled";
@@ -8194,15 +8267,15 @@ export default function App() {
               </button>
               {manualHoldStatus ? <p className="status">{manualHoldStatus}</p> : null}
             </form>
-            <form onSubmit={createSlotsByInterval} className="form">
+            <form onSubmit={createSlotsByInterval} className="form interval-free-form">
               <h3 className="interval-manual-hold-title">Свободные интервалы</h3>
               <div className="row-2">
                 <input type="time" value={intervalForm.start_time} onChange={(e) => setIntervalForm({ ...intervalForm, start_time: e.target.value })} required />
                 <input type="time" value={intervalForm.end_time} onChange={(e) => setIntervalForm({ ...intervalForm, end_time: e.target.value })} required />
               </div>
               {activeIntervalStaff.length > 0 ? (
-                <label className="field-label">
-                  Сотрудник
+                <label className="field-label interval-free-staff-field">
+                  <span>Сотрудник</span>
                   <select
                     value={intervalForm.staff_id}
                     onChange={(e) => setIntervalForm({ ...intervalForm, staff_id: e.target.value })}
