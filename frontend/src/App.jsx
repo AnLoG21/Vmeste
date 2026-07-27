@@ -1462,6 +1462,65 @@ function clientWindowKey(w) {
   return `${w.starts_at}|${w.ends_at}|${w.staff_id ?? ""}`;
 }
 
+/** Group available windows by staff for per-master scroll strips. */
+function groupClientWindowsByStaff(windows) {
+  const map = new Map();
+  for (const w of windows || []) {
+    const sid = w.staff_id == null || w.staff_id === "" ? "none" : String(w.staff_id);
+    if (!map.has(sid)) {
+      map.set(sid, {
+        staff_id: w.staff_id ?? null,
+        staff_label: w.staff_label || (sid === "none" ? "Без мастера" : "Мастер"),
+        windows: [],
+      });
+    }
+    map.get(sid).windows.push(w);
+  }
+  return [...map.values()].sort((a, b) => {
+    if (a.staff_id == null && b.staff_id != null) return 1;
+    if (a.staff_id != null && b.staff_id == null) return -1;
+    return String(a.staff_label).localeCompare(String(b.staff_label), "ru");
+  });
+}
+
+function staffIntervalOptionLabel(link) {
+  const name = formatStaffFullName(link?.staff_user) || `id ${link?.staff}`;
+  const title = (link?.job_title || "").trim();
+  return title ? `${name} — ${title}` : name;
+}
+
+function intervalStaffConflicts(templateStaffId, slotStaffId) {
+  const tSid = templateStaffId == null || templateStaffId === "" ? null : Number(templateStaffId);
+  const sSid = slotStaffId == null || slotStaffId === "" ? null : Number(slotStaffId);
+  if (tSid == null || sSid == null) return true;
+  return tSid === sSid;
+}
+
+/** Group saved interval templates by staff for per-employee rows. */
+function groupSavedIntervalsByStaff(intervals, orgStaff) {
+  const linkByStaffId = new Map((orgStaff || []).map((l) => [Number(l.staff), l]));
+  const map = new Map();
+  for (const t of intervals || []) {
+    const sid = t.staff_id == null || t.staff_id === "" ? "none" : String(t.staff_id);
+    if (!map.has(sid)) {
+      let staff_label = "Без сотрудника";
+      let job_title = "";
+      if (sid !== "none") {
+        const link = linkByStaffId.get(Number(t.staff_id));
+        staff_label = formatStaffFullName(link?.staff_user) || `Мастер ${t.staff_id}`;
+        job_title = (link?.job_title || "").trim();
+      }
+      map.set(sid, { staff_id: t.staff_id ?? null, staff_label, job_title, templates: [] });
+    }
+    map.get(sid).templates.push(t);
+  }
+  return [...map.values()].sort((a, b) => {
+    if (a.staff_id == null && b.staff_id != null) return 1;
+    if (a.staff_id != null && b.staff_id == null) return -1;
+    return String(a.staff_label).localeCompare(String(b.staff_label), "ru");
+  });
+}
+
 const BOOKING_MESSAGE_DATE_TOKEN = "{date}";
 const bookingTokenDragRef = { el: null };
 const bookingTokenPointerRef = { active: false, token: null, editorRoot: null, onComplete: null };
@@ -2327,7 +2386,16 @@ export default function App() {
     end_time: "18:00",
     repeat_type: "none",
     repeat_count: "1",
+    staff_id: "",
   });
+  const [manualHoldForm, setManualHoldForm] = useState(() => ({
+    date: todayIsoDate(),
+    start_time: "10:00",
+    end_time: "11:00",
+    guest_name: "",
+  }));
+  const [manualHoldStatus, setManualHoldStatus] = useState("");
+  const [manualHoldBusy, setManualHoldBusy] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date().toISOString().slice(0, 7));
   const [bookingsMonth, setBookingsMonth] = useState(currentLocalMonthKey);
   const [intervalToast, setIntervalToast] = useState(null);
@@ -6377,6 +6445,53 @@ export default function App() {
     loadSellerData();
   }
 
+  async function createManualHold(event) {
+    event?.preventDefault?.();
+    if (!manualHoldForm.date || !manualHoldForm.start_time || !manualHoldForm.end_time) {
+      setManualHoldStatus("Укажите дату и время.");
+      return;
+    }
+    const start = new Date(`${manualHoldForm.date}T${manualHoldForm.start_time}:00`);
+    const end = new Date(`${manualHoldForm.date}T${manualHoldForm.end_time}:00`);
+    if (!(start < end)) {
+      setManualHoldStatus("Начало должно быть раньше конца.");
+      return;
+    }
+    setManualHoldBusy(true);
+    setManualHoldStatus("");
+    const response = await authFetch(`${API_URL}/booking/slots/manual-hold/`, {
+      method: "POST",
+      body: JSON.stringify({
+        starts_at: start.toISOString(),
+        ends_at: end.toISOString(),
+        guest_name: (manualHoldForm.guest_name || "").trim(),
+      }),
+    });
+    setManualHoldBusy(false);
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      setManualHoldStatus(err.detail || "Не удалось забронировать интервал.");
+      return;
+    }
+    setManualHoldStatus("Интервал забронирован.");
+    setManualHoldForm((p) => ({ ...p, guest_name: "" }));
+    await loadSellerData();
+  }
+
+  async function releaseManualHold(slotId) {
+    const response = await authFetch(`${API_URL}/booking/slots/${slotId}/release-hold/`, {
+      method: "POST",
+      body: "{}",
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      setSellerStatus(err.detail || "Не удалось снять бронь.");
+      return;
+    }
+    setSellerStatus("Ручная бронь снята.");
+    await loadSellerData();
+  }
+
   async function createSlot(event) {
     event.preventDefault();
     const response = await authFetch(`${API_URL}/booking/slots/`, { method: "POST", body: JSON.stringify(slotForm) });
@@ -6396,11 +6511,15 @@ export default function App() {
     const baseStart = new Date(`${baseDate}T${intervalForm.start_time}:00`);
     const baseEnd = new Date(`${baseDate}T${intervalForm.end_time}:00`);
     if (baseStart >= baseEnd) return setSellerStatus("Время начала должно быть раньше окончания.");
+    const templateStaffId = intervalForm.staff_id ? Number(intervalForm.staff_id) : null;
     const hasDuplicate = savedIntervals.some(
-      (s) => s.start_time === intervalForm.start_time && s.end_time === intervalForm.end_time
+      (s) =>
+        s.start_time === intervalForm.start_time &&
+        s.end_time === intervalForm.end_time &&
+        (s.staff_id ?? null) === templateStaffId
     );
     if (hasDuplicate) {
-      const msg = "Такой интервал уже есть в сохранённых — выбери другой диапазон времени.";
+      const msg = "Такой интервал уже есть в сохранённых — выбери другой диапазон времени или сотрудника.";
       setSellerStatus(msg);
       showIntervalToast(msg);
       return;
@@ -6409,6 +6528,7 @@ export default function App() {
       id: `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       start_time: intervalForm.start_time,
       end_time: intervalForm.end_time,
+      staff_id: templateStaffId,
     };
     setSavedIntervals((prev) => [template, ...prev]);
     setSelectedIntervalId(template.id);
@@ -6435,6 +6555,7 @@ export default function App() {
       body: JSON.stringify({
         starts_at: start.toISOString(),
         ends_at: end.toISOString(),
+        ...(template.staff_id != null ? { staff: template.staff_id } : {}),
       }),
     });
     if (!response.ok) {
@@ -6478,7 +6599,11 @@ export default function App() {
       const end = new Date(`${date}T${template.end_time}:00`);
       const response = await authFetch(`${API_URL}/booking/slots/`, {
         method: "POST",
-        body: JSON.stringify({ starts_at: start.toISOString(), ends_at: end.toISOString() }),
+        body: JSON.stringify({
+          starts_at: start.toISOString(),
+          ends_at: end.toISOString(),
+          ...(template.staff_id != null ? { staff: template.staff_id } : {}),
+        }),
       });
       if (response.ok) {
         success += 1;
@@ -6506,6 +6631,7 @@ export default function App() {
     const endMs = end.getTime();
     const daySlots = slots.filter((s) => s.starts_at?.slice(0, 10) === date);
     for (const slot of daySlots) {
+      if (!intervalStaffConflicts(template.staff_id, slot.staff)) continue;
       const slotStartMs = new Date(slot.starts_at).getTime();
       const slotEndMs = new Date(slot.ends_at).getTime();
       const sameBounds = slotStartMs === startMs && slotEndMs === endMs;
@@ -7810,9 +7936,58 @@ export default function App() {
     const daysInMonth = new Date(year, month, 0).getDate();
     const offset = (firstDay.getDay() + 6) % 7;
     const weekdays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+    const activeIntervalStaff = orgStaff.filter(
+      (l) =>
+        l.is_active &&
+        l.invitation_status !== "pending" &&
+        l.invitation_status !== "rejected"
+    );
+    const groupedSavedIntervals = groupSavedIntervalsByStaff(savedIntervals, orgStaff);
+
+    const renderSavedIntervalChip = (template) => (
+      <div
+        key={template.id}
+        className={`template-chip ${selectedIntervalId === template.id ? "active" : ""}`}
+        draggable
+        onClick={(e) => {
+          setSelectedIntervalId(template.id);
+          if (intervalPopoverId === template.id) {
+            closeIntervalPopover();
+            return;
+          }
+          const chip = e.currentTarget;
+          intervalPopoverAnchorRef.current = chip;
+          setIntervalPopoverFixedStyle(buildIntervalPopoverFixedStyle(chip));
+          setIntervalPopoverId(template.id);
+        }}
+        onDragStart={() => {
+          setDragIntervalId(template.id);
+          setSelectedIntervalId(template.id);
+        }}
+      >
+        <div className="template-main">
+          <strong>
+            {template.start_time} - {template.end_time}
+          </strong>
+        </div>
+        <button
+          type="button"
+          className="template-remove"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSavedIntervals((prev) => prev.filter((x) => x.id !== template.id));
+            if (selectedIntervalId === template.id) setSelectedIntervalId(null);
+            if (intervalPopoverId === template.id) closeIntervalPopover();
+          }}
+          aria-label="Удалить сохранённый интервал"
+        >
+          ×
+        </button>
+      </div>
+    );
 
     const byDay = slots
-      .filter((s) => !s.is_booked && s.starts_at?.slice(0, 7) === calendarMonth)
+      .filter((s) => s.starts_at?.slice(0, 7) === calendarMonth)
       .reduce((acc, slot) => {
         const day = Number(slot.starts_at.slice(8, 10));
         if (!acc[day]) acc[day] = [];
@@ -7829,11 +8004,76 @@ export default function App() {
         <h2>Календарь интервалов</h2>
         {showCreateControls && (
           <>
+            <form onSubmit={createManualHold} className="form interval-manual-hold">
+              <h3 className="interval-manual-hold-title">Забронировать</h3>
+              <p className="muted small">Отметьте занятое время внутри свободного интервала (например, запись по телефону).</p>
+              <div className="row-2">
+                <label className="field-label">
+                  Дата
+                  <input
+                    type="date"
+                    value={manualHoldForm.date}
+                    onChange={(e) => setManualHoldForm((p) => ({ ...p, date: e.target.value }))}
+                    required
+                  />
+                </label>
+                <label className="field-label">
+                  ФИО (необязательно)
+                  <input
+                    type="text"
+                    placeholder="На кого бронь"
+                    value={manualHoldForm.guest_name}
+                    onChange={(e) => setManualHoldForm((p) => ({ ...p, guest_name: e.target.value }))}
+                  />
+                </label>
+              </div>
+              <div className="row-2">
+                <label className="field-label">
+                  С
+                  <input
+                    type="time"
+                    value={manualHoldForm.start_time}
+                    onChange={(e) => setManualHoldForm((p) => ({ ...p, start_time: e.target.value }))}
+                    required
+                  />
+                </label>
+                <label className="field-label">
+                  До
+                  <input
+                    type="time"
+                    value={manualHoldForm.end_time}
+                    onChange={(e) => setManualHoldForm((p) => ({ ...p, end_time: e.target.value }))}
+                    required
+                  />
+                </label>
+              </div>
+              <button type="submit" disabled={manualHoldBusy}>
+                {manualHoldBusy ? "Бронирование…" : "Забронировать интервал"}
+              </button>
+              {manualHoldStatus ? <p className="status">{manualHoldStatus}</p> : null}
+            </form>
             <form onSubmit={createSlotsByInterval} className="form">
+              <h3 className="interval-manual-hold-title">Свободные интервалы</h3>
               <div className="row-2">
                 <input type="time" value={intervalForm.start_time} onChange={(e) => setIntervalForm({ ...intervalForm, start_time: e.target.value })} required />
                 <input type="time" value={intervalForm.end_time} onChange={(e) => setIntervalForm({ ...intervalForm, end_time: e.target.value })} required />
               </div>
+              {activeIntervalStaff.length > 0 ? (
+                <label className="field-label">
+                  Сотрудник
+                  <select
+                    value={intervalForm.staff_id}
+                    onChange={(e) => setIntervalForm({ ...intervalForm, staff_id: e.target.value })}
+                  >
+                    <option value="">Без сотрудника</option>
+                    {activeIntervalStaff.map((link) => (
+                      <option key={link.id} value={link.staff}>
+                        {staffIntervalOptionLabel(link)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <button type="submit">Создать интервал</button>
             </form>
             <p className="status">{sellerStatus}</p>
@@ -7843,42 +8083,14 @@ export default function App() {
         <div className="interval-templates">
           <h3>Сохранённые интервалы</h3>
           {savedIntervals.length === 0 && <p className="muted">Пока нет сохранённых интервалов.</p>}
-          <div className="template-list">
-            {savedIntervals.map((template) => (
-              <div
-                key={template.id}
-                className={`template-chip ${selectedIntervalId === template.id ? "active" : ""}`}
-                draggable
-                onClick={(e) => {
-                  setSelectedIntervalId(template.id);
-                  if (intervalPopoverId === template.id) {
-                    closeIntervalPopover();
-                    return;
-                  }
-                  const chip = e.currentTarget;
-                  intervalPopoverAnchorRef.current = chip;
-                  setIntervalPopoverFixedStyle(buildIntervalPopoverFixedStyle(chip));
-                  setIntervalPopoverId(template.id);
-                }}
-                onDragStart={() => {
-                  setDragIntervalId(template.id);
-                  setSelectedIntervalId(template.id);
-                }}
-              >
-                <div className="template-main"><strong>{template.start_time} - {template.end_time}</strong></div>
-                <button
-                  type="button"
-                  className="template-remove"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSavedIntervals((prev) => prev.filter((x) => x.id !== template.id));
-                    if (selectedIntervalId === template.id) setSelectedIntervalId(null);
-                    if (intervalPopoverId === template.id) closeIntervalPopover();
-                  }}
-                  aria-label="Удалить сохранённый интервал"
-                >
-                  ×
-                </button>
+          <div className="interval-staff-groups">
+            {groupedSavedIntervals.map((group) => (
+              <div key={group.staff_id ?? "none"} className="interval-staff-group">
+                <p className="interval-staff-group-name">
+                  {group.staff_label}
+                  {group.job_title ? <span className="interval-staff-group-job"> · {group.job_title}</span> : null}
+                </p>
+                <div className="template-list">{group.templates.map((template) => renderSavedIntervalChip(template))}</div>
               </div>
             ))}
           </div>
@@ -7948,34 +8160,55 @@ export default function App() {
                     {(byDay[day] || []).slice(0, 5).map((s) => (
                       <div
                         key={s.id}
-                        className="slot-chip"
-                        title="Свободный интервал"
+                        className={["slot-chip", s.is_booked && "slot-chip--booked"].filter(Boolean).join(" ")}
+                        title={
+                          s.is_booked
+                            ? s.booking_client_name || s.hold_label || "Забронировано"
+                            : "Свободный интервал"
+                        }
                       >
                         <span className="slot-chip-label">
                           {new Date(s.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           {" – "}
                           {new Date(s.ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {s.is_booked
+                            ? ` · ${s.booking_client_name || s.hold_label || "бронь"}`
+                            : ""}
                         </span>
-                        <button
-                          type="button"
-                          className="chip-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteSlot(s.id);
-                          }}
-                        >
-                          x
-                        </button>
+                        {!s.is_booked ? (
+                          <button
+                            type="button"
+                            className="chip-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteSlot(s.id);
+                            }}
+                          >
+                            x
+                          </button>
+                        ) : s.is_manual_hold ? (
+                          <button
+                            type="button"
+                            className="chip-btn"
+                            title="Снять ручную бронь"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void releaseManualHold(s.id);
+                            }}
+                          >
+                            x
+                          </button>
+                        ) : null}
                       </div>
                     ))}
                     {(byDay[day] || []).length > 5 && <div className="muted">+{(byDay[day] || []).length - 5}</div>}
-                    {(byDay[day] || []).some((s) => s.recurrence_group) && (
+                    {(byDay[day] || []).some((s) => !s.is_booked && s.recurrence_group) && (
                       <button
                         type="button"
                         className="small-btn ghost-btn"
                         onClick={(e) => {
                           e.stopPropagation();
-                          const grp = (byDay[day] || []).find((s) => s.recurrence_group)?.recurrence_group;
+                          const grp = (byDay[day] || []).find((s) => !s.is_booked && s.recurrence_group)?.recurrence_group;
                           if (grp) deleteSeries(grp);
                         }}
                       >
@@ -7985,7 +8218,21 @@ export default function App() {
                   </div>
                   <div className="calendar-slots calendar-slots--mobile">
                     {(byDay[day] || []).slice(0, 3).map((s) => (
-                      <div key={s.id} className="calendar-slot-compact calendar-slot-compact--interval" title="Свободный интервал">
+                      <div
+                        key={s.id}
+                        className={[
+                          "calendar-slot-compact",
+                          "calendar-slot-compact--interval",
+                          s.is_booked && "calendar-slot-compact--booked",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        title={
+                          s.is_booked
+                            ? s.booking_client_name || s.hold_label || "Забронировано"
+                            : "Свободный интервал"
+                        }
+                      >
                         <span className="calendar-slot-compact-time">
                           <span className="calendar-slot-compact-start">
                             {new Date(s.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -11804,26 +12051,36 @@ export default function App() {
                     {clientBookWindows.length === 0 ? (
                       <p className="muted small">Нет свободных интервалов на эту дату.</p>
                     ) : (
-                      <div className="client-slot-strip client-book-slot-strip" role="listbox" aria-label="Доступное время">
-                        {clientBookWindows.map((w) => {
-                          const key = clientWindowKey(w);
-                          const active = clientBookingForm.windowKey === key;
-                          return (
-                            <button
-                              key={key}
-                              type="button"
-                              role="option"
-                              aria-selected={active}
-                              className={["client-slot-chip", active && "client-slot-chip--active"].filter(Boolean).join(" ")}
-                              onClick={() => setClientBookingForm((p) => ({ ...p, windowKey: key }))}
+                      <div className="client-staff-slots">
+                        {groupClientWindowsByStaff(clientBookWindows).map((group) => (
+                          <div key={group.staff_id ?? "none"} className="client-staff-slot-row">
+                            <p className="client-staff-slot-name">{group.staff_label}</p>
+                            <div
+                              className="client-slot-strip client-book-slot-strip"
+                              role="listbox"
+                              aria-label={`Время · ${group.staff_label}`}
                             >
-                              <span className="client-slot-chip-time">
-                                {formatTimeHm(w.starts_at)} — {formatTimeHm(w.ends_at)}
-                              </span>
-                              {w.staff_label ? <span className="client-slot-chip-master">{w.staff_label}</span> : null}
-                            </button>
-                          );
-                        })}
+                              {group.windows.map((w) => {
+                                const key = clientWindowKey(w);
+                                const active = clientBookingForm.windowKey === key;
+                                return (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    role="option"
+                                    aria-selected={active}
+                                    className={["client-slot-chip", active && "client-slot-chip--active"].filter(Boolean).join(" ")}
+                                    onClick={() => setClientBookingForm((p) => ({ ...p, windowKey: key }))}
+                                  >
+                                    <span className="client-slot-chip-time">
+                                      {formatTimeHm(w.starts_at)} — {formatTimeHm(w.ends_at)}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </>
@@ -11976,6 +12233,28 @@ function ServiceEditor({ service, draft, dirty, onDraftChange, onUploadPhotos, o
       <div className="service-editor-name">
         <strong>{service.name}</strong>
         {dirty ? <span className="service-editor-dirty-mark">●</span> : null}
+        <label className="service-editor-camera-btn" title="Добавить фото">
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => {
+              void onUploadPhotos?.(service.id, e.target.files);
+              e.target.value = "";
+            }}
+          />
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M9 2 7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"
+            />
+            <circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.35" />
+          </svg>
+          <span className="service-editor-camera-plus" aria-hidden="true">
+            +
+          </span>
+        </label>
       </div>
       <label className="service-editor-field">
         <span className="small-label">Цена</span>
@@ -12007,22 +12286,9 @@ function ServiceEditor({ service, draft, dirty, onDraftChange, onUploadPhotos, o
         />
         Оказываем
       </label>
-      <div className="service-editor-photos">
-        <ServicePhotoCarousel items={gallery} className="service-editor-carousel" />
-        <div className="service-editor-photo-actions">
-          <label className="ghost-btn service-editor-photo-upload">
-            Фото
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              hidden
-              onChange={(e) => {
-                void onUploadPhotos?.(service.id, e.target.files);
-                e.target.value = "";
-              }}
-            />
-          </label>
+      {(gallery.length > 0 || photos.length > 0) && (
+        <div className="service-editor-photos">
+          <ServicePhotoCarousel items={gallery.length ? gallery : photos} className="service-editor-carousel" />
           {photos.length > 0 && (
             <div className="service-editor-photo-list">
               {photos.map((ph) => (
@@ -12040,7 +12306,7 @@ function ServiceEditor({ service, draft, dirty, onDraftChange, onUploadPhotos, o
             </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 }

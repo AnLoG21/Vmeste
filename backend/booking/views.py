@@ -14,7 +14,13 @@ from rest_framework.response import Response
 from catalog.models import Service
 from notifications.models import InAppNotification
 
-from .booking_windows import book_time_window, list_available_dates, list_available_windows
+from .booking_windows import (
+    book_time_window,
+    list_available_dates,
+    list_available_windows,
+    manual_hold_window,
+    release_manual_hold,
+)
 from .models import AvailabilitySlot, Booking, ProviderStaff
 from .serializers import AvailabilitySlotSerializer, BookingSerializer, ProviderStaffSerializer
 
@@ -198,6 +204,49 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
         date_to = parse_date(date_to_raw) or (today + timedelta(days=60))
         dates = list_available_dates(int(provider), int(service), date_from, date_to)
         return Response({"dates": dates})
+
+    @action(detail=False, methods=["post"], url_path="manual-hold")
+    def manual_hold(self, request):
+        """Организация бронирует кусок свободного интервала (с опциональным ФИО)."""
+        if request.user.role != "provider":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        starts_raw = request.data.get("starts_at")
+        ends_raw = request.data.get("ends_at")
+        guest_name = (request.data.get("guest_name") or request.data.get("hold_label") or "")[:120]
+        if not starts_raw or not ends_raw:
+            return Response(
+                {"detail": "Укажите starts_at и ends_at."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        starts_at = parse_datetime(str(starts_raw))
+        ends_at = parse_datetime(str(ends_raw))
+        if not starts_at or not ends_at:
+            return Response({"detail": "Некорректное время."}, status=status.HTTP_400_BAD_REQUEST)
+        if timezone.is_naive(starts_at):
+            starts_at = timezone.make_aware(starts_at, timezone.get_current_timezone())
+        if timezone.is_naive(ends_at):
+            ends_at = timezone.make_aware(ends_at, timezone.get_current_timezone())
+        try:
+            held = manual_hold_window(request.user.id, starts_at, ends_at, guest_name)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            AvailabilitySlotSerializer(held, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="release-hold")
+    def release_hold(self, request, pk=None):
+        if request.user.role != "provider":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        slot = self.get_object()
+        if slot.provider_id != request.user.id:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        try:
+            released = release_manual_hold(slot)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(AvailabilitySlotSerializer(released, context={"request": request}).data)
 
     @action(detail=False, methods=["delete"], url_path="delete-series")
     def delete_series(self, request):

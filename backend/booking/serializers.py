@@ -93,6 +93,7 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
 class AvailabilitySlotSerializer(serializers.ModelSerializer):
     booking_client_name = serializers.SerializerMethodField()
     booking_service_name = serializers.SerializerMethodField()
+    is_manual_hold = serializers.SerializerMethodField()
 
     class Meta:
         model = AvailabilitySlot
@@ -103,20 +104,40 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
             "starts_at",
             "ends_at",
             "is_booked",
+            "hold_label",
+            "is_manual_hold",
             "recurrence_group",
             "booking_client_name",
             "booking_service_name",
         ]
-        read_only_fields = ["provider", "is_booked", "booking_client_name", "booking_service_name"]
+        read_only_fields = [
+            "provider",
+            "is_booked",
+            "hold_label",
+            "is_manual_hold",
+            "booking_client_name",
+            "booking_service_name",
+        ]
+
+    def get_is_manual_hold(self, obj):
+        if not obj.is_booked:
+            return False
+        try:
+            _ = obj.booking
+            return False
+        except Booking.DoesNotExist:
+            return True
 
     def get_booking_client_name(self, obj):
         if not obj.is_booked:
             return ""
+        label = (obj.hold_label or "").strip()
         try:
             booking = obj.booking
         except Booking.DoesNotExist:
-            return ""
-        return client_display_name(getattr(booking, "client", None))
+            return label
+        name = client_display_name(getattr(booking, "client", None))
+        return name or label
 
     def get_booking_service_name(self, obj):
         if not obj.is_booked:
@@ -124,7 +145,7 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
         try:
             booking = obj.booking
         except Booking.DoesNotExist:
-            return ""
+            return "Ручная бронь"
         return (booking.service.name or "").strip()
 
 

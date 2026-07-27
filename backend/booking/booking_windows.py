@@ -91,15 +91,22 @@ def _staff_ids_for_service(provider_id: int, service: Service) -> list[int | Non
 
 
 def _booked_ranges(provider_id: int, book_date):
-    qs = (
-        Booking.objects.filter(provider_id=provider_id, slot__starts_at__date=book_date)
-        .exclude(status=Booking.Status.CANCELLED)
-        .select_related("slot")
-    )
+    """Busy ranges for a day: client bookings and manual holds (is_booked slots)."""
+    qs = AvailabilitySlot.objects.filter(
+        provider_id=provider_id,
+        is_booked=True,
+        starts_at__date=book_date,
+    ).select_related("booking")
     out = []
-    for b in qs:
-        sid = b.staff_id or b.slot.staff_id
-        out.append((b.slot.starts_at, b.slot.ends_at, sid))
+    for slot in qs:
+        try:
+            booking = slot.booking
+            if booking.status == Booking.Status.CANCELLED:
+                continue
+        except Booking.DoesNotExist:
+            booking = None
+        sid = (booking.staff_id if booking and booking.staff_id else None) or slot.staff_id
+        out.append((slot.starts_at, slot.ends_at, sid))
     return out
 
 
@@ -268,3 +275,78 @@ def book_time_window(provider_id: int, service_id: int, starts_at, ends_at, staf
     except Exception:
         pass
     return booking
+
+
+def manual_hold_window(provider_id: int, starts_at, ends_at, guest_name: str = ""):
+    """Забронировать интервал организацией без клиентской записи (hold_label = ФИО/заметка)."""
+    if ends_at <= starts_at:
+        raise ValueError("Время начала должно быть раньше окончания.")
+    container = (
+        AvailabilitySlot.objects.filter(
+            provider_id=provider_id,
+            is_booked=False,
+            starts_at__lte=starts_at,
+            ends_at__gte=ends_at,
+        )
+        .order_by("starts_at")
+        .first()
+    )
+    if not container:
+        raise ValueError("В выбранном диапазоне нет свободного интервала.")
+
+    label = (guest_name or "").strip()[:120]
+    if container.starts_at == starts_at and container.ends_at == ends_at:
+        container.is_booked = True
+        container.hold_label = label
+        container.save(update_fields=["is_booked", "hold_label"])
+        return container
+
+    recurrence = container.recurrence_group
+    provider = container.provider
+    slot_staff = container.staff_id
+    c_start = container.starts_at
+    c_end = container.ends_at
+    container.delete()
+    if c_start < starts_at:
+        AvailabilitySlot.objects.create(
+            provider=provider,
+            staff_id=slot_staff,
+            starts_at=c_start,
+            ends_at=starts_at,
+            is_booked=False,
+            recurrence_group=recurrence,
+        )
+    held = AvailabilitySlot.objects.create(
+        provider=provider,
+        staff_id=slot_staff,
+        starts_at=starts_at,
+        ends_at=ends_at,
+        is_booked=True,
+        hold_label=label,
+        recurrence_group=recurrence,
+    )
+    if ends_at < c_end:
+        AvailabilitySlot.objects.create(
+            provider=provider,
+            staff_id=slot_staff,
+            starts_at=ends_at,
+            ends_at=c_end,
+            is_booked=False,
+            recurrence_group=recurrence,
+        )
+    return held
+
+
+def release_manual_hold(slot: AvailabilitySlot) -> AvailabilitySlot:
+    """Снять ручную бронь организации (не клиентскую запись)."""
+    if not slot.is_booked:
+        raise ValueError("Интервал уже свободен.")
+    try:
+        _ = slot.booking
+        raise ValueError("Это клиентская запись — отмените её в разделе «Записи».")
+    except Booking.DoesNotExist:
+        pass
+    slot.is_booked = False
+    slot.hold_label = ""
+    slot.save(update_fields=["is_booked", "hold_label"])
+    return slot

@@ -2981,6 +2981,15 @@ body.theme-dark .tg-chat-item-row:hover {
   font-size: 13px;
   line-height: 1.35;
   word-break: break-word;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.service-editor-name strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .service-editor-active {
@@ -7821,6 +7830,117 @@ body.theme-dark .password-eye-btn:hover {
 
 .tg-chat-info-dropdown button.tg-chat-info-danger:hover {
   background: #fef3f2;
+}
+
+.interval-manual-hold {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #ffe4cf;
+  background: linear-gradient(160deg, #fff7ed, #ffffff);
+}
+
+.interval-manual-hold-title {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.interval-manual-hold .field-label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.interval-manual-hold .field-label input {
+  font-size: 14px;
+  color: #1a1a1a;
+}
+
+.slot-chip--booked {
+  background: #ffe8e0;
+  border-color: #f0a090;
+}
+
+.calendar-slot-compact--booked {
+  background: #ffe8e0;
+  color: #8b2e1a;
+}
+
+.service-editor-camera-btn {
+  position: relative;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid #ffd0a8;
+  background: #fff3e8;
+  color: #c45c26;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.service-editor-camera-btn:hover {
+  background: #ffe4cf;
+}
+
+.service-editor-camera-plus {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff7a00;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 12px;
+  text-align: center;
+}
+
+.client-staff-slots {
+  display: grid;
+  gap: 12px;
+}
+
+.client-staff-slot-row {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.client-staff-slot-name {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #3d1a00;
+}
+
+.interval-staff-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.interval-staff-group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.interval-staff-group-name {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #3d1a00;
+}
+
+.interval-staff-group-job {
+  font-weight: 500;
+  color: #8a5a3a;
 }
 
 .tg-chat-row-menu-wrap {

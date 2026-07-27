@@ -28,6 +28,7 @@ class AvailabilitySlot(models.Model):
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     is_booked = models.BooleanField(default=False)
+    hold_label = models.CharField(max_length=120, blank=True, default="")
     recurrence_group = models.CharField(max_length=64, blank=True, default="")
 
 
