@@ -53,16 +53,53 @@ class ProviderStaffViewSet(viewsets.ModelViewSet):
 
         user = self.request.user
         if user.role == "provider":
-            return ProviderStaff.objects.filter(provider=user).select_related("staff", "provider")
-        return ProviderStaff.objects.filter(staff=user).select_related("staff", "provider")
+            return (
+                ProviderStaff.objects.filter(provider=user)
+                .select_related("staff", "provider")
+                .prefetch_related("portfolio_photos")
+            )
+        return (
+            ProviderStaff.objects.filter(staff=user)
+            .select_related("staff", "provider")
+            .prefetch_related("portfolio_photos")
+        )
+
+    def _can_edit_staff_card(self, link) -> bool:
+        user = self.request.user
+        if user.role == "provider" and link.provider_id == user.id:
+            return True
+        if user.role == "staff" and link.staff_id == user.id:
+            return True
+        return False
+
+    def partial_update(self, request, *args, **kwargs):
+        link = self.get_object()
+        user = request.user
+        if user.role == "staff":
+            if link.staff_id != user.id:
+                return Response(status=status.HTTP_403_FORBIDDEN)
+            # Сотрудник может править только свою краткую информацию
+            allowed = {}
+            if "bio" in request.data:
+                allowed["bio"] = request.data.get("bio")
+            if not allowed:
+                return Response(
+                    {"detail": "Можно изменить только краткую информацию о себе."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            ser = self.get_serializer(link, data=allowed, partial=True)
+            ser.is_valid(raise_exception=True)
+            ser.save()
+            return Response(ser.data)
+        if user.role != "provider" or link.provider_id != user.id:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        return super().partial_update(request, *args, **kwargs)
 
     @action(detail=True, methods=["post"], url_path="card")
     def upload_card(self, request, pk=None):
-        """Загрузка аватарки/портфолио и bio для карточки сотрудника организации."""
-        if request.user.role != "provider":
-            return Response(status=status.HTTP_403_FORBIDDEN)
+        """Загрузка аватарки/портфолио и bio — сотрудник в личном кабинете или провайдер."""
         link = self.get_object()
-        if link.provider_id != request.user.id:
+        if not self._can_edit_staff_card(link):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         bio = request.data.get("bio", None)
@@ -90,6 +127,18 @@ class ProviderStaffViewSet(viewsets.ModelViewSet):
 
         ser = self.get_serializer(link)
         return Response({"staff": ser.data, "created": created}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["delete"], url_path=r"portfolio/(?P<photo_id>[^/.]+)")
+    def delete_portfolio_photo(self, request, pk=None, photo_id=None):
+        link = self.get_object()
+        if not self._can_edit_staff_card(link):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        photo = link.portfolio_photos.filter(pk=photo_id).first()
+        if not photo:
+            return Response({"detail": "Фото не найдено."}, status=status.HTTP_404_NOT_FOUND)
+        photo.delete()
+        ser = self.get_serializer(link)
+        return Response(ser.data)
 
     @action(detail=True, methods=["post"], url_path="accept-invite")
     def accept_invite(self, request, pk=None):

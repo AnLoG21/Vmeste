@@ -5144,15 +5144,16 @@ export default function App() {
     else loadStaffWorkspace();
   }
 
-  async function uploadStaffCard(linkId, { avatarFile, portfolioFiles } = {}) {
+  async function uploadStaffCard(linkId, { avatarFile, portfolioFiles, bio } = {}) {
     const fd = new FormData();
+    if (bio != null) fd.append("bio", String(bio));
     if (avatarFile) fd.append("avatar", avatarFile);
     if (Array.isArray(portfolioFiles)) {
       for (const f of portfolioFiles) {
         if (f) fd.append("portfolio_photos", f);
       }
     }
-    if (!avatarFile && (!Array.isArray(portfolioFiles) || portfolioFiles.length === 0)) return;
+    if (bio == null && !avatarFile && (!Array.isArray(portfolioFiles) || portfolioFiles.length === 0)) return;
 
     const response = await authFetch(`${API_URL}/booking/staff/${linkId}/card/`, {
       method: "POST",
@@ -5160,11 +5161,41 @@ export default function App() {
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      setStaffInviteStatus(err.detail || "Не удалось загрузить фото сотрудника.");
+      setStaffInviteStatus(err.detail || "Не удалось сохранить карточку сотрудника.");
+      return false;
+    }
+    const data = await response.json().catch(() => ({}));
+    if (data?.staff) {
+      setOrgStaff((prev) =>
+        (prev || []).map((l) => (Number(l.id) === Number(linkId) ? { ...l, ...data.staff } : l)),
+      );
+    }
+    setStaffInviteStatus("Карточка сохранена.");
+    if (me?.role === "provider") loadSellerData();
+    else if (me?.role === "staff") loadStaffWorkspace();
+    return true;
+  }
+
+  async function deleteStaffPortfolioPhoto(linkId, photoId) {
+    const response = await authFetch(
+      `${API_URL}/booking/staff/${linkId}/portfolio/${encodeURIComponent(photoId)}/`,
+      { method: "DELETE" },
+    );
+    if (!response.ok) {
+      setStaffInviteStatus("Не удалось удалить фото.");
       return;
     }
-    setStaffInviteStatus("Фото сохранены.");
-    if (me?.role === "provider") loadSellerData();
+    const data = await response.json().catch(() => null);
+    if (data) {
+      setOrgStaff((prev) =>
+        (prev || []).map((l) => (Number(l.id) === Number(linkId) ? { ...l, ...data } : l)),
+      );
+    } else if (me?.role === "staff") {
+      loadStaffWorkspace();
+    } else {
+      loadSellerData();
+    }
+    setStaffInviteStatus("Фото удалено.");
   }
 
   async function createOrgGroup(event) {
@@ -9322,17 +9353,6 @@ export default function App() {
                         if (v !== (link.job_title || "").trim()) patchStaffMeta(link.id, { job_title: v });
                       }}
                     />
-                    <label className="muted small-label" style={{ marginTop: 10 }}>
-                      Кратко о сотруднике
-                    </label>
-                    <textarea
-                      rows={2}
-                      defaultValue={link.bio || ""}
-                      onBlur={(e) => {
-                        const v = e.target.value.trim();
-                        if (v !== (link.bio || "").trim()) patchStaffMeta(link.id, { bio: v });
-                      }}
-                    />
                   </div>
                   {me?.role === "provider" && link.is_active && link.invitation_status !== "pending" && (
                     <div className="staff-deact-cell">
@@ -9342,45 +9362,6 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                {me?.role === "provider" && link.is_active && (
-                  <div className="staff-media-block">
-                    <div className="staff-media-row">
-                      <div className="staff-media-avatar">
-                        {link.avatar_image ? (
-                          <img src={reviewImageUrl(link.avatar_image)} alt="" />
-                        ) : (
-                          <span aria-hidden>{String(rowName || "?").slice(0, 1).toUpperCase()}</span>
-                        )}
-                      </div>
-                      <label className="ghost-btn small staff-media-upload-btn" title="Загрузить аватарку">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          hidden
-                          onChange={(e) => {
-                            const f = e.target.files?.[0] || null;
-                            void uploadStaffCard(link.id, { avatarFile: f });
-                            e.target.value = "";
-                          }}
-                        />
-                        Аватар
-                      </label>
-                    </div>
-                    <div className="staff-media-portfolio">
-                      <label className="muted small-label">Портфолио</label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={(e) => {
-                          const files = Array.from(e.target.files || []);
-                          void uploadStaffCard(link.id, { portfolioFiles: files });
-                          e.target.value = "";
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
                 {link.is_active && (me?.role === "provider" || staffEffectivePerms.can_delegate_permissions) && (
                   <div className="staff-perms">
                     <button
@@ -9999,12 +9980,101 @@ export default function App() {
                 <p className="status">{resendStatus}</p>
               </>
             )}
-            {me?.role === "staff" && orgStaff.length > 0 && (
-              <>
-                <h3>Моя организация</h3>
-                <p className="muted">Разделы «Записи» и «Чаты» — под оранжевой шапкой (доступ по правам, их настраивает исполнитель).</p>
-              </>
-            )}
+            {me?.role === "staff" && (() => {
+              const myLink =
+                orgStaff.find(
+                  (l) =>
+                    Number(l.staff) === Number(me.id) &&
+                    l.is_active &&
+                    l.invitation_status !== "pending" &&
+                    l.invitation_status !== "rejected",
+                ) || null;
+              if (!myLink) {
+                return (
+                  <>
+                    <h3>Моя организация</h3>
+                    <p className="muted">Разделы «Записи» и «Чаты» — под оранжевой шапкой (доступ по правам, их настраивает исполнитель).</p>
+                  </>
+                );
+              }
+              const avatarUrl = myLink.avatar_image ? reviewImageUrl(myLink.avatar_image) : "";
+              const portfolio = myLink.portfolio_photos || [];
+              return (
+                <div className="staff-self-card">
+                  <h3>Карточка сотрудника</h3>
+                  <p className="muted small">Эти данные видят клиенты в карточке организации.</p>
+                  <label className="muted small-label">Должность</label>
+                  <p className="staff-self-job">{(myLink.job_title || "").trim() || "Не указана (задаёт организация)"}</p>
+                  <label className="muted small-label">Кратко о сотруднике</label>
+                  <textarea
+                    rows={3}
+                    key={`bio-${myLink.id}`}
+                    defaultValue={myLink.bio || ""}
+                    placeholder="Коротко расскажите о себе и опыте"
+                    onBlur={(e) => {
+                      const v = e.target.value.trim();
+                      if (v !== (myLink.bio || "").trim()) {
+                        void uploadStaffCard(myLink.id, { bio: v });
+                      }
+                    }}
+                  />
+                  <div className="staff-media-block">
+                    <div className="staff-media-row">
+                      <div className="staff-media-avatar">
+                        {avatarUrl ? (
+                          <img src={avatarUrl} alt="" />
+                        ) : (
+                          <span aria-hidden>{String(fullName || "?").slice(0, 1).toUpperCase()}</span>
+                        )}
+                      </div>
+                      <label className="ghost-btn small staff-media-upload-btn" title="Загрузить фото">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          hidden
+                          onChange={(e) => {
+                            const f = e.target.files?.[0] || null;
+                            void uploadStaffCard(myLink.id, { avatarFile: f });
+                            e.target.value = "";
+                          }}
+                        />
+                        1 фото профиля
+                      </label>
+                    </div>
+                    <div className="staff-media-portfolio">
+                      <label className="muted small-label">Портфолио</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          void uploadStaffCard(myLink.id, { portfolioFiles: files });
+                          e.target.value = "";
+                        }}
+                      />
+                      {portfolio.length > 0 && (
+                        <div className="staff-self-portfolio-list">
+                          {portfolio.map((ph) => (
+                            <button
+                              key={ph.id}
+                              type="button"
+                              className="staff-self-portfolio-chip"
+                              title="Удалить фото"
+                              onClick={() => void deleteStaffPortfolioPhoto(myLink.id, ph.id)}
+                            >
+                              <img src={reviewImageUrl(ph.image)} alt="" />
+                              <span aria-hidden>×</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {staffInviteStatus ? <p className="status">{staffInviteStatus}</p> : null}
+                </div>
+              );
+            })()}
           </section>
         )}
 

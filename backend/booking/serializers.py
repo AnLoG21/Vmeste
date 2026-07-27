@@ -76,12 +76,16 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
         photos = getattr(obj, "portfolio_photos", None)
         if photos is None:
             return []
+        request = self.context.get("request")
         rows = photos.all().order_by("id")
         out = []
         for row in rows:
             if not row.image:
                 continue
-            out.append({"id": row.id, "image": row.image})
+            url = row.image.url
+            if request:
+                url = request.build_absolute_uri(url)
+            out.append({"id": row.id, "image": url})
         return out
 
     def to_representation(self, instance):

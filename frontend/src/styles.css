@@ -850,6 +850,69 @@ button:hover {
   width: auto;
 }
 
+.staff-self-card {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #ffe1ca;
+  display: grid;
+  gap: 8px;
+}
+
+.staff-self-card textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+}
+
+.staff-self-job {
+  margin: 0 0 4px;
+  font-weight: 700;
+  color: #3d1a00;
+}
+
+.staff-self-portfolio-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.staff-self-portfolio-chip {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 1px solid #ffd9bd;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff3e8;
+  cursor: pointer;
+}
+
+.staff-self-portfolio-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.staff-self-portfolio-chip span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.staff-self-portfolio-chip:hover span {
+  opacity: 1;
+}
+
 .staff-job-deact-row .staff-deactivate-btn {
   flex-shrink: 0;
   width: auto;
