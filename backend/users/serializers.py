@@ -53,8 +53,9 @@ class UserSerializer(serializers.ModelSerializer):
             "organization_card_note",
             "anonymous_seat_count",
             "provider_license_number",
+            "organization_slug",
         ]
-        read_only_fields = ["id", "username", "email", "role", "email_verified"]
+        read_only_fields = ["id", "username", "email", "role", "email_verified", "organization_slug"]
 
 
 class ProviderGalleryPhotoSerializer(serializers.ModelSerializer):
@@ -203,6 +204,10 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         if settings.SKIP_EMAIL_VERIFICATION:
             user.email_verified = True
         user.save()
+        if user.role == User.Role.PROVIDER:
+            from .slug_utils import ensure_organization_slug
+
+            ensure_organization_slug(user)
         return user
 
 

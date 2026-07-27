@@ -463,6 +463,18 @@ class YooKassaWebhookView(APIView):
         if event != "payment.succeeded":
             return Response({"detail": "ignored"})
         yk_id = obj.get("id")
+        meta = obj.get("metadata") or {}
+        if meta.get("type") == "cafe_order" or (not Payment.objects.filter(yookassa_payment_id=yk_id).exists()):
+            from cafe.models import CafeOrder
+
+            cafe_order = CafeOrder.objects.filter(yookassa_payment_id=yk_id).first()
+            if cafe_order:
+                if cafe_order.status != CafeOrder.Status.PAID:
+                    cafe_order.status = CafeOrder.Status.PAID
+                    cafe_order.paid_at = timezone.now()
+                    cafe_order.save(update_fields=["status", "paid_at", "updated_at"])
+                return Response({"detail": "ok"})
+
         payment = Payment.objects.filter(yookassa_payment_id=yk_id).select_related("subscription").first()
         if not payment:
             return Response({"detail": "not found"}, status=status.HTTP_404_NOT_FOUND)

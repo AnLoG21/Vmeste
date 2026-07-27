@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     "notifications",
     "reviews",
     "subscriptions",
+    "cafe",
 ]
 
 MIDDLEWARE = [

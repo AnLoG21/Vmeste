@@ -12,6 +12,7 @@ class User(AbstractUser):
     class ProviderSphere(models.TextChoices):
         HAIR_SALON = "hair_salon", "Салон красоты"
         SERVICE_CENTER = "service_center", "Сервисный центр"
+        CAFE_RESTAURANT = "cafe_restaurant", "Кафе и рестораны"
 
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.CLIENT)
     phone = models.CharField(max_length=30, blank=True)
@@ -78,6 +79,13 @@ class User(AbstractUser):
     consent_ip = models.GenericIPAddressField(null=True, blank=True)
     consent_user_agent = models.CharField(max_length=512, blank=True, default="")
     account_deleted_at = models.DateTimeField(null=True, blank=True)
+    organization_slug = models.SlugField(
+        max_length=80,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text="Публичный URL /o/<slug>/",
+    )
     provider_authority_confirmed_at = models.DateTimeField(
         null=True,
         blank=True,

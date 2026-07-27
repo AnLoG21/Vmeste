@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .org_profile import OrganizationClientProfileView, ProviderGalleryView, ProviderOrganizationInfoView
+from .public_org import PublicOrganizationBySlugView, PublicOrganizationSitemapView
 from .views import (
     AutomationRequestView,
     ChangeEmailView,
@@ -25,6 +26,8 @@ urlpatterns = [
     path("me/", MeView.as_view(), name="user-me"),
     path("me/delete/", DeleteAccountView.as_view(), name="user-delete-account"),
     path("organization-profile/", OrganizationClientProfileView.as_view(), name="organization-client-profile"),
+    path("public-org/<slug:slug>/", PublicOrganizationBySlugView.as_view(), name="public-org-by-slug"),
+    path("public-orgs/", PublicOrganizationSitemapView.as_view(), name="public-orgs-list"),
     path("organization-info/", ProviderOrganizationInfoView.as_view(), name="organization-info"),
     path("gallery/", ProviderGalleryView.as_view(), name="provider-gallery"),
     path("presence/ping/", PresencePingView.as_view(), name="user-presence-ping"),

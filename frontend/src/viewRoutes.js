@@ -5,6 +5,7 @@ export const VIEW_PATHS = {
   settings: "/settings",
   subscriptions: "/subscriptions",
   organization: "/organization",
+  cafe: "/cafe",
   staff: "/staff",
   reviews: "/reviews",
   bookings: "/bookings",

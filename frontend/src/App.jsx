@@ -4,6 +4,7 @@ import logoMain from "./assets/logo-main.png";
 import LandingPage from "./LandingPage.jsx";
 import SubscriptionsPage from "./SubscriptionsPage.jsx";
 import AnalyticsPage from "./AnalyticsPage.jsx";
+import CafeProviderWorkspace from "./CafeProviderWorkspace.jsx";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
 import "./landing.css";
@@ -230,6 +231,7 @@ const BOOKMARK_CATALOG = [
   { id: "subscriptions", label: "Подписки", roles: ["provider", "staff"] },
   { id: "staff", label: "Сотрудники", roles: ["provider"] },
   { id: "organization", label: "Организация", roles: ["provider"] },
+  { id: "cafe", label: "Кафе: зал и меню", roles: ["provider"] },
   { id: "analytics", label: "Аналитика", roles: ["provider", "staff"], menuIcon: "analytics" },
 ];
 
@@ -9979,7 +9981,7 @@ export default function App() {
       : { backgroundColor: activeChatWallpaper }
     : undefined;
   const tgMainDark = activeChatWallpaper === "#1e2a24";
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe"].includes(currentView);
 
   return (
     <div className={`page${accessToken ? " page-logged" : " page--guest"}`}>
@@ -10192,6 +10194,12 @@ export default function App() {
                       <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z" /></svg>
                     </span>
                     <span className="menu-item-label">Организация</span>
+                  </button>
+                )}
+                {canManageOrgSettings && me?.provider_sphere === "cafe_restaurant" && (
+                  <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("cafe"); setMenuOpen(false); }}>
+                    <span className="menu-item-icon" aria-hidden="true">🍽️</span>
+                    <span className="menu-item-label">Кафе: зал и меню</span>
                   </button>
                 )}
                 <button type="button" className="menu-dropdown-item" onClick={logout}>
@@ -10510,6 +10518,9 @@ export default function App() {
               {canManageOrgSettings && (
                 <button type="button" className="ghost-btn" onClick={() => setCurrentView("organization")}>Организация</button>
               )}
+              {canManageOrgSettings && me?.provider_sphere === "cafe_restaurant" && (
+                <button type="button" className="ghost-btn" onClick={() => setCurrentView("cafe")}>Кафе: зал и меню</button>
+              )}
             </div>
             <div className="profile-delete-block">
               <h3>Удаление аккаунта</h3>
@@ -10656,6 +10667,9 @@ export default function App() {
 
         {accessToken && currentView === "settings" && renderGeneralSettings()}
         {accessToken && currentView === "organization" && canManageOrgSettings && renderOrganizationSettings()}
+        {accessToken && currentView === "cafe" && me?.role === "provider" && me?.provider_sphere === "cafe_restaurant" && (
+          <CafeProviderWorkspace authFetch={authFetch} API_URL={API_URL} />
+        )}
         {accessToken && currentView === "staff" && canManageOrgSettings && renderStaffManagement()}
 
         {accessToken && canViewOrgReviews() && currentView === "reviews" && renderProviderReviewsBlock()}

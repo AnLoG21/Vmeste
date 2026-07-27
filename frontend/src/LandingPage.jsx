@@ -203,6 +203,14 @@ export default function LandingPage({ onLogin, onRegister }) {
             <p>Ремонт техники, диагностика, статусы заказов и чат с клиентом.</p>
             <span className="landing-biz-link">Подробнее →</span>
           </a>
+          <a className="landing-biz-card" href="/businesses#cafe_restaurant">
+            <span className="landing-biz-emoji" aria-hidden="true">
+              🍽️
+            </span>
+            <h3>Кафе и рестораны</h3>
+            <p>План зала, QR столов, меню с новинками, самовывоз и доставка.</p>
+            <span className="landing-biz-link">Подробнее →</span>
+          </a>
           <a className="landing-biz-card landing-biz-card--more" href="/#automation-request">
             <span className="landing-biz-emoji" aria-hidden="true">
               ✨
@@ -375,7 +383,9 @@ export default function LandingPage({ onLogin, onRegister }) {
               <li>Регистрация и вход с подтверждением email</li>
               <li>Роли: клиент, исполнитель (организация), сотрудник</li>
               <li>Онлайн-запись и календарь интервалов</li>
-              <li>Каталог услуг с готовыми шаблонами (салон красоты, автосервис)</li>
+              <li>Каталог услуг с шаблонами: салон красоты, сервисный центр, кафе/рестораны</li>
+              <li>Кафе: план зала, QR и PIN столов, меню (новинки, фото, кБЖУ), самовывоз/доставка, оплата</li>
+              <li>Публичные страницы организаций (/o/…) для SEO</li>
               <li>Карта организаций, поиск и фильтры для клиентов</li>
               <li>Чаты между клиентами и организациями</li>
               <li>Отзывы и рейтинг организаций</li>
@@ -384,6 +394,7 @@ export default function LandingPage({ onLogin, onRegister }) {
               <li>История записей и уведомления в личном кабинете</li>
               <li>Подписки и оплата через ЮKassa</li>
               <li>Заявка на индивидуальную автоматизацию</li>
+              <li>Согласия 152‑ФЗ, cookies/Метрика, удаление аккаунта</li>
             </ul>
           </article>
           <article className="landing-roadmap-card landing-roadmap-card--planned">
@@ -391,7 +402,9 @@ export default function LandingPage({ onLogin, onRegister }) {
             <ul>
               <li>Email- и SMS-уведомления о записях и напоминания</li>
               <li>Push-уведомления и мобильное приложение</li>
-              <li>Онлайн-оплата услуг при записи (не только подписка)</li>
+              <li>Онлайн-оплата услуг при записи (не только подписка и заказы кафе)</li>
+              <li>Печать QR и конструктор рассадки «как в редакторе зала» — доработка UX</li>
+              <li>Посадочные страницы по городам и сферам</li>
               <li>Отчёты и аналитика для бизнеса</li>
               <li>Несколько филиалов у одной организации</li>
               <li>Интеграции: 1С, CRM, мессенджеры, телефония</li>

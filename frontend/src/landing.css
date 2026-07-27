@@ -744,6 +744,28 @@
 .landing-biz-link { margin-top: auto; color: #c45c00; font-weight: 700; font-size: 0.95rem; }
 .landing-biz-card--more { background: linear-gradient(165deg, #fff8f2, #ffe8d5); }
 
+.public-org-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+.public-org-gallery img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 12px;
+}
+.cafe-provider-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 18px;
+}
+.cafe-provider-tabs .is-active {
+  border-color: #c45c00;
+  background: #fff3e8;
+}
 .landing-faq-item {
   border: 1px solid #ffd9bd;
   border-radius: 12px;

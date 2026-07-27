@@ -1,0 +1,130 @@
+.cafe-guest {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 16px 14px 80px;
+  font-family: Georgia, "Times New Roman", serif;
+  background: linear-gradient(180deg, #fff8f1, #fff);
+  min-height: 100vh;
+}
+.cafe-guest-header h1 {
+  margin: 8px 0 4px;
+  font-size: 1.6rem;
+}
+.cafe-guest-header a {
+  color: #c45c00;
+  font-weight: 700;
+  text-decoration: none;
+}
+.cafe-guest-card {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid #ffd9bd;
+  border-radius: 16px;
+  background: #fffdfb;
+}
+.cafe-guest-card input,
+.cafe-guest-card textarea,
+.cafe-guest-card select {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e0c2a8;
+  font: inherit;
+}
+.cafe-guest-modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 20px;
+}
+.cafe-mode-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  border-radius: 14px;
+  border: 1px solid #ffd9bd;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+.cafe-mode-btn.is-active {
+  border-color: #c45c00;
+  background: #fff3e8;
+  box-shadow: 0 0 0 2px rgba(196, 92, 0, 0.2);
+}
+.cafe-mode-btn span {
+  font-size: 1.5rem;
+}
+.cafe-menu-cat {
+  margin-bottom: 22px;
+}
+.cafe-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.cafe-menu-item {
+  position: relative;
+  border: 1px solid #ffd9bd;
+  border-radius: 14px;
+  padding: 10px;
+  background: #fff;
+}
+.cafe-new-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  background: #c45c00;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 999px;
+}
+.cafe-menu-item img,
+.cafe-menu-ph {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #f3e8d8;
+}
+.cafe-menu-item h3 {
+  margin: 8px 0 4px;
+  font-size: 1rem;
+}
+.cafe-menu-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+.cafe-qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.cafe-qty button {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid #e0c2a8;
+  background: #fff8f1;
+  cursor: pointer;
+}
+.cafe-guest-status {
+  color: #8d3e00;
+  margin-top: 12px;
+}
+.muted.small {
+  font-size: 0.85rem;
+}
+@media (max-width: 560px) {
+  .cafe-guest-modes {
+    grid-template-columns: 1fr;
+  }
+}

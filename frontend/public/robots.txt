@@ -4,6 +4,7 @@ Allow: /contacts
 Allow: /offer
 Allow: /privacy
 Allow: /businesses
+Allow: /o/
 Allow: /legal/
 
 # Личный кабинет и приложение — не индексировать
@@ -11,6 +12,7 @@ Disallow: /cabinet
 Disallow: /settings
 Disallow: /subscriptions
 Disallow: /organization
+Disallow: /cafe
 Disallow: /staff
 Disallow: /reviews
 Disallow: /bookings
@@ -21,6 +23,7 @@ Disallow: /map
 Disallow: /book
 Disallow: /my-bookings
 Disallow: /my-reviews
+Disallow: /t/
 Disallow: /api/
 Disallow: /admin
 Disallow: /admin/

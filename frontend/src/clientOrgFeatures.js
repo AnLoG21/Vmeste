@@ -253,9 +253,26 @@ function defaultStickerSvg() {
 </svg>`;
 }
 
+function plateStickerSvg() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 52 52">
+  <rect x="4" y="3" width="44" height="44" rx="13" fill="#e67e22"/>
+  <circle cx="28" cy="26" r="10" fill="none" stroke="#fff" stroke-width="2.2"/>
+  <g stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none">
+    <path d="M14 16 v16"/>
+    <path d="M11 16 v6 c0 3 3 3 3 0 v-6"/>
+    <path d="M17 16 v6 c0 3-3 3-3 0"/>
+    <path d="M14 22 v10"/>
+    <path d="M38 17 v8"/>
+    <path d="M38 25 c4 0 4 4 0 4"/>
+    <path d="M38 29 v5"/>
+  </g>
+</svg>`;
+}
+
 export function sphereMapIconHref(sphere) {
   if (sphere === "hair_salon") return svgDataUrl(scissorsStickerSvg());
   if (sphere === "service_center") return svgDataUrl(wheelStickerSvg());
+  if (sphere === "cafe_restaurant") return svgDataUrl(plateStickerSvg());
   return svgDataUrl(defaultStickerSvg());
 }
 
