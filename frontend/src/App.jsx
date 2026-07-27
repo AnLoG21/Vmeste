@@ -8203,6 +8203,8 @@ export default function App() {
 
     const byDay = slots
       .filter((s) => s.starts_at?.slice(0, 7) === calendarMonth)
+      // В календаре интервалов не показываем клиентские записи — только свободные и ручные брони организации.
+      .filter((s) => !s.is_booked || Boolean(s.is_manual_hold))
       .reduce((acc, slot) => {
         const day = Number(slot.starts_at.slice(8, 10));
         if (!acc[day]) acc[day] = [];
@@ -12652,18 +12654,33 @@ export default function App() {
                           </>
                         ) : (
                           <>
-                            <button
-                              type="button"
-                              className="calendar-day-sheet-item-delete"
-                              aria-label="Удалить интервал"
-                              title="Удалить"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteSlot(it.id);
-                              }}
-                            >
-                              ×
-                            </button>
+                            {!it.is_booked ? (
+                              <button
+                                type="button"
+                                className="calendar-day-sheet-item-delete"
+                                aria-label="Удалить интервал"
+                                title="Удалить"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteSlot(it.id);
+                                }}
+                              >
+                                ×
+                              </button>
+                            ) : it.is_manual_hold ? (
+                              <button
+                                type="button"
+                                className="calendar-day-sheet-item-delete"
+                                aria-label="Снять ручную бронь"
+                                title="Снять ручную бронь"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void releaseManualHold(it.id);
+                                }}
+                              >
+                                ×
+                              </button>
+                            ) : null}
                             <strong>
                               {new Date(it.starts_at).toLocaleTimeString([], {
                                 hour: "2-digit",
@@ -12675,7 +12692,11 @@ export default function App() {
                                 minute: "2-digit",
                               })}
                             </strong>
-                            <div className="muted">Свободно</div>
+                            <div className="muted">
+                              {it.is_manual_hold
+                                ? `Ручная бронь${it.booking_client_name || it.hold_label ? ` · ${it.booking_client_name || it.hold_label}` : ""}`
+                                : "Свободно"}
+                            </div>
                           </>
                         )}
                       </li>
