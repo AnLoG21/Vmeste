@@ -1034,6 +1034,9 @@ const emptyRegisterForm = {
   floor: "",
   organization_latitude: "55.751244",
   organization_longitude: "37.618423",
+  accept_privacy: false,
+  accept_offer: false,
+  age_confirmed: false,
 };
 
 const BOOKING_MSG_PRESETS = {
@@ -2668,6 +2671,9 @@ export default function App() {
     organization_longitude: "37.618423",
   });
   const [profileOrgStatus, setProfileOrgStatus] = useState("");
+  const [deleteAccountForm, setDeleteAccountForm] = useState({ password: "", confirm: "" });
+  const [deleteAccountStatus, setDeleteAccountStatus] = useState("");
+  const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
   const [branchGeoStatus, setBranchGeoStatus] = useState("");
   const [orgMainEditOpen, setOrgMainEditOpen] = useState(false);
   const [selectedOrgBranchId, setSelectedOrgBranchId] = useState(null);
@@ -3881,6 +3887,36 @@ export default function App() {
     resetPushRegistration();
   }
 
+  async function deleteMyAccount(event) {
+    event?.preventDefault?.();
+    setDeleteAccountStatus("");
+    if ((deleteAccountForm.confirm || "").trim().toLowerCase() !== "удалить") {
+      setDeleteAccountStatus("Для подтверждения введите слово «удалить».");
+      return;
+    }
+    if (!deleteAccountForm.password) {
+      setDeleteAccountStatus("Укажите пароль.");
+      return;
+    }
+    setDeleteAccountBusy(true);
+    const res = await authFetch(`${API_URL}/users/me/delete/`, {
+      method: "POST",
+      body: JSON.stringify({
+        password: deleteAccountForm.password,
+        confirm: "удалить",
+      }),
+    });
+    setDeleteAccountBusy(false);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setDeleteAccountStatus(err.detail || err.password?.[0] || "Не удалось удалить аккаунт.");
+      return;
+    }
+    setDeleteAccountForm({ password: "", confirm: "" });
+    logout();
+    setAuthStatus("Аккаунт удалён. Данные обезличены.");
+  }
+
   async function onSubmit(event) {
     event.preventDefault();
     setAuthStatus("");
@@ -3888,10 +3924,21 @@ export default function App() {
       setStatus("Пароли не совпадают.");
       return;
     }
+    if (!form.age_confirmed) {
+      setStatus("Подтвердите, что вам исполнилось 18 лет.");
+      return;
+    }
+    if (!form.accept_privacy || !form.accept_offer) {
+      setStatus("Нужно принять оферту и политику конфиденциальности.");
+      return;
+    }
     setStatus("Сохраняем...");
     const payload = {
       ...form,
       organization_address: simplifyCommaAddressLine(form.organization_address.trim()) || form.organization_address.trim(),
+      accept_privacy: Boolean(form.accept_privacy),
+      accept_offer: Boolean(form.accept_offer),
+      age_confirmed: Boolean(form.age_confirmed),
     };
     const response = await fetch(`${API_URL}/users/register/`, {
       method: "POST",
@@ -3941,6 +3988,10 @@ export default function App() {
     }
     if (form.password !== form.password_confirm) {
       setAuthStatus("Пароли не совпадают.");
+      return;
+    }
+    if (!form.age_confirmed || !form.accept_privacy || !form.accept_offer) {
+      setAuthStatus("Подтвердите возраст и примите оферту с политикой конфиденциальности.");
       return;
     }
     setAuthStatus("");
@@ -10227,11 +10278,53 @@ export default function App() {
                         required
                         autoComplete="new-password"
                       />
+                      <label className="checkbox auth-consent-item">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(form.age_confirmed)}
+                          onChange={(e) => setForm({ ...form, age_confirmed: e.target.checked })}
+                          required
+                        />
+                        <span>Мне исполнилось 18 лет</span>
+                      </label>
+                      <label className="checkbox auth-consent-item">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(form.accept_offer)}
+                          onChange={(e) => setForm({ ...form, accept_offer: e.target.checked })}
+                          required
+                        />
+                        <span>
+                          Принимаю{" "}
+                          <a href="/offer" target="_blank" rel="noopener noreferrer">
+                            публичную оферту
+                          </a>
+                        </span>
+                      </label>
+                      <label className="checkbox auth-consent-item">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(form.accept_privacy)}
+                          onChange={(e) => setForm({ ...form, accept_privacy: e.target.checked })}
+                          required
+                        />
+                        <span>
+                          Согласен(на) на обработку персональных данных согласно{" "}
+                          <a href="/privacy" target="_blank" rel="noopener noreferrer">
+                            политике конфиденциальности
+                          </a>
+                        </span>
+                      </label>
                       {form.role === "provider" ? <button type="button" onClick={continueProviderRegistration}>Продолжить</button> : <button type="submit">Создать аккаунт</button>}
                     </>
                   )}
                   {registerStep === 2 && form.role === "provider" && (
                     <>
+                      <p className="muted small auth-provider-disclaimer">
+                        Размещая услуги, вы подтверждаете, что организация вправе их оказывать (лицензии и
+                        разрешения — ваша ответственность). Платформа «Вместе» предоставляет только ПО для
+                        записи и не оказывает конечные услуги клиентам.
+                      </p>
                       <select value={form.provider_sphere} onChange={(e) => setForm({ ...form, provider_sphere: e.target.value })} required>
                         <option value="">Выбери сферу услуг</option>
                         {sphereOptions.map((s) => <option key={s.key} value={s.key}>{s.value}</option>)}
@@ -10370,6 +10463,32 @@ export default function App() {
               {canManageOrgSettings && (
                 <button type="button" className="ghost-btn" onClick={() => setCurrentView("organization")}>Организация</button>
               )}
+            </div>
+            <div className="profile-delete-block">
+              <h3>Удаление аккаунта</h3>
+              <p className="muted small">
+                Аккаунт будет деактивирован, персональные данные обезличены. Для подтверждения введите
+                пароль и слово «удалить».
+              </p>
+              <form onSubmit={deleteMyAccount} className="form">
+                <PasswordInput
+                  placeholder="Текущий пароль"
+                  value={deleteAccountForm.password}
+                  onChange={(e) => setDeleteAccountForm((p) => ({ ...p, password: e.target.value }))}
+                  autoComplete="current-password"
+                  required
+                />
+                <input
+                  placeholder='Введите «удалить»'
+                  value={deleteAccountForm.confirm}
+                  onChange={(e) => setDeleteAccountForm((p) => ({ ...p, confirm: e.target.value }))}
+                  required
+                />
+                <button type="submit" className="danger-btn" disabled={deleteAccountBusy}>
+                  {deleteAccountBusy ? "Удаление…" : "Удалить аккаунт"}
+                </button>
+                {deleteAccountStatus ? <p className="status error">{deleteAccountStatus}</p> : null}
+              </form>
             </div>
             {!me?.email_verified && (
               <>
@@ -11958,6 +12077,10 @@ export default function App() {
                         ({mapOrgProfile?.reviews_count ?? mapOrgSummary?.reviews_count ?? 0} отзывов)
                       </p>
                     )}
+                    <p className="muted small map-org-platform-note">
+                      Услуги оказывает организация. Платформа «Вместе» предоставляет инструмент записи и не
+                      несёт ответственность за качество и лицензии.
+                    </p>
                   </div>
 
                   {buildOrgCarouselItems(mapOrgProfile).length > 0 && (

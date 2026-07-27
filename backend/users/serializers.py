@@ -67,6 +67,9 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     apartment = serializers.CharField(required=False, allow_blank=True, write_only=True)
     intercom = serializers.CharField(required=False, allow_blank=True, write_only=True)
     floor = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    accept_privacy = serializers.BooleanField(write_only=True)
+    accept_offer = serializers.BooleanField(write_only=True)
+    age_confirmed = serializers.BooleanField(write_only=True)
 
     class Meta:
         model = User
@@ -90,6 +93,9 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             "apartment",
             "intercom",
             "floor",
+            "accept_privacy",
+            "accept_offer",
+            "age_confirmed",
         ]
 
     def validate_email(self, value):
@@ -120,21 +126,33 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         if attrs["password"] != attrs.pop("password_confirm", None):
             raise serializers.ValidationError({"password_confirm": "Пароли не совпадают."})
         validate_password(attrs["password"])
+        if not attrs.pop("accept_privacy", False):
+            raise serializers.ValidationError({"accept_privacy": "Нужно согласие с политикой конфиденциальности."})
+        if not attrs.pop("accept_offer", False):
+            raise serializers.ValidationError({"accept_offer": "Нужно принять публичную оферту."})
+        if not attrs.pop("age_confirmed", False):
+            raise serializers.ValidationError({"age_confirmed": "Подтвердите, что вам исполнилось 18 лет."})
         return attrs
 
     def create(self, validated_data):
+        from django.utils import timezone
+
         pwd = validated_data.pop("password")
         extra = validated_data.pop("organization_address_details", "") or ""
         entrance = validated_data.pop("entrance", "") or ""
         floor = validated_data.pop("floor", "") or ""
         apartment = validated_data.pop("apartment", "") or ""
         intercom = validated_data.pop("intercom", "") or ""
+        now = timezone.now()
         user = User(**validated_data)
         user.organization_entrance = entrance
         user.organization_floor = floor
         user.organization_apartment = apartment
         user.organization_intercom = intercom
         user.organization_address_extra = extra
+        user.consent_privacy_at = now
+        user.consent_offer_at = now
+        user.age_confirmed_at = now
         user.set_password(pwd)
         if settings.SKIP_EMAIL_VERIFICATION:
             user.email_verified = True
@@ -164,3 +182,13 @@ class AutomationRequestSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
     telegram = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
     message = serializers.CharField(required=False, allow_blank=True, default="")
+    accept_privacy = serializers.BooleanField(write_only=True)
+
+    def validate_accept_privacy(self, value):
+        if not value:
+            raise serializers.ValidationError("Нужно согласие на обработку персональных данных.")
+        return value
+
+    def validate(self, attrs):
+        attrs.pop("accept_privacy", None)
+        return attrs

@@ -8,4 +8,5 @@ export const SITE_LEGAL = {
   status: "Самозанятый",
   inn: "971500759750",
   city: "Москва",
+  metrikaId: "109821476",
 };

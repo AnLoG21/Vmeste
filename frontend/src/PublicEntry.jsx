@@ -1,4 +1,5 @@
 import App from "./App.jsx";
+import CookieConsentBanner from "./CookieConsentBanner.jsx";
 import BusinessesPage from "./legal/BusinessesPage.jsx";
 import ContactsPage from "./legal/ContactsPage.jsx";
 import OfferPage from "./legal/OfferPage.jsx";
@@ -19,8 +20,10 @@ function normalizePath(pathname) {
 export default function PublicEntry() {
   const path = normalizePath(window.location.pathname);
   const LegalPage = LEGAL_ROUTES[path];
-  if (LegalPage) {
-    return <LegalPage />;
-  }
-  return <App />;
+  return (
+    <>
+      {LegalPage ? <LegalPage /> : <App />}
+      <CookieConsentBanner />
+    </>
+  );
 }

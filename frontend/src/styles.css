@@ -120,6 +120,96 @@ button:hover {
   color: #c0392b;
 }
 
+.danger-btn {
+  background: #b91c1c !important;
+  color: #fff !important;
+}
+
+.danger-btn:hover {
+  background: #991b1b !important;
+}
+
+.auth-consent-item,
+.landing-consent-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.auth-consent-item a,
+.landing-consent-item a {
+  color: #c85a00;
+}
+
+.auth-provider-disclaimer,
+.map-org-platform-note {
+  margin: 6px 0 0;
+  line-height: 1.35;
+}
+
+.profile-delete-block {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #ffe4cf;
+  display: grid;
+  gap: 8px;
+}
+
+.cookie-consent {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 10050;
+  pointer-events: none;
+}
+
+.cookie-consent-inner {
+  pointer-events: auto;
+  max-width: 720px;
+  margin: 0 auto;
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid #ffd9bd;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
+}
+
+.cookie-consent-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #374151;
+}
+
+.cookie-consent-text a {
+  color: #c85a00;
+}
+
+.cookie-consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cookie-consent-btn {
+  width: auto !important;
+  min-width: 140px;
+  padding: 10px 14px;
+  border-radius: 10px;
+}
+
+.cookie-consent-btn--primary {
+  background: #ff7a00;
+  color: #fff;
+}
+
 .auth-switch-text {
   margin: 10px 0 6px;
   text-align: center;

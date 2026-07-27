@@ -20,7 +20,14 @@ function formatPlanPrice(plan) {
 export default function LandingPage({ onLogin, onRegister }) {
   const requestRef = useRef(null);
   const pricingRef = useRef(null);
-  const [form, setForm] = useState({ name: "", email: "", phone: "+7", telegram: "", message: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "+7",
+    telegram: "",
+    message: "",
+    accept_privacy: false,
+  });
   const [formStatus, setFormStatus] = useState("");
   const [plans, setPlans] = useState([]);
 
@@ -54,6 +61,10 @@ export default function LandingPage({ onLogin, onRegister }) {
 
   async function submitRequest(e) {
     e.preventDefault();
+    if (!form.accept_privacy) {
+      setFormStatus("Нужно согласие на обработку персональных данных.");
+      return;
+    }
     setFormStatus("Отправляем...");
     const response = await fetch(`${API_URL}/users/automation-request/`, {
       method: "POST",
@@ -64,13 +75,14 @@ export default function LandingPage({ onLogin, onRegister }) {
     if (!response.ok) {
       const err =
         data.detail ||
+        data.accept_privacy?.[0] ||
         (typeof data === "object" && Object.values(data).flat?.()[0]) ||
         "Не удалось отправить заявку.";
       setFormStatus(typeof err === "string" ? err : "Не удалось отправить заявку.");
       return;
     }
     setFormStatus(data.detail || "Заявка отправлена!");
-    setForm({ name: "", email: "", phone: "+7", telegram: "", message: "" });
+    setForm({ name: "", email: "", phone: "+7", telegram: "", message: "", accept_privacy: false });
   }
 
   return (
@@ -312,6 +324,20 @@ export default function LandingPage({ onLogin, onRegister }) {
             value={form.message}
             onChange={(e) => setForm({ ...form, message: e.target.value })}
           />
+          <label className="checkbox landing-consent-item">
+            <input
+              type="checkbox"
+              checked={Boolean(form.accept_privacy)}
+              onChange={(e) => setForm({ ...form, accept_privacy: e.target.checked })}
+              required
+            />
+            <span>
+              Согласен(на) на обработку персональных данных согласно{" "}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer">
+                политике конфиденциальности
+              </a>
+            </span>
+          </label>
           <button type="submit" className="landing-btn landing-btn--primary">
             Отправить заявку
           </button>

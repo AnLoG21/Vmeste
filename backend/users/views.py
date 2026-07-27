@@ -180,6 +180,65 @@ class MeView(APIView):
         return self.get(request)
 
 
+class DeleteAccountView(APIView):
+    """Обезличить и деактивировать аккаунт по запросу пользователя (152-ФЗ)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        password = (request.data.get("password") or "").strip()
+        confirm = (request.data.get("confirm") or "").strip().lower()
+        if confirm not in ("удалить", "delete"):
+            return Response(
+                {"detail": "Для подтверждения введите слово «удалить»."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user = request.user
+        if not password or not user.check_password(password):
+            return Response({"password": ["Неверный пароль."]}, status=status.HTTP_400_BAD_REQUEST)
+        if user.role == User.Role.PROVIDER:
+            # Не даём удалить организацию с активной подпиской без явного предупреждения —
+            # данные обезличиваются, доступ закрывается.
+            pass
+        now = timezone.now()
+        uid = user.id
+        user.first_name = "Удалён"
+        user.last_name = ""
+        user.patronymic = ""
+        user.phone = ""
+        user.email = f"deleted_{uid}@deleted.local"
+        user.username = f"deleted_{uid}"
+        user.organization_name = ""
+        user.organization_address = ""
+        user.organization_entrance = ""
+        user.organization_floor = ""
+        user.organization_apartment = ""
+        user.organization_intercom = ""
+        user.organization_address_extra = ""
+        user.organization_latitude = None
+        user.organization_longitude = None
+        user.organization_card_note = ""
+        user.organization_phones = []
+        user.organization_websites = []
+        user.organization_working_hours = {}
+        user.email_verification_token = ""
+        user.is_active = False
+        user.account_deleted_at = now
+        user.set_unusable_password()
+        user.save()
+        try:
+            user.gallery_photos.all().delete()
+        except Exception:
+            pass
+        try:
+            from notifications.models import DevicePushToken
+
+            DevicePushToken.objects.filter(user_id=uid).delete()
+        except Exception:
+            pass
+        return Response({"detail": "Аккаунт удалён. Данные обезличены."})
+
+
 class ChangePasswordView(APIView):
     """Request password change: validates old password and emails a confirmation link."""
 

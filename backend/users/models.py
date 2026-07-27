@@ -70,6 +70,10 @@ class User(AbstractUser):
         default=0,
         help_text="Сколько мест «Без сотрудников N» доступно в календаре интервалов.",
     )
+    consent_privacy_at = models.DateTimeField(null=True, blank=True)
+    consent_offer_at = models.DateTimeField(null=True, blank=True)
+    age_confirmed_at = models.DateTimeField(null=True, blank=True)
+    account_deleted_at = models.DateTimeField(null=True, blank=True)
 
 
 class ProviderGalleryPhoto(models.Model):
