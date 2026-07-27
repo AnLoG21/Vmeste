@@ -119,7 +119,9 @@ class PublicOrganizationSitemapView(APIView):
                     "slug": slug,
                     "name": u.organization_name or u.username,
                     "sphere": u.provider_sphere or "",
+                    "address": u.organization_address or "",
                     "url": f"/o/{slug}",
+                    "menu_url": f"/m/{slug}" if u.provider_sphere == User.ProviderSphere.CAFE_RESTAURANT else "",
                 }
             )
         return Response({"organizations": items})

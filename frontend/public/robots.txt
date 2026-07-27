@@ -5,6 +5,8 @@ Allow: /offer
 Allow: /privacy
 Allow: /businesses
 Allow: /o/
+Allow: /m/
+Allow: /city/
 Allow: /legal/
 
 # Личный кабинет и приложение — не индексировать

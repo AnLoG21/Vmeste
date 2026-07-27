@@ -138,8 +138,8 @@ export default function PublicOrgPage({ slug }) {
         ) : null}
         <div className="landing-hero-actions" style={{ marginTop: 24 }}>
           {org.is_cafe ? (
-            <a className="landing-btn landing-btn--primary" href="/#pricing">
-              Меню по QR за столом
+            <a className="landing-btn landing-btn--primary" href={`/m/${org.slug}`}>
+              Открыть меню
             </a>
           ) : (
             <a className="landing-btn landing-btn--primary" href="/map">

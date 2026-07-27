@@ -63,6 +63,15 @@ class CafeTable(models.Model):
     height = models.FloatField(default=80)
     rotation = models.FloatField(default=0)
     seats = models.PositiveSmallIntegerField(default=2, validators=[MinValueValidator(1), MaxValueValidator(30)])
+    shape = models.CharField(
+        max_length=16,
+        default="round",
+        choices=[
+            ("round", "Круглый"),
+            ("rect", "Прямоугольный"),
+            ("sofa", "Диванный"),
+        ],
+    )
     pin_code = models.CharField(max_length=6, validators=[pin_validator], default="000000")
     public_token = models.CharField(max_length=32, unique=True, db_index=True, blank=True)
     is_active = models.BooleanField(default=True)
@@ -73,7 +82,7 @@ class CafeTable(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.public_token:
-            self.public_token = secrets.token_urlsafe(16)[:32]
+            self.public_token = secrets.token_hex(12)
         if not self.pin_code or len(self.pin_code) != 6:
             self.pin_code = f"{secrets.randbelow(1_000_000):06d}"
         super().save(*args, **kwargs)
@@ -117,7 +126,10 @@ class CafeMenuItem(models.Model):
     calories = models.PositiveIntegerField(null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     is_new = models.BooleanField(default=False)
+    is_available = models.BooleanField(default=True, help_text="Есть в наличии")
     is_active = models.BooleanField(default=True)
+    rating_sum = models.PositiveIntegerField(default=0)
+    rating_count = models.PositiveIntegerField(default=0)
     sort_order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -144,23 +156,42 @@ class CafeMenuItemPhoto(models.Model):
 
 
 class CafeGuestSession(models.Model):
-    """Короткоживущая сессия после ввода PIN стола."""
+    """Сессия гостя: после PIN стола или вход в меню заведения (самовывоз/доставка)."""
 
     token = models.CharField(max_length=64, unique=True, db_index=True)
-    table = models.ForeignKey(CafeTable, on_delete=models.CASCADE, related_name="sessions")
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="cafe_guest_sessions",
+        null=True,
+        blank=True,
+    )
+    table = models.ForeignKey(
+        CafeTable,
+        on_delete=models.CASCADE,
+        related_name="sessions",
+        null=True,
+        blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
 
     @classmethod
-    def create_for_table(cls, table, hours=8):
-        from django.utils import timezone
+    def create_session(cls, *, provider, table=None, hours=8):
         from datetime import timedelta
 
+        from django.utils import timezone
+
         return cls.objects.create(
-            token=secrets.token_urlsafe(32),
+            token=secrets.token_hex(24),
+            provider=provider,
             table=table,
             expires_at=timezone.now() + timedelta(hours=hours),
         )
+
+    @classmethod
+    def create_for_table(cls, table, hours=8):
+        return cls.create_session(provider=table.floor_plan.provider, table=table, hours=hours)
 
 
 class CafeOrder(models.Model):

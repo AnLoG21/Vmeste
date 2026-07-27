@@ -116,6 +116,23 @@
   background: #fff8f1;
   cursor: pointer;
 }
+.cafe-rate-row {
+  display: flex;
+  gap: 2px;
+  margin: 4px 0 6px;
+}
+.cafe-rate-star {
+  border: 0;
+  background: transparent;
+  color: #d4a574;
+  font-size: 1rem;
+  padding: 0 2px;
+  cursor: pointer;
+  line-height: 1;
+}
+.cafe-rate-star:hover {
+  color: #c45c00;
+}
 .cafe-guest-status {
   color: #8d3e00;
   margin-top: 12px;

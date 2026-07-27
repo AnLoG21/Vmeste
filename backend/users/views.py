@@ -166,6 +166,10 @@ class MeView(APIView):
 
     def get(self, request):
         u = request.user
+        if u.role == User.Role.PROVIDER:
+            from .slug_utils import ensure_organization_slug
+
+            ensure_organization_slug(u)
         full_name = " ".join(
             p for p in (u.last_name, u.first_name, getattr(u, "patronymic", "") or "") if p
         ).strip()

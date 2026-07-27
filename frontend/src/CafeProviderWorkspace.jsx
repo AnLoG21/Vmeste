@@ -1,41 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import CafeFloorCanvas, { qrImageUrl, GRID } from "./CafeFloorCanvas.jsx";
 import "./cafeGuest.css";
 import "./cafeProvider.css";
-
-function TableIcon({ seats = 2, label = "", selected = false }) {
-  const n = Math.max(1, Math.min(12, Number(seats) || 2));
-  const chairs = [];
-  for (let i = 0; i < n; i += 1) {
-    const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
-    const cx = 40 + Math.cos(angle) * 28;
-    const cy = 40 + Math.sin(angle) * 28;
-    chairs.push(
-      <rect
-        key={i}
-        x={cx - 5}
-        y={cy - 4}
-        width="10"
-        height="8"
-        rx="2"
-        fill="#8d5a2b"
-        transform={`rotate(${(angle * 180) / Math.PI + 90} ${cx} ${cy})`}
-      />,
-    );
-  }
-  return (
-    <svg viewBox="0 0 80 80" width="100%" height="100%" aria-hidden="true">
-      {chairs}
-      <ellipse cx="40" cy="40" rx="18" ry="14" fill={selected ? "#ffd7b0" : "#f0c49a"} stroke="#c45c00" strokeWidth="2.5" />
-      <text x="40" y="44" textAnchor="middle" fontSize="9" fontWeight="700" fill="#5a3a22">
-        {String(label).slice(0, 8)}
-      </text>
-    </svg>
-  );
-}
-
-function qrImageUrl(data, size = 180) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`;
-}
 
 const emptyCatForm = { name: "", is_novelties: false };
 const emptyItemForm = {
@@ -46,36 +12,29 @@ const emptyItemForm = {
   weight_grams: "",
   calories: "",
   is_new: false,
+  is_available: true,
 };
 
-/**
- * props: authFetch, API_URL, initialTab?, onTabConsumed?
- */
-export default function CafeProviderWorkspace({
-  authFetch,
-  API_URL,
-  initialTab = "floor",
-  onTabChange,
-}) {
-  const [tab, setTab] = useState(initialTab || "floor");
+export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab = "floor", onTabChange }) {
+  const [tab, setTab] = useState(initialTab === "orders" ? "floor" : initialTab || "floor");
   const [settings, setSettings] = useState(null);
   const [floors, setFloors] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [orders, setOrders] = useState([]);
   const [status, setStatus] = useState("");
   const [selectedFloorId, setSelectedFloorId] = useState(null);
   const [selectedTableId, setSelectedTableId] = useState(null);
-  const [tool, setTool] = useState("move"); // move | wall | erase
-  const [wallDraft, setWallDraft] = useState(null);
+  const [selectedWallId, setSelectedWallId] = useState(null);
+  const [tool, setTool] = useState("move");
+  const [zoom, setZoom] = useState(1);
   const [catFormOpen, setCatFormOpen] = useState(false);
   const [catForm, setCatForm] = useState(emptyCatForm);
   const [editingCatId, setEditingCatId] = useState(null);
   const [itemFormOpenFor, setItemFormOpenFor] = useState(null);
   const [itemForm, setItemForm] = useState(emptyItemForm);
-  const canvasRef = useRef(null);
+  const [meSlug, setMeSlug] = useState("");
 
   useEffect(() => {
-    if (initialTab && initialTab !== tab) setTab(initialTab);
+    if (initialTab && initialTab !== "orders" && initialTab !== tab) setTab(initialTab);
   }, [initialTab]);
 
   function switchTab(id) {
@@ -84,11 +43,11 @@ export default function CafeProviderWorkspace({
   }
 
   const loadAll = useCallback(async () => {
-    const [s, f, m, o] = await Promise.all([
+    const [s, f, m, meRes] = await Promise.all([
       authFetch(`${API_URL}/cafe/settings/`),
       authFetch(`${API_URL}/cafe/floors/`),
       authFetch(`${API_URL}/cafe/menu/categories/`),
-      authFetch(`${API_URL}/cafe/orders/`),
+      authFetch(`${API_URL}/users/me/`),
     ]);
     if (s.ok) setSettings(await s.json());
     if (f.ok) {
@@ -97,7 +56,10 @@ export default function CafeProviderWorkspace({
       setSelectedFloorId((prev) => prev || floorsData[0]?.id || null);
     }
     if (m.ok) setCategories(await m.json());
-    if (o.ok) setOrders(await o.json());
+    if (meRes.ok) {
+      const me = await meRes.json();
+      setMeSlug(me.organization_slug || "");
+    }
   }, [API_URL, authFetch]);
 
   useEffect(() => {
@@ -107,6 +69,8 @@ export default function CafeProviderWorkspace({
   const floor = floors.find((x) => x.id === selectedFloorId) || floors[0] || null;
   const selectedTable = (floor?.tables || []).find((t) => t.id === selectedTableId) || null;
   const origin = typeof window !== "undefined" ? window.location.origin : "https://vsevmeste.space";
+  const guestMenuUrl = meSlug ? `${origin}/m/${meSlug}` : "";
+  const tableUrl = selectedTable?.public_token ? `${origin}/t/${selectedTable.public_token}` : "";
 
   async function saveSettings(patch) {
     const res = await authFetch(`${API_URL}/cafe/settings/`, {
@@ -138,22 +102,26 @@ export default function CafeProviderWorkspace({
     });
     if (res.ok) {
       const updated = await res.json();
-      setFloors((prev) => prev.map((f) => (f.id === id ? { ...f, ...updated, tables: f.tables } : f)));
+      setFloors((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, ...updated, tables: updated.tables || f.tables } : f)),
+      );
     }
   }
 
-  async function addTable() {
+  async function addTable(shape = "round") {
     if (!floor) return;
+    const size =
+      shape === "sofa" ? { width: 110, height: 78 } : shape === "rect" ? { width: 100, height: 72 } : { width: 88, height: 88 };
     const res = await authFetch(`${API_URL}/cafe/floors/${floor.id}/tables/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         label: `Стол ${(floor.tables?.length || 0) + 1}`,
-        x: 60 + (floor.tables?.length || 0) * 24,
-        y: 60 + (floor.tables?.length || 0) * 16,
-        width: 88,
-        height: 88,
-        seats: 4,
+        x: GRID * 3 + (floor.tables?.length || 0) * GRID,
+        y: GRID * 3 + (floor.tables?.length || 0) * GRID,
+        ...size,
+        seats: shape === "sofa" ? 6 : 4,
+        shape,
         rotation: 0,
         pin_code: String(Math.floor(100000 + Math.random() * 900000)),
       }),
@@ -195,91 +163,29 @@ export default function CafeProviderWorkspace({
     }
   }
 
-  function canvasPoint(e) {
-    const el = canvasRef.current;
-    if (!el) return { x: 0, y: 0 };
-    const rect = el.getBoundingClientRect();
-    const scaleX = (floor?.width || rect.width) / rect.width;
-    const scaleY = (floor?.height || rect.height) / rect.height;
-    return {
-      x: Math.max(0, (e.clientX - rect.left) * scaleX),
-      y: Math.max(0, (e.clientY - rect.top) * scaleY),
-    };
+  function deleteSelectedWall() {
+    if (!floor || !selectedWallId) return;
+    const drawings = (floor.drawings || []).filter((d) => d.id !== selectedWallId);
+    patchFloor(floor.id, { drawings });
+    setSelectedWallId(null);
   }
 
-  function onCanvasMouseDown(e) {
+  function addZone() {
     if (!floor) return;
-    if (e.target.closest(".cafe-table-node")) return;
-    const p = canvasPoint(e);
-    if (tool === "wall") {
-      setWallDraft({ x1: p.x, y1: p.y, x2: p.x, y2: p.y });
-      return;
-    }
-    if (tool === "erase") {
-      const drawings = Array.isArray(floor.drawings) ? [...floor.drawings] : [];
-      // remove nearest wall endpoint within 24px
-      let best = -1;
-      let bestDist = 24;
-      drawings.forEach((d, idx) => {
-        if (d.type !== "wall") return;
-        const midX = (d.x1 + d.x2) / 2;
-        const midY = (d.y1 + d.y2) / 2;
-        const dist = Math.hypot(midX - p.x, midY - p.y);
-        if (dist < bestDist) {
-          bestDist = dist;
-          best = idx;
-        }
-      });
-      if (best >= 0) {
-        drawings.splice(best, 1);
-        patchFloor(floor.id, { drawings });
-      }
-    }
-  }
-
-  function onCanvasMouseMove(e) {
-    if (!wallDraft) return;
-    const p = canvasPoint(e);
-    setWallDraft((d) => (d ? { ...d, x2: p.x, y2: p.y } : null));
-  }
-
-  function onCanvasMouseUp() {
-    if (!wallDraft || !floor) return;
-    const len = Math.hypot(wallDraft.x2 - wallDraft.x1, wallDraft.y2 - wallDraft.y1);
-    if (len > 8) {
-      const drawings = [...(Array.isArray(floor.drawings) ? floor.drawings : []), { type: "wall", ...wallDraft }];
-      patchFloor(floor.id, { drawings });
-    }
-    setWallDraft(null);
-  }
-
-  function startTableDrag(e, table) {
-    if (tool !== "move") return;
-    e.preventDefault();
-    e.stopPropagation();
-    setSelectedTableId(table.id);
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const ox = table.x;
-    const oy = table.y;
-    const node = e.currentTarget;
-    function onMove(ev) {
-      const nx = Math.max(0, ox + (ev.clientX - startX));
-      const ny = Math.max(0, oy + (ev.clientY - startY));
-      node.style.left = `${nx}px`;
-      node.style.top = `${ny}px`;
-      node.dataset.nx = String(nx);
-      node.dataset.ny = String(ny);
-    }
-    function onUp() {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      const nx = Number(node.dataset.nx ?? ox);
-      const ny = Number(node.dataset.ny ?? oy);
-      patchTable(table.id, { x: nx, y: ny });
-    }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    const drawings = [
+      ...(floor.drawings || []),
+      {
+        id: `z-${Date.now()}`,
+        type: "zone",
+        x: GRID * 2,
+        y: GRID * 2,
+        w: GRID * 8,
+        h: GRID * 6,
+        name: "Зона",
+        color: "rgba(196,92,0,0.1)",
+      },
+    ];
+    patchFloor(floor.id, { drawings });
   }
 
   async function submitCategory(e) {
@@ -289,19 +195,13 @@ export default function CafeProviderWorkspace({
       await authFetch(`${API_URL}/cafe/menu/categories/${editingCatId}/`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: catForm.name.trim(),
-          is_novelties: Boolean(catForm.is_novelties),
-        }),
+        body: JSON.stringify({ name: catForm.name.trim(), is_novelties: Boolean(catForm.is_novelties) }),
       });
     } else {
       await authFetch(`${API_URL}/cafe/menu/categories/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: catForm.name.trim(),
-          is_novelties: Boolean(catForm.is_novelties),
-        }),
+        body: JSON.stringify({ name: catForm.name.trim(), is_novelties: Boolean(catForm.is_novelties) }),
       });
     }
     setCatFormOpen(false);
@@ -311,7 +211,7 @@ export default function CafeProviderWorkspace({
   }
 
   async function deleteCategory(id) {
-    if (!window.confirm("Удалить категорию и все блюда в ней?")) return;
+    if (!window.confirm("Удалить категорию и блюда?")) return;
     await authFetch(`${API_URL}/cafe/menu/categories/${id}/`, { method: "DELETE" });
     await loadAll();
   }
@@ -331,6 +231,7 @@ export default function CafeProviderWorkspace({
         weight_grams: itemForm.weight_grams ? Number(itemForm.weight_grams) : null,
         calories: itemForm.calories ? Number(itemForm.calories) : null,
         is_new: Boolean(itemForm.is_new),
+        is_available: itemForm.is_available !== false,
       }),
     });
     setItemFormOpenFor(null);
@@ -360,40 +261,26 @@ export default function CafeProviderWorkspace({
     await loadAll();
   }
 
-  async function setOrderStatus(id, next) {
-    await authFetch(`${API_URL}/cafe/orders/${id}/`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: next }),
-    });
-    await loadAll();
-  }
-
-  const modeLabels = { dine_in: "За столом", takeaway: "Самовывоз", delivery: "Доставка" };
-  const statusLabels = {
-    draft: "Черновик",
-    awaiting_payment: "Ожидает оплаты",
-    paid: "Оплачен",
-    accepted: "Принят",
-    cooking: "Готовится",
-    ready: "Готов",
-    delivering: "Доставляется",
-    done: "Завершён",
-    cancelled: "Отменён",
-  };
-
   return (
     <section className="card full-width cafe-provider">
-      <h2>Кафе и ресторан</h2>
+      <h2>Зал и меню</h2>
       <p className="muted">
-        Начертите стены зала, расставьте столы со стульями, настройте PIN и QR, ведите меню и заказы.
+        Чертите стены по сетке, редактируйте точки, расставляйте столы. Заказы — во вкладке «Заказы» сверху.
       </p>
+      {guestMenuUrl ? (
+        <p className="cafe-guest-link">
+          Меню без стола (самовывоз/доставка):{" "}
+          <a href={guestMenuUrl} target="_blank" rel="noreferrer">
+            {guestMenuUrl}
+          </a>
+        </p>
+      ) : null}
+
       <div className="cafe-provider-tabs">
         {[
           ["floor", "Зал и столы"],
           ["menu", "Меню"],
           ["settings", "Режимы и оплата"],
-          ["orders", "Заказы"],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -435,7 +322,7 @@ export default function CafeProviderWorkspace({
             />
           </label>
           <label>
-            Стоимость доставки, ₽
+            Доставка, ₽
             <input
               type="number"
               value={settings.delivery_fee}
@@ -444,7 +331,7 @@ export default function CafeProviderWorkspace({
             />
           </label>
           <label>
-            Мин. сумма доставки, ₽
+            Мин. сумма, ₽
             <input
               type="number"
               value={settings.delivery_min_order}
@@ -461,18 +348,38 @@ export default function CafeProviderWorkspace({
             <button type="button" onClick={addFloor}>
               + Зал
             </button>
-            <button type="button" onClick={addTable} disabled={!floor}>
-              + Стол
+            <button type="button" onClick={() => addTable("round")} disabled={!floor}>
+              + Круглый
+            </button>
+            <button type="button" onClick={() => addTable("rect")} disabled={!floor}>
+              + Прямоуг.
+            </button>
+            <button type="button" onClick={() => addTable("sofa")} disabled={!floor}>
+              + Диван
             </button>
             <button type="button" className={tool === "move" ? "is-active" : ""} onClick={() => setTool("move")}>
-              Двигать
+              Выбор
             </button>
             <button type="button" className={tool === "wall" ? "is-active" : ""} onClick={() => setTool("wall")}>
               Стена
             </button>
             <button type="button" className={tool === "erase" ? "is-active" : ""} onClick={() => setTool("erase")}>
-              Ластик стен
+              Ластик
             </button>
+            <button type="button" onClick={addZone} disabled={!floor}>
+              + Зона
+            </button>
+            <button type="button" className="ghost-btn" onClick={() => setZoom((z) => Math.min(1.6, +(z + 0.1).toFixed(1)))}>
+              Масштаб +
+            </button>
+            <button type="button" className="ghost-btn" onClick={() => setZoom((z) => Math.max(0.6, +(z - 0.1).toFixed(1)))}>
+              Масштаб −
+            </button>
+            {selectedWallId ? (
+              <button type="button" className="ghost-btn" onClick={deleteSelectedWall}>
+                Удалить стену
+              </button>
+            ) : null}
             {floors.map((f) => (
               <button
                 key={f.id}
@@ -484,65 +391,58 @@ export default function CafeProviderWorkspace({
               </button>
             ))}
           </div>
+          <p className="muted small">Сетка {GRID}px · стены тянутся ровно (H/V) и липнут к точкам · клик по стене — якоря</p>
+          {floor ? (
+            <div className="cafe-toolbar">
+              <label className="muted small">
+                Ширина плана
+                <input
+                  type="number"
+                  min={400}
+                  max={2000}
+                  step={20}
+                  value={floor.width}
+                  onChange={(e) =>
+                    setFloors((prev) =>
+                      prev.map((f) => (f.id === floor.id ? { ...f, width: Number(e.target.value) || f.width } : f)),
+                    )
+                  }
+                  onBlur={(e) => patchFloor(floor.id, { width: Math.max(400, Number(e.target.value) || floor.width) })}
+                />
+              </label>
+              <label className="muted small">
+                Высота плана
+                <input
+                  type="number"
+                  min={300}
+                  max={1600}
+                  step={20}
+                  value={floor.height}
+                  onChange={(e) =>
+                    setFloors((prev) =>
+                      prev.map((f) => (f.id === floor.id ? { ...f, height: Number(e.target.value) || f.height } : f)),
+                    )
+                  }
+                  onBlur={(e) => patchFloor(floor.id, { height: Math.max(300, Number(e.target.value) || floor.height) })}
+                />
+              </label>
+            </div>
+          ) : null}
 
           {floor ? (
-            <div
-              ref={canvasRef}
-              className={`cafe-floor-canvas tool-${tool}`}
-              style={{ width: "100%", maxWidth: floor.width, height: Math.min(floor.height, 480) }}
-              onMouseDown={onCanvasMouseDown}
-              onMouseMove={onCanvasMouseMove}
-              onMouseUp={onCanvasMouseUp}
-              onMouseLeave={onCanvasMouseUp}
-            >
-              <svg className="cafe-floor-drawings" viewBox={`0 0 ${floor.width} ${floor.height}`} preserveAspectRatio="none">
-                {(Array.isArray(floor.drawings) ? floor.drawings : []).map((d, i) =>
-                  d.type === "wall" ? (
-                    <line
-                      key={i}
-                      x1={d.x1}
-                      y1={d.y1}
-                      x2={d.x2}
-                      y2={d.y2}
-                      stroke="#5a3a22"
-                      strokeWidth="6"
-                      strokeLinecap="round"
-                    />
-                  ) : null,
-                )}
-                {wallDraft ? (
-                  <line
-                    x1={wallDraft.x1}
-                    y1={wallDraft.y1}
-                    x2={wallDraft.x2}
-                    y2={wallDraft.y2}
-                    stroke="#c45c00"
-                    strokeWidth="5"
-                    strokeDasharray="8 6"
-                    strokeLinecap="round"
-                  />
-                ) : null}
-              </svg>
-              {(floor.tables || []).map((t) => (
-                <div
-                  key={t.id}
-                  className={`cafe-table-node${selectedTableId === t.id ? " is-selected" : ""}`}
-                  style={{
-                    left: t.x,
-                    top: t.y,
-                    width: t.width || 88,
-                    height: t.height || 88,
-                    transform: `rotate(${t.rotation || 0}deg)`,
-                  }}
-                  onMouseDown={(e) => startTableDrag(e, t)}
-                  onClick={() => setSelectedTableId(t.id)}
-                >
-                  <TableIcon seats={t.seats} label={t.label} selected={selectedTableId === t.id} />
-                </div>
-              ))}
-            </div>
+            <CafeFloorCanvas
+              floor={floor}
+              selectedTableId={selectedTableId}
+              selectedWallId={selectedWallId}
+              tool={tool}
+              zoom={zoom}
+              onSelectTable={setSelectedTableId}
+              onSelectWall={setSelectedWallId}
+              onPatchFloor={patchFloor}
+              onPatchTable={patchTable}
+            />
           ) : (
-            <p className="muted">Создайте зал, начертите стены и добавьте столы.</p>
+            <p className="muted">Создайте зал.</p>
           )}
 
           {selectedTable && (
@@ -566,7 +466,18 @@ export default function CafeProviderWorkspace({
                 />
               </label>
               <label>
-                Мест (стулья)
+                Форма
+                <select
+                  value={selectedTable.shape || "round"}
+                  onChange={(e) => patchTable(selectedTable.id, { shape: e.target.value })}
+                >
+                  <option value="round">Круглый</option>
+                  <option value="rect">Прямоугольный</option>
+                  <option value="sofa">Диванный</option>
+                </select>
+              </label>
+              <label>
+                Мест
                 <input
                   type="number"
                   min={1}
@@ -576,7 +487,7 @@ export default function CafeProviderWorkspace({
                 />
               </label>
               <label>
-                Поворот, °
+                Поворот °
                 <input
                   type="number"
                   step={15}
@@ -584,14 +495,6 @@ export default function CafeProviderWorkspace({
                   onChange={(e) => patchTable(selectedTable.id, { rotation: Number(e.target.value) || 0 })}
                 />
               </label>
-              <div className="cafe-form-span2 cafe-toolbar">
-                <button type="button" onClick={() => patchTable(selectedTable.id, { rotation: ((selectedTable.rotation || 0) + 45) % 360 })}>
-                  Повернуть +45°
-                </button>
-                <button type="button" className="ghost-btn" onClick={() => deleteTable(selectedTable.id)}>
-                  Удалить стол
-                </button>
-              </div>
               <label>
                 PIN (6 цифр)
                 <input
@@ -614,36 +517,31 @@ export default function CafeProviderWorkspace({
                   }}
                 />
               </label>
+              <div className="cafe-form-span2 cafe-toolbar">
+                <button type="button" onClick={() => patchTable(selectedTable.id, { rotation: ((selectedTable.rotation || 0) + 45) % 360 })}>
+                  +45°
+                </button>
+                <button type="button" className="ghost-btn" onClick={() => deleteTable(selectedTable.id)}>
+                  Удалить
+                </button>
+              </div>
               <div className="cafe-qr-block cafe-form-span2">
-                <p className="muted small">QR-код стола (откройте или скачайте):</p>
-                {selectedTable.public_token ? (
+                <p>
+                  <strong>Ссылка для гостя (откройте на телефоне):</strong>
+                </p>
+                {tableUrl ? (
                   <>
-                    <img
-                      src={qrImageUrl(`${origin}/t/${selectedTable.public_token}`, 200)}
-                      alt={`QR ${selectedTable.label}`}
-                      width={200}
-                      height={200}
-                    />
-                    <div className="cafe-toolbar">
-                      <a
-                        className="ghost-btn"
-                        href={qrImageUrl(`${origin}/t/${selectedTable.public_token}`, 400)}
-                        download={`qr-${selectedTable.label}.png`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Скачать QR
-                      </a>
-                      <a className="ghost-btn" href={`${origin}/t/${selectedTable.public_token}`} target="_blank" rel="noreferrer">
-                        Открыть ссылку
-                      </a>
-                    </div>
-                    <code className="cafe-qr-url">
-                      {origin}/t/{selectedTable.public_token}
-                    </code>
+                    <a className="cafe-qr-open" href={tableUrl} target="_blank" rel="noreferrer">
+                      {tableUrl}
+                    </a>
+                    <img src={qrImageUrl(tableUrl, 220)} alt={`QR ${selectedTable.label}`} width={220} height={220} />
+                    <p className="muted small">PIN для входа: {selectedTable.pin_code}</p>
+                    <a className="ghost-btn" href={qrImageUrl(tableUrl, 400)} target="_blank" rel="noreferrer">
+                      Открыть QR крупно
+                    </a>
                   </>
                 ) : (
-                  <p className="muted">Токен стола ещё не создан — сохраните стол ещё раз.</p>
+                  <p className="muted">Нет токена стола — пересохраните стол.</p>
                 )}
               </div>
             </div>
@@ -678,15 +576,10 @@ export default function CafeProviderWorkspace({
 
           {catFormOpen && (
             <form className="cafe-form-panel cafe-form-grid" onSubmit={submitCategory}>
-              <h3 className="cafe-form-span2">{editingCatId ? "Редактировать категорию" : "Новая категория"}</h3>
+              <h3 className="cafe-form-span2">{editingCatId ? "Категория" : "Новая категория"}</h3>
               <label className="cafe-form-span2">
                 Название
-                <input
-                  value={catForm.name}
-                  onChange={(e) => setCatForm({ ...catForm, name: e.target.value })}
-                  required
-                  autoFocus
-                />
+                <input value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} required autoFocus />
               </label>
               <label className="checkbox cafe-form-span2">
                 <input
@@ -694,18 +587,11 @@ export default function CafeProviderWorkspace({
                   checked={Boolean(catForm.is_novelties)}
                   onChange={(e) => setCatForm({ ...catForm, is_novelties: e.target.checked })}
                 />
-                <span>Категория «Новинки» (показывается первой)</span>
+                <span>«Новинки»</span>
               </label>
               <div className="cafe-form-span2 cafe-toolbar">
-                <button type="submit">{editingCatId ? "Сохранить" : "Создать"}</button>
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={() => {
-                    setCatFormOpen(false);
-                    setEditingCatId(null);
-                  }}
-                >
+                <button type="submit">Сохранить</button>
+                <button type="button" className="ghost-btn" onClick={() => setCatFormOpen(false)}>
                   Отмена
                 </button>
               </div>
@@ -750,66 +636,38 @@ export default function CafeProviderWorkspace({
                   <h4 className="cafe-form-span2">Новое блюдо</h4>
                   <label>
                     Название *
-                    <input
-                      value={itemForm.name}
-                      onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
-                      required
-                      autoFocus
-                    />
+                    <input value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} required autoFocus />
                   </label>
                   <label>
-                    Цена, ₽ *
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={itemForm.price}
-                      onChange={(e) => setItemForm({ ...itemForm, price: e.target.value })}
-                      required
-                    />
+                    Цена *
+                    <input type="number" value={itemForm.price} onChange={(e) => setItemForm({ ...itemForm, price: e.target.value })} required />
                   </label>
                   <label className="cafe-form-span2">
                     Состав
-                    <textarea
-                      rows={2}
-                      value={itemForm.composition}
-                      onChange={(e) => setItemForm({ ...itemForm, composition: e.target.value })}
-                    />
-                  </label>
-                  <label className="cafe-form-span2">
-                    Описание
-                    <textarea
-                      rows={2}
-                      value={itemForm.description}
-                      onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
-                    />
+                    <textarea rows={2} value={itemForm.composition} onChange={(e) => setItemForm({ ...itemForm, composition: e.target.value })} />
                   </label>
                   <label>
                     Граммы
-                    <input
-                      type="number"
-                      value={itemForm.weight_grams}
-                      onChange={(e) => setItemForm({ ...itemForm, weight_grams: e.target.value })}
-                    />
+                    <input type="number" value={itemForm.weight_grams} onChange={(e) => setItemForm({ ...itemForm, weight_grams: e.target.value })} />
                   </label>
                   <label>
                     Ккал
-                    <input
-                      type="number"
-                      value={itemForm.calories}
-                      onChange={(e) => setItemForm({ ...itemForm, calories: e.target.value })}
-                    />
+                    <input type="number" value={itemForm.calories} onChange={(e) => setItemForm({ ...itemForm, calories: e.target.value })} />
                   </label>
-                  <label className="checkbox cafe-form-span2">
+                  <label className="checkbox">
+                    <input type="checkbox" checked={Boolean(itemForm.is_new)} onChange={(e) => setItemForm({ ...itemForm, is_new: e.target.checked })} />
+                    <span>Новинка</span>
+                  </label>
+                  <label className="checkbox">
                     <input
                       type="checkbox"
-                      checked={Boolean(itemForm.is_new)}
-                      onChange={(e) => setItemForm({ ...itemForm, is_new: e.target.checked })}
+                      checked={itemForm.is_available !== false}
+                      onChange={(e) => setItemForm({ ...itemForm, is_available: e.target.checked })}
                     />
-                    <span>Пометка «Новинка»</span>
+                    <span>В наличии</span>
                   </label>
                   <div className="cafe-form-span2 cafe-toolbar">
-                    <button type="submit">Добавить блюдо</button>
+                    <button type="submit">Добавить</button>
                     <button type="button" className="ghost-btn" onClick={() => setItemFormOpenFor(null)}>
                       Отмена
                     </button>
@@ -825,46 +683,29 @@ export default function CafeProviderWorkspace({
                   </label>
                   <label>
                     Цена
-                    <input
-                      type="number"
-                      defaultValue={item.price}
-                      onBlur={(e) => patchItem(item.id, { price: e.target.value })}
-                    />
+                    <input type="number" defaultValue={item.price} onBlur={(e) => patchItem(item.id, { price: e.target.value })} />
                   </label>
                   <label className="cafe-form-span2">
                     Состав
-                    <textarea
-                      rows={2}
-                      defaultValue={item.composition}
-                      onBlur={(e) => patchItem(item.id, { composition: e.target.value })}
-                    />
+                    <textarea rows={2} defaultValue={item.composition} onBlur={(e) => patchItem(item.id, { composition: e.target.value })} />
                   </label>
-                  <label>
-                    Граммы
-                    <input
-                      type="number"
-                      defaultValue={item.weight_grams || ""}
-                      onBlur={(e) => patchItem(item.id, { weight_grams: e.target.value || null })}
-                    />
-                  </label>
-                  <label>
-                    Ккал
-                    <input
-                      type="number"
-                      defaultValue={item.calories || ""}
-                      onBlur={(e) => patchItem(item.id, { calories: e.target.value || null })}
-                    />
+                  <label className="checkbox">
+                    <input type="checkbox" checked={Boolean(item.is_new)} onChange={(e) => patchItem(item.id, { is_new: e.target.checked })} />
+                    <span>Новинка</span>
                   </label>
                   <label className="checkbox">
                     <input
                       type="checkbox"
-                      checked={Boolean(item.is_new)}
-                      onChange={(e) => patchItem(item.id, { is_new: e.target.checked })}
+                      checked={item.is_available !== false}
+                      onChange={(e) => patchItem(item.id, { is_available: e.target.checked })}
                     />
-                    <span>Новинка</span>
+                    <span>В наличии</span>
                   </label>
+                  <p className="muted small cafe-form-span2">
+                    Рейтинг: {item.rating_avg != null ? `★ ${item.rating_avg} (${item.rating_count})` : "пока нет"}
+                  </p>
                   <label>
-                    Фото (до 5)
+                    Фото
                     <input
                       type="file"
                       accept="image/*"
@@ -875,45 +716,13 @@ export default function CafeProviderWorkspace({
                       }}
                     />
                   </label>
-                  <div className="cafe-form-span2 cafe-toolbar">
-                    <span className="muted small">Фото: {item.photos?.length || 0}/5</span>
+                  <div className="cafe-toolbar">
                     <button type="button" className="ghost-btn" onClick={() => deleteItem(item.id)}>
-                      Удалить блюдо
+                      Удалить
                     </button>
                   </div>
                 </div>
               ))}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {tab === "orders" && (
-        <div className="cafe-tables-list">
-          {orders.length === 0 ? <p className="muted">Заказов пока нет.</p> : null}
-          {orders.map((o) => (
-            <div key={o.id} className="cafe-guest-card">
-              <strong>
-                #{o.id} · {modeLabels[o.mode] || o.mode} · {statusLabels[o.status] || o.status}
-              </strong>
-              <p>
-                {o.table_label ? `Стол: ${o.table_label}` : null} · {Number(o.total).toLocaleString("ru-RU")} ₽ ·{" "}
-                {o.pay_method}
-              </p>
-              <ul>
-                {(o.items || []).map((i) => (
-                  <li key={i.id}>
-                    {i.name} × {i.quantity}
-                  </li>
-                ))}
-              </ul>
-              <div className="cafe-toolbar">
-                {["accepted", "cooking", "ready", "done", "cancelled"].map((st) => (
-                  <button key={st} type="button" className="ghost-btn" onClick={() => setOrderStatus(o.id, st)}>
-                    {statusLabels[st] || st}
-                  </button>
-                ))}
-              </div>
             </div>
           ))}
         </div>

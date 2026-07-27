@@ -44,6 +44,7 @@ class CafeTableSerializer(serializers.ModelSerializer):
             "height",
             "rotation",
             "seats",
+            "shape",
             "pin_code",
             "public_token",
             "is_active",
@@ -82,6 +83,7 @@ class CafeMenuItemPhotoSerializer(serializers.ModelSerializer):
 
 class CafeMenuItemSerializer(serializers.ModelSerializer):
     photos = CafeMenuItemPhotoSerializer(many=True, read_only=True)
+    rating_avg = serializers.SerializerMethodField()
 
     class Meta:
         model = CafeMenuItem
@@ -95,13 +97,21 @@ class CafeMenuItemSerializer(serializers.ModelSerializer):
             "calories",
             "price",
             "is_new",
+            "is_available",
             "is_active",
+            "rating_avg",
+            "rating_count",
             "sort_order",
             "photos",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at", "photos"]
+        read_only_fields = ["created_at", "updated_at", "photos", "rating_avg", "rating_count"]
+
+    def get_rating_avg(self, obj):
+        if not obj.rating_count:
+            return None
+        return round(obj.rating_sum / obj.rating_count, 1)
 
 
 class CafeMenuCategorySerializer(serializers.ModelSerializer):

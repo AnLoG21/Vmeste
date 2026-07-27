@@ -73,12 +73,46 @@
   cursor: cell;
 }
 
+.cafe-floor-inner {
+  position: relative;
+  transform-origin: 0 0;
+}
+
 .cafe-floor-drawings {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
+}
+
+.cafe-wall-handle {
+  position: absolute;
+  z-index: 4;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #c45c00;
+  box-shadow: 0 0 0 1px #5a3a22;
+  cursor: grab;
+}
+
+.cafe-wall-handle:active {
+  cursor: grabbing;
+}
+
+.cafe-wall-anchor {
+  fill: #fff;
+  stroke: #5a3a22;
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.cafe-wall-anchor.is-selected {
+  fill: #c45c00;
+  stroke: #fff;
 }
 
 .cafe-table-node {

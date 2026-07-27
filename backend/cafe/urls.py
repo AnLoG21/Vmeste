@@ -18,6 +18,8 @@ urlpatterns = [
     path("orders/<int:pk>/", views.CafeProviderOrdersView.as_view()),
     path("t/<str:token>/", views.CafeTablePublicView.as_view()),
     path("t/<str:token>/unlock/", views.CafeTableUnlockView.as_view()),
+    path("m/<slug:slug>/", views.CafeOrgPublicView.as_view()),
     path("guest/menu/", views.CafeGuestMenuView.as_view()),
     path("guest/order/", views.CafeGuestOrderCreateView.as_view()),
+    path("menu/items/<int:pk>/rate/", views.CafeMenuItemRateView.as_view()),
 ]

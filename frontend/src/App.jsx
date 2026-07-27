@@ -4,6 +4,7 @@ import logoMain from "./assets/logo-main.png";
 import LandingPage from "./LandingPage.jsx";
 import SubscriptionsPage from "./SubscriptionsPage.jsx";
 import AnalyticsPage from "./AnalyticsPage.jsx";
+import CafeOrdersPage from "./CafeOrdersPage.jsx";
 import CafeProviderWorkspace from "./CafeProviderWorkspace.jsx";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
@@ -231,7 +232,8 @@ const BOOKMARK_CATALOG = [
   { id: "subscriptions", label: "Подписки", roles: ["provider", "staff"] },
   { id: "staff", label: "Сотрудники", roles: ["provider"] },
   { id: "organization", label: "Организация", roles: ["provider"] },
-  { id: "cafe", label: "Кафе: зал и меню", roles: ["provider"] },
+  { id: "cafe", label: "Зал и меню", roles: ["provider"] },
+  { id: "cafe_orders", label: "Заказы", roles: ["provider"] },
   { id: "analytics", label: "Аналитика", roles: ["provider", "staff"], menuIcon: "analytics" },
 ];
 
@@ -239,10 +241,18 @@ const DEFAULT_SUBNAV_BOOKMARKS = {
   client: ["client_map", "bookings", "chats"],
   provider: ["bookings", "reviews", "chats"],
   staff: ["bookings", "reviews", "chats"],
+  provider_cafe: ["cafe", "cafe_orders", "chats"],
 };
 
-function loadSubnavBookmarks(role) {
-  const fallback = DEFAULT_SUBNAV_BOOKMARKS[role] || DEFAULT_SUBNAV_BOOKMARKS.client;
+function defaultSubnavBookmarks(role, sphere) {
+  if (role === "provider" && sphere === "cafe_restaurant") {
+    return [...DEFAULT_SUBNAV_BOOKMARKS.provider_cafe];
+  }
+  return [...(DEFAULT_SUBNAV_BOOKMARKS[role] || DEFAULT_SUBNAV_BOOKMARKS.client)];
+}
+
+function loadSubnavBookmarks(role, sphere) {
+  const fallback = defaultSubnavBookmarks(role, sphere);
   try {
     const raw = localStorage.getItem(SUBNAV_BOOKMARKS_KEY);
     if (!raw) return [...fallback];
@@ -252,7 +262,16 @@ function loadSubnavBookmarks(role) {
     const allowed = new Set(
       BOOKMARK_CATALOG.filter((b) => b.roles.includes(role)).map((b) => b.id)
     );
-    return list.filter((id) => allowed.has(id));
+    let next = list.filter((id) => allowed.has(id));
+    if (role === "provider" && sphere === "cafe_restaurant") {
+      next = next.filter((id) => id !== "bookings");
+      if (!next.includes("cafe")) next = ["cafe", ...next];
+      if (!next.includes("cafe_orders")) {
+        const i = Math.max(0, next.indexOf("cafe"));
+        next = [...next.slice(0, i + 1), "cafe_orders", ...next.slice(i + 1)];
+      }
+    }
+    return next.length ? next : [...fallback];
   } catch {
     return [...fallback];
   }
@@ -261,7 +280,6 @@ function loadSubnavBookmarks(role) {
 function bookmarkLabel(id, role, sphere) {
   const b = BOOKMARK_CATALOG.find((x) => x.id === id);
   if (!b) return id;
-  if (id === "bookings" && role === "provider" && sphere === "cafe_restaurant") return "Заказы";
   if (role === "client" && b.labelClient) return b.labelClient;
   return b.label;
 }
@@ -2913,8 +2931,7 @@ export default function App() {
       me?.provider_sphere === "cafe_restaurant" &&
       currentView === "bookings"
     ) {
-      setCafeWorkspaceTab("orders");
-      setCurrentView("cafe");
+      setCurrentView("cafe_orders");
     }
   }, [me?.role, me?.provider_sphere, currentView, setCurrentView]);
 
@@ -3640,8 +3657,8 @@ export default function App() {
 
   useEffect(() => {
     if (!me?.role) return;
-    setSubnavBookmarks(loadSubnavBookmarks(me.role));
-  }, [me?.role]);
+    setSubnavBookmarks(loadSubnavBookmarks(me.role, me.provider_sphere));
+  }, [me?.role, me?.provider_sphere]);
 
   useEffect(() => {
     if (!me?.role) return;
@@ -6450,7 +6467,12 @@ export default function App() {
       if (id === "chats" && !staffHasPerm("manage_chats") && !staffHasPerm("manage_client_chats")) return false;
     }
     if ((id === "staff" || id === "organization") && !canManageOrgSettings) return false;
-    if (me?.provider_sphere === "cafe_restaurant" && id === "intervals") return false;
+    if (me?.provider_sphere === "cafe_restaurant") {
+      if (id === "intervals" || id === "bookings" || id === "services") return false;
+      if ((id === "cafe" || id === "cafe_orders") && role !== "provider") return false;
+    } else if (id === "cafe" || id === "cafe_orders") {
+      return false;
+    }
     return true;
   }
 
@@ -6459,11 +6481,6 @@ export default function App() {
     if (id === "chats" && isMobileChatLayout()) setSelectedChatId(null);
     if (id === "reviews") {
       openProviderReviews();
-      return;
-    }
-    if (id === "bookings" && me?.role === "provider" && me?.provider_sphere === "cafe_restaurant") {
-      setCafeWorkspaceTab("orders");
-      setCurrentView("cafe");
       return;
     }
     if (id === "cafe") setCafeWorkspaceTab("floor");
@@ -6485,12 +6502,7 @@ export default function App() {
 
   function renderSubnavBookmarkButton(id) {
     if (!isBookmarkAvailable(id)) return null;
-    const cafeOrdersActive =
-      id === "bookings" &&
-      currentView === "cafe" &&
-      me?.provider_sphere === "cafe_restaurant" &&
-      cafeWorkspaceTab === "orders";
-    const active = currentView === id || cafeOrdersActive;
+    const active = currentView === id;
     const label = bookmarkLabel(id, me?.role, me?.provider_sphere);
     if (id === "chats") {
       return (
@@ -6585,7 +6597,7 @@ export default function App() {
     const role = me?.role;
     if (!role) return [];
     const inSubnav = new Set(subnavBookmarks);
-    const preferred = ["intervals", "services", "analytics", "bookings", "reviews", "chats", "client_map"];
+    const preferred = ["cafe", "cafe_orders", "intervals", "services", "analytics", "bookings", "reviews", "chats", "client_map"];
     return preferred.filter((id) => !inSubnav.has(id) && isBookmarkAvailable(id));
   }
 
@@ -9150,7 +9162,7 @@ export default function App() {
           <button
             type="button"
             className="ghost-btn"
-            onClick={() => setSubnavBookmarks([...(DEFAULT_SUBNAV_BOOKMARKS[role] || DEFAULT_SUBNAV_BOOKMARKS.client)])}
+            onClick={() => setSubnavBookmarks(defaultSubnavBookmarks(role, me?.provider_sphere))}
           >
             Сбросить по умолчанию
           </button>
@@ -10006,7 +10018,7 @@ export default function App() {
       : { backgroundColor: activeChatWallpaper }
     : undefined;
   const tgMainDark = activeChatWallpaper === "#1e2a24";
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders"].includes(currentView);
 
   return (
     <div className={`page${accessToken ? " page-logged" : " page--guest"}`}>
@@ -10224,7 +10236,13 @@ export default function App() {
                 {canManageOrgSettings && me?.provider_sphere === "cafe_restaurant" && (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("cafe"); setMenuOpen(false); }}>
                     <span className="menu-item-icon" aria-hidden="true">🍽️</span>
-                    <span className="menu-item-label">Кафе: зал и меню</span>
+                    <span className="menu-item-label">Зал и меню</span>
+                  </button>
+                )}
+                {canManageOrgSettings && me?.provider_sphere === "cafe_restaurant" && (
+                  <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("cafe_orders"); setMenuOpen(false); }}>
+                    <span className="menu-item-icon" aria-hidden="true">🧾</span>
+                    <span className="menu-item-label">Заказы</span>
                   </button>
                 )}
                 <button type="button" className="menu-dropdown-item" onClick={logout}>
@@ -10543,9 +10561,12 @@ export default function App() {
               {canManageOrgSettings && (
                 <button type="button" className="ghost-btn" onClick={() => setCurrentView("organization")}>Организация</button>
               )}
-              {canManageOrgSettings && me?.provider_sphere === "cafe_restaurant" && (
-                <button type="button" className="ghost-btn" onClick={() => setCurrentView("cafe")}>Кафе: зал и меню</button>
-              )}
+                {canManageOrgSettings && me?.provider_sphere === "cafe_restaurant" && (
+                  <>
+                    <button type="button" className="ghost-btn" onClick={() => setCurrentView("cafe")}>Зал и меню</button>
+                    <button type="button" className="ghost-btn" onClick={() => setCurrentView("cafe_orders")}>Заказы</button>
+                  </>
+                )}
             </div>
             <div className="profile-delete-block">
               <h3>Удаление аккаунта</h3>
@@ -10699,6 +10720,9 @@ export default function App() {
             initialTab={cafeWorkspaceTab}
             onTabChange={setCafeWorkspaceTab}
           />
+        )}
+        {accessToken && currentView === "cafe_orders" && me?.role === "provider" && me?.provider_sphere === "cafe_restaurant" && (
+          <CafeOrdersPage authFetch={authFetch} API_URL={API_URL} />
         )}
         {accessToken && currentView === "staff" && canManageOrgSettings && renderStaffManagement()}
 
