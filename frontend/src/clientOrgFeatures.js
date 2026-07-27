@@ -255,17 +255,16 @@ function defaultStickerSvg() {
 
 function plateStickerSvg() {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 52 52">
-  <rect x="4" y="3" width="44" height="44" rx="13" fill="#e67e22"/>
-  <circle cx="28" cy="26" r="10" fill="none" stroke="#fff" stroke-width="2.2"/>
-  <g stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none">
-    <path d="M14 16 v16"/>
-    <path d="M11 16 v6 c0 3 3 3 3 0 v-6"/>
-    <path d="M17 16 v6 c0 3-3 3-3 0"/>
-    <path d="M14 22 v10"/>
-    <path d="M38 17 v8"/>
-    <path d="M38 25 c4 0 4 4 0 4"/>
-    <path d="M38 29 v5"/>
+  <defs>
+    <filter id="vmPl" x="-12%" y="-8%" width="124%" height="128%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#8d3e00" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <g filter="url(#vmPl)">
+    <rect x="4" y="3" width="44" height="44" rx="13" fill="#e67e22"/>
+    <rect x="4" y="3" width="44" height="44" rx="13" fill="none" stroke="#fff" stroke-width="2.5"/>
   </g>
+  <text x="26" y="33" text-anchor="middle" font-size="26" dominant-baseline="middle">🍽️</text>
 </svg>`;
 }
 

@@ -12279,16 +12279,29 @@ export default function App() {
                   {mapOrgPopup.address && <p className="muted small">{mapOrgPopup.address}</p>}
 
                   <div className="map-org-sheet-actions row-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const filterDate = clientDiscoverFiltersRef.current?.slot_date || todayIsoDate();
-                        onClientLocationSelect(String(mapOrgPopup.id), filterDate);
-                        setClientBookModalOpen(true);
-                      }}
-                    >
-                      Записаться
-                    </button>
+                    {mapOrgPopup.provider_sphere === "cafe_restaurant" || mapOrgProfile?.is_cafe ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const slug = mapOrgProfile?.organization_slug;
+                          if (slug) window.location.href = `/m/${slug}`;
+                          else showToast("Сохраните профиль организации — появится ссылка меню.");
+                        }}
+                      >
+                        Заказать
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const filterDate = clientDiscoverFiltersRef.current?.slot_date || todayIsoDate();
+                          onClientLocationSelect(String(mapOrgPopup.id), filterDate);
+                          setClientBookModalOpen(true);
+                        }}
+                      >
+                        Записаться
+                      </button>
+                    )}
                     <button type="button" onClick={() => openChatWithProvider(mapOrgPopup.provider)}>
                       Чат
                     </button>

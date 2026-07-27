@@ -9,6 +9,7 @@ from reviews.models import Review, ReviewPhoto
 
 from .models import ProviderGalleryPhoto, User
 from .serializers import ProviderGalleryPhotoSerializer, UserSerializer
+from .slug_utils import ensure_organization_slug
 
 ORG_GALLERY_MAX_PHOTOS = 5
 
@@ -31,6 +32,9 @@ class OrganizationClientProfileView(APIView):
             provider = User.objects.get(pk=provider_id, role=User.Role.PROVIDER)
         except User.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
+        ensure_organization_slug(provider)
+        provider.refresh_from_db()
 
         agg = Review.objects.filter(provider_id=provider.id).aggregate(
             avg=Avg("rating"), cnt=Count("id")
@@ -80,9 +84,12 @@ class OrganizationClientProfileView(APIView):
         return Response(
             {
                 "provider": provider.id,
+                "organization_slug": provider.organization_slug or "",
                 "organization_name": provider.organization_name or provider.username,
                 "provider_sphere": provider.provider_sphere or "",
                 "sphere_label": dict(User.ProviderSphere.choices).get(provider.provider_sphere or "", ""),
+                "is_cafe": provider.provider_sphere == User.ProviderSphere.CAFE_RESTAURANT,
+                "menu_url": f"/m/{provider.organization_slug}" if provider.provider_sphere == User.ProviderSphere.CAFE_RESTAURANT and provider.organization_slug else "",
                 "organization_address": provider.organization_address or "",
                 "working_hours": hours,
                 "phones": phones,

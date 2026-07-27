@@ -338,7 +338,7 @@ class CafeTablePublicView(APIView):
                 "table_label": table.label,
                 "organization_name": provider.organization_name or provider.username,
                 "provider_slug": provider.organization_slug or "",
-                "need_pin": True,
+                "need_pin": False,
                 "modes": {
                     "dine_in": settings_obj.enable_dine_in,
                     "takeaway": settings_obj.enable_takeaway,
@@ -361,7 +361,7 @@ class CafeTableUnlockView(APIView):
         if not table:
             return Response({"detail": "Стол не найден."}, status=status.HTTP_404_NOT_FOUND)
         pin = (request.data.get("pin") or "").strip()
-        if pin != table.pin_code:
+        if pin and pin != table.pin_code:
             return Response({"pin": ["Неверный пароль."]}, status=status.HTTP_400_BAD_REQUEST)
         sess = CafeGuestSession.create_for_table(table)
         provider = table.floor_plan.provider

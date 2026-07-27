@@ -1,10 +1,12 @@
 .cafe-guest {
   max-width: 920px;
   margin: 0 auto;
-  padding: 16px 14px 80px;
+  padding: 16px 14px calc(96px + env(safe-area-inset-bottom, 0px));
   font-family: Georgia, "Times New Roman", serif;
   background: linear-gradient(180deg, #fff8f1, #fff);
   min-height: 100vh;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 .cafe-guest-header h1 {
   margin: 8px 0 4px;
@@ -63,7 +65,7 @@
 }
 .cafe-menu-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr));
   gap: 12px;
 }
 .cafe-menu-item {
@@ -144,4 +146,39 @@
   .cafe-guest-modes {
     grid-template-columns: 1fr;
   }
+  .cafe-guest-header h1 {
+    font-size: 1.35rem;
+  }
+  .cafe-menu-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .cafe-guest-card input,
+  .cafe-guest-card textarea,
+  .cafe-guest-card select {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+.cafe-guest-cart-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 253, 251, 0.96);
+  border-top: 1px solid #ffd9bd;
+  box-shadow: 0 -4px 16px rgba(90, 58, 34, 0.12);
+}
+
+.cafe-guest-cart-bar .landing-btn {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  font-size: 0.92rem;
 }

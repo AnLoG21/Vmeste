@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_URL } from "./config.js";
 import { setPageMeta } from "./seo/setPageMeta.js";
 import "./landing.css";
@@ -10,6 +10,13 @@ const MODE_META = {
   delivery: { label: "Доставка", icon: "🛵" },
 };
 
+function pickDefaultMode(modes = {}) {
+  if (modes.dine_in) return "dine_in";
+  if (modes.takeaway) return "takeaway";
+  if (modes.delivery) return "delivery";
+  return "";
+}
+
 /**
  * mode: "table" | "org"
  * key: table token or org slug
@@ -17,51 +24,95 @@ const MODE_META = {
 export default function CafeGuestPage({ mode = "table", keyId }) {
   const storageKey = `cafe_sess_${mode}_${keyId}`;
   const [info, setInfo] = useState(null);
-  const [pin, setPin] = useState("");
   const [session, setSession] = useState(() => sessionStorage.getItem(storageKey) || "");
   const [unlock, setUnlock] = useState(null);
   const [modeOrder, setModeOrder] = useState("");
   const [menu, setMenu] = useState([]);
   const [cart, setCart] = useState({});
   const [status, setStatus] = useState("");
+  const [booting, setBooting] = useState(true);
   const [payMethod, setPayMethod] = useState("online");
   const [guestPhone, setGuestPhone] = useState("+7");
   const [guestName, setGuestName] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [orderResult, setOrderResult] = useState(null);
 
+  const applySession = useCallback(
+    (data) => {
+      if (!data?.session_token) return;
+      sessionStorage.setItem(storageKey, data.session_token);
+      setSession(data.session_token);
+      setUnlock(data);
+      setModeOrder((prev) => prev || pickDefaultMode(data.modes));
+    },
+    [storageKey],
+  );
+
   useEffect(() => {
     setStatus("");
-    if (mode === "org") {
-      fetch(`${API_URL}/cafe/m/${encodeURIComponent(keyId)}/`)
-        .then(async (res) => {
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.detail || "Заведение не найдено");
-          setInfo(data);
+    setBooting(true);
+    let cancelled = false;
+
+    async function boot() {
+      try {
+        if (mode === "org") {
+          const infoRes = await fetch(`${API_URL}/cafe/m/${encodeURIComponent(keyId)}/`);
+          const infoData = await infoRes.json().catch(() => ({}));
+          if (!infoRes.ok) throw new Error(infoData.detail || "Заведение не найдено");
+          if (cancelled) return;
+          setInfo(infoData);
           setPageMeta({
-            title: `${data.organization_name || "Кафе"} · меню`,
+            title: `${infoData.organization_name || "Кафе"} · меню`,
             description: "Меню и заказ через Вместе",
             path: `/m/${keyId}`,
             robots: "index,follow",
           });
-        })
-        .catch((e) => setStatus(e.message));
-      return;
-    }
-    fetch(`${API_URL}/cafe/t/${encodeURIComponent(keyId)}/`)
-      .then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.detail || "Стол не найден");
-        setInfo(data);
+          if (!sessionStorage.getItem(storageKey)) {
+            const openRes = await fetch(`${API_URL}/cafe/m/${encodeURIComponent(keyId)}/`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: "{}",
+            });
+            const openData = await openRes.json().catch(() => ({}));
+            if (!openRes.ok) throw new Error(openData.detail || "Не удалось открыть меню");
+            if (!cancelled) applySession(openData);
+          }
+          return;
+        }
+
+        const infoRes = await fetch(`${API_URL}/cafe/t/${encodeURIComponent(keyId)}/`);
+        const infoData = await infoRes.json().catch(() => ({}));
+        if (!infoRes.ok) throw new Error(infoData.detail || "Стол не найден");
+        if (cancelled) return;
+        setInfo(infoData);
         setPageMeta({
-          title: `${data.organization_name || "Кафе"} · стол`,
+          title: `${infoData.organization_name || "Кафе"} · стол`,
           description: "Меню и заказ через Вместе",
           path: `/t/${keyId}`,
           robots: "noindex,nofollow",
         });
-      })
-      .catch((e) => setStatus(e.message));
-  }, [mode, keyId]);
+        if (!sessionStorage.getItem(storageKey)) {
+          const openRes = await fetch(`${API_URL}/cafe/t/${encodeURIComponent(keyId)}/unlock/`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+          });
+          const openData = await openRes.json().catch(() => ({}));
+          if (!openRes.ok) throw new Error(openData.detail || openData.pin?.[0] || "Не удалось открыть меню");
+          if (!cancelled) applySession(openData);
+        }
+      } catch (e) {
+        if (!cancelled) setStatus(e.message || "Ошибка загрузки");
+      } finally {
+        if (!cancelled) setBooting(false);
+      }
+    }
+
+    boot();
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, keyId, storageKey, applySession]);
 
   useEffect(() => {
     if (!session) return;
@@ -71,48 +122,14 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
         if (!res.ok) {
           sessionStorage.removeItem(storageKey);
           setSession("");
+          setUnlock(null);
           throw new Error(data.detail || "Сессия истекла");
         }
         setMenu(data.categories || []);
+        if (!modeOrder) setModeOrder(pickDefaultMode(unlock?.modes || info?.modes));
       })
       .catch((e) => setStatus(e.message));
-  }, [session, storageKey]);
-
-  async function doUnlock(e) {
-    e.preventDefault();
-    setStatus("Открываем меню…");
-    if (mode === "org") {
-      const res = await fetch(`${API_URL}/cafe/m/${encodeURIComponent(keyId)}/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setStatus(data.detail || "Не удалось открыть меню");
-        return;
-      }
-      sessionStorage.setItem(storageKey, data.session_token);
-      setSession(data.session_token);
-      setUnlock(data);
-      setStatus("");
-      return;
-    }
-    const res = await fetch(`${API_URL}/cafe/t/${encodeURIComponent(keyId)}/unlock/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setStatus(data.pin?.[0] || data.detail || "Неверный пароль");
-      return;
-    }
-    sessionStorage.setItem(storageKey, data.session_token);
-    setSession(data.session_token);
-    setUnlock(data);
-    setStatus("");
-  }
+  }, [session, storageKey, unlock?.modes, info?.modes, modeOrder]);
 
   const cartLines = useMemo(() => {
     const lines = [];
@@ -169,51 +186,27 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
   }
 
   const modes = unlock?.modes || info?.modes || {};
+  const ready = Boolean(session) && !booting;
 
   return (
     <div className="cafe-guest">
       <header className="cafe-guest-header">
         <a href="/">Вместе</a>
-        <h1>{info?.organization_name || "Кафе"}</h1>
+        <h1>{info?.organization_name || unlock?.organization_name || "Кафе"}</h1>
         <p>
           {mode === "table"
-            ? info?.table_label
-              ? `Стол: ${info.table_label}`
-              : "Загрузка стола…"
+            ? info?.table_label || unlock?.table_label
+              ? `Стол: ${info?.table_label || unlock?.table_label}`
+              : booting
+                ? "Открываем меню…"
+                : "Стол"
             : "Самовывоз и доставка"}
         </p>
       </header>
 
-      {!session ? (
-        <form className="cafe-guest-card" onSubmit={doUnlock}>
-          {mode === "table" ? (
-            <>
-              <h2>Введите пароль стола</h2>
-              <p className="muted">6 цифр с карточки / QR</p>
-              <input
-                inputMode="numeric"
-                pattern="\d{6}"
-                maxLength={6}
-                placeholder="••••••"
-                value={pin}
-                onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                required
-              />
-              <button type="submit" className="landing-btn landing-btn--primary">
-                Войти в меню
-              </button>
-            </>
-          ) : (
-            <>
-              <h2>Меню заведения</h2>
-              <p className="muted">Заказ навынос или с доставкой — без PIN стола</p>
-              <button type="submit" className="landing-btn landing-btn--primary">
-                Открыть меню
-              </button>
-            </>
-          )}
-        </form>
-      ) : (
+      {booting && !session ? <p className="cafe-guest-status">Открываем меню…</p> : null}
+
+      {ready ? (
         <>
           <section className="cafe-guest-modes">
             {Object.entries(MODE_META).map(([key, meta]) =>
@@ -265,9 +258,9 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                               if (!res.ok) return;
                               const data = await res.json();
                               setMenu((prev) =>
-                                prev.map((cat) => ({
-                                  ...cat,
-                                  items: (cat.items || []).map((it) =>
+                                prev.map((c) => ({
+                                  ...c,
+                                  items: (c.items || []).map((it) =>
                                     it.id === item.id
                                       ? { ...it, rating_avg: data.rating_avg, rating_count: data.rating_count }
                                       : it,
@@ -342,8 +335,19 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
               ) : null}
             </form>
           ) : null}
+
+          {cartLines.length > 0 ? (
+            <div className="cafe-guest-cart-bar" aria-hidden="true">
+              <span>
+                {cartLines.reduce((s, i) => s + i.quantity, 0)} поз. · {cartTotal.toLocaleString("ru-RU")} ₽
+              </span>
+              <button type="button" className="landing-btn landing-btn--primary" onClick={() => document.querySelector(".cafe-checkout")?.scrollIntoView({ behavior: "smooth" })}>
+                К оформлению
+              </button>
+            </div>
+          ) : null}
         </>
-      )}
+      ) : null}
       {status ? <p className="cafe-guest-status">{status}</p> : null}
     </div>
   );

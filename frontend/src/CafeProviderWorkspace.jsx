@@ -24,6 +24,7 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
   const [selectedFloorId, setSelectedFloorId] = useState(null);
   const [selectedTableId, setSelectedTableId] = useState(null);
   const [selectedWallId, setSelectedWallId] = useState(null);
+  const [selectedZoneId, setSelectedZoneId] = useState(null);
   const [tool, setTool] = useState("move");
   const [zoom, setZoom] = useState(1);
   const [catFormOpen, setCatFormOpen] = useState(false);
@@ -68,6 +69,7 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
 
   const floor = floors.find((x) => x.id === selectedFloorId) || floors[0] || null;
   const selectedTable = (floor?.tables || []).find((t) => t.id === selectedTableId) || null;
+  const selectedZone = (floor?.drawings || []).find((d) => d.id === selectedZoneId && d.type === "zone") || null;
   const origin = typeof window !== "undefined" ? window.location.origin : "https://vsevmeste.space";
   const guestMenuUrl = meSlug ? `${origin}/m/${meSlug}` : "";
   const tableUrl = selectedTable?.public_token ? `${origin}/t/${selectedTable.public_token}` : "";
@@ -91,6 +93,21 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
       const plan = await res.json();
       setFloors((prev) => [...prev, plan]);
       setSelectedFloorId(plan.id);
+    }
+  }
+
+  async function deleteFloor(id) {
+    if (!window.confirm("Удалить зал и все столы на нём?")) return;
+    const res = await authFetch(`${API_URL}/cafe/floors/${id}/`, { method: "DELETE" });
+    if (res.ok || res.status === 204) {
+      const next = floors.filter((f) => f.id !== id);
+      setFloors(next);
+      if (selectedFloorId === id) {
+        setSelectedFloorId(next[0]?.id || null);
+        setSelectedTableId(null);
+        setSelectedWallId(null);
+        setSelectedZoneId(null);
+      }
     }
   }
 
@@ -152,8 +169,8 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
     }
   }
 
-  async function deleteTable(id) {
-    if (!window.confirm("Удалить стол?")) return;
+  async function deleteTable(id, { quiet = false } = {}) {
+    if (!quiet && !window.confirm("Удалить стол?")) return;
     const res = await authFetch(`${API_URL}/cafe/tables/${id}/`, { method: "DELETE" });
     if (res.ok || res.status === 204) {
       setFloors((prev) =>
@@ -161,6 +178,18 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
       );
       if (selectedTableId === id) setSelectedTableId(null);
     }
+  }
+
+  function patchZone(zoneId, patch) {
+    if (!floor) return;
+    const drawings = (floor.drawings || []).map((d) => (d.id === zoneId ? { ...d, ...patch } : d));
+    patchFloor(floor.id, { drawings });
+  }
+
+  function deleteZone(zoneId) {
+    if (!floor) return;
+    patchFloor(floor.id, { drawings: (floor.drawings || []).filter((d) => d.id !== zoneId) });
+    if (selectedZoneId === zoneId) setSelectedZoneId(null);
   }
 
   function deleteSelectedWall() {
@@ -181,7 +210,7 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
         y: GRID * 2,
         w: GRID * 8,
         h: GRID * 6,
-        name: "Зона",
+        name: "Комната",
         color: "rgba(196,92,0,0.1)",
       },
     ];
@@ -268,13 +297,20 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
         Чертите стены по сетке, редактируйте точки, расставляйте столы. Заказы — во вкладке «Заказы» сверху.
       </p>
       {guestMenuUrl ? (
-        <p className="cafe-guest-link">
-          Меню без стола (самовывоз/доставка):{" "}
-          <a href={guestMenuUrl} target="_blank" rel="noreferrer">
+        <div className="cafe-qr-block cafe-menu-qr-top">
+          <h3>QR меню (самовывоз / доставка)</h3>
+          <p className="muted small">Гость сканирует и сразу попадает в меню с корзиной — без PIN стола.</p>
+          <a className="cafe-qr-open" href={guestMenuUrl} target="_blank" rel="noreferrer">
             {guestMenuUrl}
           </a>
-        </p>
-      ) : null}
+          <img src={qrImageUrl(guestMenuUrl, 180)} alt="QR меню заведения" width={180} height={180} />
+          <a className="ghost-btn" href={guestMenuUrl} target="_blank" rel="noreferrer">
+            Превью меню гостя
+          </a>
+        </div>
+      ) : (
+        <p className="muted">Сохраните профиль организации — появится ссылка и QR для меню без стола.</p>
+      )}
 
       <div className="cafe-provider-tabs">
         {[
@@ -366,8 +402,8 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
             <button type="button" className={tool === "erase" ? "is-active" : ""} onClick={() => setTool("erase")}>
               Ластик
             </button>
-            <button type="button" onClick={addZone} disabled={!floor}>
-              + Зона
+            <button type="button" onClick={addZone} disabled={!floor} title="Прямоугольная область: VIP, терраса, бар">
+              + Комната
             </button>
             <button type="button" className="ghost-btn" onClick={() => setZoom((z) => Math.min(1.6, +(z + 0.1).toFixed(1)))}>
               Масштаб +
@@ -375,6 +411,11 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
             <button type="button" className="ghost-btn" onClick={() => setZoom((z) => Math.max(0.6, +(z - 0.1).toFixed(1)))}>
               Масштаб −
             </button>
+            {floor && floors.length > 1 ? (
+              <button type="button" className="ghost-btn" onClick={() => deleteFloor(floor.id)}>
+                Удалить зал
+              </button>
+            ) : null}
             {selectedWallId ? (
               <button type="button" className="ghost-btn" onClick={deleteSelectedWall}>
                 Удалить стену
@@ -391,7 +432,9 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
               </button>
             ))}
           </div>
-          <p className="muted small">Сетка {GRID}px · стены тянутся ровно (H/V) и липнут к точкам · клик по стене — якоря</p>
+          <p className="muted small">
+            Сетка {GRID}px · стены за курсором · перетаскивание стены целиком · ластик — стены, комнаты, столы
+          </p>
           {floor ? (
             <div className="cafe-toolbar">
               <label className="muted small">
@@ -434,15 +477,36 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
               floor={floor}
               selectedTableId={selectedTableId}
               selectedWallId={selectedWallId}
+              selectedZoneId={selectedZoneId}
               tool={tool}
               zoom={zoom}
               onSelectTable={setSelectedTableId}
               onSelectWall={setSelectedWallId}
+              onSelectZone={setSelectedZoneId}
               onPatchFloor={patchFloor}
               onPatchTable={patchTable}
+              onDeleteTable={(id) => deleteTable(id, { quiet: true })}
             />
           ) : (
             <p className="muted">Создайте зал.</p>
+          )}
+
+          {selectedZone && (
+            <div className="cafe-table-editor cafe-form-grid">
+              <h3 className="cafe-form-span2">Комната / зона</h3>
+              <label className="cafe-form-span2">
+                Название (VIP, терраса…)
+                <input
+                  value={selectedZone.name || ""}
+                  onChange={(e) => patchZone(selectedZone.id, { name: e.target.value })}
+                />
+              </label>
+              <div className="cafe-form-span2 cafe-toolbar">
+                <button type="button" className="ghost-btn" onClick={() => deleteZone(selectedZone.id)}>
+                  Удалить комнату
+                </button>
+              </div>
+            </div>
           )}
 
           {selectedTable && (
@@ -527,7 +591,7 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
               </div>
               <div className="cafe-qr-block cafe-form-span2">
                 <p>
-                  <strong>Ссылка для гостя (откройте на телефоне):</strong>
+                  <strong>QR стола — скан → меню и корзина</strong>
                 </p>
                 {tableUrl ? (
                   <>
@@ -535,9 +599,12 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
                       {tableUrl}
                     </a>
                     <img src={qrImageUrl(tableUrl, 220)} alt={`QR ${selectedTable.label}`} width={220} height={220} />
-                    <p className="muted small">PIN для входа: {selectedTable.pin_code}</p>
+                    <p className="muted small">PIN (если нужен вручную): {selectedTable.pin_code}</p>
+                    <a className="ghost-btn" href={tableUrl} target="_blank" rel="noreferrer">
+                      Превью меню гостя
+                    </a>
                     <a className="ghost-btn" href={qrImageUrl(tableUrl, 400)} target="_blank" rel="noreferrer">
-                      Открыть QR крупно
+                      QR крупно
                     </a>
                   </>
                 ) : (

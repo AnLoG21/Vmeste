@@ -9,15 +9,32 @@ function snap(v, grid = GRID) {
 function orthoSnap(x1, y1, x2, y2) {
   const dx = Math.abs(x2 - x1);
   const dy = Math.abs(y2 - y1);
-  if (dx > dy * 2) return { x2: x2, y2: y1 };
-  if (dy > dx * 2) return { x2: x1, y2: y2 };
+  if (dx > dy * 2) return { x2, y2: y1 };
+  if (dy > dx * 2) return { x2: x1, y2 };
   return { x2, y2 };
 }
 
-function ensureWallIds(drawings) {
+function ensureDrawingIds(drawings) {
   return (Array.isArray(drawings) ? drawings : []).map((d, i) =>
-    d.id ? d : { ...d, id: `w-${i}-${Math.round((d.x1 || 0) + (d.y1 || 0))}` },
+    d.id ? d : { ...d, id: `${d.type || "d"}-${i}-${Math.round((d.x1 || d.x || 0) + (d.y1 || d.y || 0))}` },
   );
+}
+
+function rectChairRects(n) {
+  const counts = [0, 0, 0, 0];
+  for (let i = 0; i < n; i += 1) counts[i % 4] += 1;
+  const chairs = [];
+  const place = (side, idx, total) => {
+    const t = total === 1 ? 0.5 : idx / (total - 1);
+    if (side === 0) chairs.push({ x: 14 + t * 62, y: 2 });
+    if (side === 1) chairs.push({ x: 14 + t * 62, y: 54 });
+    if (side === 2) chairs.push({ x: 2, y: 12 + t * 42 });
+    if (side === 3) chairs.push({ x: 78, y: 12 + t * 42 });
+  };
+  counts.forEach((c, side) => {
+    for (let i = 0; i < c; i += 1) place(side, i, c);
+  });
+  return chairs;
 }
 
 function TableIcon({ seats = 2, label = "", shape = "round", selected = false }) {
@@ -39,30 +56,11 @@ function TableIcon({ seats = 2, label = "", shape = "round", selected = false })
     );
   }
   if (shape === "rect") {
-    const chairs = [];
-    for (let i = 0; i < n; i += 1) {
-      const side = i % 4;
-      const idx = Math.floor(i / 4);
-      let x = 40;
-      let y = 28;
-      if (side === 0) {
-        x = 18 + idx * 14;
-        y = 4;
-      } else if (side === 1) {
-        x = 18 + idx * 14;
-        y = 50;
-      } else if (side === 2) {
-        x = 4;
-        y = 16 + idx * 12;
-      } else {
-        x = 76;
-        y = 16 + idx * 12;
-      }
-      chairs.push(<rect key={i} x={x} y={y} width="10" height="8" rx="2" fill="#8d5a2b" />);
-    }
     return (
       <svg viewBox="0 0 90 66" width="100%" height="100%" aria-hidden="true">
-        {chairs}
+        {rectChairRects(n).map((c, i) => (
+          <rect key={i} x={c.x} y={c.y} width="10" height="8" rx="2" fill="#8d5a2b" />
+        ))}
         <rect x="16" y="14" width="58" height="38" rx="6" fill={fill} stroke="#c45c00" strokeWidth="2.5" />
         <text x="45" y="38" textAnchor="middle" fontSize="9" fontWeight="700" fill="#5a3a22">
           {String(label).slice(0, 10)}
@@ -103,42 +101,40 @@ export function qrImageUrl(data, size = 180) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=8&data=${encodeURIComponent(data)}`;
 }
 
-/**
- * Floor canvas + wall editing.
- * props: floor, selectedTableId, selectedWallId, tool, zoom, onSelectTable, onSelectWall,
- * onPatchFloor, onPatchTable, onDraftHint
- */
 export default function CafeFloorCanvas({
   floor,
   selectedTableId,
   selectedWallId,
+  selectedZoneId,
   tool,
   zoom = 1,
   onSelectTable,
   onSelectWall,
+  onSelectZone,
   onPatchFloor,
   onPatchTable,
+  onDeleteTable,
 }) {
   const canvasRef = useRef(null);
+  const innerRef = useRef(null);
   const [wallDraft, setWallDraft] = useState(null);
   const [guide, setGuide] = useState(null);
-  const drawings = useMemo(() => ensureWallIds(floor?.drawings), [floor?.drawings]);
+  const drawings = useMemo(() => ensureDrawingIds(floor?.drawings), [floor?.drawings]);
 
-  function canvasPoint(e) {
-    const el = canvasRef.current;
-    if (!el || !floor) return { x: 0, y: 0 };
-    const rect = el.getBoundingClientRect();
-    const scaleX = floor.width / rect.width;
-    const scaleY = floor.height / rect.height;
+  function floorPoint(e) {
+    const inner = innerRef.current;
+    if (!inner || !floor) return { x: 0, y: 0 };
+    const rect = inner.getBoundingClientRect();
+    if (!rect.width || !rect.height) return { x: 0, y: 0 };
     return {
-      x: Math.max(0, Math.min(floor.width, (e.clientX - rect.left) * scaleX)),
-      y: Math.max(0, Math.min(floor.height, (e.clientY - rect.top) * scaleY)),
+      x: Math.max(0, Math.min(floor.width, ((e.clientX - rect.left) / rect.width) * floor.width)),
+      y: Math.max(0, Math.min(floor.height, ((e.clientY - rect.top) / rect.height) * floor.height)),
     };
   }
 
   function nearestEndpoint(p, excludeWallId = null) {
     let best = null;
-    let bestDist = 14;
+    let bestDist = 16;
     drawings.forEach((d) => {
       if (d.type !== "wall" || d.id === excludeWallId) return;
       [
@@ -155,9 +151,9 @@ export default function CafeFloorCanvas({
     return best;
   }
 
-  function hitWall(p) {
+  function hitWall(p, tolerance = 14) {
     let best = null;
-    let bestDist = 10;
+    let bestDist = tolerance;
     drawings.forEach((d) => {
       if (d.type !== "wall") return;
       const dx = d.x2 - d.x1;
@@ -175,40 +171,87 @@ export default function CafeFloorCanvas({
     return best;
   }
 
+  function hitZone(p) {
+    for (let i = drawings.length - 1; i >= 0; i -= 1) {
+      const d = drawings[i];
+      if (d.type !== "zone") continue;
+      if (p.x >= d.x && p.x <= d.x + d.w && p.y >= d.y && p.y <= d.y + d.h) return d;
+    }
+    return null;
+  }
+
+  function hitTable(p) {
+    for (let i = (floor.tables || []).length - 1; i >= 0; i -= 1) {
+      const t = floor.tables[i];
+      const w = t.width || (t.shape === "sofa" ? 110 : t.shape === "rect" ? 100 : 88);
+      const h = t.height || (t.shape === "sofa" ? 78 : t.shape === "rect" ? 72 : 88);
+      if (p.x >= t.x && p.x <= t.x + w && p.y >= t.y && p.y <= t.y + h) return t;
+    }
+    return null;
+  }
+
   function saveDrawings(next) {
     onPatchFloor(floor.id, { drawings: next });
+  }
+
+  function eraseAt(p) {
+    const wall = hitWall(p, 18);
+    if (wall) {
+      saveDrawings(drawings.filter((d) => d.id !== wall.id));
+      if (selectedWallId === wall.id) onSelectWall(null);
+      return;
+    }
+    const zone = hitZone(p);
+    if (zone) {
+      saveDrawings(drawings.filter((d) => d.id !== zone.id));
+      if (selectedZoneId === zone.id) onSelectZone?.(null);
+      return;
+    }
+    const table = hitTable(p);
+    if (table && onDeleteTable) onDeleteTable(table.id);
   }
 
   function onCanvasMouseDown(e) {
     if (!floor) return;
     if (e.target.closest(".cafe-table-node") || e.target.closest(".cafe-wall-handle")) return;
-    const raw = canvasPoint(e);
+    const raw = floorPoint(e);
     const p = { x: snap(raw.x), y: snap(raw.y) };
     const anchored = nearestEndpoint(p) || p;
 
     if (tool === "wall") {
       onSelectWall(null);
+      onSelectZone?.(null);
+      onSelectTable(null);
       setWallDraft({ id: `w-${Date.now()}`, type: "wall", x1: anchored.x, y1: anchored.y, x2: anchored.x, y2: anchored.y });
       return;
     }
     if (tool === "erase") {
-      const wall = hitWall(raw);
-      if (wall) saveDrawings(drawings.filter((d) => d.id !== wall.id));
+      eraseAt(raw);
       return;
     }
-    // select
+
+    const zone = hitZone(raw);
+    if (zone) {
+      onSelectZone?.(zone.id);
+      onSelectWall(null);
+      onSelectTable(null);
+      return;
+    }
     const wall = hitWall(raw);
     if (wall) {
       onSelectWall(wall.id);
+      onSelectZone?.(null);
       onSelectTable(null);
-    } else {
-      onSelectWall(null);
+      if (tool === "move") startWallBodyDrag(e, wall);
+      return;
     }
+    onSelectWall(null);
+    onSelectZone?.(null);
   }
 
   function onCanvasMouseMove(e) {
     if (!wallDraft) return;
-    const raw = canvasPoint(e);
+    const raw = floorPoint(e);
     let x2 = snap(raw.x);
     let y2 = snap(raw.y);
     const ortho = orthoSnap(wallDraft.x1, wallDraft.y1, x2, y2);
@@ -229,7 +272,7 @@ export default function CafeFloorCanvas({
   function onCanvasMouseUp() {
     if (!wallDraft || !floor) return;
     const len = Math.hypot(wallDraft.x2 - wallDraft.x1, wallDraft.y2 - wallDraft.y1);
-    if (len >= GRID) {
+    if (len >= GRID / 2) {
       saveDrawings([...drawings, wallDraft]);
       onSelectWall(wallDraft.id);
     }
@@ -237,12 +280,43 @@ export default function CafeFloorCanvas({
     setGuide(null);
   }
 
+  function startWallBodyDrag(e, wall) {
+    e.preventDefault();
+    const start = floorPoint(e);
+    const ox1 = wall.x1;
+    const oy1 = wall.y1;
+    const ox2 = wall.x2;
+    const oy2 = wall.y2;
+    function onMove(ev) {
+      const p = floorPoint(ev);
+      const dx = snap(p.x - start.x);
+      const dy = snap(p.y - start.y);
+      const next = drawings.map((d) => {
+        if (d.id !== wall.id) return d;
+        return {
+          ...d,
+          x1: Math.max(0, Math.min(floor.width, ox1 + dx)),
+          y1: Math.max(0, Math.min(floor.height, oy1 + dy)),
+          x2: Math.max(0, Math.min(floor.width, ox2 + dx)),
+          y2: Math.max(0, Math.min(floor.height, oy2 + dy)),
+        };
+      });
+      onPatchFloor(floor.id, { drawings: next });
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
   function startHandleDrag(e, wallId, which) {
     e.preventDefault();
     e.stopPropagation();
     onSelectWall(wallId);
     function onMove(ev) {
-      const raw = canvasPoint(ev);
+      const raw = floorPoint(ev);
       let x = snap(raw.x);
       let y = snap(raw.y);
       const wall = drawings.find((d) => d.id === wallId);
@@ -261,7 +335,6 @@ export default function CafeFloorCanvas({
         if (which === "a") return { ...d, x1: x, y1: y };
         return { ...d, x2: x, y2: y };
       });
-      // optimistic local via parent patch
       onPatchFloor(floor.id, { drawings: next });
     }
     function onUp() {
@@ -278,14 +351,15 @@ export default function CafeFloorCanvas({
     e.stopPropagation();
     onSelectTable(table.id);
     onSelectWall(null);
-    const startX = e.clientX;
-    const startY = e.clientY;
+    onSelectZone?.(null);
+    const start = floorPoint(e);
     const ox = table.x;
     const oy = table.y;
     const node = e.currentTarget;
     function onMove(ev) {
-      const nx = snap(Math.max(0, ox + (ev.clientX - startX) / zoom));
-      const ny = snap(Math.max(0, oy + (ev.clientY - startY) / zoom));
+      const p = floorPoint(ev);
+      const nx = snap(Math.max(0, Math.min(floor.width - (table.width || 88), ox + p.x - start.x)));
+      const ny = snap(Math.max(0, Math.min(floor.height - (table.height || 88), oy + p.y - start.y)));
       node.style.left = `${nx}px`;
       node.style.top = `${ny}px`;
       node.dataset.nx = String(nx);
@@ -303,8 +377,8 @@ export default function CafeFloorCanvas({
   }
 
   if (!floor) return null;
-  const width = Math.round(floor.width * zoom);
-  const height = Math.round(Math.min(floor.height, 520) * zoom);
+  const displayW = Math.min(floor.width * zoom, typeof window !== "undefined" ? window.innerWidth - 32 : floor.width * zoom);
+  const displayH = Math.min(floor.height * zoom, 520 * zoom);
 
   return (
     <div
@@ -312,8 +386,8 @@ export default function CafeFloorCanvas({
       className={`cafe-floor-canvas tool-${tool}`}
       style={{
         width: "100%",
-        maxWidth: width,
-        height,
+        maxWidth: displayW,
+        height: displayH,
         backgroundSize: `${GRID * zoom}px ${GRID * zoom}px`,
       }}
       onMouseDown={onCanvasMouseDown}
@@ -321,7 +395,11 @@ export default function CafeFloorCanvas({
       onMouseUp={onCanvasMouseUp}
       onMouseLeave={onCanvasMouseUp}
     >
-      <div className="cafe-floor-inner" style={{ width: floor.width, height: floor.height, transform: `scale(${zoom})` }}>
+      <div
+        ref={innerRef}
+        className="cafe-floor-inner"
+        style={{ width: floor.width, height: floor.height, transform: `scale(${zoom})` }}
+      >
         <svg className="cafe-floor-drawings" viewBox={`0 0 ${floor.width} ${floor.height}`} preserveAspectRatio="none">
           {guide?.horizontal && wallDraft ? (
             <line x1={0} y1={wallDraft.y1} x2={floor.width} y2={wallDraft.y1} stroke="#74b9ff" strokeWidth="1" strokeDasharray="4 4" />
@@ -341,7 +419,6 @@ export default function CafeFloorCanvas({
                   strokeWidth={selectedWallId === d.id ? 8 : 6}
                   strokeLinecap="round"
                 />
-                <line x1={d.x1} y1={d.y1} x2={d.x2} y2={d.y2} stroke="transparent" strokeWidth="14" strokeLinecap="round" />
                 <circle
                   className={`cafe-wall-anchor${selectedWallId === d.id ? " is-selected" : ""}`}
                   cx={d.x1}
@@ -356,16 +433,23 @@ export default function CafeFloorCanvas({
                 />
               </g>
             ) : d.type === "zone" ? (
-              <rect
-                key={d.id}
-                x={d.x}
-                y={d.y}
-                width={d.w}
-                height={d.h}
-                fill={d.color || "rgba(196,92,0,0.08)"}
-                stroke="#c45c00"
-                strokeDasharray="6 4"
-              />
+              <g key={d.id}>
+                <rect
+                  x={d.x}
+                  y={d.y}
+                  width={d.w}
+                  height={d.h}
+                  fill={d.color || "rgba(196,92,0,0.08)"}
+                  stroke={selectedZoneId === d.id ? "#c45c00" : "#c45c00"}
+                  strokeWidth={selectedZoneId === d.id ? 2.5 : 1.5}
+                  strokeDasharray="6 4"
+                />
+                {d.name ? (
+                  <text x={d.x + 8} y={d.y + 18} fill="#8d3e00" fontSize="12" fontWeight="700">
+                    {d.name}
+                  </text>
+                ) : null}
+              </g>
             ) : null,
           )}
           {wallDraft ? (
@@ -423,6 +507,7 @@ export default function CafeFloorCanvas({
             onClick={() => {
               onSelectTable(t.id);
               onSelectWall(null);
+              onSelectZone?.(null);
             }}
           >
             <TableIcon seats={t.seats} label={t.label} shape={t.shape || "round"} selected={selectedTableId === t.id} />
