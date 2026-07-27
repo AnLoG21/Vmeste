@@ -3931,6 +3931,56 @@ body.theme-dark .tg-chat-search {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  transition: top 0.2s ease, height 0.2s ease;
+}
+
+.map-org-sheet--collapsed {
+  top: auto;
+  height: 72px;
+  max-height: 72px;
+  overflow: hidden;
+}
+
+.map-org-sheet--collapsed .map-org-sheet-body {
+  display: none;
+}
+
+.map-org-sheet-peek {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  margin: 0;
+  padding: 0 16px 10px;
+  border: none;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.map-org-sheet-peek:hover,
+.map-org-sheet-peek:active,
+.map-org-sheet-peek:focus {
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none;
+}
+
+.map-org-sheet-peek-title {
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1.2;
+  color: #1f2937;
+}
+
+.client-discover-map-wrap--sheet-collapsed .client-discover-map {
+  max-height: none;
+  min-height: min(520px, 62vh);
 }
 
 .map-org-sheet--reviews-open {
@@ -8216,6 +8266,35 @@ body.theme-dark .password-eye-btn:hover {
 .interval-anon-seat-btn:hover,
 .interval-anon-seat-btn:active {
   background: #ffe8d6 !important;
+}
+
+.interval-anon-services {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.interval-anon-services-list {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border: 1px solid #ffe4cf;
+  border-radius: 10px;
+  background: #fffdfb;
+}
+
+.interval-anon-service-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.interval-edit-modal {
+  max-width: min(420px, 94vw);
 }
 
 .interval-calendar .interval-templates {

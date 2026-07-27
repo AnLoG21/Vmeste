@@ -34,6 +34,11 @@ class AvailabilitySlot(models.Model):
         blank=True,
         help_text="Номер «Без сотрудников N» при staff=null.",
     )
+    service_ids = models.JSONField(
+        blank=True,
+        default=list,
+        help_text="Для «Без сотрудников»: ID услуг, которые можно оказать в этом интервале. Пусто — все услуги.",
+    )
     recurrence_group = models.CharField(max_length=64, blank=True, default="")
 
 

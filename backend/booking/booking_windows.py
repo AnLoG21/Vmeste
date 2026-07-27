@@ -165,6 +165,15 @@ def list_available_windows(provider_id: int, service_id: int, book_date) -> list
     named_slots = [s for s in slots if s.staff_id]
     anon_slots = [s for s in slots if not s.staff_id]
 
+    def _anon_allows_service(slot) -> bool:
+        ids = getattr(slot, "service_ids", None) or []
+        if not ids:
+            return True
+        try:
+            return int(service_id) in {int(x) for x in ids}
+        except (TypeError, ValueError):
+            return False
+
     for slot in named_slots:
         if _org_uses_staff_assignments(provider_id) and slot.staff_id not in allowed:
             continue
@@ -190,7 +199,8 @@ def list_available_windows(provider_id: int, service_id: int, book_date) -> list
 
     # Одна клиентская полоса «Без сотрудника»: окно доступно, пока есть свободная ёмкость.
     seen_anon_times: set[tuple[str, str]] = set()
-    for slot in anon_slots:
+    anon_for_service = [s for s in anon_slots if _anon_allows_service(s)]
+    for slot in anon_for_service:
         cur = slot.starts_at
         while cur + duration <= slot.ends_at:
             w_end = cur + duration
@@ -201,7 +211,7 @@ def list_available_windows(provider_id: int, service_id: int, book_date) -> list
             if key in seen_anon_times:
                 cur += duration
                 continue
-            covering = [s for s in anon_slots if s.starts_at <= cur and s.ends_at >= w_end]
+            covering = [s for s in anon_for_service if s.starts_at <= cur and s.ends_at >= w_end]
             remaining = len(covering) - _anon_busy_count(cur, w_end, booked)
             if remaining > 0:
                 seen_anon_times.add(key)
@@ -277,6 +287,13 @@ def book_time_window(provider_id: int, service_id: int, starts_at, ends_at, staf
         busy_idx = _anon_busy_indexes(starts_at, ends_at, booked)
         container = None
         for c in containers:
+            allowed = getattr(c, "service_ids", None) or []
+            if allowed:
+                try:
+                    if int(service_id) not in {int(x) for x in allowed}:
+                        continue
+                except (TypeError, ValueError):
+                    continue
             idx = c.anonymous_index if c.anonymous_index is not None else 0
             if idx not in busy_idx:
                 container = c

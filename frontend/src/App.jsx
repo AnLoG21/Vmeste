@@ -2397,6 +2397,7 @@ export default function App() {
   const [bookAvailableDates, setBookAvailableDates] = useState([]);
   const mapOrgCarouselTouchX = useRef(null);
   const [mapOrgPopup, setMapOrgPopup] = useState(null);
+  const [mapOrgSheetCollapsed, setMapOrgSheetCollapsed] = useState(false);
   const [mapOrgSummary, setMapOrgSummary] = useState(null);
   const [mapOrgReviewsOpen, setMapOrgReviewsOpen] = useState(false);
   const [mapOrgReviews, setMapOrgReviews] = useState([]);
@@ -2497,7 +2498,9 @@ export default function App() {
     repeat_type: "none",
     repeat_count: "1",
     assignee: "",
+    service_ids: [],
   });
+  const [intervalEditModal, setIntervalEditModal] = useState(null);
   const [manualHoldForm, setManualHoldForm] = useState(() => ({
     date: todayIsoDate(),
     start_time: "10:00",
@@ -6758,12 +6761,20 @@ export default function App() {
       setSellerStatus("Выбери сотрудника или место «Без сотрудников».");
       return;
     }
+    if (templateAnon != null && !(intervalForm.service_ids || []).length) {
+      setSellerStatus("Для «Без сотрудников» выберите хотя бы одну услугу.");
+      return;
+    }
     const template = {
       id: `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       start_time: intervalForm.start_time,
       end_time: intervalForm.end_time,
       staff_id: templateStaffId,
       anonymous_index: templateAnon,
+      service_ids:
+        templateAnon != null
+          ? (intervalForm.service_ids || []).map((x) => Number(x)).filter((n) => Number.isFinite(n))
+          : [],
     };
     setSavedIntervals((prev) => [template, ...prev]);
     setSelectedIntervalId(template.id);
@@ -6792,6 +6803,9 @@ export default function App() {
         ends_at: end.toISOString(),
         ...(template.staff_id != null ? { staff: template.staff_id } : {}),
         ...(template.anonymous_index != null ? { anonymous_index: template.anonymous_index } : {}),
+        ...(Array.isArray(template.service_ids) && template.service_ids.length
+          ? { service_ids: template.service_ids }
+          : {}),
       }),
     });
     if (!response.ok) {
@@ -6840,6 +6854,9 @@ export default function App() {
           ends_at: end.toISOString(),
           ...(template.staff_id != null ? { staff: template.staff_id } : {}),
           ...(template.anonymous_index != null ? { anonymous_index: template.anonymous_index } : {}),
+          ...(Array.isArray(template.service_ids) && template.service_ids.length
+            ? { service_ids: template.service_ids }
+            : {}),
         }),
       });
       if (response.ok) {
@@ -7343,6 +7360,7 @@ export default function App() {
 
   function closeMapOrgSheet() {
     setMapOrgPopup(null);
+    setMapOrgSheetCollapsed(false);
     setMapOrgProfile(null);
     setMapOrgStaff([]);
     setMapOrgReviewsOpen(false);
@@ -7350,6 +7368,16 @@ export default function App() {
     setStaffReviewModal(null);
     window.setTimeout(fitClientDiscoverMapViewport, 0);
     window.setTimeout(fitClientDiscoverMapViewport, 120);
+  }
+
+  function collapseMapOrgSheet() {
+    setMapOrgSheetCollapsed(true);
+    window.setTimeout(fitClientDiscoverMapViewport, 0);
+  }
+
+  function expandMapOrgSheet() {
+    setMapOrgSheetCollapsed(false);
+    window.setTimeout(fitClientDiscoverMapViewport, 0);
   }
 
   async function waitForClientDiscoverMap(maxMs = 4500) {
@@ -7364,6 +7392,7 @@ export default function App() {
 
   async function openOrgOnMap(loc) {
     setMapOrgPopup(loc);
+    setMapOrgSheetCollapsed(false);
     setMapOrgCarouselIndex(0);
     const profile = await loadMapOrgProfile(loc.provider);
     if (profile?.reviews_count > 0) {
@@ -8395,7 +8424,13 @@ export default function App() {
                 <div className="interval-free-staff-row">
                   <select
                     value={intervalForm.assignee}
-                    onChange={(e) => setIntervalForm({ ...intervalForm, assignee: e.target.value })}
+                    onChange={(e) =>
+                      setIntervalForm({
+                        ...intervalForm,
+                        assignee: e.target.value,
+                        service_ids: e.target.value.startsWith("anon:") ? intervalForm.service_ids : [],
+                      })
+                    }
                     required
                   >
                     <option value="" disabled>
@@ -8423,6 +8458,39 @@ export default function App() {
                   </button>
                 </div>
               </label>
+              {String(intervalForm.assignee || "").startsWith("anon:") ? (
+                <div className="interval-anon-services">
+                  <p className="field-label">Услуги для этого места</p>
+                  <div className="interval-anon-services-list">
+                    {services.filter((s) => s.is_active).length === 0 ? (
+                      <p className="muted small">Нет активных услуг в каталоге.</p>
+                    ) : (
+                      services
+                        .filter((s) => s.is_active)
+                        .map((s) => {
+                          const checked = (intervalForm.service_ids || []).some((id) => Number(id) === Number(s.id));
+                          return (
+                            <label key={s.id} className="checkbox interval-anon-service-item">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  setIntervalForm((p) => {
+                                    const cur = new Set((p.service_ids || []).map(Number));
+                                    if (e.target.checked) cur.add(Number(s.id));
+                                    else cur.delete(Number(s.id));
+                                    return { ...p, service_ids: [...cur] };
+                                  });
+                                }}
+                              />
+                              <span>{s.name}</span>
+                            </label>
+                          );
+                        })
+                    )}
+                  </div>
+                </div>
+              ) : null}
               <button type="submit">Создать интервал</button>
             </form>
             <p className="status">{sellerStatus}</p>
@@ -8619,6 +8687,23 @@ export default function App() {
                 role="dialog"
                 aria-label="Действия с интервалом"
               >
+                {popTemplate.anonymous_index != null ? (
+                  <button
+                    type="button"
+                    className="small-btn"
+                    onClick={() => {
+                      setIntervalEditModal({
+                        id: popTemplate.id,
+                        start_time: popTemplate.start_time,
+                        end_time: popTemplate.end_time,
+                        service_ids: [...(popTemplate.service_ids || [])].map(Number),
+                      });
+                      closeIntervalPopover();
+                    }}
+                  >
+                    ✎ Изменить
+                  </button>
+                ) : null}
                 <button type="button" className="small-btn" onClick={() => { setSelectedIntervalId(popTemplate.id); closeIntervalPopover(); }}>
                   Выбрать
                 </button>
@@ -8635,6 +8720,105 @@ export default function App() {
               document.body
             );
           })()}
+        {intervalEditModal && typeof document !== "undefined" && createPortal(
+          <div className="modal-backdrop" onClick={() => setIntervalEditModal(null)}>
+            <div className="modal-card interval-edit-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="staff-review-modal-head">
+                <h3>Изменить интервал</h3>
+                <button type="button" className="small-btn" onClick={() => setIntervalEditModal(null)}>
+                  ✕
+                </button>
+              </div>
+              <form
+                className="form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const start = intervalEditModal.start_time;
+                  const end = intervalEditModal.end_time;
+                  if (!start || !end || start >= end) {
+                    setSellerStatus("Некорректное время интервала.");
+                    return;
+                  }
+                  const svcIds = (intervalEditModal.service_ids || []).map(Number).filter((n) => Number.isFinite(n));
+                  if (!svcIds.length) {
+                    setSellerStatus("Выберите хотя бы одну услугу.");
+                    return;
+                  }
+                  setSavedIntervals((prev) =>
+                    prev.map((t) =>
+                      t.id === intervalEditModal.id
+                        ? { ...t, start_time: start, end_time: end, service_ids: svcIds }
+                        : t,
+                    ),
+                  );
+                  setIntervalEditModal(null);
+                  setSellerStatus("Интервал обновлён.");
+                }}
+              >
+                <div className="row-2">
+                  <label className="field-label">
+                    С
+                    <input
+                      type="time"
+                      value={intervalEditModal.start_time}
+                      onChange={(e) =>
+                        setIntervalEditModal((p) => ({ ...p, start_time: e.target.value }))
+                      }
+                      required
+                    />
+                  </label>
+                  <label className="field-label">
+                    До
+                    <input
+                      type="time"
+                      value={intervalEditModal.end_time}
+                      onChange={(e) =>
+                        setIntervalEditModal((p) => ({ ...p, end_time: e.target.value }))
+                      }
+                      required
+                    />
+                  </label>
+                </div>
+                <div className="interval-anon-services">
+                  <p className="field-label">Услуги</p>
+                  <div className="interval-anon-services-list">
+                    {services
+                      .filter((s) => s.is_active)
+                      .map((s) => {
+                        const checked = (intervalEditModal.service_ids || []).some(
+                          (id) => Number(id) === Number(s.id),
+                        );
+                        return (
+                          <label key={s.id} className="checkbox interval-anon-service-item">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                setIntervalEditModal((p) => {
+                                  const cur = new Set((p.service_ids || []).map(Number));
+                                  if (e.target.checked) cur.add(Number(s.id));
+                                  else cur.delete(Number(s.id));
+                                  return { ...p, service_ids: [...cur] };
+                                });
+                              }}
+                            />
+                            <span>{s.name}</span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                </div>
+                <div className="row-2">
+                  <button type="button" className="ghost-btn" onClick={() => setIntervalEditModal(null)}>
+                    Отмена
+                  </button>
+                  <button type="submit">Сохранить</button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body,
+        )}
       </section>
     );
   }
@@ -11690,7 +11874,8 @@ export default function App() {
               className={[
                 "client-discover-map-wrap",
                 mapOrgPopup && "client-discover-map-wrap--has-sheet",
-                mapOrgReviewsOpen && "client-discover-map-wrap--org-reviews",
+                mapOrgPopup && mapOrgSheetCollapsed && "client-discover-map-wrap--sheet-collapsed",
+                mapOrgReviewsOpen && !mapOrgSheetCollapsed && "client-discover-map-wrap--org-reviews",
                 (clientBookModalOpen || clientFiltersOpen) && "client-discover-map-wrap--blocked",
                 (clientBookModalOpen || clientFiltersOpen) && "client-discover-map-wrap--sheet-inert",
               ]
@@ -11700,17 +11885,24 @@ export default function App() {
               <div id="client-discover-map" className="client-discover-map" role="application" aria-label="Карта точек записи" />
               {mapOrgPopup && (
                 <div
-                  className={["map-org-sheet", mapOrgReviewsOpen && "map-org-sheet--reviews-open"].filter(Boolean).join(" ")}
+                  className={[
+                    "map-org-sheet",
+                    mapOrgReviewsOpen && !mapOrgSheetCollapsed && "map-org-sheet--reviews-open",
+                    mapOrgSheetCollapsed && "map-org-sheet--collapsed",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                   role="dialog"
                   aria-label="Организация на карте"
                 >
                   <button
                     type="button"
                     className="map-org-sheet-handle"
-                    aria-label="Свернуть карточку"
+                    aria-label={mapOrgSheetCollapsed ? "Развернуть карточку" : "Свернуть карточку"}
                     onClick={(e) => {
                       e.stopPropagation();
-                      closeMapOrgSheet();
+                      if (mapOrgSheetCollapsed) expandMapOrgSheet();
+                      else collapseMapOrgSheet();
                     }}
                     onTouchStart={(e) => {
                       mapOrgSheetTouchY.current = e.touches?.[0]?.clientY ?? 0;
@@ -11720,11 +11912,29 @@ export default function App() {
                       mapOrgSheetTouchY.current = null;
                       if (startY == null) return;
                       const endY = e.changedTouches?.[0]?.clientY ?? startY;
-                      if (endY - startY > 56) closeMapOrgSheet();
+                      const dy = endY - startY;
+                      if (dy > 56) {
+                        if (mapOrgSheetCollapsed) closeMapOrgSheet();
+                        else collapseMapOrgSheet();
+                      } else if (dy < -56 && mapOrgSheetCollapsed) {
+                        expandMapOrgSheet();
+                      }
                     }}
                   >
                     <span className="map-org-sheet-handle-bar" aria-hidden />
                   </button>
+                  {mapOrgSheetCollapsed ? (
+                    <button
+                      type="button"
+                      className="map-org-sheet-peek"
+                      onClick={() => expandMapOrgSheet()}
+                    >
+                      <span className="map-org-sheet-peek-title">
+                        {mapOrgPopup.organization_name || mapOrgPopup.title}
+                      </span>
+                      <span className="muted small">Нажмите, чтобы открыть</span>
+                    </button>
+                  ) : (
                   <div className="map-org-sheet-body">
                   <div className="map-org-sheet-header">
                     {(() => {
@@ -11829,6 +12039,22 @@ export default function App() {
                   ) : null}
 
                   {mapOrgPopup.address && <p className="muted small">{mapOrgPopup.address}</p>}
+
+                  <div className="map-org-sheet-actions row-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const filterDate = clientDiscoverFiltersRef.current?.slot_date || todayIsoDate();
+                        onClientLocationSelect(String(mapOrgPopup.id), filterDate);
+                        setClientBookModalOpen(true);
+                      }}
+                    >
+                      Записаться
+                    </button>
+                    <button type="button" onClick={() => openChatWithProvider(mapOrgPopup.provider)}>
+                      Чат
+                    </button>
+                  </div>
 
                   {mapOrgStaff?.length > 0 && (
                     <div className="map-org-staff-section">
@@ -11946,7 +12172,9 @@ export default function App() {
                             if (!list.length) return <p className="muted">Пока нет отзывов.</p>;
                             return (
                               <ul className="list review-list">
-                                {list.map((r) => (
+                                {list.map((r) => {
+                                  const displayRating = r.staff_rating || r.rating;
+                                  return (
                                   <li
                                     key={r.id}
                                     className={["review-item", r.is_new && "review-item--new"]
@@ -11955,14 +12183,14 @@ export default function App() {
                                   >
                                     <div className="review-item-head">
                                       <strong>{r.client_name || "Клиент"}</strong>
-                                      {(r.staff_rating || r.rating) ? (
+                                      {displayRating ? (
                                         <span
                                           className="review-stars"
-                                          aria-label={`Оценка ${r.staff_rating || r.rating}`}
+                                          aria-label={`Оценка ${displayRating}`}
                                         >
-                                          {"★".repeat(r.staff_rating || r.rating)}
+                                          {"★".repeat(displayRating)}
                                           <span className="review-stars-empty">
-                                            {"☆".repeat(Math.max(0, 5 - (r.staff_rating || r.rating)))}
+                                            {"☆".repeat(Math.max(0, 5 - displayRating))}
                                           </span>
                                         </span>
                                       ) : null}
@@ -11975,8 +12203,39 @@ export default function App() {
                                     {r.staff_text && r.text ? (
                                       <p className="muted small review-item-text">Об услуге: {r.text}</p>
                                     ) : null}
+                                    {r.photos?.length > 0 && (
+                                      <div className="review-photos">
+                                        {r.photos.map((p, photoIdx) => (
+                                          <button
+                                            key={p.id}
+                                            type="button"
+                                            className="review-photo-btn"
+                                            onClick={() => {
+                                              const items = (list || []).flatMap((rev) =>
+                                                (rev.photos || []).map((ph) => ({
+                                                  id: `review-${rev.id}-${ph.id}`,
+                                                  url: reviewImageUrl(ph.image),
+                                                  source: "review",
+                                                  review_id: rev.id,
+                                                  client_name: rev.client_name,
+                                                  rating: rev.staff_rating || rev.rating,
+                                                  text: rev.staff_text || rev.text || "",
+                                                })),
+                                              );
+                                              const start = items.findIndex(
+                                                (it) => it.id === `review-${r.id}-${p.id}`,
+                                              );
+                                              openOrgPhotoLightbox(items, start >= 0 ? start : photoIdx);
+                                            }}
+                                          >
+                                            <img src={reviewImageUrl(p.image)} alt="" />
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
                                   </li>
-                                ))}
+                                  );
+                                })}
                               </ul>
                             );
                           })()}
@@ -11984,36 +12243,6 @@ export default function App() {
                       </div>
                     </div>
                   )}
-
-                  <div className="map-org-sheet-actions row-2">
-
-                    <button
-
-                      type="button"
-
-                      onClick={() => {
-
-                        const filterDate = clientDiscoverFiltersRef.current?.slot_date || todayIsoDate();
-
-                        onClientLocationSelect(String(mapOrgPopup.id), filterDate);
-
-                        setClientBookModalOpen(true);
-
-                      }}
-
-                    >
-
-                      Записаться
-
-                    </button>
-
-                    <button type="button" onClick={() => openChatWithProvider(mapOrgPopup.provider)}>
-
-                      Чат
-
-                    </button>
-
-                  </div>
 
                   {(mapOrgProfile?.reviews_count > 0 || mapOrgReviews.length > 0) && (
 
@@ -12066,10 +12295,10 @@ export default function App() {
                   )}
 
                   </div>
+                  )}
                 </div>
               )}
             </div>
-            <p className="muted client-discover-hint">Нажми на метку, чтобы открыть карточку организации.</p>
           </section>
         )}
 
