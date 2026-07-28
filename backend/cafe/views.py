@@ -10,23 +10,25 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from subscriptions.yookassa_client import create_payment
-from users.email_service import send_cafe_order_receipt_email
-
 from .models import (
     CafeFloorPlan,
     CafeGuestSession,
     CafeMenuCategory,
     CafeMenuItem,
     CafeMenuItemPhoto,
+    CafeMenuItemRemovableIngredient,
     CafeOrder,
     CafeOrderItem,
+    CafeOrderItemRating,
     CafeSettings,
     CafeTable,
 )
+from .receipt_service import SERVICE_CHARGE_PERCENT, send_order_receipt_after_payment
 from .serializers import (
     CafeFloorPlanSerializer,
     CafeMenuCategorySerializer,
     CafeMenuItemPhotoSerializer,
+    CafeMenuItemRemovableIngredientSerializer,
     CafeMenuItemSerializer,
     CafeOrderSerializer,
     CafeSettingsSerializer,
@@ -93,10 +95,14 @@ class CafeSettingsView(APIView):
     def patch(self, request):
         if not _is_cafe_provider(request.user):
             return Response(status=status.HTTP_403_FORBIDDEN)
-        ser = CafeSettingsSerializer(_get_or_create_settings(request.user), data=request.data, partial=True)
+        obj = _get_or_create_settings(request.user)
+        data = dict(request.data)
+        if not (data.get("yookassa_secret_key") or "").strip():
+            data.pop("yookassa_secret_key", None)
+        ser = CafeSettingsSerializer(obj, data=data, partial=True)
         ser.is_valid(raise_exception=True)
         ser.save()
-        return Response(ser.data)
+        return Response(CafeSettingsSerializer(obj).data)
 
 
 class CafeFloorPlanListCreateView(APIView):
@@ -176,7 +182,10 @@ class CafeMenuCategoryListCreateView(APIView):
     def get(self, request):
         if not _is_cafe_provider(request.user):
             return Response(status=status.HTTP_403_FORBIDDEN)
-        qs = CafeMenuCategory.objects.filter(provider=request.user).prefetch_related("items__photos")
+        qs = CafeMenuCategory.objects.filter(provider=request.user).prefetch_related(
+            "items__photos",
+            "items__removable_ingredients",
+        )
         return Response(CafeMenuCategorySerializer(qs, many=True, context={"request": request}).data)
 
     def post(self, request):
@@ -292,6 +301,37 @@ class CafeMenuItemPhotoView(APIView):
             item__category__provider=request.user,
         )
         photo.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CafeMenuItemIngredientView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, item_id):
+        if not _is_cafe_provider(request.user):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        item = get_object_or_404(CafeMenuItem, pk=item_id, category__provider=request.user)
+        name = (request.data.get("name") or "").strip()
+        if not name:
+            return Response({"name": ["Укажите название."]}, status=status.HTTP_400_BAD_REQUEST)
+        ing = CafeMenuItemRemovableIngredient.objects.create(item=item, name=name[:120])
+        return Response(
+            CafeMenuItemRemovableIngredientSerializer(ing).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    def delete(self, request, item_id, ingredient_id=None):
+        if not _is_cafe_provider(request.user):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if not ingredient_id:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+        ing = get_object_or_404(
+            CafeMenuItemRemovableIngredient,
+            pk=ingredient_id,
+            item_id=item_id,
+            item__category__provider=request.user,
+        )
+        ing.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -473,7 +513,8 @@ class CafeGuestMenuView(APIView):
         if not provider:
             return Response({"detail": "Сессия недействительна."}, status=status.HTTP_401_UNAUTHORIZED)
         cats = CafeMenuCategory.objects.filter(provider=provider, is_active=True).prefetch_related(
-            "items__photos"
+            "items__photos",
+            "items__removable_ingredients",
         )
         data = CafeMenuCategorySerializer(cats, many=True, context={"request": request}).data
         for cat in data:
@@ -532,16 +573,22 @@ class CafeGuestOrderCreateView(APIView):
         guest_email = (request.data.get("guest_email") or "").strip().lower()
         guest_name = (request.data.get("guest_name") or "").strip()
         delivery_address = (request.data.get("delivery_address") or "").strip()
+        include_service_charge = bool(request.data.get("include_service_charge", True))
+        tip_custom = bool(request.data.get("tip_custom"))
         try:
-            tip_percent = max(0, min(30, int(request.data.get("tip_percent") or 0)))
+            tip_percent = max(0, min(100, int(request.data.get("tip_percent") or 0)))
         except (TypeError, ValueError):
             tip_percent = 0
+        try:
+            tip_amount_raw = Decimal(str(request.data.get("tip_amount") or 0))
+            if tip_amount_raw < 0:
+                tip_amount_raw = Decimal("0")
+        except Exception:
+            tip_amount_raw = Decimal("0")
         if mode == CafeOrder.Mode.DELIVERY and not delivery_address:
             return Response({"delivery_address": ["Укажите адрес доставки."]}, status=status.HTTP_400_BAD_REQUEST)
         if mode in (CafeOrder.Mode.TAKEAWAY, CafeOrder.Mode.DELIVERY) and not guest_phone:
             return Response({"guest_phone": ["Укажите телефон."]}, status=status.HTTP_400_BAD_REQUEST)
-        if not guest_email:
-            return Response({"guest_email": ["Укажите email для чека."]}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
             order = CafeOrder.objects.create(
@@ -555,6 +602,7 @@ class CafeGuestOrderCreateView(APIView):
                 delivery_address=delivery_address,
                 comment=(request.data.get("comment") or "").strip()[:1000],
                 guest_session_token=sess.token,
+                include_service_charge=include_service_charge,
                 status=CafeOrder.Status.DRAFT,
             )
             items_total = Decimal("0")
@@ -566,15 +614,22 @@ class CafeGuestOrderCreateView(APIView):
                     continue
                 menu_item = CafeMenuItem.objects.filter(
                     pk=mid, category__provider=provider, is_active=True, is_available=True
-                ).first()
+                ).prefetch_related("removable_ingredients").first()
                 if not menu_item:
                     continue
+                allowed = {i.name for i in menu_item.removable_ingredients.all()}
+                removed = []
+                for name in row.get("removed_ingredients") or []:
+                    name = str(name).strip()
+                    if name and name in allowed and name not in removed:
+                        removed.append(name)
                 CafeOrderItem.objects.create(
                     order=order,
                     menu_item=menu_item,
                     name=menu_item.name,
                     unit_price=menu_item.price,
                     quantity=qty,
+                    removed_ingredients=removed,
                 )
                 items_total += Decimal(menu_item.price) * qty
             if items_total <= 0:
@@ -593,11 +648,30 @@ class CafeGuestOrderCreateView(APIView):
                     )
                 delivery_fee = settings_obj.delivery_fee or Decimal("0")
 
+            if tip_custom:
+                tip_amount = tip_amount_raw.quantize(Decimal("0.01"))
+                tip_percent = 0
+            else:
+                tip_amount = ((items_total * Decimal(tip_percent)) / Decimal("100")).quantize(Decimal("0.01"))
+
+            service_charge_amount = Decimal("0")
+            if include_service_charge:
+                service_charge_amount = (
+                    (items_total * Decimal(SERVICE_CHARGE_PERCENT)) / Decimal("100")
+                ).quantize(Decimal("0.01"))
+
             order.items_total = items_total
             order.tip_percent = tip_percent
-            order.tip_amount = ((items_total * Decimal(tip_percent)) / Decimal("100")).quantize(Decimal("0.01"))
+            order.tip_amount = tip_amount
+            order.tip_custom = tip_custom
             order.delivery_fee = delivery_fee
-            order.total = items_total + delivery_fee + order.tip_amount
+            order.service_charge_amount = service_charge_amount
+            order.total = items_total + delivery_fee + tip_amount + service_charge_amount
+            order.provider_payout_amount = order.total - service_charge_amount
+
+            org_shop_id = (settings_obj.yookassa_shop_id or "").strip()
+            org_secret = (settings_obj.yookassa_secret_key or "").strip()
+            use_org_yookassa = bool(org_shop_id and org_secret)
 
             if pay_method == CafeOrder.PayMethod.ONLINE:
                 order.status = CafeOrder.Status.AWAITING_PAYMENT
@@ -613,6 +687,8 @@ class CafeGuestOrderCreateView(APIView):
                     description=f"Заказ #{order.id} — {provider.organization_name or 'Вместе'}",
                     return_url=return_url,
                     metadata={"type": "cafe_order", "order_id": str(order.id)},
+                    shop_id=org_shop_id if use_org_yookassa else None,
+                    secret_key=org_secret if use_org_yookassa else None,
                 )
                 if yk and yk.get("id"):
                     order.yookassa_payment_id = yk["id"]
@@ -622,27 +698,29 @@ class CafeGuestOrderCreateView(APIView):
                     order.status = CafeOrder.Status.PAID
                     order.paid_at = timezone.now()
                     order.save(update_fields=["status", "paid_at", "updated_at"])
+                    send_order_receipt_after_payment(order)
             else:
                 order.status = CafeOrder.Status.ACCEPTED
                 order.save()
-
-            lines = [f"{row.name} × {row.quantity} — {row.line_total} ₽" for row in order.items.all()]
-            if order.delivery_fee > 0:
-                lines.append(f"Доставка — {order.delivery_fee} ₽")
-            if order.tip_amount > 0:
-                lines.append(f"Чаевые ({order.tip_percent}%) — {order.tip_amount} ₽")
-            try:
-                send_cafe_order_receipt_email(
-                    email=order.guest_email,
-                    organization_name=provider.organization_name or provider.username,
-                    order_id=order.id,
-                    lines=lines,
-                    total=f"{order.total} ₽",
-                )
-            except Exception:
-                pass
+                send_order_receipt_after_payment(order)
 
         return Response(CafeOrderSerializer(order).data, status=status.HTTP_201_CREATED)
+
+
+class CafeGuestOrderDetailView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request, order_id):
+        sess = _session_from_request(request)
+        if not sess:
+            return Response({"detail": "Нужна авторизация меню."}, status=status.HTTP_401_UNAUTHORIZED)
+        order = CafeOrder.objects.filter(pk=order_id, guest_session_token=sess.token).prefetch_related(
+            "items", "item_ratings"
+        ).first()
+        if not order:
+            return Response({"detail": "Заказ не найден."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(CafeOrderSerializer(order).data)
 
 
 class CafeMenuItemRateView(APIView):
@@ -656,7 +734,33 @@ class CafeMenuItemRateView(APIView):
             rating = 0
         if rating < 1 or rating > 5:
             return Response({"rating": ["Оценка от 1 до 5."]}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            order_id = int(request.data.get("order_id") or 0)
+        except (TypeError, ValueError):
+            order_id = 0
+        if not order_id:
+            return Response({"order_id": ["Укажите заказ."]}, status=status.HTTP_400_BAD_REQUEST)
+        sess = _session_from_request(request)
+        if not sess:
+            return Response({"detail": "Нужна авторизация меню."}, status=status.HTTP_401_UNAUTHORIZED)
+        order = CafeOrder.objects.filter(pk=order_id, guest_session_token=sess.token).first()
+        if not order:
+            return Response({"order_id": ["Заказ не найден."]}, status=status.HTTP_404_NOT_FOUND)
+        if order.status not in {
+            CafeOrder.Status.PAID,
+            CafeOrder.Status.ACCEPTED,
+            CafeOrder.Status.COOKING,
+            CafeOrder.Status.READY,
+            CafeOrder.Status.DELIVERING,
+            CafeOrder.Status.DONE,
+        }:
+            return Response({"order_id": ["Оценить блюда можно после оформления заказа."]}, status=status.HTTP_400_BAD_REQUEST)
         item = get_object_or_404(CafeMenuItem, pk=pk, is_active=True)
+        if not order.items.filter(menu_item_id=item.id).exists():
+            return Response({"detail": ["Это блюдо не входило в заказ."]}, status=status.HTTP_400_BAD_REQUEST)
+        if CafeOrderItemRating.objects.filter(order=order, menu_item=item).exists():
+            return Response({"detail": ["Вы уже оценили это блюдо."]}, status=status.HTTP_400_BAD_REQUEST)
+        CafeOrderItemRating.objects.create(order=order, menu_item=item, rating=rating)
         item.rating_sum += rating
         item.rating_count += 1
         item.save(update_fields=["rating_sum", "rating_count", "updated_at"])

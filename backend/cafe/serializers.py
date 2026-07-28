@@ -5,14 +5,18 @@ from .models import (
     CafeMenuCategory,
     CafeMenuItem,
     CafeMenuItemPhoto,
+    CafeMenuItemRemovableIngredient,
     CafeOrder,
     CafeOrderItem,
+    CafeOrderItemRating,
     CafeSettings,
     CafeTable,
 )
 
 
 class CafeSettingsSerializer(serializers.ModelSerializer):
+    has_yookassa = serializers.SerializerMethodField()
+
     class Meta:
         model = CafeSettings
         fields = [
@@ -25,9 +29,24 @@ class CafeSettingsSerializer(serializers.ModelSerializer):
             "accept_online_payment",
             "accept_cash",
             "accept_card_on_spot",
+            "payout_legal_name",
+            "payout_inn",
+            "payout_bank_name",
+            "payout_bik",
+            "payout_account",
+            "payout_corr_account",
+            "yookassa_shop_id",
+            "yookassa_secret_key",
+            "has_yookassa",
             "updated_at",
         ]
-        read_only_fields = ["updated_at"]
+        read_only_fields = ["updated_at", "has_yookassa"]
+        extra_kwargs = {
+            "yookassa_secret_key": {"write_only": True},
+        }
+
+    def get_has_yookassa(self, obj):
+        return bool(obj.yookassa_shop_id and obj.yookassa_secret_key)
 
 
 class CafeTableSerializer(serializers.ModelSerializer):
@@ -81,8 +100,16 @@ class CafeMenuItemPhotoSerializer(serializers.ModelSerializer):
         return obj.image.url if obj.image else ""
 
 
+class CafeMenuItemRemovableIngredientSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CafeMenuItemRemovableIngredient
+        fields = ["id", "name", "sort_order"]
+        read_only_fields = ["id"]
+
+
 class CafeMenuItemSerializer(serializers.ModelSerializer):
     photos = CafeMenuItemPhotoSerializer(many=True, read_only=True)
+    removable_ingredients = CafeMenuItemRemovableIngredientSerializer(many=True, read_only=True)
     rating_avg = serializers.SerializerMethodField()
 
     class Meta:
@@ -103,10 +130,11 @@ class CafeMenuItemSerializer(serializers.ModelSerializer):
             "rating_count",
             "sort_order",
             "photos",
+            "removable_ingredients",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at", "photos", "rating_avg", "rating_count"]
+        read_only_fields = ["created_at", "updated_at", "photos", "rating_avg", "rating_count", "removable_ingredients"]
 
     def get_rating_avg(self, obj):
         if not obj.rating_count:
@@ -125,12 +153,20 @@ class CafeMenuCategorySerializer(serializers.ModelSerializer):
 class CafeOrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = CafeOrderItem
-        fields = ["id", "menu_item", "name", "unit_price", "quantity"]
+        fields = ["id", "menu_item", "name", "unit_price", "quantity", "removed_ingredients"]
+
+
+class CafeOrderItemRatingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CafeOrderItemRating
+        fields = ["menu_item", "rating"]
 
 
 class CafeOrderSerializer(serializers.ModelSerializer):
     items = CafeOrderItemSerializer(many=True, read_only=True)
+    item_ratings = CafeOrderItemRatingSerializer(many=True, read_only=True)
     table_label = serializers.CharField(source="table.label", read_only=True, default="")
+    can_rate = serializers.SerializerMethodField()
 
     class Meta:
         model = CafeOrder
@@ -147,12 +183,18 @@ class CafeOrderSerializer(serializers.ModelSerializer):
             "items_total",
             "tip_percent",
             "tip_amount",
+            "tip_custom",
+            "include_service_charge",
+            "service_charge_amount",
+            "provider_payout_amount",
             "delivery_fee",
             "total",
             "confirmation_url",
             "table",
             "table_label",
             "items",
+            "item_ratings",
+            "can_rate",
             "created_at",
             "paid_at",
         ]
@@ -165,5 +207,19 @@ class CafeOrderSerializer(serializers.ModelSerializer):
             "created_at",
             "paid_at",
             "items",
+            "item_ratings",
+            "can_rate",
             "table_label",
+            "service_charge_amount",
+            "provider_payout_amount",
         ]
+
+    def get_can_rate(self, obj):
+        return obj.status in {
+            CafeOrder.Status.PAID,
+            CafeOrder.Status.ACCEPTED,
+            CafeOrder.Status.COOKING,
+            CafeOrder.Status.READY,
+            CafeOrder.Status.DELIVERING,
+            CafeOrder.Status.DONE,
+        }

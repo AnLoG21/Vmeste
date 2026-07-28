@@ -466,13 +466,17 @@ class YooKassaWebhookView(APIView):
         meta = obj.get("metadata") or {}
         if meta.get("type") == "cafe_order" or (not Payment.objects.filter(yookassa_payment_id=yk_id).exists()):
             from cafe.models import CafeOrder
+            from cafe.receipt_service import send_order_receipt_after_payment
 
             cafe_order = CafeOrder.objects.filter(yookassa_payment_id=yk_id).first()
             if cafe_order:
+                was_paid = cafe_order.status == CafeOrder.Status.PAID
                 if cafe_order.status != CafeOrder.Status.PAID:
                     cafe_order.status = CafeOrder.Status.PAID
                     cafe_order.paid_at = timezone.now()
                     cafe_order.save(update_fields=["status", "paid_at", "updated_at"])
+                if not was_paid:
+                    send_order_receipt_after_payment(cafe_order)
                 return Response({"detail": "ok"})
 
         payment = Payment.objects.filter(yookassa_payment_id=yk_id).select_related("subscription").first()

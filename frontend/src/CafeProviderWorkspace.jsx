@@ -295,6 +295,24 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
     await loadAll();
   }
 
+  async function addIngredient(itemId, name) {
+    const trimmed = (name || "").trim();
+    if (!trimmed) return;
+    const res = await authFetch(`${API_URL}/cafe/menu/items/${itemId}/ingredients/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    if (res.ok) await loadAll();
+  }
+
+  async function deleteIngredient(itemId, ingredientId) {
+    const res = await authFetch(`${API_URL}/cafe/menu/items/${itemId}/ingredients/${ingredientId}/`, {
+      method: "DELETE",
+    });
+    if (res.ok || res.status === 204) await loadAll();
+  }
+
   return (
     <section className="card full-width cafe-provider">
       <h2>Зал и меню</h2>
@@ -380,6 +398,31 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
               onBlur={() => saveSettings({ delivery_min_order: settings.delivery_min_order })}
             />
           </label>
+          <h3 className="cafe-form-span2">Реквизиты для выплат</h3>
+          <p className="muted small cafe-form-span2">
+            Укажите банковские реквизиты и ЮKassa магазина — онлайн-оплата пойдёт напрямую вам, сервисный сбор 3% остаётся платформе.
+          </p>
+          {[
+            ["payout_legal_name", "Юр. название / ИП"],
+            ["payout_inn", "ИНН"],
+            ["payout_bank_name", "Банк"],
+            ["payout_bik", "БИК"],
+            ["payout_account", "Расчётный счёт"],
+            ["payout_corr_account", "Корр. счёт"],
+            ["yookassa_shop_id", "ЮKassa Shop ID"],
+            ["yookassa_secret_key", "ЮKassa Secret Key"],
+          ].map(([key, label]) => (
+            <label key={key} className={key === "payout_bank_name" ? "cafe-form-span2" : ""}>
+              {label}
+              <input
+                type={key === "yookassa_secret_key" ? "password" : "text"}
+                value={settings[key] || ""}
+                onChange={(e) => setSettings({ ...settings, [key]: e.target.value })}
+                onBlur={() => saveSettings({ [key]: settings[key] || "" })}
+                placeholder={key === "yookassa_secret_key" && settings.has_yookassa ? "••••••••" : ""}
+              />
+            </label>
+          ))}
         </div>
       )}
 
@@ -754,6 +797,29 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
                   <p className="muted small cafe-form-span2">
                     Рейтинг: {item.rating_avg != null ? `★ ${item.rating_avg} (${item.rating_count})` : "пока нет"}
                   </p>
+                  <div className="cafe-form-span2 cafe-ingredient-editor">
+                    <span className="muted small">Можно убрать при заказе:</span>
+                    <div className="cafe-ingredient-chips">
+                      {(item.removable_ingredients || []).map((ing) => (
+                        <span key={ing.id} className="cafe-ingredient-chip is-provider">
+                          {ing.name}
+                          <button type="button" className="cafe-ingredient-remove" onClick={() => deleteIngredient(item.id, ing.id)} aria-label="Удалить">
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                      <button
+                        type="button"
+                        className="cafe-ingredient-add"
+                        onClick={() => {
+                          const name = window.prompt("Ингредиент, который гость может убрать:");
+                          if (name) addIngredient(item.id, name);
+                        }}
+                      >
+                        + Ингредиент
+                      </button>
+                    </div>
+                  </div>
                   <label>
                     Фото
                     <input

@@ -223,14 +223,22 @@ def send_subscription_reminder_email(user, *, days_left: int, period_end, plan_n
     return _send_branded(to=user.email, subject=f"Вместе: {title}", text_body=text, html_body=html)
 
 
-def send_cafe_order_receipt_email(*, email: str, organization_name: str, order_id: int, lines: list[str], total: str) -> bool:
+def send_cafe_order_receipt_email(
+    *,
+    email: str,
+    organization_name: str,
+    order_id: int,
+    lines: list[str],
+    total: str,
+    pdf_bytes: bytes | None = None,
+) -> bool:
     email = (email or "").strip().lower()
     if not email:
         return False
     title = f"Чек по заказу #{order_id}"
     greeting = f"Спасибо за заказ в «{organization_name or SITE_BRAND}»!"
     paragraphs = [
-        "Сохранили для вас состав заказа и итоговую сумму.",
+        "Оплата прошла успешно. Чек во вложении в формате PDF.",
         *lines,
         f"Итого: {total}",
     ]
@@ -240,9 +248,17 @@ def send_cafe_order_receipt_email(*, email: str, organization_name: str, order_i
         greeting=greeting,
         paragraphs=paragraphs,
     )
-    return _send_branded(
-        to=email,
+    if not _can_send():
+        logger.warning("SMTP не настроен. Письмо «%s» для %s:\n%s", title, email, text)
+        return False
+    msg = EmailMultiAlternatives(
         subject=f"{organization_name or SITE_BRAND}: {title}",
-        text_body=text,
-        html_body=html,
+        body=text,
+        from_email=_from_email(),
+        to=[email],
     )
+    msg.attach_alternative(html, "text/html")
+    if pdf_bytes:
+        msg.attach(f"cafe-order-{order_id}.pdf", pdf_bytes, "application/pdf")
+    msg.send(fail_silently=False)
+    return True

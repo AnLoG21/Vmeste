@@ -24,6 +24,14 @@ class CafeSettings(models.Model):
     accept_online_payment = models.BooleanField(default=True)
     accept_cash = models.BooleanField(default=True)
     accept_card_on_spot = models.BooleanField(default=True)
+    payout_legal_name = models.CharField(max_length=200, blank=True, default="")
+    payout_inn = models.CharField(max_length=12, blank=True, default="")
+    payout_bank_name = models.CharField(max_length=200, blank=True, default="")
+    payout_bik = models.CharField(max_length=9, blank=True, default="")
+    payout_account = models.CharField(max_length=20, blank=True, default="")
+    payout_corr_account = models.CharField(max_length=20, blank=True, default="")
+    yookassa_shop_id = models.CharField(max_length=64, blank=True, default="")
+    yookassa_secret_key = models.CharField(max_length=128, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -145,6 +153,20 @@ class CafeMenuItem(models.Model):
         return self.name
 
 
+class CafeMenuItemRemovableIngredient(models.Model):
+    """Ингредиент, который гость может убрать из блюда."""
+
+    item = models.ForeignKey(CafeMenuItem, on_delete=models.CASCADE, related_name="removable_ingredients")
+    name = models.CharField(max_length=120)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+
+    def __str__(self):
+        return self.name
+
+
 class CafeMenuItemPhoto(models.Model):
     item = models.ForeignKey(CafeMenuItem, on_delete=models.CASCADE, related_name="photos")
     image = models.ImageField(upload_to="cafe_menu/%Y/%m/")
@@ -239,6 +261,15 @@ class CafeOrder(models.Model):
     items_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     tip_percent = models.PositiveSmallIntegerField(default=0)
     tip_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    tip_custom = models.BooleanField(default=False, help_text="Чаевые заданы суммой, а не процентом.")
+    include_service_charge = models.BooleanField(default=True)
+    service_charge_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    provider_payout_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Сумма к выплате организации (без сервисного сбора).",
+    )
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     yookassa_payment_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
@@ -267,7 +298,18 @@ class CafeOrderItem(models.Model):
     name = models.CharField(max_length=180)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1)])
+    removed_ingredients = models.JSONField(blank=True, default=list)
 
     @property
     def line_total(self):
         return self.unit_price * self.quantity
+
+
+class CafeOrderItemRating(models.Model):
+    order = models.ForeignKey(CafeOrder, on_delete=models.CASCADE, related_name="item_ratings")
+    menu_item = models.ForeignKey(CafeMenuItem, on_delete=models.CASCADE, related_name="order_ratings")
+    rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("order", "menu_item")]

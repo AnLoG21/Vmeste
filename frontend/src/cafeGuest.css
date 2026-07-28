@@ -192,6 +192,19 @@
   gap: 12px;
   margin-bottom: 12px;
 }
+.cafe-cart-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: #fff3e8;
+  color: #8d5a2b;
+  cursor: pointer;
+  flex-shrink: 0;
+}
 .cafe-cart-lines {
   list-style: none;
   padding: 0;
@@ -200,16 +213,121 @@
   gap: 10px;
 }
 .cafe-cart-line {
-  display: flex;
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 10px;
   padding-bottom: 10px;
   border-bottom: 1px solid #ffe6d1;
 }
+.cafe-cart-line-photo {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #f3e8d8;
+}
+.cafe-cart-line-body {
+  min-width: 0;
+}
+.cafe-cart-line-price {
+  white-space: nowrap;
+}
 .cafe-cart-line p {
   margin: 4px 0 0;
   color: #8d5a2b;
+}
+.cafe-ingredient-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.cafe-ingredient-chip {
+  border: 1px solid #e0c2a8;
+  border-radius: 999px;
+  background: #fff;
+  color: #5c3d1e;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.cafe-ingredient-chip.is-removed {
+  background: #ffe8e0;
+  border-color: #e8a090;
+  text-decoration: line-through;
+}
+.cafe-ingredient-chip.is-provider {
+  cursor: default;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cafe-ingredient-remove {
+  border: 0;
+  background: transparent;
+  color: #a33;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+}
+.cafe-ingredient-add {
+  border: 1px dashed #c45c00;
+  border-radius: 999px;
+  background: #fff8f1;
+  color: #c45c00;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.cafe-tip-head {
+  display: block;
+  margin-bottom: 4px;
+}
+.cafe-tip-toggle {
+  margin-bottom: 6px;
+}
+.cafe-service-charge {
+  margin-top: 4px;
+  font-size: 0.92rem;
+}
+.cafe-rating-readonly {
+  color: #b8860b;
+}
+.cafe-stars {
+  display: inline-flex;
+  gap: 2px;
+}
+.cafe-star {
+  border: 0;
+  background: transparent;
+  color: #ddd;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.cafe-star.is-on {
+  color: #e6a800;
+}
+.cafe-star:disabled {
+  cursor: default;
+}
+.cafe-rating-panel {
+  margin-bottom: 18px;
+}
+.cafe-rating-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: grid;
+  gap: 10px;
+}
+.cafe-rating-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .cafe-tip-block {
   display: grid;

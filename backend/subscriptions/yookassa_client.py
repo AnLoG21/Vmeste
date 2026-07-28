@@ -20,8 +20,18 @@ def _auth_header() -> str:
     ).decode()
 
 
-def create_payment(*, amount: str, description: str, return_url: str, metadata: dict) -> dict | None:
-    if not _configured():
+def create_payment(
+    *,
+    amount: str,
+    description: str,
+    return_url: str,
+    metadata: dict,
+    shop_id: str | None = None,
+    secret_key: str | None = None,
+) -> dict | None:
+    sid = shop_id or settings.YOOKASSA_SHOP_ID
+    secret = secret_key or settings.YOOKASSA_SECRET_KEY
+    if not sid or not secret:
         return None
     payload = {
         "amount": {"value": f"{float(amount):.2f}", "currency": "RUB"},
@@ -30,11 +40,12 @@ def create_payment(*, amount: str, description: str, return_url: str, metadata: 
         "description": description[:128],
         "metadata": metadata,
     }
+    auth = base64.b64encode(f"{sid}:{secret}".encode()).decode()
     req = urllib.request.Request(
         "https://api.yookassa.ru/v3/payments",
         data=json.dumps(payload).encode("utf-8"),
         headers={
-            "Authorization": f"Basic {_auth_header()}",
+            "Authorization": f"Basic {auth}",
             "Content-Type": "application/json",
             "Idempotence-Key": str(uuid.uuid4()),
         },

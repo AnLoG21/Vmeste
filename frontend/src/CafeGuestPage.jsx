@@ -11,6 +11,8 @@ const MODE_META = {
   delivery: { label: "Доставка", icon: "🛵" },
 };
 
+const SERVICE_CHARGE_PERCENT = 3;
+
 function pickDefaultMode(modes = {}) {
   if (modes.dine_in) return "dine_in";
   if (modes.takeaway) return "takeaway";
@@ -18,11 +20,42 @@ function pickDefaultMode(modes = {}) {
   return "";
 }
 
+function cartLineKey(menuItemId, removed = []) {
+  return `${menuItemId}:${[...removed].sort().join("|")}`;
+}
+
 function CartIcon() {
   return (
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="currentColor">
       <path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-1.99.9-1.99 2S15.9 22 17 22s2-.9 2-2-.9-2-2-2zM7.17 14h9.95c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0 0 21.58 5H6.21l-.94-2H2v2h2l3.6 7.59-1.35 2.44A2 2 0 0 0 8 18h12v-2H8l1.1-2z" />
     </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor">
+      <path d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 0 0 5.7 7.11L10.59 12l-4.89 4.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4z" />
+    </svg>
+  );
+}
+
+function Stars({ value, onChange, readOnly = false }) {
+  return (
+    <span className="cafe-stars" aria-label={value ? `Оценка ${value}` : "Без оценки"}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          className={`cafe-star${n <= value ? " is-on" : ""}`}
+          disabled={readOnly}
+          onClick={() => onChange?.(n)}
+          aria-label={`${n} звёзд`}
+        >
+          ★
+        </button>
+      ))}
+    </span>
   );
 }
 
@@ -34,7 +67,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
   const [unlock, setUnlock] = useState(null);
   const [modeOrder, setModeOrder] = useState("");
   const [menu, setMenu] = useState([]);
-  const [cart, setCart] = useState({});
+  const [cart, setCart] = useState([]);
   const [status, setStatus] = useState("");
   const [booting, setBooting] = useState(true);
   const [cartOpen, setCartOpen] = useState(false);
@@ -43,8 +76,21 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
-  const [tipPercent, setTipPercent] = useState(0);
+  const [tipPercent, setTipPercent] = useState(20);
+  const [tipCustomMode, setTipCustomMode] = useState(false);
+  const [tipCustomAmount, setTipCustomAmount] = useState("");
+  const [includeServiceCharge, setIncludeServiceCharge] = useState(true);
   const [orderResult, setOrderResult] = useState(null);
+  const [completedOrder, setCompletedOrder] = useState(null);
+  const [ratingBusy, setRatingBusy] = useState(null);
+
+  const menuById = useMemo(() => {
+    const map = {};
+    for (const cat of menu) {
+      for (const item of cat.items || []) map[item.id] = item;
+    }
+    return map;
+  }, [menu]);
 
   const applySession = useCallback(
     (data) => {
@@ -130,26 +176,90 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
       .catch((e) => setStatus(e.message));
   }, [session, storageKey, unlock?.modes, info?.modes, modeOrder]);
 
-  const cartLines = useMemo(() => {
-    const lines = [];
-    for (const cat of menu) {
-      for (const item of cat.items || []) {
-        const q = cart[item.id] || 0;
-        if (q > 0) lines.push({ ...item, quantity: q });
+  useEffect(() => {
+    if (!session) return;
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get("order");
+    if (!orderId) return;
+    let cancelled = false;
+    let attempts = 0;
+
+    async function loadOrder() {
+      const res = await fetch(`${API_URL}/cafe/guest/order/${orderId}/`, {
+        headers: { "X-Cafe-Session": session },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || cancelled) return;
+      setCompletedOrder(data);
+      if (data.status === "awaiting_payment" && attempts < 12) {
+        attempts += 1;
+        window.setTimeout(loadOrder, 2500);
       }
     }
-    return lines;
-  }, [cart, menu]);
+
+    loadOrder();
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
+  const cartLines = useMemo(
+    () =>
+      cart
+        .map((line) => {
+          const item = menuById[line.menuItemId];
+          if (!item) return null;
+          return { ...item, ...line, key: line.key };
+        })
+        .filter(Boolean),
+    [cart, menuById],
+  );
 
   const itemsCount = cartLines.reduce((s, i) => s + i.quantity, 0);
   const cartTotal = cartLines.reduce((s, i) => s + Number(i.price) * i.quantity, 0);
-  const tipAmount = Math.round(cartTotal * (tipPercent / 100));
-  const grandTotal = cartTotal + tipAmount + (modeOrder === "delivery" ? Number(unlock?.delivery_fee || 0) : 0);
+  const tipAmount = tipCustomMode
+    ? Math.max(0, Number(tipCustomAmount) || 0)
+    : Math.round(cartTotal * (tipPercent / 100));
+  const serviceChargeAmount = includeServiceCharge ? Math.round(cartTotal * (SERVICE_CHARGE_PERCENT / 100)) : 0;
+  const deliveryAmount = modeOrder === "delivery" ? Number(unlock?.delivery_fee || 0) : 0;
+  const grandTotal = cartTotal + tipAmount + deliveryAmount + serviceChargeAmount;
 
-  function addToCart(id, delta) {
+  function addToCart(menuItemId, delta = 1) {
     setCart((prev) => {
-      const next = { ...prev, [id]: Math.max(0, (prev[id] || 0) + delta) };
-      if (next[id] === 0) delete next[id];
+      const key = cartLineKey(menuItemId, []);
+      const idx = prev.findIndex((l) => l.key === key);
+      if (idx >= 0) {
+        const next = [...prev];
+        const qty = Math.max(0, next[idx].quantity + delta);
+        if (qty === 0) {
+          next.splice(idx, 1);
+          return next;
+        }
+        next[idx] = { ...next[idx], quantity: qty };
+        return next;
+      }
+      if (delta <= 0) return prev;
+      return [...prev, { key, menuItemId, quantity: delta, removed: [] }];
+    });
+  }
+
+  function toggleRemoved(lineKey, ingredientName) {
+    setCart((prev) => {
+      const idx = prev.findIndex((l) => l.key === lineKey);
+      if (idx < 0) return prev;
+      const line = prev[idx];
+      const removed = line.removed.includes(ingredientName)
+        ? line.removed.filter((x) => x !== ingredientName)
+        : [...line.removed, ingredientName];
+      const newKey = cartLineKey(line.menuItemId, removed);
+      const dup = prev.findIndex((l, i) => i !== idx && l.key === newKey);
+      const next = [...prev];
+      if (dup >= 0) {
+        next[dup] = { ...next[dup], quantity: next[dup].quantity + line.quantity };
+        next.splice(idx, 1);
+        return next;
+      }
+      next[idx] = { ...line, key: newKey, removed };
       return next;
     });
   }
@@ -191,9 +301,16 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
         guest_name: guestName,
         guest_phone: guestPhone,
         guest_email: guestEmail,
-        tip_percent: tipPercent,
+        tip_percent: tipCustomMode ? 0 : tipPercent,
+        tip_amount: tipAmount,
+        tip_custom: tipCustomMode,
+        include_service_charge: includeServiceCharge,
         delivery_address: deliveryAddress,
-        items: cartLines.map((i) => ({ menu_item: i.id, quantity: i.quantity })),
+        items: cartLines.map((i) => ({
+          menu_item: i.menuItemId,
+          quantity: i.quantity,
+          removed_ingredients: i.removed || [],
+        })),
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -207,13 +324,45 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
       window.location.href = data.confirmation_url;
       return;
     }
-    setCart({});
+    setCart([]);
     setCartOpen(false);
+    setCompletedOrder(data);
+  }
+
+  async function rateDish(menuItemId, rating) {
+    if (!completedOrder?.id) return;
+    setRatingBusy(menuItemId);
+    const res = await fetch(`${API_URL}/cafe/menu/items/${menuItemId}/rate/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Cafe-Session": session },
+      body: JSON.stringify({ rating, order_id: completedOrder.id }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setRatingBusy(null);
+    if (!res.ok) {
+      setStatus(data.detail || data.order_id?.[0] || "Не удалось сохранить оценку");
+      return;
+    }
+    setCompletedOrder((prev) => ({
+      ...prev,
+      item_ratings: [...(prev.item_ratings || []), { menu_item: menuItemId, rating }],
+    }));
+    setMenu((prev) =>
+      prev.map((cat) => ({
+        ...cat,
+        items: (cat.items || []).map((item) =>
+          item.id === menuItemId
+            ? { ...item, rating_avg: data.rating_avg, rating_count: data.rating_count }
+            : item,
+        ),
+      })),
+    );
   }
 
   const modes = unlock?.modes || info?.modes || {};
   const ready = Boolean(session) && !booting;
   const needsPin = mode === "table" && !session;
+  const ratedIds = new Set((completedOrder?.item_ratings || []).map((r) => r.menu_item));
 
   return (
     <div className="cafe-guest">
@@ -279,6 +428,30 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
             )}
           </section>
 
+          {completedOrder?.can_rate ? (
+            <section className="cafe-guest-card cafe-rating-panel">
+              <h2>Оцените блюда из заказа #{completedOrder.id}</h2>
+              <p className="muted small">Оценку можно поставить только после оформления заказа.</p>
+              <ul className="cafe-rating-list">
+                {(completedOrder.items || []).map((line) => {
+                  const rated = ratedIds.has(line.menu_item);
+                  const existing = (completedOrder.item_ratings || []).find((r) => r.menu_item === line.menu_item);
+                  return (
+                    <li key={line.id} className="cafe-rating-row">
+                      <span>{line.name}</span>
+                      <Stars
+                        value={existing?.rating || 0}
+                        readOnly={rated}
+                        onChange={(n) => rateDish(line.menu_item, n)}
+                      />
+                      {ratingBusy === line.menu_item ? <span className="muted small">…</span> : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : null}
+
           <section className="cafe-guest-menu">
             {menu.map((cat) => (
               <div key={cat.id} className="cafe-menu-cat">
@@ -289,13 +462,17 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                       {item.is_new || cat.is_novelties ? <span className="cafe-new-badge">Новинка</span> : null}
                       {item.photos?.[0]?.url ? <img src={item.photos[0].url} alt="" loading="lazy" /> : <div className="cafe-menu-ph" />}
                       <h3>{item.name}</h3>
-                      {item.rating_avg != null ? <p className="muted small">★ {item.rating_avg} ({item.rating_count})</p> : null}
+                      {item.rating_avg != null ? (
+                        <p className="muted small cafe-rating-readonly">★ {item.rating_avg} ({item.rating_count})</p>
+                      ) : (
+                        <p className="muted small cafe-rating-readonly">Пока без оценок</p>
+                      )}
                       {item.composition ? <p className="muted small">{item.composition}</p> : null}
                       <div className="cafe-menu-row">
                         <strong>{Number(item.price).toLocaleString("ru-RU")} ₽</strong>
                         <div className="cafe-qty">
                           <button type="button" onClick={() => addToCart(item.id, -1)}>−</button>
-                          <span>{cart[item.id] || 0}</span>
+                          <span>{cart.filter((l) => l.menuItemId === item.id).reduce((s, l) => s + l.quantity, 0)}</span>
                           <button type="button" onClick={() => addToCart(item.id, 1)}>+</button>
                         </div>
                       </div>
@@ -314,19 +491,41 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
           <div className="cafe-cart-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="cafe-cart-sheet-head">
               <h2>Корзина</h2>
-              <button type="button" className="ghost-btn" onClick={() => setCartOpen(false)}>Закрыть</button>
+              <button type="button" className="cafe-cart-close" onClick={() => setCartOpen(false)} aria-label="Закрыть">
+                <CloseIcon />
+              </button>
             </div>
             {!cartLines.length ? <p className="muted">Корзина пока пустая.</p> : null}
             {cartLines.length > 0 ? (
               <form className="cafe-guest-card cafe-checkout" onSubmit={submitOrder}>
                 <ul className="cafe-cart-lines">
                   {cartLines.map((i) => (
-                    <li key={i.id} className="cafe-cart-line">
-                      <div>
+                    <li key={i.key} className="cafe-cart-line">
+                      {i.photos?.[0]?.url ? (
+                        <img className="cafe-cart-line-photo" src={i.photos[0].url} alt="" />
+                      ) : (
+                        <div className="cafe-cart-line-photo cafe-menu-ph" />
+                      )}
+                      <div className="cafe-cart-line-body">
                         <strong>{i.name}</strong>
                         <p>{i.quantity} × {Number(i.price).toLocaleString("ru-RU")} ₽</p>
+                        {(i.removable_ingredients || []).length > 0 ? (
+                          <div className="cafe-ingredient-chips">
+                            {(i.removable_ingredients || []).map((ing) => (
+                              <button
+                                key={ing.id || ing.name}
+                                type="button"
+                                className={`cafe-ingredient-chip${(i.removed || []).includes(ing.name) ? " is-removed" : ""}`}
+                                onClick={() => toggleRemoved(i.key, ing.name)}
+                              >
+                                {(i.removed || []).includes(ing.name) ? "− " : ""}
+                                {ing.name}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
-                      <strong>{(Number(i.price) * i.quantity).toLocaleString("ru-RU")} ₽</strong>
+                      <strong className="cafe-cart-line-price">{(Number(i.price) * i.quantity).toLocaleString("ru-RU")} ₽</strong>
                     </li>
                   ))}
                 </ul>
@@ -336,7 +535,12 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                     <input placeholder="Телефон *" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} required />
                   </>
                 )}
-                <input placeholder="Email для чека *" type="email" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} required />
+                <input
+                  placeholder="Email для чека (необязательно)"
+                  type="email"
+                  value={guestEmail}
+                  onChange={(e) => setGuestEmail(e.target.value)}
+                />
                 {modeOrder === "delivery" ? (
                   <textarea
                     placeholder="Адрес доставки *"
@@ -355,17 +559,55 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                   </select>
                 </label>
                 <label className="cafe-tip-block">
-                  <span>Чаевые: {tipPercent}% ({tipAmount.toLocaleString("ru-RU")} ₽)</span>
-                  <input type="range" min="0" max="20" step="1" value={tipPercent} onChange={(e) => setTipPercent(Number(e.target.value) || 0)} />
+                  <span className="cafe-tip-head">
+                    Чаевые: {tipCustomMode ? `${tipAmount.toLocaleString("ru-RU")} ₽` : `${tipPercent}% (${tipAmount.toLocaleString("ru-RU")} ₽)`}
+                  </span>
+                  <label className="checkbox cafe-tip-toggle">
+                    <input type="checkbox" checked={tipCustomMode} onChange={(e) => setTipCustomMode(e.target.checked)} />
+                    <span>Своя сумма</span>
+                  </label>
+                  {tipCustomMode ? (
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Сумма чаевых, ₽"
+                      value={tipCustomAmount}
+                      onChange={(e) => setTipCustomAmount(e.target.value)}
+                    />
+                  ) : (
+                    <input
+                      type="range"
+                      min="0"
+                      max="50"
+                      step="1"
+                      value={tipPercent}
+                      onChange={(e) => setTipPercent(Number(e.target.value) || 0)}
+                    />
+                  )}
                 </label>
                 <div className="cafe-total-block">
                   <p>Блюда: <strong>{cartTotal.toLocaleString("ru-RU")} ₽</strong></p>
-                  {modeOrder === "delivery" && Number(unlock?.delivery_fee || 0) > 0 ? <p>Доставка: <strong>{Number(unlock?.delivery_fee).toLocaleString("ru-RU")} ₽</strong></p> : null}
+                  {deliveryAmount > 0 ? <p>Доставка: <strong>{deliveryAmount.toLocaleString("ru-RU")} ₽</strong></p> : null}
                   {tipAmount > 0 ? <p>Чаевые: <strong>{tipAmount.toLocaleString("ru-RU")} ₽</strong></p> : null}
+                  {serviceChargeAmount > 0 ? (
+                    <p>Сервисный сбор ({SERVICE_CHARGE_PERCENT}%): <strong>{serviceChargeAmount.toLocaleString("ru-RU")} ₽</strong></p>
+                  ) : null}
                   <p className="cafe-grand-total">Итого: <strong>{grandTotal.toLocaleString("ru-RU")} ₽</strong></p>
                 </div>
-                <button type="submit" className="landing-btn landing-btn--primary">Оформить и получить чек</button>
-                {orderResult && !orderResult.confirmation_url ? <p className="landing-form-status">Заказ #{orderResult.id} принят, чек отправлен на {guestEmail}</p> : null}
+                <label className="checkbox cafe-service-charge">
+                  <input
+                    type="checkbox"
+                    checked={includeServiceCharge}
+                    onChange={(e) => setIncludeServiceCharge(e.target.checked)}
+                  />
+                  <span>Сервисный сбор {SERVICE_CHARGE_PERCENT}% (поддержка платформы)</span>
+                </label>
+                <button type="submit" className="landing-btn landing-btn--primary">Оформить заказ</button>
+                {orderResult && !orderResult.confirmation_url ? (
+                  <p className="landing-form-status">
+                    Заказ #{orderResult.id} принят{guestEmail ? `, чек отправим на ${guestEmail} после оплаты` : ""}
+                  </p>
+                ) : null}
               </form>
             ) : null}
           </div>
