@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from subscriptions.yookassa_client import create_payment
+from users.email_service import send_cafe_order_receipt_email
 
 from .models import (
     CafeFloorPlan,
@@ -338,7 +339,7 @@ class CafeTablePublicView(APIView):
                 "table_label": table.label,
                 "organization_name": provider.organization_name or provider.username,
                 "provider_slug": provider.organization_slug or "",
-                "need_pin": False,
+                "need_pin": True,
                 "modes": {
                     "dine_in": settings_obj.enable_dine_in,
                     "takeaway": settings_obj.enable_takeaway,
@@ -361,7 +362,7 @@ class CafeTableUnlockView(APIView):
         if not table:
             return Response({"detail": "Стол не найден."}, status=status.HTTP_404_NOT_FOUND)
         pin = (request.data.get("pin") or "").strip()
-        if pin and pin != table.pin_code:
+        if pin != table.pin_code:
             return Response({"pin": ["Неверный пароль."]}, status=status.HTTP_400_BAD_REQUEST)
         sess = CafeGuestSession.create_for_table(table)
         provider = table.floor_plan.provider
@@ -528,12 +529,19 @@ class CafeGuestOrderCreateView(APIView):
             return Response({"items": ["Добавьте блюда."]}, status=status.HTTP_400_BAD_REQUEST)
 
         guest_phone = (request.data.get("guest_phone") or "").strip()
+        guest_email = (request.data.get("guest_email") or "").strip().lower()
         guest_name = (request.data.get("guest_name") or "").strip()
         delivery_address = (request.data.get("delivery_address") or "").strip()
+        try:
+            tip_percent = max(0, min(30, int(request.data.get("tip_percent") or 0)))
+        except (TypeError, ValueError):
+            tip_percent = 0
         if mode == CafeOrder.Mode.DELIVERY and not delivery_address:
             return Response({"delivery_address": ["Укажите адрес доставки."]}, status=status.HTTP_400_BAD_REQUEST)
         if mode in (CafeOrder.Mode.TAKEAWAY, CafeOrder.Mode.DELIVERY) and not guest_phone:
             return Response({"guest_phone": ["Укажите телефон."]}, status=status.HTTP_400_BAD_REQUEST)
+        if not guest_email:
+            return Response({"guest_email": ["Укажите email для чека."]}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
             order = CafeOrder.objects.create(
@@ -543,6 +551,7 @@ class CafeGuestOrderCreateView(APIView):
                 pay_method=pay_method,
                 guest_name=guest_name,
                 guest_phone=guest_phone,
+                guest_email=guest_email,
                 delivery_address=delivery_address,
                 comment=(request.data.get("comment") or "").strip()[:1000],
                 guest_session_token=sess.token,
@@ -585,8 +594,10 @@ class CafeGuestOrderCreateView(APIView):
                 delivery_fee = settings_obj.delivery_fee or Decimal("0")
 
             order.items_total = items_total
+            order.tip_percent = tip_percent
+            order.tip_amount = ((items_total * Decimal(tip_percent)) / Decimal("100")).quantize(Decimal("0.01"))
             order.delivery_fee = delivery_fee
-            order.total = items_total + delivery_fee
+            order.total = items_total + delivery_fee + order.tip_amount
 
             if pay_method == CafeOrder.PayMethod.ONLINE:
                 order.status = CafeOrder.Status.AWAITING_PAYMENT
@@ -614,6 +625,22 @@ class CafeGuestOrderCreateView(APIView):
             else:
                 order.status = CafeOrder.Status.ACCEPTED
                 order.save()
+
+            lines = [f"{row.name} × {row.quantity} — {row.line_total} ₽" for row in order.items.all()]
+            if order.delivery_fee > 0:
+                lines.append(f"Доставка — {order.delivery_fee} ₽")
+            if order.tip_amount > 0:
+                lines.append(f"Чаевые ({order.tip_percent}%) — {order.tip_amount} ₽")
+            try:
+                send_cafe_order_receipt_email(
+                    email=order.guest_email,
+                    organization_name=provider.organization_name or provider.username,
+                    order_id=order.id,
+                    lines=lines,
+                    total=f"{order.total} ₽",
+                )
+            except Exception:
+                pass
 
         return Response(CafeOrderSerializer(order).data, status=status.HTTP_201_CREATED)
 

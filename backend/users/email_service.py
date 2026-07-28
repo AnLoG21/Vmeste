@@ -221,3 +221,28 @@ def send_subscription_reminder_email(user, *, days_left: int, period_end, plan_n
     )
     text = "\n".join([greeting, "", *paragraphs, "", button_url])
     return _send_branded(to=user.email, subject=f"Вместе: {title}", text_body=text, html_body=html)
+
+
+def send_cafe_order_receipt_email(*, email: str, organization_name: str, order_id: int, lines: list[str], total: str) -> bool:
+    email = (email or "").strip().lower()
+    if not email:
+        return False
+    title = f"Чек по заказу #{order_id}"
+    greeting = f"Спасибо за заказ в «{organization_name or SITE_BRAND}»!"
+    paragraphs = [
+        "Сохранили для вас состав заказа и итоговую сумму.",
+        *lines,
+        f"Итого: {total}",
+    ]
+    text = "\n".join([greeting, "", *paragraphs, "", f"— Команда {SITE_BRAND}"])
+    html = _wrap_html(
+        title=title,
+        greeting=greeting,
+        paragraphs=paragraphs,
+    )
+    return _send_branded(
+        to=email,
+        subject=f"{organization_name or SITE_BRAND}: {title}",
+        text_body=text,
+        html_body=html,
+    )

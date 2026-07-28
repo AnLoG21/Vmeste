@@ -564,28 +564,6 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
                   onChange={(e) => patchTable(selectedTable.id, { rotation: Number(e.target.value) || 0 })}
                 />
               </label>
-              <label>
-                PIN (6 цифр)
-                <input
-                  value={selectedTable.pin_code}
-                  maxLength={6}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/\D/g, "").slice(0, 6);
-                    setFloors((prev) =>
-                      prev.map((f) => ({
-                        ...f,
-                        tables: (f.tables || []).map((t) =>
-                          t.id === selectedTable.id ? { ...t, pin_code: v } : t,
-                        ),
-                      })),
-                    );
-                  }}
-                  onBlur={(e) => {
-                    const v = e.target.value.replace(/\D/g, "").slice(0, 6);
-                    if (v.length === 6) patchTable(selectedTable.id, { pin_code: v });
-                  }}
-                />
-              </label>
               <div className="cafe-form-span2 cafe-toolbar">
                 <button type="button" onClick={() => patchTable(selectedTable.id, { rotation: ((selectedTable.rotation || 0) + 45) % 360 })}>
                   +45°
@@ -604,7 +582,7 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
                       {tableUrl}
                     </a>
                     <img src={qrImageUrl(tableUrl, 220)} alt={`QR ${selectedTable.label}`} width={220} height={220} />
-                    <p className="muted small">PIN (если нужен вручную): {selectedTable.pin_code}</p>
+                    <p className="muted small">PIN для входа в заказ: {selectedTable.pin_code}</p>
                     <a className="ghost-btn" href={tableUrl} target="_blank" rel="noreferrer">
                       Превью меню гостя
                     </a>
