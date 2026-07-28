@@ -70,9 +70,14 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
   const floor = floors.find((x) => x.id === selectedFloorId) || floors[0] || null;
   const selectedTable = (floor?.tables || []).find((t) => t.id === selectedTableId) || null;
   const selectedZone = (floor?.drawings || []).find((d) => d.id === selectedZoneId && d.type === "zone") || null;
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://vsevmeste.space";
-  const guestMenuUrl = meSlug ? `${origin}/m/${meSlug}` : "";
-  const tableUrl = selectedTable?.public_token ? `${origin}/t/${selectedTable.public_token}` : "";
+  const origin =
+    typeof window !== "undefined" && window.location?.origin && !window.location.origin.startsWith("capacitor")
+      ? window.location.origin
+      : "https://vsevmeste.space";
+  // Prefer production site for QR so phone scan always hits SPA routes /m and /t
+  const publicOrigin = origin.includes("localhost") || origin.includes("127.0.0.1") ? "https://vsevmeste.space" : origin;
+  const guestMenuUrl = meSlug ? `${publicOrigin}/m/${meSlug}` : "";
+  const tableUrl = selectedTable?.public_token ? `${publicOrigin}/t/${selectedTable.public_token}` : "";
 
   async function saveSettings(patch) {
     const res = await authFetch(`${API_URL}/cafe/settings/`, {

@@ -71,6 +71,31 @@ class Service(models.Model):
         ]
 
 
+class ServiceOption(models.Model):
+    """Дополнительная опция к услуге: цена и добавочное время."""
+
+    service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name="options")
+    name = models.CharField(max_length=150)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    extra_minutes = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    template_slug = models.CharField(max_length=80, blank=True, default="", db_index=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["service", "template_slug"],
+                condition=models.Q(template_slug__gt=""),
+                name="uniq_service_option_template_slug",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.name} (+{self.extra_minutes} мин)"
+
+
 class ServicePhoto(models.Model):
     service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name="photos")
     image = models.ImageField(upload_to="service_photos/%Y/%m/")

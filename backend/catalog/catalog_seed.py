@@ -6,12 +6,59 @@ from typing import Any
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
-from .models import Service, ServiceCategory, ServiceSubcategory
+from .models import Service, ServiceCategory, ServiceOption, ServiceSubcategory
 from .sphere_templates import get_sphere_catalog
 
 User = get_user_model()
 
 DEFAULT_PRICE = Decimal("0")
+
+
+def _seed_service_options(svc, svc_data, stats):
+    options = svc_data.get("options") or []
+    for i, opt_data in enumerate(options):
+        slug = (opt_data.get("slug") or "").strip()
+        name = (opt_data.get("name") or "").strip()
+        if not name:
+            continue
+        extra = int(opt_data.get("extra_minutes") or 0)
+        price = Decimal(str(opt_data.get("price", DEFAULT_PRICE)))
+        defaults = {
+            "name": name,
+            "price": price,
+            "extra_minutes": extra,
+            "is_active": True,
+            "sort_order": i,
+        }
+        if slug:
+            opt, created = ServiceOption.objects.get_or_create(
+                service=svc,
+                template_slug=slug,
+                defaults=defaults,
+            )
+        else:
+            opt, created = ServiceOption.objects.get_or_create(
+                service=svc,
+                name=name,
+                defaults={**defaults, "template_slug": ""},
+            )
+        if created:
+            stats["options_created"] = stats.get("options_created", 0) + 1
+        else:
+            changed = []
+            if opt.name != name:
+                opt.name = name
+                changed.append("name")
+            if opt.extra_minutes != extra:
+                opt.extra_minutes = extra
+                changed.append("extra_minutes")
+            # цену не перезаписываем — организация могла поменять
+            if opt.sort_order != i:
+                opt.sort_order = i
+                changed.append("sort_order")
+            if changed:
+                opt.save(update_fields=changed)
+        stats["options"] = stats.get("options", 0) + 1
 
 
 def seed_provider_catalog(provider, sphere: str, *, reset_inactive_only: bool = False) -> dict[str, int]:
@@ -23,7 +70,7 @@ def seed_provider_catalog(provider, sphere: str, *, reset_inactive_only: bool = 
     if not catalog:
         raise ValueError(f"Нет шаблона каталога для сферы: {sphere}")
 
-    stats = {"categories": 0, "subcategories": 0, "services": 0, "services_created": 0}
+    stats = {"categories": 0, "subcategories": 0, "services": 0, "services_created": 0, "options": 0, "options_created": 0}
 
     with transaction.atomic():
         for cat_data in catalog["categories"]:
@@ -87,6 +134,7 @@ def seed_provider_catalog(provider, sphere: str, *, reset_inactive_only: bool = 
                         if changed:
                             svc.save(update_fields=changed)
                     stats["services"] += 1
+                    _seed_service_options(svc, svc_data, stats)
 
     return stats
 

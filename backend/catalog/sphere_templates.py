@@ -93,39 +93,153 @@ HAIR_SALON_CATALOG: dict[str, Any] = {
                     "slug": "nails-manicure",
                     "name": "Маникюр",
                     "services": [
-                        {"slug": "nails-manicure-classic", "name": "Классический (обрезной) маникюр", "duration_minutes": 60},
-                        {"slug": "nails-manicure-apparatus", "name": "Аппаратный маникюр", "duration_minutes": 60},
-                        {"slug": "nails-manicure-european", "name": "Европейский маникюр", "duration_minutes": 50},
-                        {"slug": "nails-manicure-combo", "name": "Комбинированный маникюр", "duration_minutes": 70},
-                        {"slug": "nails-manicure-japanese", "name": "Японский маникюр", "duration_minutes": 75},
+                        {
+                            "slug": "nails-manicure-classic",
+                            "name": "Классический (обрезной) маникюр",
+                            "duration_minutes": 60,
+                            "options": [
+                                {"slug": "nm-c-gel", "name": "Покрытие гель-лак", "extra_minutes": 30, "price": 800},
+                                {"slug": "nm-c-care", "name": "Уход / масло / парафин", "extra_minutes": 15, "price": 300},
+                                {"slug": "nm-c-design-1", "name": "Дизайн 1–2 ногтя", "extra_minutes": 15, "price": 200},
+                            ],
+                        },
+                        {
+                            "slug": "nails-manicure-apparatus",
+                            "name": "Аппаратный маникюр",
+                            "duration_minutes": 60,
+                            "options": [
+                                {"slug": "nm-a-gel", "name": "Покрытие гель-лак", "extra_minutes": 30, "price": 800},
+                                {"slug": "nm-a-strengthen", "name": "Укрепление (база/акрил)", "extra_minutes": 20, "price": 500},
+                                {"slug": "nm-a-design", "name": "Дизайн (все ногти)", "extra_minutes": 25, "price": 600},
+                                {"slug": "nm-a-remove", "name": "Снятие старого покрытия", "extra_minutes": 15, "price": 300},
+                            ],
+                        },
+                        {
+                            "slug": "nails-manicure-european",
+                            "name": "Европейский маникюр",
+                            "duration_minutes": 50,
+                            "options": [
+                                {"slug": "nm-e-gel", "name": "Покрытие гель-лак", "extra_minutes": 30, "price": 800},
+                                {"slug": "nm-e-polish", "name": "Обычный лак", "extra_minutes": 10, "price": 200},
+                            ],
+                        },
+                        {
+                            "slug": "nails-manicure-combo",
+                            "name": "Комбинированный маникюр",
+                            "duration_minutes": 70,
+                            "options": [
+                                {"slug": "nm-k-gel", "name": "Покрытие гель-лак", "extra_minutes": 30, "price": 800},
+                                {"slug": "nm-k-french", "name": "Френч", "extra_minutes": 20, "price": 400},
+                                {"slug": "nm-k-design", "name": "Дизайн / стемпинг", "extra_minutes": 20, "price": 500},
+                                {"slug": "nm-k-repair", "name": "Ремонт 1 ногтя", "extra_minutes": 10, "price": 150},
+                            ],
+                        },
+                        {
+                            "slug": "nails-manicure-japanese",
+                            "name": "Японский маникюр",
+                            "duration_minutes": 75,
+                            "options": [
+                                {"slug": "nm-j-polish", "name": "Полировка пастой", "extra_minutes": 10, "price": 200},
+                                {"slug": "nm-j-care", "name": "SPA-уход для рук", "extra_minutes": 20, "price": 400},
+                            ],
+                        },
+                        {
+                            "slug": "nails-manicure-express",
+                            "name": "Экспресс-маникюр",
+                            "duration_minutes": 40,
+                            "options": [
+                                {"slug": "nm-x-gel", "name": "Покрытие гель-лак", "extra_minutes": 25, "price": 700},
+                            ],
+                        },
+                        {
+                            "slug": "nails-manicure-male",
+                            "name": "Мужской маникюр",
+                            "duration_minutes": 45,
+                            "options": [
+                                {"slug": "nm-m-care", "name": "Уход / крем", "extra_minutes": 10, "price": 200},
+                            ],
+                        },
+                        {
+                            "slug": "nails-manicure-child",
+                            "name": "Детский маникюр",
+                            "duration_minutes": 35,
+                            "options": [
+                                {"slug": "nm-ch-polish", "name": "Детский лак", "extra_minutes": 10, "price": 150},
+                                {"slug": "nm-ch-sticker", "name": "Наклейки", "extra_minutes": 5, "price": 100},
+                            ],
+                        },
                     ],
                 },
                 {
                     "slug": "nails-coating",
                     "name": "Покрытие",
                     "services": [
-                        {"slug": "nails-coat-gel", "name": "Гель-лак (шеллак)", "duration_minutes": 90},
+                        {
+                            "slug": "nails-coat-gel",
+                            "name": "Гель-лак (шеллак)",
+                            "duration_minutes": 90,
+                            "options": [
+                                {"slug": "nc-g-remove", "name": "Снятие своего покрытия", "extra_minutes": 15, "price": 300},
+                                {"slug": "nc-g-design", "name": "Дизайн", "extra_minutes": 20, "price": 500},
+                                {"slug": "nc-g-french", "name": "Френч", "extra_minutes": 15, "price": 350},
+                            ],
+                        },
                         {"slug": "nails-coat-healing", "name": "Лечебное покрытие", "duration_minutes": 60},
-                        {"slug": "nails-coat-design", "name": "Дизайн ногтей", "duration_minutes": 30},
+                        {
+                            "slug": "nails-coat-design",
+                            "name": "Дизайн ногтей",
+                            "duration_minutes": 30,
+                            "options": [
+                                {"slug": "nc-d-art", "name": "Роспись / арт", "extra_minutes": 20, "price": 400},
+                                {"slug": "nc-d-stones", "name": "Стразы / камни", "extra_minutes": 10, "price": 250},
+                            ],
+                        },
                         {"slug": "nails-coat-french", "name": "Французский маникюр", "duration_minutes": 90},
+                        {"slug": "nails-coat-remove", "name": "Снятие покрытия", "duration_minutes": 20},
                     ],
                 },
                 {
                     "slug": "nails-modeling",
                     "name": "Моделирование",
                     "services": [
-                        {"slug": "nails-model-extension", "name": "Наращивание ногтей (гель/акрил)", "duration_minutes": 120},
+                        {
+                            "slug": "nails-model-extension",
+                            "name": "Наращивание ногтей (гель/акрил)",
+                            "duration_minutes": 120,
+                            "options": [
+                                {"slug": "nmd-e-design", "name": "Дизайн", "extra_minutes": 25, "price": 600},
+                                {"slug": "nmd-e-form", "name": "Сложная форма", "extra_minutes": 20, "price": 400},
+                            ],
+                        },
                         {"slug": "nails-model-strengthen", "name": "Укрепление ногтей", "duration_minutes": 60},
                         {"slug": "nails-model-repair", "name": "Ремонт ногтей", "duration_minutes": 30},
+                        {"slug": "nails-model-correction", "name": "Коррекция наращивания", "duration_minutes": 90},
                     ],
                 },
                 {
                     "slug": "nails-pedicure",
                     "name": "Педикюр",
                     "services": [
-                        {"slug": "nails-pedicure-apparatus", "name": "Аппаратный педикюр", "duration_minutes": 75},
-                        {"slug": "nails-pedicure-combo", "name": "Комбинированный педикюр", "duration_minutes": 80},
+                        {
+                            "slug": "nails-pedicure-apparatus",
+                            "name": "Аппаратный педикюр",
+                            "duration_minutes": 75,
+                            "options": [
+                                {"slug": "np-a-gel", "name": "Покрытие гель-лак", "extra_minutes": 30, "price": 900},
+                                {"slug": "np-a-callus", "name": "Обработка мозолей", "extra_minutes": 15, "price": 400},
+                            ],
+                        },
+                        {
+                            "slug": "nails-pedicure-combo",
+                            "name": "Комбинированный педикюр",
+                            "duration_minutes": 80,
+                            "options": [
+                                {"slug": "np-c-gel", "name": "Покрытие гель-лак", "extra_minutes": 30, "price": 900},
+                                {"slug": "np-c-spa", "name": "SPA-уход для стоп", "extra_minutes": 20, "price": 500},
+                            ],
+                        },
                         {"slug": "nails-pedicure-spa", "name": "SPA-педикюр", "duration_minutes": 90},
+                        {"slug": "nails-pedicure-express", "name": "Экспресс-педикюр", "duration_minutes": 50},
                     ],
                 },
             ],

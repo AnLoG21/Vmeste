@@ -72,6 +72,11 @@ class Booking(models.Model):
     )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.NEW)
     comment = models.CharField(max_length=250, blank=True)
+    selected_options = models.JSONField(
+        blank=True,
+        default=list,
+        help_text="Снимок выбранных допов: [{id,name,price,extra_minutes}, …]",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
 

@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from reviews.models import ReviewPhoto
 
-from .models import Service, ServiceCategory, ServicePhoto, ServiceSubcategory
+from .models import Service, ServiceCategory, ServiceOption, ServicePhoto, ServiceSubcategory
 
 
 class ServicePhotoSerializer(serializers.ModelSerializer):
@@ -18,6 +18,13 @@ class ServicePhotoSerializer(serializers.ModelSerializer):
         if request and url and not url.startswith("http"):
             return request.build_absolute_uri(url)
         return url
+
+
+class ServiceOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ServiceOption
+        fields = ["id", "service", "name", "price", "extra_minutes", "is_active", "sort_order", "template_slug"]
+        read_only_fields = ["template_slug"]
 
 
 class ServiceSubcategorySerializer(serializers.ModelSerializer):
@@ -40,6 +47,7 @@ class ServiceSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
     subcategory_name = serializers.CharField(source="subcategory.name", read_only=True)
     photos = ServicePhotoSerializer(many=True, read_only=True)
+    options = ServiceOptionSerializer(many=True, read_only=True)
     review_photos = serializers.SerializerMethodField()
     gallery = serializers.SerializerMethodField()
 
@@ -58,6 +66,7 @@ class ServiceSerializer(serializers.ModelSerializer):
             "is_active",
             "template_slug",
             "photos",
+            "options",
             "review_photos",
             "gallery",
         ]
@@ -67,6 +76,7 @@ class ServiceSerializer(serializers.ModelSerializer):
             "category_name",
             "subcategory_name",
             "photos",
+            "options",
             "review_photos",
             "gallery",
         ]

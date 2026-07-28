@@ -6,6 +6,8 @@ export const VIEW_PATHS = {
   subscriptions: "/subscriptions",
   organization: "/organization",
   cafe: "/cafe",
+  cafe_orders: "/cafe-orders",
+  my_bookings: "/my-bookings",
   staff: "/staff",
   reviews: "/reviews",
   bookings: "/bookings",

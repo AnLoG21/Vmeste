@@ -137,13 +137,14 @@ def _anon_busy_indexes(start, end, booked) -> set:
     return indexes
 
 
-def list_available_windows(provider_id: int, service_id: int, book_date) -> list[dict]:
+def list_available_windows(provider_id: int, service_id: int, book_date, extra_minutes: int = 0) -> list[dict]:
     try:
         service = Service.objects.get(pk=service_id, provider_id=provider_id, is_active=True)
     except Service.DoesNotExist:
         return []
 
-    duration = timedelta(minutes=max(1, int(service.duration_minutes or 30)))
+    total_minutes = max(1, int(service.duration_minutes or 30) + max(0, int(extra_minutes or 0)))
+    duration = timedelta(minutes=total_minutes)
     slots = list(
         AvailabilitySlot.objects.filter(
             provider_id=provider_id,
@@ -231,7 +232,7 @@ def list_available_windows(provider_id: int, service_id: int, book_date) -> list
     return windows
 
 
-def list_available_dates(provider_id: int, service_id: int, date_from, date_to) -> list[str]:
+def list_available_dates(provider_id: int, service_id: int, date_from, date_to, extra_minutes: int = 0) -> list[str]:
     """ISO dates in [date_from, date_to] that have at least one bookable window."""
     if date_from > date_to:
         date_from, date_to = date_to, date_from
@@ -246,14 +247,48 @@ def list_available_dates(provider_id: int, service_id: int, date_from, date_to) 
     )
     out = []
     for day in slot_days:
-        if list_available_windows(provider_id, service_id, day):
+        if list_available_windows(provider_id, service_id, day, extra_minutes=extra_minutes):
             out.append(day.isoformat())
     return out
 
 
-def book_time_window(provider_id: int, service_id: int, starts_at, ends_at, staff_id, client, comment: str):
+def resolve_selected_options(service, option_ids) -> list[dict]:
+    """Validate option IDs and return frozen snapshots."""
+    from decimal import Decimal
+
+    if not option_ids:
+        return []
+    try:
+        ids = [int(x) for x in option_ids]
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Некорректные доп. опции.") from exc
+    opts = list(service.options.filter(pk__in=ids, is_active=True))
+    if len(opts) != len(set(ids)):
+        raise ValueError("Некоторые доп. опции недоступны.")
+    return [
+        {
+            "id": o.id,
+            "name": o.name,
+            "price": str(Decimal(o.price)),
+            "extra_minutes": int(o.extra_minutes or 0),
+        }
+        for o in opts
+    ]
+
+
+def book_time_window(
+    provider_id: int,
+    service_id: int,
+    starts_at,
+    ends_at,
+    staff_id,
+    client,
+    comment: str,
+    selected_options: list | None = None,
+):
     """Забронировать окно внутри свободного интервала без разрезания исходного слота."""
     service = Service.objects.get(pk=service_id, provider_id=provider_id, is_active=True)
+    snapshots = selected_options or []
     booked = _booked_ranges(provider_id, starts_at.date())
     anon_index = None
 
@@ -319,6 +354,7 @@ def book_time_window(provider_id: int, service_id: int, starts_at, ends_at, staf
         slot=booked_slot,
         staff_id=sid,
         comment=(comment or "")[:250],
+        selected_options=snapshots,
     )
     try:
         from .booking_actions import notify_new_booking

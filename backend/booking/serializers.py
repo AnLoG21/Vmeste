@@ -230,6 +230,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "staff",
             "status",
             "comment",
+            "selected_options",
             "created_at",
             "service_name",
             "service_price",
@@ -244,6 +245,7 @@ class BookingSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "client",
+            "selected_options",
             "created_at",
             "service_name",
             "service_price",

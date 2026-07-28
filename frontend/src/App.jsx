@@ -220,8 +220,9 @@ const CHAT_RECEIPTS_KEY = "vmeste_chat_receipts_v1";
 
 /** Закладки верхней панели / пункты меню (id → метаданные). */
 const BOOKMARK_CATALOG = [
-  { id: "client_map", label: "Карта", roles: ["client"] },
+  { id: "client_map", label: "Карта", roles: ["client", "provider"] },
   { id: "bookings", label: "Записи", labelClient: "Мои записи", roles: ["client", "provider", "staff"] },
+  { id: "my_bookings", label: "Мои записи", roles: ["provider"] },
   { id: "reviews", label: "Отзывы", roles: ["provider", "staff"] },
   { id: "intervals", label: "Календарь интервалов", roles: ["provider"], menuIcon: "calendar" },
   { id: "services", label: "Услуги и категории", roles: ["provider"], menuIcon: "services" },
@@ -239,9 +240,9 @@ const BOOKMARK_CATALOG = [
 
 const DEFAULT_SUBNAV_BOOKMARKS = {
   client: ["client_map", "bookings", "chats"],
-  provider: ["bookings", "reviews", "chats"],
+  provider: ["bookings", "client_map", "my_bookings", "chats"],
   staff: ["bookings", "reviews", "chats"],
-  provider_cafe: ["cafe", "cafe_orders", "chats"],
+  provider_cafe: ["cafe", "cafe_orders", "client_map", "my_bookings", "chats"],
 };
 
 function defaultSubnavBookmarks(role, sphere) {
@@ -270,6 +271,8 @@ function loadSubnavBookmarks(role, sphere) {
         const i = Math.max(0, next.indexOf("cafe"));
         next = [...next.slice(0, i + 1), "cafe_orders", ...next.slice(i + 1)];
       }
+      if (!next.includes("client_map")) next = [...next, "client_map"];
+      if (!next.includes("my_bookings")) next = [...next, "my_bookings"];
     }
     return next.length ? next : [...fallback];
   } catch {
@@ -2510,6 +2513,7 @@ export default function App() {
     locationId: "",
     provider: "",
     serviceId: "",
+    optionIds: [],
     bookDate: "",
     windowKey: "",
     comment: "",
@@ -3358,8 +3362,9 @@ export default function App() {
   }, [accessToken, me?.id, me?.role]);
 
   useEffect(() => {
-    if (!accessToken || me?.role !== "client") return;
+    if (!accessToken || (me?.role !== "client" && me?.role !== "provider")) return;
     const p = new URLSearchParams();
+    if (me?.role === "provider") p.set("discover", "1");
     const q = clientDiscoverSearch.trim();
     if (q) p.set("search", q);
     const f = clientDiscoverFilters;
@@ -3424,8 +3429,9 @@ export default function App() {
   }, [accessToken, me?.role, currentView]);
 
   useEffect(() => {
-    if (!accessToken || currentView !== "bookings") return;
+    if (!accessToken || (currentView !== "bookings" && currentView !== "my_bookings")) return;
     if (me?.role === "client") reloadBookingsList();
+    else if (me?.role === "provider" && currentView === "my_bookings") reloadBookingsList();
     else if (me?.role === "provider") loadSellerData();
     else if (me?.role === "staff" && staffHasPerm("manage_bookings")) reloadBookingsList();
   }, [accessToken, currentView, me?.role, me?.id]);
@@ -3451,16 +3457,20 @@ export default function App() {
   }, [currentView, me?.role, clientDiscoverFilters.slot_date]);
 
   useEffect(() => {
-    if (me?.role !== "client") return;
-    const { provider, serviceId, bookDate } = clientBookingForm;
+    if (me?.role !== "client" && me?.role !== "provider") return;
+    const { provider, serviceId, bookDate, optionIds } = clientBookingForm;
     if (!provider || !serviceId || !bookDate) {
       setClientBookWindows([]);
       return;
     }
+    const selected = providerServices.find((s) => String(s.id) === String(serviceId));
+    const extra = (selected?.options || [])
+      .filter((o) => (optionIds || []).map(Number).includes(Number(o.id)))
+      .reduce((sum, o) => sum + (Number(o.extra_minutes) || 0), 0);
     let cancelled = false;
     (async () => {
       const res = await authFetch(
-        `${API_URL}/booking/slots/available-windows/?provider=${encodeURIComponent(provider)}&service=${encodeURIComponent(serviceId)}&date=${encodeURIComponent(bookDate)}`,
+        `${API_URL}/booking/slots/available-windows/?provider=${encodeURIComponent(provider)}&service=${encodeURIComponent(serviceId)}&date=${encodeURIComponent(bookDate)}&extra_minutes=${extra}`,
       );
       if (cancelled) return;
       if (res.ok) {
@@ -3477,15 +3487,19 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [clientBookingForm.provider, clientBookingForm.serviceId, clientBookingForm.bookDate, me?.role]);
+  }, [clientBookingForm.provider, clientBookingForm.serviceId, clientBookingForm.bookDate, clientBookingForm.optionIds, providerServices, me?.role]);
 
   useEffect(() => {
-    if (me?.role !== "client" || !clientBookModalOpen) return undefined;
-    const { provider, serviceId } = clientBookingForm;
+    if ((me?.role !== "client" && me?.role !== "provider") || !clientBookModalOpen) return undefined;
+    const { provider, serviceId, optionIds } = clientBookingForm;
     if (!provider || !serviceId) {
       setBookAvailableDates([]);
       return undefined;
     }
+    const selected = providerServices.find((s) => String(s.id) === String(serviceId));
+    const extra = (selected?.options || [])
+      .filter((o) => (optionIds || []).map(Number).includes(Number(o.id)))
+      .reduce((sum, o) => sum + (Number(o.extra_minutes) || 0), 0);
     let cancelled = false;
     const from = todayIsoDate();
     const toDate = new Date();
@@ -3493,7 +3507,7 @@ export default function App() {
     const to = `${toDate.getFullYear()}-${String(toDate.getMonth() + 1).padStart(2, "0")}-${String(toDate.getDate()).padStart(2, "0")}`;
     (async () => {
       const res = await authFetch(
-        `${API_URL}/booking/slots/available-dates/?provider=${encodeURIComponent(provider)}&service=${encodeURIComponent(serviceId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+        `${API_URL}/booking/slots/available-dates/?provider=${encodeURIComponent(provider)}&service=${encodeURIComponent(serviceId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&extra_minutes=${extra}`,
       );
       if (cancelled || !res.ok) return;
       const data = await res.json();
@@ -3509,7 +3523,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [clientBookModalOpen, clientBookingForm.provider, clientBookingForm.serviceId, me?.role]);
+  }, [clientBookModalOpen, clientBookingForm.provider, clientBookingForm.serviceId, clientBookingForm.optionIds, providerServices, me?.role]);
 
   useEffect(() => {
     if (!clientFiltersOpen) return undefined;
@@ -3545,7 +3559,7 @@ export default function App() {
 
   useEffect(() => {
     const map = clientDiscoverMapRef.current;
-    if (!map || currentView !== "client_map" || me?.role !== "client") return;
+    if (!map || currentView !== "client_map" || (me?.role !== "client" && me?.role !== "provider")) return;
     const lockMap = Boolean(clientBookModalOpen || clientFiltersOpen);
     try {
       if (lockMap) {
@@ -3559,7 +3573,7 @@ export default function App() {
   }, [clientBookModalOpen, clientFiltersOpen, currentView, me?.role]);
 
   useEffect(() => {
-    if (currentView !== "client_map" || me?.role !== "client") return undefined;
+    if (currentView !== "client_map" || (me?.role !== "client" && me?.role !== "provider")) return undefined;
     if (mapOrgPopup) {
       window.setTimeout(fitClientDiscoverMapViewport, 0);
       window.setTimeout(fitClientDiscoverMapViewport, 200);
@@ -3570,7 +3584,7 @@ export default function App() {
   }, [mapOrgPopup, mapOrgReviewsOpen, currentView, me?.role]);
 
   useEffect(() => {
-    if (currentView !== "client_map" || me?.role !== "client") {
+    if (currentView !== "client_map" || (me?.role !== "client" && me?.role !== "provider")) {
       destroyClientDiscoverMap();
       return undefined;
     }
@@ -3614,23 +3628,23 @@ export default function App() {
   }, [currentView, me?.role]);
 
   useEffect(() => {
-    if (currentView !== "client_map" || me?.role !== "client") return undefined;
+    if (currentView !== "client_map" || (me?.role !== "client" && me?.role !== "provider")) return undefined;
     const id = window.setInterval(() => setMapMarkersTick((t) => t + 1), 60000);
     return () => window.clearInterval(id);
   }, [currentView, me?.role]);
 
   useEffect(() => {
-    if (currentView !== "client_map" || me?.role !== "client" || !clientDiscoverMapRef.current) return;
+    if (currentView !== "client_map" || (me?.role !== "client" && me?.role !== "provider") || !clientDiscoverMapRef.current) return;
     paintClientDiscoverMapMarkers(allLocations, { fitView: true });
   }, [allLocations, currentView, me?.role]);
 
   useEffect(() => {
-    if (currentView !== "client_map" || me?.role !== "client" || !clientDiscoverMapRef.current) return;
+    if (currentView !== "client_map" || (me?.role !== "client" && me?.role !== "provider") || !clientDiscoverMapRef.current) return;
     paintClientDiscoverMapMarkers(allLocations, { fitView: false });
   }, [mapMarkersTick, currentView, me?.role]);
 
   useEffect(() => {
-    if (currentView !== "client_map" || me?.role !== "client" || !clientDiscoverMapRef.current) return;
+    if (currentView !== "client_map" || (me?.role !== "client" && me?.role !== "provider") || !clientDiscoverMapRef.current) return;
     paintClientDiscoverMapMarkers(allLocations, {
       fitView: false,
       selectedId: mapOrgPopup?.id ?? null,
@@ -6597,7 +6611,7 @@ export default function App() {
     const role = me?.role;
     if (!role) return [];
     const inSubnav = new Set(subnavBookmarks);
-    const preferred = ["cafe", "cafe_orders", "intervals", "services", "analytics", "bookings", "reviews", "chats", "client_map"];
+    const preferred = ["cafe", "cafe_orders", "client_map", "my_bookings", "intervals", "services", "analytics", "bookings", "reviews", "chats"];
     return preferred.filter((id) => !inSubnav.has(id) && isBookmarkAvailable(id));
   }
 
@@ -7253,6 +7267,7 @@ export default function App() {
       locationId: String(loc.id),
       provider: pid,
       serviceId: "",
+      optionIds: [],
       windowKey: "",
       bookDate,
     }));
@@ -7298,6 +7313,7 @@ export default function App() {
         ends_at: win.ends_at,
         staff: win.staff_id ?? null,
         comment: clientBookingForm.comment,
+        option_ids: clientBookingForm.optionIds || [],
       }),
     });
     if (!response.ok) {
@@ -7314,6 +7330,7 @@ export default function App() {
       locationId: "",
       provider: "",
       serviceId: "",
+      optionIds: [],
       bookDate: clientDiscoverFilters.slot_date || "",
       windowKey: "",
       comment: "",
@@ -7321,7 +7338,7 @@ export default function App() {
     setClientBookWindows([]);
     setClientBookModalOpen(false);
     setMapOrgPopup(null);
-    setCurrentView("bookings");
+    setCurrentView(me?.role === "provider" ? "my_bookings" : "bookings");
   }
 
   function bookingClientLabel(it) {
@@ -7349,11 +7366,12 @@ export default function App() {
   }
 
   async function reloadBookingsList() {
-    const bookingsRes = await authFetch(`${API_URL}/booking/`);
+    const asClient = currentView === "my_bookings" || me?.role === "client";
+    const bookingsRes = await authFetch(`${API_URL}/booking/${asClient && me?.role === "provider" ? "?as_client=1" : ""}`);
     if (!bookingsRes.ok) return [];
     let list = normalizeBookingsList(await bookingsRes.json());
 
-    if (canManageBookings()) {
+    if (canManageBookings() && currentView !== "my_bookings") {
       const slotsRes = await authFetch(`${API_URL}/booking/slots/`);
       if (slotsRes.ok) {
         const slotsData = normalizeSlotsList(await slotsRes.json());
@@ -10041,7 +10059,7 @@ export default function App() {
           />
         </button>
         <div>{verifyStatus && <p className="verify-note">{verifyStatus}</p>}</div>
-        {accessToken && me?.role === "client" && (
+        {accessToken && (me?.role === "client" || (me?.role === "provider" && currentView === "client_map")) && (
           <div className="client-header-search">
             <div className="client-header-search-input-wrap" ref={clientHeaderSearchWrapRef}>
               <input
@@ -12096,7 +12114,7 @@ export default function App() {
           </div>
         )}
 
-        {accessToken && me?.role === "client" && currentView === "client_map" && (
+        {accessToken && (me?.role === "client" || me?.role === "provider") && currentView === "client_map" && (
           <section className="card full-width client-discover-card">
             <div className="client-discover-top">
               <h2 className="client-discover-title" id="client-map-title">
@@ -12584,7 +12602,7 @@ export default function App() {
               <select
                 id="client-book-service"
                 value={clientBookingForm.serviceId}
-                onChange={(e) => setClientBookingForm((p) => ({ ...p, serviceId: e.target.value, windowKey: "" }))}
+                onChange={(e) => setClientBookingForm((p) => ({ ...p, serviceId: e.target.value, optionIds: [], windowKey: "" }))}
                 required
                 disabled={!clientBookingForm.provider}
               >
@@ -12639,6 +12657,7 @@ export default function App() {
         )}
 
         {accessToken && me?.role === "client" && currentView === "bookings" && renderBookingsBlock("Мои записи")}
+        {accessToken && me?.role === "provider" && currentView === "my_bookings" && renderBookingsBlock("Мои записи")}
 
         {accessToken && currentView === "booking_history" && renderBookingHistory()}
 
@@ -13113,12 +13132,49 @@ export default function App() {
                 </div>
               )}
               <form onSubmit={createClientBooking} className="form">
-                <select value={clientBookingForm.serviceId} onChange={(e) => setClientBookingForm((p) => ({ ...p, serviceId: e.target.value, windowKey: "" }))} required disabled={!clientBookingForm.provider || providerServices.length === 0}>
+                <select value={clientBookingForm.serviceId} onChange={(e) => setClientBookingForm((p) => ({ ...p, serviceId: e.target.value, optionIds: [], windowKey: "" }))} required disabled={!clientBookingForm.provider || providerServices.length === 0}>
                   <option value="">Услуга</option>
                   {providerServices.map((s) => (
                     <option key={s.id} value={s.id}>{s.name} — {s.price} ₽</option>
                   ))}
                 </select>
+                {(() => {
+                  const selected = providerServices.find(
+                    (s) => String(s.id) === String(clientBookingForm.serviceId),
+                  );
+                  const opts = (selected?.options || []).filter((o) => o.is_active !== false);
+                  if (!opts.length) return null;
+                  return (
+                    <div className="service-options-pick">
+                      <p className="field-label">Дополнительно</p>
+                      {opts.map((o) => {
+                        const on = (clientBookingForm.optionIds || []).map(Number).includes(Number(o.id));
+                        return (
+                          <button
+                            key={o.id}
+                            type="button"
+                            className={`service-option-chip${on ? " is-on" : ""}`}
+                            onClick={() =>
+                              setClientBookingForm((p) => {
+                                const cur = (p.optionIds || []).map(Number);
+                                const id = Number(o.id);
+                                const next = on ? cur.filter((x) => x !== id) : [...cur, id];
+                                return { ...p, optionIds: next, windowKey: "" };
+                              })
+                            }
+                          >
+                            <span className="service-option-plus">{on ? "✓" : "+"}</span>
+                            <span>
+                              {o.name}
+                              {Number(o.price) > 0 ? ` · +${Number(o.price).toLocaleString("ru-RU")} ₽` : ""}
+                              {Number(o.extra_minutes) > 0 ? ` · +${o.extra_minutes} мин` : ""}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
                 {(() => {
                   const selected = providerServices.find(
                     (s) => String(s.id) === String(clientBookingForm.serviceId),
@@ -13411,6 +13467,22 @@ function ServiceEditor({ service, draft, dirty, onDraftChange, onUploadPhotos, o
         />
         Оказываем
       </label>
+      {(service.options || []).length > 0 ? (
+        <div className="service-editor-options">
+          <span className="small-label">Дополнительно к услуге</span>
+          {(service.options || []).map((o) => (
+            <div key={o.id} className="service-editor-option-row">
+              <span>
+                + {o.name}
+                {Number(o.price) > 0 ? ` · ${Number(o.price).toLocaleString("ru-RU")} ₽` : ""}
+                {Number(o.extra_minutes) > 0 ? ` · +${o.extra_minutes} мин` : ""}
+                {!o.is_active ? " (выкл.)" : ""}
+              </span>
+            </div>
+          ))}
+          <p className="muted small">Допы появляются после «Загрузить каталог». Гость отмечает их плюсиком при записи.</p>
+        </div>
+      ) : null}
       {(gallery.length > 0 || photos.length > 0) && (
         <div className="service-editor-photos">
           <ServicePhotoCarousel items={gallery.length ? gallery : photos} className="service-editor-carousel" />

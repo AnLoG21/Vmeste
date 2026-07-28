@@ -46,6 +46,8 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
         role = getattr(user, "role", None)
 
         if role == "provider":
+            if (request.query_params.get("discover") or "").strip() in ("1", "true", "yes"):
+                return self._client_discover_queryset()
             return ProviderLocation.objects.filter(provider=user).select_related("provider")
 
         if role == "staff":
@@ -197,7 +199,9 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
         serializer.save(provider=self.request.user)
 
     def list(self, request, *args, **kwargs):
-        if getattr(request.user, "role", None) != "client":
+        role = getattr(request.user, "role", None)
+        discover = (request.query_params.get("discover") or "").strip() in ("1", "true", "yes")
+        if role != "client" and not (role == "provider" and discover):
             return super().list(request, *args, **kwargs)
         queryset = self.filter_queryset(self.get_queryset())
         serializer = self.get_serializer(queryset, many=True)

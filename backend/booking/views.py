@@ -21,11 +21,16 @@ from .booking_windows import (
     list_available_windows,
     manual_hold_window,
     release_manual_hold,
+    resolve_selected_options,
 )
 from .models import AvailabilitySlot, Booking, ProviderStaff, ProviderStaffPortfolioPhoto
 from .serializers import AvailabilitySlotSerializer, BookingSerializer, ProviderStaffSerializer
 
 User = get_user_model()
+
+
+def _acts_as_client(user) -> bool:
+    return getattr(user, "role", None) in ("client", "provider")
 
 
 def _staff_display_name(u: User) -> str:
@@ -268,11 +273,16 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="available-windows")
     def available_windows(self, request):
-        if request.user.role != "client":
+        if not _acts_as_client(request.user):
             return Response(status=status.HTTP_403_FORBIDDEN)
         provider = (request.query_params.get("provider") or "").strip()
         service = (request.query_params.get("service") or "").strip()
         book_date_raw = (request.query_params.get("date") or "").strip()
+        extra_raw = (request.query_params.get("extra_minutes") or "0").strip()
+        try:
+            extra_minutes = max(0, int(extra_raw or 0))
+        except ValueError:
+            extra_minutes = 0
         if not provider or not service or not book_date_raw:
             return Response(
                 {"detail": "Укажите provider, service и date."},
@@ -281,17 +291,22 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
         book_date = parse_date(book_date_raw)
         if not book_date:
             return Response({"detail": "Некорректная дата."}, status=status.HTTP_400_BAD_REQUEST)
-        data = list_available_windows(int(provider), int(service), book_date)
+        data = list_available_windows(int(provider), int(service), book_date, extra_minutes=extra_minutes)
         return Response(data)
 
     @action(detail=False, methods=["get"], url_path="available-dates")
     def available_dates(self, request):
-        if request.user.role != "client":
+        if not _acts_as_client(request.user):
             return Response(status=status.HTTP_403_FORBIDDEN)
         provider = (request.query_params.get("provider") or "").strip()
         service = (request.query_params.get("service") or "").strip()
         date_from_raw = (request.query_params.get("from") or "").strip()
         date_to_raw = (request.query_params.get("to") or "").strip()
+        extra_raw = (request.query_params.get("extra_minutes") or "0").strip()
+        try:
+            extra_minutes = max(0, int(extra_raw or 0))
+        except ValueError:
+            extra_minutes = 0
         if not provider or not service:
             return Response(
                 {"detail": "Укажите provider и service."},
@@ -300,7 +315,7 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
         today = timezone.localdate()
         date_from = parse_date(date_from_raw) or today
         date_to = parse_date(date_to_raw) or (today + timedelta(days=60))
-        dates = list_available_dates(int(provider), int(service), date_from, date_to)
+        dates = list_available_dates(int(provider), int(service), date_from, date_to, extra_minutes=extra_minutes)
         return Response({"dates": dates})
 
     @action(detail=False, methods=["post"], url_path="manual-hold")
@@ -407,6 +422,9 @@ class BookingViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        as_client = (self.request.query_params.get("as_client") or "").strip() in ("1", "true", "yes")
+        if user.role == "provider" and as_client:
+            return self._booking_queryset(Booking.objects.filter(client=user))
         if user.role == "provider":
             return self._booking_queryset(Booking.objects.filter(provider=user))
         if user.role == "staff":
@@ -420,7 +438,7 @@ class BookingViewSet(viewsets.ModelViewSet):
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
-        if request.user.role != "client":
+        if not _acts_as_client(request.user):
             return Response(status=status.HTTP_403_FORBIDDEN)
         service_id = request.data.get("service")
         provider_id = request.data.get("provider")
@@ -429,6 +447,10 @@ class BookingViewSet(viewsets.ModelViewSet):
         ends_raw = request.data.get("ends_at")
         staff_id = request.data.get("staff")
         comment = (request.data.get("comment") or "")[:250]
+        option_ids = request.data.get("option_ids") or request.data.get("options") or []
+
+        if provider_id and str(provider_id) == str(request.user.id):
+            return Response({"detail": "Нельзя записаться к своей организации."}, status=status.HTTP_400_BAD_REQUEST)
 
         if starts_raw and ends_raw:
             starts_at = parse_datetime(str(starts_raw))
@@ -436,6 +458,8 @@ class BookingViewSet(viewsets.ModelViewSet):
             if not starts_at or not ends_at or ends_at <= starts_at:
                 return Response({"detail": "Некорректное время."}, status=status.HTTP_400_BAD_REQUEST)
             try:
+                service = Service.objects.get(pk=int(service_id), provider_id=int(provider_id), is_active=True)
+                snapshots = resolve_selected_options(service, option_ids)
                 booking = book_time_window(
                     int(provider_id),
                     int(service_id),
@@ -444,6 +468,7 @@ class BookingViewSet(viewsets.ModelViewSet):
                     int(staff_id) if staff_id not in (None, "", "null") else None,
                     request.user,
                     comment,
+                    selected_options=snapshots,
                 )
             except Service.DoesNotExist:
                 return Response({"detail": "Услуга не найдена."}, status=status.HTTP_400_BAD_REQUEST)
@@ -519,8 +544,8 @@ class BookingViewSet(viewsets.ModelViewSet):
     def cancel_by_client(self, request, pk=None):
         from .booking_actions import cancel_booking_by_client
 
-        booking = self.get_object()
-        if request.user.role != "client" or booking.client_id != request.user.id:
+        booking = Booking.objects.filter(pk=pk).first()
+        if not booking or booking.client_id != request.user.id:
             return Response(status=status.HTTP_403_FORBIDDEN)
         ok, _ = cancel_booking_by_client(booking)
         return Response(self.get_serializer(booking).data)
