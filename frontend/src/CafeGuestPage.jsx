@@ -63,8 +63,14 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
   const storageKey = `cafe_sess_${mode}_${keyId}`;
   const [info, setInfo] = useState(null);
   const [pin, setPin] = useState("");
-  const [session, setSession] = useState(() => (mode === "org" ? sessionStorage.getItem(storageKey) || "" : ""));
-  const [unlock, setUnlock] = useState(null);
+  const [session, setSession] = useState(() => sessionStorage.getItem(storageKey) || "");
+  const [unlock, setUnlock] = useState(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(`${storageKey}_meta`) || "null");
+    } catch {
+      return null;
+    }
+  });
   const [modeOrder, setModeOrder] = useState("");
   const [menu, setMenu] = useState([]);
   const [cart, setCart] = useState([]);
@@ -96,6 +102,11 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
     (data) => {
       if (!data?.session_token) return;
       sessionStorage.setItem(storageKey, data.session_token);
+      try {
+        sessionStorage.setItem(`${storageKey}_meta`, JSON.stringify(data));
+      } catch {
+        /* ignore quota */
+      }
       setSession(data.session_token);
       setUnlock(data);
       setModeOrder((prev) => prev || pickDefaultMode(data.modes));
@@ -166,6 +177,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           sessionStorage.removeItem(storageKey);
+          sessionStorage.removeItem(`${storageKey}_meta`);
           setSession("");
           setUnlock(null);
           throw new Error(data.detail || "Сессия истекла");

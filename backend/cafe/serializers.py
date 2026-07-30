@@ -67,6 +67,8 @@ class CafeTableSerializer(serializers.ModelSerializer):
             "pin_code",
             "public_token",
             "is_active",
+            "is_occupied",
+            "guest_count",
             "sort_order",
             "qr_path",
         ]

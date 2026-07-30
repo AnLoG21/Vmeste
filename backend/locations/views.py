@@ -37,7 +37,11 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_serializer_class(self):
-        if getattr(self.request.user, "role", None) == "client":
+        user = self.request.user
+        role = getattr(user, "role", None)
+        if role == "client":
+            return ProviderLocationClientSerializer
+        if role == "provider" and (self.request.query_params.get("discover") or "").strip() in ("1", "true", "yes"):
             return ProviderLocationClientSerializer
         return ProviderLocationSerializer
 
@@ -46,7 +50,7 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
         role = getattr(user, "role", None)
 
         if role == "provider":
-            if (request.query_params.get("discover") or "").strip() in ("1", "true", "yes"):
+            if (self.request.query_params.get("discover") or "").strip() in ("1", "true", "yes"):
                 return self._client_discover_queryset()
             return ProviderLocation.objects.filter(provider=user).select_related("provider")
 

@@ -98,8 +98,12 @@ function TableIcon({ seats = 2, label = "", shape = "round", selected = false })
 }
 
 export function qrImageUrl(data, size = 180) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=8&data=${encodeURIComponent(data)}`;
+  return `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><rect width="100%" height="100%" fill="#fff"/><text x="50%" y="50%" text-anchor="middle" fill="#999" font-size="12">QR…</text></svg>`,
+  )}`;
 }
+
+export { QrImg } from "./qrUtils.jsx";
 
 export default function CafeFloorCanvas({
   floor,
@@ -126,9 +130,12 @@ export default function CafeFloorCanvas({
     if (!inner || !floor) return { x: 0, y: 0 };
     const rect = inner.getBoundingClientRect();
     if (!rect.width || !rect.height) return { x: 0, y: 0 };
+    const src = e.touches?.[0] || e.changedTouches?.[0] || e;
+    const cx = src.clientX ?? 0;
+    const cy = src.clientY ?? 0;
     return {
-      x: Math.max(0, Math.min(floor.width, ((e.clientX - rect.left) / rect.width) * floor.width)),
-      y: Math.max(0, Math.min(floor.height, ((e.clientY - rect.top) / rect.height) * floor.height)),
+      x: Math.max(0, Math.min(floor.width, ((cx - rect.left) / rect.width) * floor.width)),
+      y: Math.max(0, Math.min(floor.height, ((cy - rect.top) / rect.height) * floor.height)),
     };
   }
 
@@ -304,11 +311,13 @@ export default function CafeFloorCanvas({
       onPatchFloor(floor.id, { drawings: next });
     }
     function onUp() {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   }
 
   function startHandleDrag(e, wallId, which) {
@@ -338,11 +347,13 @@ export default function CafeFloorCanvas({
       onPatchFloor(floor.id, { drawings: next });
     }
     function onUp() {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   }
 
   function startTableDrag(e, table) {
@@ -366,14 +377,16 @@ export default function CafeFloorCanvas({
       node.dataset.ny = String(ny);
     }
     function onUp() {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
       const nx = Number(node.dataset.nx ?? ox);
       const ny = Number(node.dataset.ny ?? oy);
       onPatchTable(table.id, { x: nx, y: ny });
     }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   }
 
   if (!floor) return null;
@@ -390,10 +403,11 @@ export default function CafeFloorCanvas({
         height: displayH,
         backgroundSize: `${GRID * zoom}px ${GRID * zoom}px`,
       }}
-      onMouseDown={onCanvasMouseDown}
-      onMouseMove={onCanvasMouseMove}
-      onMouseUp={onCanvasMouseUp}
-      onMouseLeave={onCanvasMouseUp}
+      onPointerDown={onCanvasMouseDown}
+      onPointerMove={onCanvasMouseMove}
+      onPointerUp={onCanvasMouseUp}
+      onPointerLeave={onCanvasMouseUp}
+      onPointerCancel={onCanvasMouseUp}
     >
       <div
         ref={innerRef}
@@ -479,14 +493,14 @@ export default function CafeFloorCanvas({
                   type="button"
                   className="cafe-wall-handle"
                   style={{ left: d.x1 - 7, top: d.y1 - 7 }}
-                  onMouseDown={(e) => startHandleDrag(e, d.id, "a")}
+                  onPointerDown={(e) => startHandleDrag(e, d.id, "a")}
                   aria-label="Точка A"
                 />
                 <button
                   type="button"
                   className="cafe-wall-handle"
                   style={{ left: d.x2 - 7, top: d.y2 - 7 }}
-                  onMouseDown={(e) => startHandleDrag(e, d.id, "b")}
+                  onPointerDown={(e) => startHandleDrag(e, d.id, "b")}
                   aria-label="Точка B"
                 />
               </div>
@@ -503,7 +517,7 @@ export default function CafeFloorCanvas({
               height: t.height || (t.shape === "sofa" ? 78 : t.shape === "rect" ? 72 : 88),
               transform: `rotate(${t.rotation || 0}deg)`,
             }}
-            onMouseDown={(e) => startTableDrag(e, t)}
+            onPointerDown={(e) => startTableDrag(e, t)}
             onClick={() => {
               onSelectTable(t.id);
               onSelectWall(null);

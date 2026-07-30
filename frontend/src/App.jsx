@@ -242,7 +242,7 @@ const DEFAULT_SUBNAV_BOOKMARKS = {
   client: ["client_map", "bookings", "chats"],
   provider: ["bookings", "client_map", "my_bookings", "chats"],
   staff: ["bookings", "reviews", "chats"],
-  provider_cafe: ["cafe", "cafe_orders", "client_map", "my_bookings", "chats"],
+  provider_cafe: ["cafe_orders", "cafe", "client_map", "my_bookings", "chats"],
 };
 
 function defaultSubnavBookmarks(role, sphere) {
@@ -266,10 +266,13 @@ function loadSubnavBookmarks(role, sphere) {
     let next = list.filter((id) => allowed.has(id));
     if (role === "provider" && sphere === "cafe_restaurant") {
       next = next.filter((id) => id !== "bookings");
-      if (!next.includes("cafe")) next = ["cafe", ...next];
-      if (!next.includes("cafe_orders")) {
-        const i = Math.max(0, next.indexOf("cafe"));
-        next = [...next.slice(0, i + 1), "cafe_orders", ...next.slice(i + 1)];
+      if (!next.includes("cafe_orders")) next = ["cafe_orders", ...next];
+      else {
+        next = ["cafe_orders", ...next.filter((id) => id !== "cafe_orders")];
+      }
+      if (!next.includes("cafe")) {
+        const i = Math.max(0, next.indexOf("cafe_orders"));
+        next = [...next.slice(0, i + 1), "cafe", ...next.slice(i + 1)];
       }
       if (!next.includes("client_map")) next = [...next, "client_map"];
       if (!next.includes("my_bookings")) next = [...next, "my_bookings"];
@@ -10251,13 +10254,13 @@ export default function App() {
                     <span className="menu-item-label">Организация</span>
                   </button>
                 )}
-                {canManageOrgSettings && me?.provider_sphere === "cafe_restaurant" && (
+                {canManageOrgSettings && me?.provider_sphere === "cafe_restaurant" && !subnavBookmarks.includes("cafe") && (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("cafe"); setMenuOpen(false); }}>
                     <span className="menu-item-icon" aria-hidden="true">🍽️</span>
                     <span className="menu-item-label">Зал и меню</span>
                   </button>
                 )}
-                {canManageOrgSettings && me?.provider_sphere === "cafe_restaurant" && (
+                {canManageOrgSettings && me?.provider_sphere === "cafe_restaurant" && !subnavBookmarks.includes("cafe_orders") && (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("cafe_orders"); setMenuOpen(false); }}>
                     <span className="menu-item-icon" aria-hidden="true">🧾</span>
                     <span className="menu-item-label">Заказы</span>
@@ -10352,7 +10355,7 @@ export default function App() {
                     <>
                       <input placeholder="Фамилия" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required />
                       <input placeholder="Имя" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required />
-                      <input placeholder="Отчество (если есть)" value={form.patronymic} onChange={(e) => setForm({ ...form, patronymic: e.target.value })} />
+                      <input placeholder="Отчество (при наличии)" value={form.patronymic} onChange={(e) => setForm({ ...form, patronymic: e.target.value })} />
                       <input placeholder="Логин" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required />
                       <input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
                       <input
@@ -10579,12 +10582,6 @@ export default function App() {
               {canManageOrgSettings && (
                 <button type="button" className="ghost-btn" onClick={() => setCurrentView("organization")}>Организация</button>
               )}
-                {canManageOrgSettings && me?.provider_sphere === "cafe_restaurant" && (
-                  <>
-                    <button type="button" className="ghost-btn" onClick={() => setCurrentView("cafe")}>Зал и меню</button>
-                    <button type="button" className="ghost-btn" onClick={() => setCurrentView("cafe_orders")}>Заказы</button>
-                  </>
-                )}
             </div>
             <div className="profile-delete-block">
               <h3>Удаление аккаунта</h3>
@@ -12661,7 +12658,7 @@ export default function App() {
 
         {accessToken && currentView === "booking_history" && renderBookingHistory()}
 
-        {accessToken && me?.role === "client" && clientFiltersOpen && typeof document !== "undefined" && createPortal(
+        {accessToken && (me?.role === "client" || me?.role === "provider") && clientFiltersOpen && typeof document !== "undefined" && createPortal(
           <div
             className="modal-backdrop modal-backdrop--app-overlay"
             role="dialog"

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import CafeFloorCanvas, { qrImageUrl, GRID } from "./CafeFloorCanvas.jsx";
+import CafeFloorCanvas, { QrImg, GRID } from "./CafeFloorCanvas.jsx";
 import "./cafeGuest.css";
 import "./cafeProvider.css";
 
@@ -326,7 +326,7 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
           <a className="cafe-qr-open" href={guestMenuUrl} target="_blank" rel="noreferrer">
             {guestMenuUrl}
           </a>
-          <img src={qrImageUrl(guestMenuUrl, 180)} alt="QR меню заведения" width={180} height={180} />
+          <QrImg data={guestMenuUrl} size={180} alt="QR меню заведения" />
           <a className="ghost-btn" href={guestMenuUrl} target="_blank" rel="noreferrer">
             Превью меню гостя
           </a>
@@ -624,14 +624,14 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
                     <a className="cafe-qr-open" href={tableUrl} target="_blank" rel="noreferrer">
                       {tableUrl}
                     </a>
-                    <img src={qrImageUrl(tableUrl, 220)} alt={`QR ${selectedTable.label}`} width={220} height={220} />
+                    <QrImg data={tableUrl} size={220} alt={`QR ${selectedTable.label}`} />
                     <p className="muted small">PIN для входа в заказ: {selectedTable.pin_code}</p>
                     <a className="ghost-btn" href={tableUrl} target="_blank" rel="noreferrer">
                       Превью меню гостя
                     </a>
-                    <a className="ghost-btn" href={qrImageUrl(tableUrl, 400)} target="_blank" rel="noreferrer">
-                      QR крупно
-                    </a>
+                    <div className="cafe-qr-large">
+                      <QrImg data={tableUrl} size={320} alt={`QR крупно ${selectedTable.label}`} />
+                    </div>
                   </>
                 ) : (
                   <p className="muted">Нет токена стола — пересохраните стол.</p>

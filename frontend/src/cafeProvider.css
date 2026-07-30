@@ -213,3 +213,144 @@
     padding: 12px;
   }
 }
+
+.cafe-table-node,
+.cafe-wall-handle {
+  touch-action: none;
+}
+
+.cafe-order-card {
+  border: 1px solid #ffd9bd;
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: #fffdfb;
+}
+.cafe-order-card-head {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.cafe-order-meta {
+  margin: 8px 0 0;
+  color: #8d5a2b;
+}
+.cafe-order-items {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+.cafe-order-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.cafe-order-badge--accepted,
+.cafe-order-badge--paid,
+.cafe-order-badge--awaiting_payment,
+.cafe-order-badge--draft {
+  background: #e8e8e8;
+  color: #444;
+}
+.cafe-order-badge--cooking,
+.cafe-order-badge--delivering {
+  background: #ffe566;
+  color: #5c4a00;
+}
+.cafe-order-badge--ready {
+  background: #c8f5a8;
+  color: #2d5a12;
+}
+.cafe-order-badge--done {
+  background: #4caf50;
+  color: #fff;
+}
+.cafe-order-badge--cancelled {
+  background: #e53935;
+  color: #fff;
+}
+.cafe-order-status-accepted,
+.cafe-order-status-paid,
+.cafe-order-status-awaiting_payment {
+  border-color: #cfcfcf;
+  background: #f5f5f5;
+}
+.cafe-order-status-cooking,
+.cafe-order-status-delivering {
+  border-color: #f0c400;
+  background: #fffbea;
+}
+.cafe-order-status-ready {
+  border-color: #8bc34a;
+  background: #f3fce8;
+}
+.cafe-order-status-done {
+  border-color: #2e7d32;
+  background: #e8f5e9;
+}
+.cafe-order-status-cancelled {
+  border-color: #c62828;
+  background: #ffebee;
+}
+.cafe-seating-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.cafe-seat-card {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #ffd9bd;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+.cafe-seat-card.is-free {
+  background: #f0fff0;
+  border-color: #9ccc9c;
+}
+.cafe-seat-card.is-busy {
+  background: #fff3e8;
+  border-color: #c45c00;
+}
+.cafe-seat-card.is-selected {
+  box-shadow: 0 0 0 2px rgba(196, 92, 0, 0.35);
+}
+.cafe-seat-panel {
+  margin-top: 12px;
+}
+.cafe-waiter-menu {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0;
+  display: grid;
+  gap: 10px;
+  max-height: 360px;
+  overflow: auto;
+}
+.cafe-waiter-menu li {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #ffe6d1;
+}
+.cafe-waiter-order {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}

@@ -344,6 +344,83 @@ class CafeProviderOrdersView(APIView):
         qs = CafeOrder.objects.filter(provider=request.user).prefetch_related("items")[:100]
         return Response(CafeOrderSerializer(qs, many=True).data)
 
+    def post(self, request):
+        """Официант создаёт заказ за стол."""
+        if not _is_cafe_provider(request.user):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        try:
+            table_id = int(request.data.get("table") or 0)
+        except (TypeError, ValueError):
+            table_id = 0
+        table = (
+            CafeTable.objects.select_related("floor_plan")
+            .filter(pk=table_id, floor_plan__provider=request.user, is_active=True)
+            .first()
+        )
+        if not table:
+            return Response({"table": ["Укажите стол."]}, status=status.HTTP_400_BAD_REQUEST)
+        raw_items = request.data.get("items") or []
+        if not isinstance(raw_items, list) or not raw_items:
+            return Response({"items": ["Добавьте блюда."]}, status=status.HTTP_400_BAD_REQUEST)
+        pay_method = (request.data.get("pay_method") or CafeOrder.PayMethod.CASH).strip()
+        if pay_method not in {c[0] for c in CafeOrder.PayMethod.choices}:
+            pay_method = CafeOrder.PayMethod.CASH
+        with transaction.atomic():
+            order = CafeOrder.objects.create(
+                provider=request.user,
+                table=table,
+                mode=CafeOrder.Mode.DINE_IN,
+                pay_method=pay_method,
+                guest_name=(request.data.get("guest_name") or "").strip()[:120],
+                guest_phone=(request.data.get("guest_phone") or "").strip()[:30],
+                comment=(request.data.get("comment") or "").strip()[:1000],
+                status=CafeOrder.Status.ACCEPTED,
+                include_service_charge=False,
+            )
+            items_total = Decimal("0")
+            for row in raw_items:
+                try:
+                    mid = int(row.get("menu_item"))
+                    qty = max(1, int(row.get("quantity") or 1))
+                except (TypeError, ValueError):
+                    continue
+                menu_item = CafeMenuItem.objects.filter(
+                    pk=mid, category__provider=request.user, is_active=True, is_available=True
+                ).prefetch_related("removable_ingredients").first()
+                if not menu_item:
+                    continue
+                allowed = {i.name for i in menu_item.removable_ingredients.all()}
+                removed = []
+                for name in row.get("removed_ingredients") or []:
+                    name = str(name).strip()
+                    if name and name in allowed and name not in removed:
+                        removed.append(name)
+                CafeOrderItem.objects.create(
+                    order=order,
+                    menu_item=menu_item,
+                    name=menu_item.name,
+                    unit_price=menu_item.price,
+                    quantity=qty,
+                    removed_ingredients=removed,
+                )
+                items_total += Decimal(menu_item.price) * qty
+            if items_total <= 0:
+                order.delete()
+                return Response({"items": ["Нет доступных позиций."]}, status=status.HTTP_400_BAD_REQUEST)
+            order.items_total = items_total
+            order.total = items_total
+            order.provider_payout_amount = items_total
+            order.save()
+            table.is_occupied = True
+            try:
+                guests = max(0, min(30, int(request.data.get("guest_count") or table.guest_count or 0)))
+            except (TypeError, ValueError):
+                guests = table.guest_count or 0
+            if guests:
+                table.guest_count = guests
+            table.save(update_fields=["is_occupied", "guest_count"])
+        return Response(CafeOrderSerializer(order).data, status=status.HTTP_201_CREATED)
+
     def patch(self, request, pk):
         if not _is_cafe_provider(request.user):
             return Response(status=status.HTTP_403_FORBIDDEN)
@@ -354,6 +431,19 @@ class CafeProviderOrdersView(APIView):
             return Response({"status": ["Некорректный статус."]}, status=status.HTTP_400_BAD_REQUEST)
         order.status = new_status
         order.save(update_fields=["status", "updated_at"])
+        if new_status in (CafeOrder.Status.DONE, CafeOrder.Status.CANCELLED) and order.table_id:
+            active = CafeOrder.objects.filter(
+                table_id=order.table_id,
+                status__in=[
+                    CafeOrder.Status.ACCEPTED,
+                    CafeOrder.Status.COOKING,
+                    CafeOrder.Status.READY,
+                    CafeOrder.Status.PAID,
+                    CafeOrder.Status.AWAITING_PAYMENT,
+                ],
+            ).exclude(pk=order.pk).exists()
+            if not active:
+                CafeTable.objects.filter(pk=order.table_id).update(is_occupied=False, guest_count=0)
         return Response(CafeOrderSerializer(order).data)
 
 

@@ -83,6 +83,8 @@ class CafeTable(models.Model):
     pin_code = models.CharField(max_length=6, validators=[pin_validator], default="000000")
     public_token = models.CharField(max_length=32, unique=True, db_index=True, blank=True)
     is_active = models.BooleanField(default=True)
+    is_occupied = models.BooleanField(default=False)
+    guest_count = models.PositiveSmallIntegerField(default=0, validators=[MaxValueValidator(30)])
     sort_order = models.PositiveIntegerField(default=0)
 
     class Meta:
