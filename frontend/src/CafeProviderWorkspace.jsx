@@ -466,66 +466,46 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
             <button type="button" className="ghost-btn" onClick={() => setZoom((z) => Math.max(0.6, +(z - 0.1).toFixed(1)))}>
               Масштаб −
             </button>
-            {floor && floors.length > 1 ? (
-              <button type="button" className="ghost-btn" onClick={() => deleteFloor(floor.id)}>
-                Удалить зал
-              </button>
-            ) : null}
             {selectedWallId ? (
               <button type="button" className="ghost-btn" onClick={deleteSelectedWall}>
                 Удалить стену
               </button>
             ) : null}
+          </div>
+          <div className="cafe-floor-tabs">
             {floors.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                className={`ghost-btn${f.id === floor?.id ? " is-active" : ""}`}
-                onClick={() => setSelectedFloorId(f.id)}
-              >
-                {f.name}
-              </button>
+              <div key={f.id} className={`cafe-floor-tab${f.id === floor?.id ? " is-active" : ""}`}>
+                <button
+                  type="button"
+                  className="cafe-floor-tab-name"
+                  onClick={() => {
+                    setSelectedFloorId(f.id);
+                    setSelectedTableId(null);
+                    setSelectedWallId(null);
+                    setSelectedZoneId(null);
+                  }}
+                >
+                  {f.name}
+                </button>
+                {floors.length > 1 ? (
+                  <button
+                    type="button"
+                    className="cafe-floor-tab-close"
+                    aria-label={`Удалить ${f.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteFloor(f.id);
+                    }}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
             ))}
           </div>
           <p className="muted small">
-            Сетка {GRID}px · стены за курсором · перетаскивание стены целиком · ластик — стены, комнаты, столы
+            Сетка {GRID}px · тяните правый нижний угол плана · комнату — за уголок · ластик удаляет объекты под курсором
           </p>
-          {floor ? (
-            <div className="cafe-toolbar">
-              <label className="muted small">
-                Ширина плана
-                <input
-                  type="number"
-                  min={400}
-                  max={2000}
-                  step={20}
-                  value={floor.width}
-                  onChange={(e) =>
-                    setFloors((prev) =>
-                      prev.map((f) => (f.id === floor.id ? { ...f, width: Number(e.target.value) || f.width } : f)),
-                    )
-                  }
-                  onBlur={(e) => patchFloor(floor.id, { width: Math.max(400, Number(e.target.value) || floor.width) })}
-                />
-              </label>
-              <label className="muted small">
-                Высота плана
-                <input
-                  type="number"
-                  min={300}
-                  max={1600}
-                  step={20}
-                  value={floor.height}
-                  onChange={(e) =>
-                    setFloors((prev) =>
-                      prev.map((f) => (f.id === floor.id ? { ...f, height: Number(e.target.value) || f.height } : f)),
-                    )
-                  }
-                  onBlur={(e) => patchFloor(floor.id, { height: Math.max(300, Number(e.target.value) || floor.height) })}
-                />
-              </label>
-            </div>
-          ) : null}
 
           {floor ? (
             <CafeFloorCanvas
@@ -535,12 +515,17 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
               selectedZoneId={selectedZoneId}
               tool={tool}
               zoom={zoom}
+              showFloorResize
               onSelectTable={setSelectedTableId}
               onSelectWall={setSelectedWallId}
               onSelectZone={setSelectedZoneId}
               onPatchFloor={patchFloor}
               onPatchTable={patchTable}
               onDeleteTable={(id) => deleteTable(id, { quiet: true })}
+              onResizeFloor={({ width, height }, { commit } = {}) => {
+                setFloors((prev) => prev.map((f) => (f.id === floor.id ? { ...f, width, height } : f)));
+                if (commit) patchFloor(floor.id, { width, height });
+              }}
             />
           ) : (
             <p className="muted">Создайте зал.</p>

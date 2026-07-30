@@ -122,10 +122,152 @@
   filter: drop-shadow(0 2px 4px rgba(90, 58, 34, 0.2));
 }
 
-.cafe-table-node.is-selected {
-  outline: 2px solid #c45c00;
-  outline-offset: 2px;
-  border-radius: 12px;
+.cafe-table-node.is-occupied {
+  filter: drop-shadow(0 0 0 2px rgba(196, 92, 0, 0.55)) drop-shadow(0 2px 4px rgba(90, 58, 34, 0.2));
+}
+
+.cafe-zone-handle,
+.cafe-floor-resize {
+  position: absolute;
+  z-index: 5;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 3px;
+  background: #c45c00;
+  box-shadow: 0 0 0 1px #5a3a22;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.cafe-floor-resize {
+  right: 4px;
+  bottom: 4px;
+  left: auto;
+  top: auto;
+}
+
+.cafe-floor-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+
+.cafe-floor-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #ffd9bd;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.cafe-floor-tab.is-active {
+  border-color: #c45c00;
+  background: #fff3e8;
+}
+
+.cafe-floor-tab-name {
+  border: 0;
+  background: transparent;
+  padding: 8px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cafe-floor-tab-close {
+  display: none;
+  border: 0;
+  background: transparent;
+  color: #a33;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.cafe-floor-tab:hover .cafe-floor-tab-close,
+.cafe-floor-tab:focus-within .cafe-floor-tab-close {
+  display: inline-flex;
+}
+
+.cafe-order-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cafe-order-card-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cafe-order-expand {
+  border: 0;
+  background: transparent;
+  color: #8d5a2b;
+  cursor: pointer;
+  padding: 4px 6px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.cafe-order-expand:hover,
+.cafe-order-expand:focus {
+  background: transparent;
+  color: #c45c00;
+}
+
+.cafe-order-expand-arrow {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  font-size: 0.75rem;
+}
+
+.cafe-order-expand-arrow.is-open {
+  transform: rotate(180deg);
+}
+
+.cafe-order-card-head {
+  /* legacy */
+  background: transparent;
+}
+
+.cafe-seat-controls {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  text-align: left;
+}
+
+.cafe-seat-occupied,
+.cafe-seat-guests {
+  justify-self: start;
+  width: auto;
+  max-width: 220px;
+}
+
+.cafe-seat-panel .checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+  width: auto;
+}
+
+.cafe-waiter-draft {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
 }
 
 .cafe-table-editor {
@@ -227,17 +369,20 @@
   background: #fffdfb;
 }
 .cafe-order-card-head {
-  width: 100%;
+  width: auto;
   display: flex;
-  justify-content: space-between;
   align-items: center;
   gap: 10px;
   border: 0;
   background: transparent;
   padding: 0;
-  cursor: pointer;
+  cursor: default;
   font: inherit;
   text-align: left;
+}
+.cafe-order-card-head:hover,
+.cafe-order-card-head:focus {
+  background: transparent;
 }
 .cafe-order-meta {
   margin: 8px 0 0;

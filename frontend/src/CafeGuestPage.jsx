@@ -252,6 +252,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
 
   function addToCart(menuItemId, delta = 1) {
     setCart((prev) => {
+      // +/- в меню всегда к «чистой» позиции без убранных ингредиентов
       const key = cartLineKey(menuItemId, []);
       const idx = prev.findIndex((l) => l.key === key);
       if (idx >= 0) {
@@ -269,23 +270,48 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
     });
   }
 
+  function changeLineQty(lineKey, delta) {
+    setCart((prev) => {
+      const idx = prev.findIndex((l) => l.key === lineKey);
+      if (idx < 0) return prev;
+      const next = [...prev];
+      const qty = Math.max(0, next[idx].quantity + delta);
+      if (qty === 0) {
+        next.splice(idx, 1);
+        return next;
+      }
+      next[idx] = { ...next[idx], quantity: qty };
+      return next;
+    });
+  }
+
   function toggleRemoved(lineKey, ingredientName) {
     setCart((prev) => {
       const idx = prev.findIndex((l) => l.key === lineKey);
       if (idx < 0) return prev;
       const line = prev[idx];
-      const removed = line.removed.includes(ingredientName)
-        ? line.removed.filter((x) => x !== ingredientName)
-        : [...line.removed, ingredientName];
+      // Если в линии несколько штук — отделяем одну с новой кастомизацией
+      const working =
+        line.quantity > 1
+          ? { ...line, quantity: 1 }
+          : line;
+      const restQty = line.quantity > 1 ? line.quantity - 1 : 0;
+      const removed = working.removed.includes(ingredientName)
+        ? working.removed.filter((x) => x !== ingredientName)
+        : [...working.removed, ingredientName];
       const newKey = cartLineKey(line.menuItemId, removed);
-      const dup = prev.findIndex((l, i) => i !== idx && l.key === newKey);
-      const next = [...prev];
-      if (dup >= 0) {
-        next[dup] = { ...next[dup], quantity: next[dup].quantity + line.quantity };
+      let next = [...prev];
+      if (restQty > 0) {
+        next[idx] = { ...line, quantity: restQty };
+      } else {
         next.splice(idx, 1);
-        return next;
       }
-      next[idx] = { ...line, key: newKey, removed };
+      const dup = next.findIndex((l) => l.key === newKey);
+      if (dup >= 0) {
+        next[dup] = { ...next[dup], quantity: next[dup].quantity + 1 };
+      } else {
+        next.push({ key: newKey, menuItemId: line.menuItemId, quantity: 1, removed });
+      }
       return next;
     });
   }
@@ -534,7 +560,15 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                       )}
                       <div className="cafe-cart-line-body">
                         <strong>{i.name}</strong>
-                        <p>{i.quantity} × {Number(i.price).toLocaleString("ru-RU")} ₽</p>
+                        <div className="cafe-qty cafe-cart-line-qty">
+                          <button type="button" onClick={() => changeLineQty(i.key, -1)}>−</button>
+                          <span>{i.quantity}</span>
+                          <button type="button" onClick={() => changeLineQty(i.key, 1)}>+</button>
+                          <span className="muted small">× {Number(i.price).toLocaleString("ru-RU")} ₽</span>
+                        </div>
+                        {(i.removed || []).length ? (
+                          <p className="muted small">Без: {(i.removed || []).join(", ")}</p>
+                        ) : null}
                         {(i.removable_ingredients || []).length > 0 ? (
                           <div className="cafe-ingredient-chips">
                             {(i.removable_ingredients || []).map((ing) => (

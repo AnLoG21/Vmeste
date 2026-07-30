@@ -112,17 +112,21 @@ export default function CafeFloorCanvas({
   selectedZoneId,
   tool,
   zoom = 1,
+  selectOnly = false,
+  showFloorResize = false,
   onSelectTable,
   onSelectWall,
   onSelectZone,
   onPatchFloor,
   onPatchTable,
   onDeleteTable,
+  onResizeFloor,
 }) {
   const canvasRef = useRef(null);
   const innerRef = useRef(null);
   const [wallDraft, setWallDraft] = useState(null);
   const [guide, setGuide] = useState(null);
+  const dragActiveRef = useRef(false);
   const drawings = useMemo(() => ensureDrawingIds(floor?.drawings), [floor?.drawings]);
 
   function floorPoint(e) {
@@ -137,6 +141,34 @@ export default function CafeFloorCanvas({
       x: Math.max(0, Math.min(floor.width, ((cx - rect.left) / rect.width) * floor.width)),
       y: Math.max(0, Math.min(floor.height, ((cy - rect.top) / rect.height) * floor.height)),
     };
+  }
+
+  function bindPointerDrag(e, { onMove, onUp }) {
+    dragActiveRef.current = true;
+    const target = e.currentTarget;
+    try {
+      target?.setPointerCapture?.(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    function move(ev) {
+      onMove(ev);
+    }
+    function up(ev) {
+      dragActiveRef.current = false;
+      try {
+        target?.releasePointerCapture?.(ev.pointerId);
+      } catch {
+        /* ignore */
+      }
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      onUp?.(ev);
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
   }
 
   function nearestEndpoint(p, excludeWallId = null) {
@@ -219,8 +251,21 @@ export default function CafeFloorCanvas({
   }
 
   function onCanvasMouseDown(e) {
-    if (!floor) return;
-    if (e.target.closest(".cafe-table-node") || e.target.closest(".cafe-wall-handle")) return;
+    if (!floor || selectOnly) {
+      if (selectOnly) {
+        const raw = floorPoint(e);
+        const table = hitTable(raw);
+        if (table) {
+          onSelectTable(table.id);
+          onSelectWall?.(null);
+          onSelectZone?.(null);
+        }
+      }
+      return;
+    }
+    if (e.target.closest(".cafe-table-node") || e.target.closest(".cafe-wall-handle") || e.target.closest(".cafe-zone-handle") || e.target.closest(".cafe-floor-resize")) {
+      return;
+    }
     const raw = floorPoint(e);
     const p = { x: snap(raw.x), y: snap(raw.y) };
     const anchored = nearestEndpoint(p) || p;
@@ -242,6 +287,7 @@ export default function CafeFloorCanvas({
       onSelectZone?.(zone.id);
       onSelectWall(null);
       onSelectTable(null);
+      if (tool === "move") startZoneBodyDrag(e, zone);
       return;
     }
     const wall = hitWall(raw);
@@ -277,6 +323,7 @@ export default function CafeFloorCanvas({
   }
 
   function onCanvasMouseUp() {
+    if (dragActiveRef.current) return;
     if (!wallDraft || !floor) return;
     const len = Math.hypot(wallDraft.x2 - wallDraft.x1, wallDraft.y2 - wallDraft.y1);
     if (len >= GRID / 2) {
@@ -294,70 +341,136 @@ export default function CafeFloorCanvas({
     const oy1 = wall.y1;
     const ox2 = wall.x2;
     const oy2 = wall.y2;
-    function onMove(ev) {
-      const p = floorPoint(ev);
-      const dx = snap(p.x - start.x);
-      const dy = snap(p.y - start.y);
-      const next = drawings.map((d) => {
-        if (d.id !== wall.id) return d;
-        return {
-          ...d,
-          x1: Math.max(0, Math.min(floor.width, ox1 + dx)),
-          y1: Math.max(0, Math.min(floor.height, oy1 + dy)),
-          x2: Math.max(0, Math.min(floor.width, ox2 + dx)),
-          y2: Math.max(0, Math.min(floor.height, oy2 + dy)),
+    bindPointerDrag(e, {
+      onMove(ev) {
+        const p = floorPoint(ev);
+        const dx = snap(p.x - start.x);
+        const dy = snap(p.y - start.y);
+        const next = drawings.map((d) => {
+          if (d.id !== wall.id) return d;
+          return {
+            ...d,
+            x1: Math.max(0, Math.min(floor.width, ox1 + dx)),
+            y1: Math.max(0, Math.min(floor.height, oy1 + dy)),
+            x2: Math.max(0, Math.min(floor.width, ox2 + dx)),
+            y2: Math.max(0, Math.min(floor.height, oy2 + dy)),
+          };
+        });
+        onPatchFloor(floor.id, { drawings: next });
+      },
+    });
+  }
+
+  function startZoneBodyDrag(e, zone) {
+    e.preventDefault();
+    const start = floorPoint(e);
+    const ox = zone.x;
+    const oy = zone.y;
+    bindPointerDrag(e, {
+      onMove(ev) {
+        const p = floorPoint(ev);
+        const dx = snap(p.x - start.x);
+        const dy = snap(p.y - start.y);
+        const next = drawings.map((d) => {
+          if (d.id !== zone.id) return d;
+          return {
+            ...d,
+            x: Math.max(0, Math.min(floor.width - (d.w || 40), ox + dx)),
+            y: Math.max(0, Math.min(floor.height - (d.h || 40), oy + dy)),
+          };
+        });
+        onPatchFloor(floor.id, { drawings: next });
+      },
+    });
+  }
+
+  function startZoneResize(e, zoneId) {
+    e.preventDefault();
+    e.stopPropagation();
+    onSelectZone?.(zoneId);
+    const zone = drawings.find((d) => d.id === zoneId);
+    if (!zone) return;
+    const ox = zone.x;
+    const oy = zone.y;
+    bindPointerDrag(e, {
+      onMove(ev) {
+        const p = floorPoint(ev);
+        const w = Math.max(GRID * 2, snap(p.x - ox));
+        const h = Math.max(GRID * 2, snap(p.y - oy));
+        const next = drawings.map((d) => (d.id !== zoneId ? d : { ...d, w, h }));
+        onPatchFloor(floor.id, { drawings: next });
+      },
+    });
+  }
+
+  function startFloorResize(e) {
+    if (!onResizeFloor || !floor) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const start = { x: e.clientX, y: e.clientY };
+    const ow = floor.width;
+    const oh = floor.height;
+    let last = { width: ow, height: oh };
+    bindPointerDrag(e, {
+      onMove(ev) {
+        const dx = (ev.clientX - start.x) / zoom;
+        const dy = (ev.clientY - start.y) / zoom;
+        last = {
+          width: Math.max(400, Math.min(2400, snap(ow + dx))),
+          height: Math.max(300, Math.min(1800, snap(oh + dy))),
         };
-      });
-      onPatchFloor(floor.id, { drawings: next });
-    }
-    function onUp() {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-    }
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+        onResizeFloor(last, { commit: false });
+      },
+      onUp() {
+        onResizeFloor(last, { commit: true });
+      },
+    });
   }
 
   function startHandleDrag(e, wallId, which) {
     e.preventDefault();
     e.stopPropagation();
     onSelectWall(wallId);
-    function onMove(ev) {
-      const raw = floorPoint(ev);
-      let x = snap(raw.x);
-      let y = snap(raw.y);
-      const wall = drawings.find((d) => d.id === wallId);
-      if (!wall) return;
-      const fixed = which === "a" ? { x: wall.x2, y: wall.y2 } : { x: wall.x1, y: wall.y1 };
-      const ortho = orthoSnap(fixed.x, fixed.y, x, y);
-      x = snap(ortho.x2);
-      y = snap(ortho.y2);
-      const join = nearestEndpoint({ x, y }, wallId);
-      if (join) {
-        x = join.x;
-        y = join.y;
-      }
-      const next = drawings.map((d) => {
-        if (d.id !== wallId) return d;
-        if (which === "a") return { ...d, x1: x, y1: y };
-        return { ...d, x2: x, y2: y };
-      });
-      onPatchFloor(floor.id, { drawings: next });
-    }
-    function onUp() {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-    }
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    bindPointerDrag(e, {
+      onMove(ev) {
+        const raw = floorPoint(ev);
+        let x = snap(raw.x);
+        let y = snap(raw.y);
+        const wall = drawings.find((d) => d.id === wallId);
+        if (!wall) return;
+        const fixed = which === "a" ? { x: wall.x2, y: wall.y2 } : { x: wall.x1, y: wall.y1 };
+        const ortho = orthoSnap(fixed.x, fixed.y, x, y);
+        x = snap(ortho.x2);
+        y = snap(ortho.y2);
+        const join = nearestEndpoint({ x, y }, wallId);
+        if (join) {
+          x = join.x;
+          y = join.y;
+        }
+        const next = drawings.map((d) => {
+          if (d.id !== wallId) return d;
+          if (which === "a") return { ...d, x1: x, y1: y };
+          return { ...d, x2: x, y2: y };
+        });
+        onPatchFloor(floor.id, { drawings: next });
+      },
+    });
   }
 
   function startTableDrag(e, table) {
-    if (tool === "wall" || tool === "erase") return;
+    if (selectOnly) {
+      onSelectTable(table.id);
+      onSelectWall?.(null);
+      onSelectZone?.(null);
+      return;
+    }
+    if (tool === "wall") return;
+    if (tool === "erase") {
+      e.preventDefault();
+      e.stopPropagation();
+      onDeleteTable?.(table.id);
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     onSelectTable(table.id);
@@ -367,36 +480,32 @@ export default function CafeFloorCanvas({
     const ox = table.x;
     const oy = table.y;
     const node = e.currentTarget;
-    function onMove(ev) {
-      const p = floorPoint(ev);
-      const nx = snap(Math.max(0, Math.min(floor.width - (table.width || 88), ox + p.x - start.x)));
-      const ny = snap(Math.max(0, Math.min(floor.height - (table.height || 88), oy + p.y - start.y)));
-      node.style.left = `${nx}px`;
-      node.style.top = `${ny}px`;
-      node.dataset.nx = String(nx);
-      node.dataset.ny = String(ny);
-    }
-    function onUp() {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      const nx = Number(node.dataset.nx ?? ox);
-      const ny = Number(node.dataset.ny ?? oy);
-      onPatchTable(table.id, { x: nx, y: ny });
-    }
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    bindPointerDrag(e, {
+      onMove(ev) {
+        const p = floorPoint(ev);
+        const nx = snap(Math.max(0, Math.min(floor.width - (table.width || 88), ox + p.x - start.x)));
+        const ny = snap(Math.max(0, Math.min(floor.height - (table.height || 88), oy + p.y - start.y)));
+        node.style.left = `${nx}px`;
+        node.style.top = `${ny}px`;
+        node.dataset.nx = String(nx);
+        node.dataset.ny = String(ny);
+      },
+      onUp() {
+        const nx = Number(node.dataset.nx ?? ox);
+        const ny = Number(node.dataset.ny ?? oy);
+        onPatchTable(table.id, { x: nx, y: ny });
+      },
+    });
   }
 
   if (!floor) return null;
   const displayW = Math.min(floor.width * zoom, typeof window !== "undefined" ? window.innerWidth - 32 : floor.width * zoom);
-  const displayH = Math.min(floor.height * zoom, 520 * zoom);
+  const displayH = Math.min(floor.height * zoom, selectOnly ? 640 * zoom : 520 * zoom);
 
   return (
     <div
       ref={canvasRef}
-      className={`cafe-floor-canvas tool-${tool}`}
+      className={`cafe-floor-canvas tool-${tool}${selectOnly ? " is-select-only" : ""}`}
       style={{
         width: "100%",
         maxWidth: displayW,
@@ -406,7 +515,6 @@ export default function CafeFloorCanvas({
       onPointerDown={onCanvasMouseDown}
       onPointerMove={onCanvasMouseMove}
       onPointerUp={onCanvasMouseUp}
-      onPointerLeave={onCanvasMouseUp}
       onPointerCancel={onCanvasMouseUp}
     >
       <div
@@ -485,6 +593,7 @@ export default function CafeFloorCanvas({
         </svg>
 
         {selectedWallId &&
+          !selectOnly &&
           drawings
             .filter((d) => d.id === selectedWallId && d.type === "wall")
             .map((d) => (
@@ -506,10 +615,25 @@ export default function CafeFloorCanvas({
               </div>
             ))}
 
+        {selectedZoneId &&
+          !selectOnly &&
+          drawings
+            .filter((d) => d.id === selectedZoneId && d.type === "zone")
+            .map((d) => (
+              <button
+                key={`${d.id}-resize`}
+                type="button"
+                className="cafe-zone-handle"
+                style={{ left: d.x + d.w - 8, top: d.y + d.h - 8 }}
+                onPointerDown={(e) => startZoneResize(e, d.id)}
+                aria-label="Размер комнаты"
+              />
+            ))}
+
         {(floor.tables || []).map((t) => (
           <div
             key={t.id}
-            className={`cafe-table-node${selectedTableId === t.id ? " is-selected" : ""}`}
+            className={`cafe-table-node${selectedTableId === t.id ? " is-selected" : ""}${t.is_occupied ? " is-occupied" : ""}`}
             style={{
               left: t.x,
               top: t.y,
@@ -518,16 +642,19 @@ export default function CafeFloorCanvas({
               transform: `rotate(${t.rotation || 0}deg)`,
             }}
             onPointerDown={(e) => startTableDrag(e, t)}
-            onClick={() => {
-              onSelectTable(t.id);
-              onSelectWall(null);
-              onSelectZone?.(null);
-            }}
           >
             <TableIcon seats={t.seats} label={t.label} shape={t.shape || "round"} selected={selectedTableId === t.id} />
           </div>
         ))}
       </div>
+      {showFloorResize && !selectOnly && onResizeFloor ? (
+        <button
+          type="button"
+          className="cafe-floor-resize"
+          aria-label="Изменить размер плана"
+          onPointerDown={startFloorResize}
+        />
+      ) : null}
     </div>
   );
 }

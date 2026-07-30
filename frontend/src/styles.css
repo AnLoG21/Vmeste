@@ -4257,11 +4257,20 @@ body.theme-dark .tg-chat-search {
   font-weight: 700;
 }
 
+.map-org-staff-portfolio .service-photo-carousel-main {
+  aspect-ratio: 4 / 3;
+  min-height: 160px;
+  height: auto;
+  width: 100%;
+}
+
 .map-org-staff-portfolio .service-photo-carousel-main img {
   width: 100%;
-  height: 110px;
+  height: 100%;
   object-fit: cover;
+  object-position: center;
   border-radius: 10px;
+  display: block;
 }
 
 .staff-review-modal {
