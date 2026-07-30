@@ -77,7 +77,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
   const [status, setStatus] = useState("");
   const [booting, setBooting] = useState(true);
   const [cartOpen, setCartOpen] = useState(false);
-  const [payMethod, setPayMethod] = useState("online");
+  const [payMethod, setPayMethod] = useState("cash");
   const [guestPhone, setGuestPhone] = useState("+7");
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
@@ -187,6 +187,20 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
       })
       .catch((e) => setStatus(e.message));
   }, [session, storageKey, unlock?.modes, info?.modes, modeOrder]);
+
+  useEffect(() => {
+    const pm = unlock?.pay_methods;
+    if (!pm) return;
+    setPayMethod((prev) => {
+      if (prev === "online" && pm.online) return "online";
+      if (prev === "cash" && pm.cash) return "cash";
+      if (prev === "card_on_spot" && pm.card_on_spot) return "card_on_spot";
+      if (pm.online) return "online";
+      if (pm.cash) return "cash";
+      if (pm.card_on_spot) return "card_on_spot";
+      return prev;
+    });
+  }, [unlock?.pay_methods]);
 
   useEffect(() => {
     if (!session) return;
@@ -565,11 +579,14 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                 <label>
                   Оплата
                   <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
-                    {unlock?.pay_methods?.online !== false ? <option value="online">Онлайн</option> : null}
+                    {unlock?.pay_methods?.online ? <option value="online">Онлайн</option> : null}
                     {unlock?.pay_methods?.cash ? <option value="cash">Наличные</option> : null}
                     {unlock?.pay_methods?.card_on_spot ? <option value="card_on_spot">Картой на месте</option> : null}
                   </select>
                 </label>
+                {!unlock?.pay_methods?.online && !unlock?.pay_methods?.cash && !unlock?.pay_methods?.card_on_spot ? (
+                  <p className="muted small">Нет доступных способов оплаты. Организация ещё не настроила приём платежей.</p>
+                ) : null}
                 <label className="cafe-tip-block">
                   <span className="cafe-tip-head">
                     Чаевые: {tipCustomMode ? `${tipAmount.toLocaleString("ru-RU")} ₽` : `${tipPercent}% (${tipAmount.toLocaleString("ru-RU")} ₽)`}

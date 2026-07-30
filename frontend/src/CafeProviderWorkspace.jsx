@@ -398,10 +398,17 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
               onBlur={() => saveSettings({ delivery_min_order: settings.delivery_min_order })}
             />
           </label>
-          <h3 className="cafe-form-span2">Реквизиты для выплат</h3>
+          <h3 className="cafe-form-span2">Онлайн-оплата в ЮKassa организации</h3>
           <p className="muted small cafe-form-span2">
-            Укажите банковские реквизиты и ЮKassa магазина — онлайн-оплата пойдёт напрямую вам, сервисный сбор 3% остаётся платформе.
+            Деньги за онлайн-заказы идут только в магазин организации. Без Shop ID и Secret Key вариант «Онлайн»
+            у гостя не появится, а попытка оплаты вернёт ошибку — оплата через ЮKassa платформы не используется.
+            Сервисный сбор 3% учитывается в чеке отдельно; реквизиты ниже — для договоров/выплат и сверки.
           </p>
+          {!settings.has_yookassa && settings.accept_online_payment ? (
+            <p className="status cafe-form-span2">
+              Онлайн включён, но ключи ЮKassa не указаны — гости не смогут оплатить онлайн, пока не заполните Shop ID и Secret.
+            </p>
+          ) : null}
           {[
             ["payout_legal_name", "Юр. название / ИП"],
             ["payout_inn", "ИНН"],
@@ -409,8 +416,8 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
             ["payout_bik", "БИК"],
             ["payout_account", "Расчётный счёт"],
             ["payout_corr_account", "Корр. счёт"],
-            ["yookassa_shop_id", "ЮKassa Shop ID"],
-            ["yookassa_secret_key", "ЮKassa Secret Key"],
+            ["yookassa_shop_id", "ЮKassa Shop ID *"],
+            ["yookassa_secret_key", "ЮKassa Secret Key *"],
           ].map(([key, label]) => (
             <label key={key} className={key === "payout_bank_name" ? "cafe-form-span2" : ""}>
               {label}

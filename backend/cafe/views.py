@@ -80,6 +80,15 @@ def _session_provider(sess):
     return None
 
 
+def _guest_pay_methods(settings_obj):
+    """Онлайн только если у организации свои ключи ЮKassa — без fallback на платформу."""
+    return {
+        "online": settings_obj.online_payment_ready(),
+        "cash": settings_obj.accept_cash,
+        "card_on_spot": settings_obj.accept_card_on_spot,
+    }
+
+
 
 class CafeSettingsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -509,11 +518,7 @@ class CafeTableUnlockView(APIView):
                     "takeaway": settings_obj.enable_takeaway,
                     "delivery": settings_obj.enable_delivery,
                 },
-                "pay_methods": {
-                    "online": settings_obj.accept_online_payment,
-                    "cash": settings_obj.accept_cash,
-                    "card_on_spot": settings_obj.accept_card_on_spot,
-                },
+                "pay_methods": _guest_pay_methods(settings_obj),
                 "delivery_info": settings_obj.delivery_info,
                 "delivery_fee": str(settings_obj.delivery_fee),
                 "delivery_min_order": str(settings_obj.delivery_min_order),
@@ -579,11 +584,7 @@ class CafeOrgPublicView(APIView):
                     "takeaway": settings_obj.enable_takeaway,
                     "delivery": settings_obj.enable_delivery,
                 },
-                "pay_methods": {
-                    "online": settings_obj.accept_online_payment,
-                    "cash": settings_obj.accept_cash,
-                    "card_on_spot": settings_obj.accept_card_on_spot,
-                },
+                "pay_methods": _guest_pay_methods(settings_obj),
                 "delivery_info": settings_obj.delivery_info,
                 "delivery_fee": str(settings_obj.delivery_fee),
                 "delivery_min_order": str(settings_obj.delivery_min_order),
@@ -648,6 +649,16 @@ class CafeGuestOrderCreateView(APIView):
             return Response({"mode": ["Укажите режим."]}, status=status.HTTP_400_BAD_REQUEST)
 
         pay_method = (request.data.get("pay_method") or CafeOrder.PayMethod.ONLINE).strip()
+        if pay_method == CafeOrder.PayMethod.ONLINE and not settings_obj.online_payment_ready():
+            return Response(
+                {
+                    "pay_method": [
+                        "Онлайн-оплата недоступна: организация не подключила свой магазин ЮKassa "
+                        "(Shop ID и Secret Key в «Режимы и оплата»)."
+                    ]
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if pay_method == CafeOrder.PayMethod.ONLINE and not settings_obj.accept_online_payment:
             return Response({"pay_method": ["Онлайн-оплата отключена."]}, status=status.HTTP_400_BAD_REQUEST)
         if pay_method == CafeOrder.PayMethod.CASH and not settings_obj.accept_cash:
@@ -761,9 +772,18 @@ class CafeGuestOrderCreateView(APIView):
 
             org_shop_id = (settings_obj.yookassa_shop_id or "").strip()
             org_secret = (settings_obj.yookassa_secret_key or "").strip()
-            use_org_yookassa = bool(org_shop_id and org_secret)
 
             if pay_method == CafeOrder.PayMethod.ONLINE:
+                if not (org_shop_id and org_secret):
+                    order.delete()
+                    return Response(
+                        {
+                            "pay_method": [
+                                "Онлайн-оплата недоступна: укажите Shop ID и Secret Key ЮKassa организации."
+                            ]
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 order.status = CafeOrder.Status.AWAITING_PAYMENT
                 order.save()
                 return_base = (
@@ -777,18 +797,21 @@ class CafeGuestOrderCreateView(APIView):
                     description=f"Заказ #{order.id} — {provider.organization_name or 'Вместе'}",
                     return_url=return_url,
                     metadata={"type": "cafe_order", "order_id": str(order.id)},
-                    shop_id=org_shop_id if use_org_yookassa else None,
-                    secret_key=org_secret if use_org_yookassa else None,
+                    shop_id=org_shop_id,
+                    secret_key=org_secret,
                 )
                 if yk and yk.get("id"):
                     order.yookassa_payment_id = yk["id"]
                     order.confirmation_url = (yk.get("confirmation") or {}).get("confirmation_url") or ""
                     order.save(update_fields=["yookassa_payment_id", "confirmation_url", "updated_at"])
-                elif settings.DEBUG or not (settings.YOOKASSA_SHOP_ID and settings.YOOKASSA_SECRET_KEY):
-                    order.status = CafeOrder.Status.PAID
-                    order.paid_at = timezone.now()
-                    order.save(update_fields=["status", "paid_at", "updated_at"])
-                    send_order_receipt_after_payment(order)
+                else:
+                    order.delete()
+                    return Response(
+                        {
+                            "detail": "Не удалось создать платёж в ЮKassa организации. Проверьте ключи магазина."
+                        },
+                        status=status.HTTP_502_BAD_GATEWAY,
+                    )
             else:
                 order.status = CafeOrder.Status.ACCEPTED
                 order.save()

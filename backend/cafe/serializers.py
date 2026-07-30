@@ -46,7 +46,7 @@ class CafeSettingsSerializer(serializers.ModelSerializer):
         }
 
     def get_has_yookassa(self, obj):
-        return bool(obj.yookassa_shop_id and obj.yookassa_secret_key)
+        return obj.has_yookassa()
 
 
 class CafeTableSerializer(serializers.ModelSerializer):

@@ -34,6 +34,13 @@ class CafeSettings(models.Model):
     yookassa_secret_key = models.CharField(max_length=128, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
 
+    def has_yookassa(self) -> bool:
+        return bool((self.yookassa_shop_id or "").strip() and (self.yookassa_secret_key or "").strip())
+
+    def online_payment_ready(self) -> bool:
+        """Онлайн-оплата только через магазин организации — без ключей платформы."""
+        return bool(self.accept_online_payment and self.has_yookassa())
+
     def __str__(self):
         return f"CafeSettings<{self.provider_id}>"
 
