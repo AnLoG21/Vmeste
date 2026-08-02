@@ -114,6 +114,9 @@ export default function CafeFloorCanvas({
   zoom = 1,
   selectOnly = false,
   showFloorResize = false,
+  showOccupancyColors = false,
+  tablesWithOrders = null,
+  onOpenTableTicket = null,
   onSelectTable,
   onSelectWall,
   onSelectZone,
@@ -633,7 +636,13 @@ export default function CafeFloorCanvas({
         {(floor.tables || []).map((t) => (
           <div
             key={t.id}
-            className={`cafe-table-node${selectedTableId === t.id ? " is-selected" : ""}${t.is_occupied ? " is-occupied" : ""}`}
+            className={[
+              "cafe-table-node",
+              selectedTableId === t.id ? "is-selected" : "",
+              showOccupancyColors ? (t.is_occupied ? "is-occupied" : "is-free") : t.is_occupied ? "is-occupied" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
             style={{
               left: t.x,
               top: t.y,
@@ -644,6 +653,25 @@ export default function CafeFloorCanvas({
             onPointerDown={(e) => startTableDrag(e, t)}
           >
             <TableIcon seats={t.seats} label={t.label} shape={t.shape || "round"} selected={selectedTableId === t.id} />
+            {selectOnly && onOpenTableTicket && (t.is_occupied || (tablesWithOrders && tablesWithOrders.has(t.id))) ? (
+              <button
+                type="button"
+                className="cafe-table-ticket-btn"
+                style={{ transform: `rotate(${-(t.rotation || 0)}deg)` }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectTable?.(t.id);
+                  onOpenTableTicket(t.id);
+                }}
+                aria-label="Открыть заказ стола"
+                title="Заказ"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="currentColor">
+                  <path d="M6 2h9l3 3v17a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm8 1.5V6h2.5L14 3.5zM8 9h8v1.5H8V9zm0 3h8v1.5H8V12zm0 3h6v1.5H8V15z" />
+                </svg>
+              </button>
+            ) : null}
           </div>
         ))}
       </div>

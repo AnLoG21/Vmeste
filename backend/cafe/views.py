@@ -5,7 +5,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import permissions, status
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -92,6 +92,7 @@ def _guest_pay_methods(settings_obj):
 
 class CafeSettingsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
         if not _is_cafe_provider(request.user):
@@ -99,19 +100,27 @@ class CafeSettingsView(APIView):
         from users.slug_utils import ensure_organization_slug
 
         ensure_organization_slug(request.user)
-        return Response(CafeSettingsSerializer(_get_or_create_settings(request.user)).data)
+        return Response(
+            CafeSettingsSerializer(_get_or_create_settings(request.user), context={"request": request}).data
+        )
 
     def patch(self, request):
         if not _is_cafe_provider(request.user):
             return Response(status=status.HTTP_403_FORBIDDEN)
         obj = _get_or_create_settings(request.user)
-        data = dict(request.data)
-        if not (data.get("yookassa_secret_key") or "").strip():
+        data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        if not str(data.get("yookassa_secret_key") or "").strip():
             data.pop("yookassa_secret_key", None)
-        ser = CafeSettingsSerializer(obj, data=data, partial=True)
+        if request.data.get("clear_logo") in ("1", "true", True):
+            if obj.logo:
+                obj.logo.delete(save=False)
+            obj.logo = None
+            obj.save(update_fields=["logo", "updated_at"])
+            return Response(CafeSettingsSerializer(obj, context={"request": request}).data)
+        ser = CafeSettingsSerializer(obj, data=data, partial=True, context={"request": request})
         ser.is_valid(raise_exception=True)
         ser.save()
-        return Response(CafeSettingsSerializer(obj).data)
+        return Response(CafeSettingsSerializer(obj, context={"request": request}).data)
 
 
 class CafeFloorPlanListCreateView(APIView):
@@ -473,11 +482,15 @@ class CafeTablePublicView(APIView):
             return Response({"detail": "Стол не найден."}, status=status.HTTP_404_NOT_FOUND)
         provider = table.floor_plan.provider
         settings_obj = _get_or_create_settings(provider)
+        logo_url = ""
+        if settings_obj.logo:
+            logo_url = request.build_absolute_uri(settings_obj.logo.url)
         return Response(
             {
                 "table_label": table.label,
                 "organization_name": provider.organization_name or provider.username,
                 "provider_slug": provider.organization_slug or "",
+                "logo_url": logo_url,
                 "need_pin": True,
                 "modes": {
                     "dine_in": settings_obj.enable_dine_in,
@@ -506,6 +519,9 @@ class CafeTableUnlockView(APIView):
         sess = CafeGuestSession.create_for_table(table)
         provider = table.floor_plan.provider
         settings_obj = _get_or_create_settings(provider)
+        logo_url = ""
+        if settings_obj.logo:
+            logo_url = request.build_absolute_uri(settings_obj.logo.url)
         return Response(
             {
                 "session_token": sess.token,
@@ -513,6 +529,7 @@ class CafeTableUnlockView(APIView):
                 "table_label": table.label,
                 "organization_name": provider.organization_name or provider.username,
                 "provider_slug": getattr(provider, "organization_slug", "") or "",
+                "logo_url": logo_url,
                 "modes": {
                     "dine_in": settings_obj.enable_dine_in,
                     "takeaway": settings_obj.enable_takeaway,
@@ -544,14 +561,18 @@ class CafeOrgPublicView(APIView):
             return Response({"detail": "Заведение не найдено."}, status=status.HTTP_404_NOT_FOUND)
         ensure_organization_slug(provider)
         settings_obj = _get_or_create_settings(provider)
+        logo_url = ""
+        if settings_obj.logo:
+            logo_url = request.build_absolute_uri(settings_obj.logo.url)
         return Response(
             {
                 "organization_name": provider.organization_name or provider.username,
                 "provider_slug": provider.organization_slug,
                 "organization_address": provider.organization_address or "",
+                "logo_url": logo_url,
                 "need_pin": False,
                 "modes": {
-                    "dine_in": False,
+                    "dine_in": settings_obj.enable_dine_in,
                     "takeaway": settings_obj.enable_takeaway,
                     "delivery": settings_obj.enable_delivery,
                 },
@@ -571,17 +592,82 @@ class CafeOrgPublicView(APIView):
         if not provider:
             return Response({"detail": "Заведение не найдено."}, status=status.HTTP_404_NOT_FOUND)
         settings_obj = _get_or_create_settings(provider)
-        if not settings_obj.enable_takeaway and not settings_obj.enable_delivery:
-            return Response({"detail": "Самовывоз и доставка отключены."}, status=status.HTTP_400_BAD_REQUEST)
+        if not (
+            settings_obj.enable_takeaway
+            or settings_obj.enable_delivery
+            or settings_obj.enable_dine_in
+        ):
+            return Response({"detail": "Заказ через меню сейчас недоступен."}, status=status.HTTP_400_BAD_REQUEST)
         sess = CafeGuestSession.create_session(provider=provider, table=None)
+        logo_url = ""
+        if settings_obj.logo:
+            logo_url = request.build_absolute_uri(settings_obj.logo.url)
         return Response(
             {
                 "session_token": sess.token,
                 "expires_at": sess.expires_at,
                 "organization_name": provider.organization_name or provider.username,
                 "provider_slug": provider.organization_slug,
+                "logo_url": logo_url,
+                "table_label": "",
                 "modes": {
-                    "dine_in": False,
+                    "dine_in": settings_obj.enable_dine_in,
+                    "takeaway": settings_obj.enable_takeaway,
+                    "delivery": settings_obj.enable_delivery,
+                },
+                "pay_methods": _guest_pay_methods(settings_obj),
+                "delivery_info": settings_obj.delivery_info,
+                "delivery_fee": str(settings_obj.delivery_fee),
+                "delivery_min_order": str(settings_obj.delivery_min_order),
+            }
+        )
+
+
+class CafeOrgDineInAttachView(APIView):
+    """Привязать сессию к столу по PIN (вход с меню / карты без QR стола)."""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request, slug):
+        from users.models import User
+
+        provider = User.objects.filter(
+            role=User.Role.PROVIDER,
+            is_active=True,
+            provider_sphere=User.ProviderSphere.CAFE_RESTAURANT,
+            organization_slug__iexact=slug,
+        ).first()
+        if not provider:
+            return Response({"detail": "Заведение не найдено."}, status=status.HTTP_404_NOT_FOUND)
+        settings_obj = _get_or_create_settings(provider)
+        if not settings_obj.enable_dine_in:
+            return Response({"detail": "Режим «за столом» отключён."}, status=status.HTTP_400_BAD_REQUEST)
+        pin = (request.data.get("pin") or "").strip()
+        if len(pin) != 6 or not pin.isdigit():
+            return Response({"pin": ["Введите 6-значный код стола."]}, status=status.HTTP_400_BAD_REQUEST)
+        table = (
+            CafeTable.objects.select_related("floor_plan")
+            .filter(floor_plan__provider=provider, is_active=True, pin_code=pin)
+            .order_by("id")
+            .first()
+        )
+        if not table:
+            return Response({"pin": ["Неверный код стола."]}, status=status.HTTP_400_BAD_REQUEST)
+        sess = CafeGuestSession.create_for_table(table)
+        logo_url = ""
+        if settings_obj.logo:
+            logo_url = request.build_absolute_uri(settings_obj.logo.url)
+        return Response(
+            {
+                "session_token": sess.token,
+                "expires_at": sess.expires_at,
+                "table_label": table.label,
+                "organization_name": provider.organization_name or provider.username,
+                "provider_slug": provider.organization_slug or "",
+                "logo_url": logo_url,
+                "modes": {
+                    "dine_in": settings_obj.enable_dine_in,
                     "takeaway": settings_obj.enable_takeaway,
                     "delivery": settings_obj.enable_delivery,
                 },
@@ -641,7 +727,10 @@ class CafeGuestOrderCreateView(APIView):
             if not settings_obj.enable_dine_in:
                 return Response({"mode": ["Режим «за столом» отключён."]}, status=status.HTTP_400_BAD_REQUEST)
             if not sess.table_id:
-                return Response({"mode": ["Для заказа за столом отсканируйте QR стола."]}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"mode": ["Для заказа за столом введите код стола."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         if mode == CafeOrder.Mode.TAKEAWAY and not settings_obj.enable_takeaway:
             return Response({"mode": ["Самовывоз отключён."]}, status=status.HTTP_400_BAD_REQUEST)
         if mode == CafeOrder.Mode.DELIVERY and not settings_obj.enable_delivery:

@@ -74,6 +74,7 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
   const [menuQuery, setMenuQuery] = useState("");
   const [draftLines, setDraftLines] = useState([]);
   const [orderOpen, setOrderOpen] = useState(false);
+  const [ticketOpen, setTicketOpen] = useState(false);
   const knownIds = useRef(new Set());
   const primed = useRef(false);
 
@@ -125,6 +126,21 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
       (o) => o.table === selectedTableId && !["done", "cancelled", "draft"].includes(o.status),
     );
   }, [orders, selectedTableId]);
+
+  const tablesWithOrders = useMemo(() => {
+    const set = new Set();
+    for (const o of orders) {
+      if (o.table && !["done", "cancelled", "draft"].includes(o.status)) set.add(o.table);
+    }
+    return set;
+  }, [orders]);
+
+  const ticketOrders = useMemo(() => {
+    if (!ticketOpen || !selectedTableId) return [];
+    return orders.filter(
+      (o) => o.table === selectedTableId && !["done", "cancelled", "draft"].includes(o.status),
+    );
+  }, [orders, selectedTableId, ticketOpen]);
 
   const menuById = useMemo(() => {
     const map = {};
@@ -354,24 +370,41 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
           </div>
           {!floor ? <p className="muted">Сначала создайте зал во вкладке «Зал и меню».</p> : null}
           {floor ? (
-            <CafeFloorCanvas
-              floor={floor}
-              selectedTableId={selectedTableId}
-              selectedWallId={null}
-              selectedZoneId={null}
-              tool="move"
-              zoom={1}
-              selectOnly
-              onSelectTable={(id) => {
-                setSelectedTableId(id);
-                setOrderOpen(false);
-                setDraftLines([]);
-              }}
-              onSelectWall={() => {}}
-              onSelectZone={() => {}}
-              onPatchFloor={() => {}}
-              onPatchTable={() => {}}
-            />
+            <>
+              <div className="cafe-seat-legend" aria-label="Легенда занятости">
+                <span>
+                  <i className="cafe-seat-dot is-free" aria-hidden /> Свободен
+                </span>
+                <span>
+                  <i className="cafe-seat-dot is-busy" aria-hidden /> Занят
+                </span>
+                <span className="muted small">Иконка блокнота — заказ по позициям</span>
+              </div>
+              <CafeFloorCanvas
+                floor={floor}
+                selectedTableId={selectedTableId}
+                selectedWallId={null}
+                selectedZoneId={null}
+                tool="move"
+                zoom={1}
+                selectOnly
+                showOccupancyColors
+                tablesWithOrders={tablesWithOrders}
+                onOpenTableTicket={(id) => {
+                  setSelectedTableId(id);
+                  setTicketOpen(true);
+                }}
+                onSelectTable={(id) => {
+                  setSelectedTableId(id);
+                  setOrderOpen(false);
+                  setDraftLines([]);
+                }}
+                onSelectWall={() => {}}
+                onSelectZone={() => {}}
+                onPatchFloor={() => {}}
+                onPatchTable={() => {}}
+              />
+            </>
           ) : null}
 
           {selectedTable ? (
@@ -408,6 +441,14 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                 </label>
               </div>
               <div className="cafe-toolbar">
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={() => setTicketOpen(true)}
+                  title="Посмотреть заказ"
+                >
+                  📋 Заказ
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -503,6 +544,46 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
           ) : (
             <p className="muted small">Выберите стол на плане зала.</p>
           )}
+        </div>
+      ) : null}
+
+      {ticketOpen ? (
+        <div className="cafe-notepad-modal" onClick={() => setTicketOpen(false)}>
+          <div
+            className="cafe-notepad"
+            role="dialog"
+            aria-label="Заказ стола"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="cafe-notepad-head">
+              <h3>{selectedTable?.label || "Стол"}</h3>
+              <button type="button" className="ghost-btn" onClick={() => setTicketOpen(false)} aria-label="Закрыть">
+                ✕
+              </button>
+            </div>
+            {!ticketOrders.length ? <p className="muted">Активных заказов нет.</p> : null}
+            {ticketOrders.map((o) => (
+              <div key={o.id} style={{ marginBottom: 14 }}>
+                <p className="muted small">
+                  #{o.id} · {statusLabels[o.status] || o.status}
+                </p>
+                <ul className="cafe-notepad-list">
+                  {(o.items || []).map((line) => (
+                    <li key={line.id}>
+                      <span className="cafe-notepad-item-name">
+                        {line.name} × {line.quantity}
+                      </span>
+                      {(line.removed_ingredients || []).length ? (
+                        <span className="cafe-notepad-removed">
+                          {(line.removed_ingredients || []).map((name) => `  без ${name}`).join("\n")}
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
 

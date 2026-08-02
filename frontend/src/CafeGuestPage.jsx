@@ -15,10 +15,11 @@ const MODE_META = {
 
 const SERVICE_CHARGE_PERCENT = 3;
 
-function pickDefaultMode(modes = {}) {
-  if (modes.dine_in) return "dine_in";
+function pickDefaultMode(modes = {}, preferDineIn = true) {
+  if (preferDineIn && modes.dine_in) return "dine_in";
   if (modes.takeaway) return "takeaway";
   if (modes.delivery) return "delivery";
+  if (modes.dine_in) return "dine_in";
   return "";
 }
 
@@ -91,6 +92,10 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
   const [orderResult, setOrderResult] = useState(null);
   const [completedOrder, setCompletedOrder] = useState(null);
   const [ratingBusy, setRatingBusy] = useState(null);
+  const [lightbox, setLightbox] = useState(null); // { photos, index }
+  const [dinePinOpen, setDinePinOpen] = useState(false);
+  const [dinePin, setDinePin] = useState("");
+  const [pendingDineIn, setPendingDineIn] = useState(false);
 
   const menuById = useMemo(() => {
     const map = {};
@@ -101,7 +106,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
   }, [menu]);
 
   const applySession = useCallback(
-    (data) => {
+    (data, { preferDineIn = mode !== "org" } = {}) => {
       if (!data?.session_token) return;
       sessionStorage.setItem(storageKey, data.session_token);
       try {
@@ -111,9 +116,9 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
       }
       setSession(data.session_token);
       setUnlock(data);
-      setModeOrder((prev) => prev || pickDefaultMode(data.modes));
+      setModeOrder((prev) => prev || pickDefaultMode(data.modes, preferDineIn));
     },
-    [storageKey],
+    [storageKey, mode],
   );
 
   useEffect(() => {
@@ -146,7 +151,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
             });
             const openData = await openRes.json().catch(() => ({}));
             if (!openRes.ok) throw new Error(openData.detail || "Не удалось открыть меню");
-            if (!cancelled) applySession(openData);
+            if (!cancelled) applySession(openData, { preferDineIn: false });
           }
           return;
         }
@@ -188,7 +193,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
           throw new Error(data.detail || "Сессия истекла");
         }
         setMenu(data.categories || []);
-        if (!modeOrder) setModeOrder(pickDefaultMode(unlock?.modes || info?.modes));
+        if (!modeOrder) setModeOrder(pickDefaultMode(unlock?.modes || info?.modes, mode !== "org"));
       })
       .catch((e) => setStatus(e.message));
   }, [session, storageKey, unlock?.modes, info?.modes, modeOrder]);
@@ -334,14 +339,55 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
       setStatus(data.pin?.[0] || data.detail || "Неверный пароль");
       return;
     }
-    applySession(data);
+    applySession(data, { preferDineIn: true });
+    setModeOrder("dine_in");
     setStatus("");
+  }
+
+  async function attachDineInByPin(e) {
+    e?.preventDefault?.();
+    if (mode !== "org") return;
+    setStatus("Проверяем код стола…");
+    const res = await fetch(`${API_URL}/cafe/m/${encodeURIComponent(keyId)}/dine-in/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin: dinePin }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus(data.pin?.[0] || data.detail || "Неверный код стола");
+      return;
+    }
+    applySession(data, { preferDineIn: true });
+    setModeOrder("dine_in");
+    setDinePinOpen(false);
+    setDinePin("");
+    setPendingDineIn(false);
+    setStatus("");
+    if (pendingDineIn) setCartOpen(true);
+  }
+
+  function selectMode(key) {
+    if (key === "dine_in" && mode === "org" && !unlock?.table_label) {
+      setPendingDineIn(false);
+      setDinePinOpen(true);
+      setStatus("");
+      return;
+    }
+    setModeOrder(key);
   }
 
   async function submitOrder(e) {
     e.preventDefault();
     if (!modeOrder) {
       setStatus("Выберите режим заказа");
+      return;
+    }
+    if (modeOrder === "dine_in" && mode === "org" && !unlock?.table_label) {
+      setPendingDineIn(true);
+      setCartOpen(false);
+      setDinePinOpen(true);
+      setStatus("Для заказа за столом введите код стола");
       return;
     }
     if (!cartLines.length) {
@@ -463,30 +509,25 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
     <div className="cafe-guest">
       {menuJsonLd ? <JsonLd id="vmeste-menu-jsonld" data={menuJsonLd} /> : null}
       <header className="cafe-guest-header">
-        <a href="/" aria-label="Вместе">
-          <img src={logoMain} alt="Вместе" className="cafe-guest-logo" />
-        </a>
-        <div className="cafe-guest-head-copy">
-          <h1>{orgName}</h1>
-          <p>
-            {mode === "table"
-              ? info?.table_label || unlock?.table_label
-                ? `Стол: ${info?.table_label || unlock?.table_label}`
-                : booting
-                  ? "Открываем меню…"
-                  : "Стол"
-              : "Самовывоз и доставка"}
-          </p>
-          {mode === "org" && orgSlug ? (
-            <p className="cafe-guest-seo-links">
-              <a href={`/o/${orgSlug}`}>Карточка заведения</a>
-              {" · "}
-              <a href="/">Платформа Вместе</a>
+        <div className="cafe-guest-brand">
+          <img
+            src={info?.logo_url || unlock?.logo_url || logoMain}
+            alt={orgName}
+            className={`cafe-guest-logo${info?.logo_url || unlock?.logo_url ? " is-org" : ""}`}
+          />
+          <div className="cafe-guest-head-copy">
+            <h1>{orgName}</h1>
+            <p>
+              {booting && !info
+                ? "Открываем меню…"
+                : mode === "table"
+                  ? "Меню заведения"
+                  : "Самовывоз и доставка"}
             </p>
-          ) : null}
+          </div>
         </div>
         {ready ? (
-          <button type="button" className="cafe-cart-fab" onClick={() => setCartOpen(true)} aria-label="Открыть корзину">
+          <button type="button" className="cafe-cart-fab" onClick={() => setCartOpen(true)} aria-label={`Корзина, ${cartTotal.toLocaleString("ru-RU")} ₽`}>
             <span className="cafe-cart-fab-icon"><CartIcon /></span>
             <span className="cafe-cart-fab-price">{cartTotal.toLocaleString("ru-RU")} ₽</span>
             {itemsCount > 0 ? <span className="cafe-cart-fab-count">{itemsCount}</span> : null}
@@ -524,7 +565,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                   key={key}
                   type="button"
                   className={`cafe-mode-btn${modeOrder === key ? " is-active" : ""}`}
-                  onClick={() => setModeOrder(key)}
+                  onClick={() => selectMode(key)}
                 >
                   <span aria-hidden="true">{meta.icon}</span>
                   {meta.label}
@@ -532,6 +573,9 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
               ) : null,
             )}
           </section>
+          {mode === "org" && modeOrder === "dine_in" && unlock?.table_label ? (
+            <p className="muted small cafe-dine-attached">Стол подтверждён · можно оформлять заказ</p>
+          ) : null}
 
           {completedOrder?.can_rate ? (
             <section className="cafe-guest-card cafe-rating-panel">
@@ -564,9 +608,21 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                 <div className="cafe-menu-grid">
                   {(cat.items || []).map((item) => (
                     <article key={item.id} className="cafe-menu-item">
-                      {item.is_new || cat.is_novelties ? <span className="cafe-new-badge">Новинка</span> : null}
+                      {item.is_new ? <span className="cafe-new-badge">Новинка</span> : null}
                       {item.photos?.[0]?.url ? (
-                        <img src={item.photos[0].url} alt={item.name || "Блюдо"} loading="lazy" width={96} height={96} />
+                        <button
+                          type="button"
+                          className="cafe-menu-photo-btn"
+                          onClick={() =>
+                            setLightbox({
+                              photos: (item.photos || []).map((p) => p.url).filter(Boolean),
+                              index: 0,
+                              title: item.name,
+                            })
+                          }
+                        >
+                          <img src={item.photos[0].url} alt={item.name || "Блюдо"} loading="lazy" width={96} height={96} />
+                        </button>
                       ) : (
                         <div className="cafe-menu-ph" />
                       )}
@@ -731,6 +787,112 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
               </form>
             ) : null}
           </div>
+        </div>
+      ) : null}
+
+      {dinePinOpen ? (
+        <div className="cafe-cart-modal" onClick={() => { setDinePinOpen(false); setPendingDineIn(false); }}>
+          <div className="cafe-cart-sheet cafe-dine-pin-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="cafe-cart-sheet-head">
+              <h2>Код стола</h2>
+              <button
+                type="button"
+                className="cafe-cart-close"
+                onClick={() => { setDinePinOpen(false); setPendingDineIn(false); }}
+                aria-label="Закрыть"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            <form className="cafe-guest-card" onSubmit={attachDineInByPin}>
+              <p className="muted">Чтобы заказать «за столом», введите 6-значный код с таблички у стола.</p>
+              <input
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                placeholder="••••••"
+                value={dinePin}
+                onChange={(e) => setDinePin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                required
+                autoFocus
+              />
+              <button type="submit" className="landing-btn landing-btn--primary">
+                Подтвердить стол
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {lightbox?.photos?.length ? (
+        <div
+          className="cafe-photo-lightbox"
+          onClick={() => setLightbox(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setLightbox(null);
+            if (e.key === "ArrowRight") {
+              setLightbox((prev) =>
+                prev
+                  ? { ...prev, index: (prev.index + 1) % prev.photos.length }
+                  : prev,
+              );
+            }
+            if (e.key === "ArrowLeft") {
+              setLightbox((prev) =>
+                prev
+                  ? { ...prev, index: (prev.index - 1 + prev.photos.length) % prev.photos.length }
+                  : prev,
+              );
+            }
+          }}
+          role="dialog"
+          aria-label={lightbox.title || "Фото блюда"}
+          tabIndex={-1}
+          ref={(el) => el?.focus?.()}
+        >
+          <button type="button" className="cafe-photo-lightbox-close" onClick={() => setLightbox(null)} aria-label="Закрыть">
+            <CloseIcon />
+          </button>
+          {lightbox.photos.length > 1 ? (
+            <button
+              type="button"
+              className="cafe-photo-lightbox-nav is-prev"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightbox((prev) =>
+                  prev ? { ...prev, index: (prev.index - 1 + prev.photos.length) % prev.photos.length } : prev,
+                );
+              }}
+              aria-label="Предыдущее"
+            >
+              ‹
+            </button>
+          ) : null}
+          <img
+            src={lightbox.photos[lightbox.index]}
+            alt={lightbox.title || "Фото"}
+            onClick={(e) => e.stopPropagation()}
+          />
+          {lightbox.photos.length > 1 ? (
+            <button
+              type="button"
+              className="cafe-photo-lightbox-nav is-next"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightbox((prev) =>
+                  prev ? { ...prev, index: (prev.index + 1) % prev.photos.length } : prev,
+                );
+              }}
+              aria-label="Следующее"
+            >
+              ›
+            </button>
+          ) : null}
+          {lightbox.photos.length > 1 ? (
+            <p className="cafe-photo-lightbox-count">
+              {lightbox.index + 1} / {lightbox.photos.length}
+            </p>
+          ) : null}
         </div>
       ) : null}
 

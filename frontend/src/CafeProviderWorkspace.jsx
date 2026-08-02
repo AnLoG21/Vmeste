@@ -70,6 +70,7 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
   const floor = floors.find((x) => x.id === selectedFloorId) || floors[0] || null;
   const selectedTable = (floor?.tables || []).find((t) => t.id === selectedTableId) || null;
   const selectedZone = (floor?.drawings || []).find((d) => d.id === selectedZoneId && d.type === "zone") || null;
+  const hasNoveltiesCategory = categories.some((c) => c.is_novelties);
   const origin =
     typeof window !== "undefined" && window.location?.origin && !window.location.origin.startsWith("capacitor")
       ? window.location.origin
@@ -295,6 +296,27 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
     await loadAll();
   }
 
+  async function deletePhoto(itemId, photoId) {
+    if (!window.confirm("Удалить это фото?")) return;
+    await authFetch(`${API_URL}/cafe/menu/items/${itemId}/photos/${photoId}/`, { method: "DELETE" });
+    await loadAll();
+  }
+
+  async function uploadLogo(file) {
+    const fd = new FormData();
+    fd.append("logo", file);
+    const res = await authFetch(`${API_URL}/cafe/settings/`, { method: "PATCH", body: fd });
+    if (res.ok) setSettings(await res.json());
+  }
+
+  async function clearLogo() {
+    if (!window.confirm("Удалить логотип?")) return;
+    const fd = new FormData();
+    fd.append("clear_logo", "1");
+    const res = await authFetch(`${API_URL}/cafe/settings/`, { method: "PATCH", body: fd });
+    if (res.ok) setSettings(await res.json());
+  }
+
   async function addIngredient(itemId, name) {
     const trimmed = (name || "").trim();
     if (!trimmed) return;
@@ -354,6 +376,38 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
 
       {tab === "settings" && settings && (
         <div className="cafe-form-grid">
+          <h3 className="cafe-form-span2">Логотип заведения</h3>
+          <p className="muted small cafe-form-span2">
+            Показывается в меню гостя по центру, справа — название организации.
+          </p>
+          <div className="cafe-form-span2 cafe-logo-row">
+            {settings.logo_url ? (
+              <div className="cafe-photo-thumb cafe-logo-preview">
+                <img src={settings.logo_url} alt="Логотип" />
+                <button type="button" className="cafe-photo-thumb-x" onClick={clearLogo} aria-label="Удалить логотип">
+                  ×
+                </button>
+              </div>
+            ) : null}
+            <label className="cafe-photo-add-btn" title="Загрузить логотип">
+              <input
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadLogo(file);
+                  e.target.value = "";
+                }}
+              />
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden fill="currentColor">
+                <path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+                <path d="M17 8h-2V6h-2v2H11v2h2v2h2v-2h2V8z" />
+              </svg>
+              <span>Логотип</span>
+            </label>
+          </div>
+
           {[
             ["enable_dine_in", "За столом"],
             ["enable_takeaway", "Самовывоз"],
@@ -430,6 +484,13 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
               />
             </label>
           ))}
+          <h3 className="cafe-form-span2">Другие платёжные сервисы</h3>
+          <p className="muted small cafe-form-span2">
+            Сейчас доступна только ЮKassa организации (выше). Подключение СБП, CloudPayments, Тинькофф и других
+            эквайеров — по заявке:{" "}
+            <a href="/#automation-request">индивидуальная автоматизация</a> или{" "}
+            <a href="/contacts">контакты</a>. После подключения сервис появится здесь рядом с ЮKassa.
+          </p>
         </div>
       )}
 
@@ -649,7 +710,10 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
             </button>
             <button
               type="button"
+              disabled={hasNoveltiesCategory}
+              title={hasNoveltiesCategory ? "Категория «Новинки» уже есть" : "Добавить категорию новинок"}
               onClick={() => {
+                if (hasNoveltiesCategory) return;
                 setEditingCatId(null);
                 setCatForm({ name: "Новинки", is_novelties: true });
                 setCatFormOpen(true);
@@ -687,22 +751,37 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
             <div key={cat.id} className="cafe-guest-card cafe-cat-card">
               <div className="cafe-cat-head">
                 <h3>
-                  {cat.name} {cat.is_novelties ? "· Новинки" : ""}
+                  {cat.name}
+                  {cat.is_novelties && !/новинк/i.test(cat.name || "") ? (
+                    <span className="muted small"> · новинки</span>
+                  ) : null}
                 </h3>
-                <div className="cafe-toolbar">
+                <div className="cafe-toolbar cafe-cat-actions">
                   <button
                     type="button"
-                    className="ghost-btn"
+                    className="cafe-icon-btn"
+                    title="Изменить"
+                    aria-label="Изменить категорию"
                     onClick={() => {
                       setEditingCatId(cat.id);
                       setCatForm({ name: cat.name, is_novelties: Boolean(cat.is_novelties) });
                       setCatFormOpen(true);
                     }}
                   >
-                    Изменить
+                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="currentColor">
+                      <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z" />
+                    </svg>
                   </button>
-                  <button type="button" className="ghost-btn" onClick={() => deleteCategory(cat.id)}>
-                    Удалить
+                  <button
+                    type="button"
+                    className="cafe-icon-btn is-danger"
+                    title="Удалить"
+                    aria-label="Удалить категорию"
+                    onClick={() => deleteCategory(cat.id)}
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="currentColor">
+                      <path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                    </svg>
                   </button>
                   <button
                     type="button"
@@ -812,21 +891,51 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
                       </button>
                     </div>
                   </div>
-                  <label>
-                    Фото
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) uploadPhoto(item.id, file);
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
+                  <div className="cafe-form-span2 cafe-photo-gallery">
+                    <span className="muted small">Фото блюда</span>
+                    <div className="cafe-photo-thumbs">
+                      {(item.photos || []).map((ph) => (
+                        <div key={ph.id} className="cafe-photo-thumb">
+                          <img src={ph.url} alt="" />
+                          <button
+                            type="button"
+                            className="cafe-photo-thumb-x"
+                            aria-label="Удалить фото"
+                            onClick={() => deletePhoto(item.id, ph.id)}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                      <label className="cafe-photo-add-btn" title="Добавить фото">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          hidden
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) uploadPhoto(item.id, file);
+                            e.target.value = "";
+                          }}
+                        />
+                        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="currentColor">
+                          <path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+                          <path d="M17 8h-2V6h-2v2H11v2h2v2h2v-2h2V8z" />
+                        </svg>
+                      </label>
+                    </div>
+                  </div>
                   <div className="cafe-toolbar">
-                    <button type="button" className="ghost-btn" onClick={() => deleteItem(item.id)}>
-                      Удалить
+                    <button
+                      type="button"
+                      className="cafe-icon-btn is-danger"
+                      title="Удалить блюдо"
+                      aria-label="Удалить блюдо"
+                      onClick={() => deleteItem(item.id)}
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="currentColor">
+                        <path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                      </svg>
                     </button>
                   </div>
                 </div>

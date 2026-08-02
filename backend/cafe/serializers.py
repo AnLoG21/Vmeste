@@ -16,6 +16,7 @@ from .models import (
 
 class CafeSettingsSerializer(serializers.ModelSerializer):
     has_yookassa = serializers.SerializerMethodField()
+    logo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = CafeSettings
@@ -37,17 +38,26 @@ class CafeSettingsSerializer(serializers.ModelSerializer):
             "payout_corr_account",
             "yookassa_shop_id",
             "yookassa_secret_key",
+            "logo",
+            "logo_url",
             "has_yookassa",
             "updated_at",
         ]
-        read_only_fields = ["updated_at", "has_yookassa"]
+        read_only_fields = ["updated_at", "has_yookassa", "logo_url"]
         extra_kwargs = {
             "yookassa_secret_key": {"write_only": True},
+            "logo": {"write_only": True, "required": False},
         }
 
     def get_has_yookassa(self, obj):
         return obj.has_yookassa()
 
+    def get_logo_url(self, obj):
+        if not obj.logo:
+            return ""
+        request = self.context.get("request")
+        url = obj.logo.url
+        return request.build_absolute_uri(url) if request else url
 
 class CafeTableSerializer(serializers.ModelSerializer):
     qr_path = serializers.SerializerMethodField()
