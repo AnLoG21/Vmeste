@@ -12,17 +12,41 @@ function localBusinessJsonLd(org) {
       : org.provider_sphere === "hair_salon"
         ? "BeautySalon"
         : "LocalBusiness";
-  return {
+  const hours = org.working_hours || {};
+  const dayMap = {
+    mon: "Monday",
+    tue: "Tuesday",
+    wed: "Wednesday",
+    thu: "Thursday",
+    fri: "Friday",
+    sat: "Saturday",
+    sun: "Sunday",
+  };
+  const openingHoursSpecification = Object.entries(dayMap)
+    .map(([key, day]) => {
+      const row = hours[key] || {};
+      if (row.closed || !row.open || !row.close) return null;
+      return {
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: day,
+        opens: row.open,
+        closes: row.close,
+      };
+    })
+    .filter(Boolean);
+
+  const entity = {
     "@context": "https://schema.org",
     "@type": type,
     name: org.organization_name,
     url: `${SITE_ORIGIN}/o/${org.slug}`,
-    description: org.card_note || `${org.organization_name} — ${org.sphere_label || "организация"} на платформе Вместе`,
-    address: org.organization_address
-      ? { "@type": "PostalAddress", streetAddress: org.organization_address, addressCountry: "RU" }
-      : undefined,
+    description:
+      org.card_note ||
+      `${org.organization_name} — ${org.sphere_label || "организация"} на платформе Вместе`,
     telephone: org.phones?.[0] || undefined,
     image: org.gallery_photos?.[0]?.url || undefined,
+    sameAs: org.websites?.length ? org.websites : undefined,
+    openingHoursSpecification: openingHoursSpecification.length ? openingHoursSpecification : undefined,
     aggregateRating:
       org.average_rating && org.reviews_count
         ? {
@@ -32,6 +56,21 @@ function localBusinessJsonLd(org) {
           }
         : undefined,
   };
+  if (org.organization_address) {
+    entity.address = {
+      "@type": "PostalAddress",
+      streetAddress: org.organization_address,
+      addressCountry: "RU",
+    };
+  }
+  if (org.organization_latitude != null && org.organization_longitude != null) {
+    entity.geo = {
+      "@type": "GeoCoordinates",
+      latitude: org.organization_latitude,
+      longitude: org.organization_longitude,
+    };
+  }
+  return entity;
 }
 
 export default function PublicOrgPage({ slug }) {
@@ -67,6 +106,7 @@ export default function PublicOrgPage({ slug }) {
 
   useEffect(() => {
     if (!org) return;
+    const og = org.gallery_photos?.[0]?.url;
     setPageMeta({
       title: `${org.organization_name} — ${org.sphere_label || "Вместе"}`,
       description:
@@ -74,6 +114,8 @@ export default function PublicOrgPage({ slug }) {
         `${org.organization_name}${org.organization_address ? `, ${org.organization_address}` : ""}. Онлайн на Вместе.`,
       path: `/o/${org.slug}`,
       robots: "index,follow",
+      image: og || undefined,
+      imageAlt: org.organization_name,
     });
   }, [org]);
 
@@ -142,8 +184,15 @@ export default function PublicOrgPage({ slug }) {
         ) : null}
         {org.gallery_photos?.length ? (
           <div className="public-org-gallery">
-            {org.gallery_photos.map((p) => (
-              <img key={p.id} src={p.url} alt="" loading="lazy" />
+            {org.gallery_photos.map((p, i) => (
+              <img
+                key={p.id}
+                src={p.url}
+                alt={`${org.organization_name} — фото ${i + 1}`}
+                width={280}
+                height={200}
+                loading="lazy"
+              />
             ))}
           </div>
         ) : null}
@@ -153,14 +202,18 @@ export default function PublicOrgPage({ slug }) {
               Открыть меню
             </a>
           ) : (
-            <a className="landing-btn landing-btn--primary" href="/map">
-              Записаться на карте
+            <a className="landing-btn landing-btn--primary" href="/businesses">
+              Онлайн-запись на Вместе
             </a>
           )}
           <a className="landing-btn landing-btn--outline" href="/">
             О платформе Вместе
           </a>
         </div>
+        <p className="muted" style={{ marginTop: 16 }}>
+          <a href="/city/moscow">Москва</a> · <a href="/city/spb">Санкт-Петербург</a> ·{" "}
+          <a href="/businesses">Для бизнеса</a>
+        </p>
       </article>
     </div>
   );

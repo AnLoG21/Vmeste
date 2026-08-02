@@ -453,6 +453,8 @@ export default function LandingPage({ onLogin, onRegister }) {
         </p>
         <nav className="landing-footer-nav" aria-label="Разделы сайта">
           <a href="/businesses">Для бизнеса</a>
+          <a href="/city/moscow">Москва</a>
+          <a href="/city/spb">Санкт-Петербург</a>
           <a href="/#pricing">Тарифы</a>
           <a href="/#faq">Вопросы</a>
           <a href="/#automation-request">Заявка на автоматизацию</a>

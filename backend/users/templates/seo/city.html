@@ -1,0 +1,35 @@
+{% extends "seo/base.html" %}
+{% block content %}
+<header>
+  <nav aria-label="Хлебные крошки">
+    <a href="/">Главная</a>
+    <span class="muted">/</span>
+    <a href="/businesses">Для бизнеса</a>
+    <span class="muted">/</span>
+    <span>{{ city_title }}</span>
+  </nav>
+  <h1>Вместе · {{ city_title }}</h1>
+  <p class="muted">Организации с адресом в этом городе.</p>
+</header>
+<article>
+  {% if not orgs %}
+  <p>Пока нет опубликованных организаций с адресом в городе {{ city_title }}.</p>
+  {% else %}
+  <ul class="orgs">
+    {% for o in orgs %}
+    <li>
+      <a href="/o/{{ o.slug }}"><strong>{{ o.name }}</strong></a>
+      {% if o.sphere %} · {{ o.sphere }}{% endif %}
+      {% if o.address %}<div class="muted">{{ o.address }}</div>{% endif %}
+      {% if o.is_cafe %} · <a href="/m/{{ o.slug }}">меню</a>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <p>
+    <a href="/city/moscow">Москва</a> ·
+    <a href="/city/spb">Санкт-Петербург</a> ·
+    <a href="/businesses">Все сферы</a>
+  </p>
+</article>
+{% endblock %}

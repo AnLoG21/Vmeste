@@ -144,34 +144,45 @@ class SitemapXmlView(APIView):
     def get(self, request):
         today = timezone.localdate().isoformat()
         urls = [
-            ("/", "1.0", "weekly"),
-            ("/businesses", "0.95", "weekly"),
-            ("/contacts", "0.9", "monthly"),
-            ("/offer", "0.8", "monthly"),
-            ("/privacy", "0.6", "monthly"),
+            ("/", "1.0", "weekly", today),
+            ("/businesses", "0.95", "weekly", today),
+            ("/contacts", "0.9", "monthly", today),
+            ("/offer", "0.8", "monthly", today),
+            ("/privacy", "0.6", "monthly", today),
         ]
         for key, _title in CITY_SITEMAP:
-            urls.append((f"/city/{key}", "0.85", "weekly"))
+            urls.append((f"/city/{key}", "0.85", "weekly", today))
 
         qs = (
             User.objects.filter(role=User.Role.PROVIDER, is_active=True)
             .exclude(organization_name="")
-            .order_by("id")[:500]
+            .exclude(organization_slug="")
+            .order_by("id")[:1000]
         )
         for u in qs:
             slug = ensure_organization_slug(u)
-            urls.append((f"/o/{slug}", "0.8", "weekly"))
+            if not slug:
+                continue
+            lastmod = today
+            for attr in ("date_joined", "last_login"):
+                val = getattr(u, attr, None)
+                if val:
+                    try:
+                        lastmod = timezone.localdate(val).isoformat()
+                    except Exception:
+                        lastmod = val.date().isoformat() if hasattr(val, "date") else today
+            urls.append((f"/o/{slug}", "0.8", "weekly", lastmod))
             if u.provider_sphere == User.ProviderSphere.CAFE_RESTAURANT:
-                urls.append((f"/m/{slug}", "0.7", "weekly"))
+                urls.append((f"/m/{slug}", "0.7", "weekly", lastmod))
 
         lines = [
             '<?xml version="1.0" encoding="UTF-8"?>',
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
         ]
-        for path, priority, freq in urls:
+        for path, priority, freq, lastmod in urls:
             lines.append("  <url>")
             lines.append(f"    <loc>{SITE_ORIGIN}{path}</loc>")
-            lines.append(f"    <lastmod>{today}</lastmod>")
+            lines.append(f"    <lastmod>{lastmod}</lastmod>")
             lines.append(f"    <changefreq>{freq}</changefreq>")
             lines.append(f"    <priority>{priority}</priority>")
             lines.append("  </url>")

@@ -1,0 +1,54 @@
+{% extends "seo/base.html" %}
+{% block content %}
+<header>
+  <nav aria-label="Хлебные крошки">
+    <a href="/">Главная</a>
+    <span class="muted">/</span>
+    <a href="/businesses">Для бизнеса</a>
+    <span class="muted">/</span>
+    <span>{{ org.organization_name }}</span>
+  </nav>
+  {% if org.sphere_label %}<p class="muted">{{ org.sphere_label }}</p>{% endif %}
+  <h1>{{ org.organization_name }}</h1>
+  {% if org.average_rating %}
+  <p>★ {{ org.average_rating }} · {{ org.reviews_count }} отзывов</p>
+  {% endif %}
+</header>
+<article>
+  {% if org.organization_address %}<p>{{ org.organization_address }}</p>{% endif %}
+  {% if org.card_note %}<p>{{ org.card_note }}</p>{% endif %}
+  {% if org.phones %}
+  <p>Тел.:
+    {% for ph in org.phones %}
+    <a href="tel:{{ ph }}">{{ ph }}</a>{% if not forloop.last %}, {% endif %}
+    {% endfor %}
+  </p>
+  {% endif %}
+  {% if org.websites %}
+  <p>Сайт:
+    {% for w in org.websites %}
+    <a href="{{ w }}" rel="noopener noreferrer">{{ w }}</a>{% if not forloop.last %}, {% endif %}
+    {% endfor %}
+  </p>
+  {% endif %}
+  {% if hours_lines %}
+  <h2>Часы работы</h2>
+  <ul>{% for line in hours_lines %}<li>{{ line }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if org.gallery_photos %}
+  <div class="gallery">
+    {% for p in org.gallery_photos %}
+    <img src="{{ p.url }}" alt="{{ org.organization_name }} — фото {{ forloop.counter }}" width="140" height="120" loading="lazy" />
+    {% endfor %}
+  </div>
+  {% endif %}
+  <p>
+    {% if org.is_cafe %}
+    <a class="cta cta-primary" href="/m/{{ org.slug }}">Открыть меню</a>
+    {% else %}
+    <a class="cta cta-primary" href="/businesses">Запись и услуги на Вместе</a>
+    {% endif %}
+    <a class="cta cta-outline" href="/">О платформе Вместе</a>
+  </p>
+</article>
+{% endblock %}

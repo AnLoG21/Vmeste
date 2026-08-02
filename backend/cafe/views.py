@@ -548,6 +548,7 @@ class CafeOrgPublicView(APIView):
             {
                 "organization_name": provider.organization_name or provider.username,
                 "provider_slug": provider.organization_slug,
+                "organization_address": provider.organization_address or "",
                 "need_pin": False,
                 "modes": {
                     "dine_in": False,

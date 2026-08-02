@@ -2,6 +2,7 @@ from django.urls import path
 
 from .org_profile import OrganizationClientProfileView, ProviderGalleryView, ProviderOrganizationInfoView
 from .public_org import PublicOrganizationBySlugView, PublicOrganizationSitemapView, SitemapXmlView
+from .seo_html import SeoCityHtmlView, SeoMenuHtmlView, SeoOrgHtmlView
 from .views import (
     AutomationRequestView,
     ChangeEmailView,
@@ -29,6 +30,9 @@ urlpatterns = [
     path("public-org/<slug:slug>/", PublicOrganizationBySlugView.as_view(), name="public-org-by-slug"),
     path("public-orgs/", PublicOrganizationSitemapView.as_view(), name="public-orgs-list"),
     path("sitemap.xml", SitemapXmlView.as_view(), name="users-sitemap-xml"),
+    path("seo/o/<slug:slug>/", SeoOrgHtmlView.as_view(), name="seo-org-html"),
+    path("seo/m/<slug:slug>/", SeoMenuHtmlView.as_view(), name="seo-menu-html"),
+    path("seo/city/<slug:city_key>/", SeoCityHtmlView.as_view(), name="seo-city-html"),
     path("organization-info/", ProviderOrganizationInfoView.as_view(), name="organization-info"),
     path("gallery/", ProviderGalleryView.as_view(), name="provider-gallery"),
     path("presence/ping/", PresencePingView.as_view(), name="user-presence-ping"),

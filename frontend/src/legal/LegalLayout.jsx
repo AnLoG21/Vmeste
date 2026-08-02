@@ -75,6 +75,8 @@ export default function LegalLayout({ title, path, description, children }) {
         <nav className="landing-footer-nav" aria-label="Разделы сайта">
           <a href="/">Главная</a>
           <a href="/businesses">Для бизнеса</a>
+          <a href="/city/moscow">Москва</a>
+          <a href="/city/spb">Санкт-Петербург</a>
           <a href="/#pricing">Тарифы</a>
           <a href="/contacts">Контакты</a>
           <a href="/offer">Публичная оферта</a>

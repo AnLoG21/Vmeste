@@ -1,6 +1,8 @@
 ﻿import logoMain from "./assets/logo-main.png";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_URL } from "./config.js";
+import JsonLd from "./seo/JsonLd.jsx";
+import { SITE_ORIGIN, breadcrumbListJsonLd } from "./seo/schema.js";
 import { setPageMeta } from "./seo/setPageMeta.js";
 import "./landing.css";
 import "./cafeGuest.css";
@@ -128,10 +130,13 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
           if (cancelled) return;
           setInfo(infoData);
           setPageMeta({
-            title: `${infoData.organization_name || "Кафе"} · меню`,
-            description: "Меню и заказ через Вместе",
+            title: `${infoData.organization_name || "Кафе"} — меню онлайн | Вместе`,
+            description: `Меню «${infoData.organization_name || "заведения"}»${
+              infoData.organization_address ? `, ${infoData.organization_address}` : ""
+            }. Заказ онлайн через Вместе.`,
             path: `/m/${keyId}`,
             robots: "index,follow",
+            imageAlt: `${infoData.organization_name || "Кафе"} — меню`,
           });
           if (!sessionStorage.getItem(storageKey)) {
             const openRes = await fetch(`${API_URL}/cafe/m/${encodeURIComponent(keyId)}/`, {
@@ -415,13 +420,54 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
   const ready = Boolean(session) && !booting;
   const needsPin = mode === "table" && !session;
   const ratedIds = new Set((completedOrder?.item_ratings || []).map((r) => r.menu_item));
+  const orgName = info?.organization_name || unlock?.organization_name || "Кафе";
+  const orgSlug = info?.provider_slug || unlock?.provider_slug || (mode === "org" ? keyId : "");
+
+  const menuJsonLd = useMemo(() => {
+    if (mode !== "org" || !orgSlug) return null;
+    return [
+      {
+        "@context": "https://schema.org",
+        "@type": "Restaurant",
+        name: orgName,
+        url: `${SITE_ORIGIN}/m/${orgSlug}`,
+        menu: `${SITE_ORIGIN}/m/${orgSlug}`,
+        address: info?.organization_address
+          ? { "@type": "PostalAddress", streetAddress: info.organization_address, addressCountry: "RU" }
+          : undefined,
+        hasMenu: menu.length
+          ? {
+              "@type": "Menu",
+              hasMenuSection: menu.map((cat) => ({
+                "@type": "MenuSection",
+                name: cat.name,
+                hasMenuItem: (cat.items || []).slice(0, 30).map((item) => ({
+                  "@type": "MenuItem",
+                  name: item.name,
+                  description: item.description || item.name,
+                  offers: { "@type": "Offer", price: String(item.price ?? ""), priceCurrency: "RUB" },
+                })),
+              })),
+            }
+          : undefined,
+      },
+      breadcrumbListJsonLd([
+        { name: "Главная", path: "/" },
+        { name: orgName, path: `/o/${orgSlug}` },
+        { name: "Меню", path: `/m/${orgSlug}` },
+      ]),
+    ];
+  }, [mode, orgSlug, orgName, info?.organization_address, menu]);
 
   return (
     <div className="cafe-guest">
+      {menuJsonLd ? <JsonLd id="vmeste-menu-jsonld" data={menuJsonLd} /> : null}
       <header className="cafe-guest-header">
-        <img src={logoMain} alt="Вместе" className="cafe-guest-logo" />
+        <a href="/" aria-label="Вместе">
+          <img src={logoMain} alt="Вместе" className="cafe-guest-logo" />
+        </a>
         <div className="cafe-guest-head-copy">
-          <h1>{info?.organization_name || unlock?.organization_name || "Кафе"}</h1>
+          <h1>{orgName}</h1>
           <p>
             {mode === "table"
               ? info?.table_label || unlock?.table_label
@@ -431,6 +477,13 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                   : "Стол"
               : "Самовывоз и доставка"}
           </p>
+          {mode === "org" && orgSlug ? (
+            <p className="cafe-guest-seo-links">
+              <a href={`/o/${orgSlug}`}>Карточка заведения</a>
+              {" · "}
+              <a href="/">Платформа Вместе</a>
+            </p>
+          ) : null}
         </div>
         {ready ? (
           <button type="button" className="cafe-cart-fab" onClick={() => setCartOpen(true)} aria-label="Открыть корзину">
@@ -512,7 +565,11 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                   {(cat.items || []).map((item) => (
                     <article key={item.id} className="cafe-menu-item">
                       {item.is_new || cat.is_novelties ? <span className="cafe-new-badge">Новинка</span> : null}
-                      {item.photos?.[0]?.url ? <img src={item.photos[0].url} alt="" loading="lazy" /> : <div className="cafe-menu-ph" />}
+                      {item.photos?.[0]?.url ? (
+                        <img src={item.photos[0].url} alt={item.name || "Блюдо"} loading="lazy" width={96} height={96} />
+                      ) : (
+                        <div className="cafe-menu-ph" />
+                      )}
                       <h3>{item.name}</h3>
                       {item.rating_avg != null ? (
                         <p className="muted small cafe-rating-readonly">★ {item.rating_avg} ({item.rating_count})</p>

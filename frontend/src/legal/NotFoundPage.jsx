@@ -8,7 +8,7 @@ export default function NotFoundPage() {
     setPageMeta({
       title: "Страница не найдена — Вместе",
       description: "Запрашиваемая страница не существует на сайте Вместе.",
-      path: window.location.pathname,
+      path: "/",
       robots: "noindex,nofollow",
     });
   }, []);

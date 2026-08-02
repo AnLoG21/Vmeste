@@ -6,6 +6,8 @@ const META_KEYS = [
   "og:description",
   "og:url",
   "og:image",
+  "og:image:alt",
+  "og:site_name",
   "og:type",
   "og:locale",
   "twitter:card",
@@ -26,15 +28,19 @@ function upsertMeta(attr, key, content) {
   el.setAttribute("content", content);
 }
 
-function upsertLink(rel, href) {
+function upsertLink(rel, href, attrs = {}) {
   if (typeof document === "undefined" || !href) return;
-  let el = document.head.querySelector(`link[rel="${rel}"]`);
+  const hreflang = attrs.hreflang;
+  let el = hreflang
+    ? document.head.querySelector(`link[rel="${rel}"][hreflang="${hreflang}"]`)
+    : document.head.querySelector(`link[rel="${rel}"]:not([hreflang])`);
   if (!el) {
     el = document.createElement("link");
     el.setAttribute("rel", rel);
     document.head.appendChild(el);
   }
   el.setAttribute("href", href);
+  Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
 }
 
 /**
@@ -43,6 +49,7 @@ function upsertLink(rel, href) {
  *   description?: string,
  *   path?: string,
  *   image?: string,
+ *   imageAlt?: string,
  *   robots?: string,
  * }} opts
  */
@@ -51,6 +58,7 @@ export function setPageMeta({
   description,
   path = "/",
   image = "https://vsevmeste.space/og-cover.png",
+  imageAlt,
   robots = "index,follow",
 } = {}) {
   if (typeof document === "undefined") return;
@@ -60,10 +68,12 @@ export function setPageMeta({
   upsertMeta("name", "robots", robots);
   upsertMeta("property", "og:type", "website");
   upsertMeta("property", "og:locale", "ru_RU");
+  upsertMeta("property", "og:site_name", "Вместе");
   upsertMeta("property", "og:url", url);
   upsertMeta("property", "og:image", image);
   upsertMeta("property", "og:image:width", "1200");
   upsertMeta("property", "og:image:height", "630");
+  upsertMeta("property", "og:image:alt", imageAlt || title || "Вместе");
   if (title) upsertMeta("property", "og:title", title);
   if (description) upsertMeta("property", "og:description", description);
   upsertMeta("name", "twitter:card", "summary_large_image");
@@ -71,6 +81,8 @@ export function setPageMeta({
   if (description) upsertMeta("name", "twitter:description", description);
   upsertMeta("name", "twitter:image", image);
   upsertLink("canonical", url);
+  upsertLink("alternate", url, { hreflang: "ru" });
+  upsertLink("alternate", "https://vsevmeste.space/", { hreflang: "x-default" });
 }
 
 export function setNoIndexAppMeta() {

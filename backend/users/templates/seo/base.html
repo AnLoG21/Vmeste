@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }}</title>
+  <meta name="description" content="{{ description }}" />
+  <meta name="robots" content="{{ robots }}" />
+  <link rel="canonical" href="{{ canonical }}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="ru_RU" />
+  <meta property="og:site_name" content="Вместе" />
+  <meta property="og:title" content="{{ title }}" />
+  <meta property="og:description" content="{{ description }}" />
+  <meta property="og:url" content="{{ canonical }}" />
+  <meta property="og:image" content="{{ og_image }}" />
+  <meta property="og:image:alt" content="{{ title }}" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="{{ title }}" />
+  <meta name="twitter:description" content="{{ description }}" />
+  <meta name="twitter:image" content="{{ og_image }}" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  {% if json_ld %}<script type="application/ld+json">{{ json_ld|safe }}</script>{% endif %}
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f7f4ef;color:#1a1a1a;line-height:1.5}
+    a{color:#c45c00}
+    .wrap{max-width:840px;margin:0 auto;padding:1.5rem 1.25rem 3rem}
+    header nav,footer nav{display:flex;flex-wrap:wrap;gap:.75rem 1rem;margin-bottom:1rem;font-size:.95rem}
+    h1{font-size:1.75rem;margin:.25rem 0 .75rem}
+    .muted{color:#555}
+    .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.5rem;margin:1rem 0}
+    .gallery img{width:100%;height:120px;object-fit:cover;border-radius:8px}
+    .menu-item{display:grid;grid-template-columns:72px 1fr auto;gap:.75rem;align-items:start;padding:.65rem 0;border-bottom:1px solid #e6e0d6}
+    .menu-item img{width:72px;height:72px;object-fit:cover;border-radius:8px}
+    .ph{width:72px;height:72px;border-radius:8px;background:#e8e2d8}
+    .price{white-space:nowrap;font-weight:600}
+    .cta{display:inline-block;margin-top:1rem;margin-right:.5rem;padding:.65rem 1rem;border-radius:10px;text-decoration:none}
+    .cta-primary{background:#ff7a00;color:#fff}
+    .cta-outline{border:1px solid #c45c00;color:#c45c00}
+    ul.orgs{list-style:none;padding:0}
+    ul.orgs li{padding:.5rem 0;border-bottom:1px solid #e6e0d6}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    {% block content %}{% endblock %}
+    <footer style="margin-top:2.5rem;padding-top:1rem;border-top:1px solid #e6e0d6">
+      <nav aria-label="Разделы">
+        <a href="/">Вместе</a>
+        <a href="/businesses">Для бизнеса</a>
+        <a href="/city/moscow">Москва</a>
+        <a href="/city/spb">Санкт-Петербург</a>
+        <a href="/contacts">Контакты</a>
+      </nav>
+      <p class="muted">© {{ year }} Вместе · vsevmeste.space</p>
+    </footer>
+  </div>
+</body>
+</html>

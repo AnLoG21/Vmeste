@@ -4,7 +4,7 @@ http://{$DOMAIN}, http://www.{$DOMAIN} {
 	@www host www.{$DOMAIN}
 	redir @www http://{$DOMAIN}{uri} permanent
 
-	encode gzip
+	encode gzip zstd
 
 	handle_path /media/* {
 		root * /srv/media
@@ -14,6 +14,32 @@ http://{$DOMAIN}, http://www.{$DOMAIN} {
 		rewrite * /api/users/sitemap.xml
 		reverse_proxy web:8000
 	}
+
+	@seo_org {
+		path_regexp seo_org ^/o/([^/]+)/?$
+		header_regexp User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
+	}
+	@seo_menu {
+		path_regexp seo_menu ^/m/([^/]+)/?$
+		header_regexp User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
+	}
+	@seo_city {
+		path_regexp seo_city ^/city/(moscow|spb)/?$
+		header_regexp User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
+	}
+	handle @seo_org {
+		uri path_regexp seo_org ^/o/([^/]+)/?$ /api/users/seo/o/{re.seo_org.1}/
+		reverse_proxy web:8000
+	}
+	handle @seo_menu {
+		uri path_regexp seo_menu ^/m/([^/]+)/?$ /api/users/seo/m/{re.seo_menu.1}/
+		reverse_proxy web:8000
+	}
+	handle @seo_city {
+		uri path_regexp seo_city ^/city/(moscow|spb)/?$ /api/users/seo/city/{re.seo_city.1}/
+		reverse_proxy web:8000
+	}
+
 	handle /api/* {
 		reverse_proxy web:8000
 	}

@@ -1,0 +1,40 @@
+{% extends "seo/base.html" %}
+{% block content %}
+<header>
+  <nav aria-label="Хлебные крошки">
+    <a href="/">Главная</a>
+    <span class="muted">/</span>
+    <a href="/o/{{ org_slug }}">{{ org_name }}</a>
+    <span class="muted">/</span>
+    <span>Меню</span>
+  </nav>
+  <h1>{{ org_name }} — меню</h1>
+  {% if address %}<p class="muted">{{ address }}</p>{% endif %}
+</header>
+<article>
+  {% if not menu %}
+  <p>Меню пока не опубликовано. Загляните позже или откройте карточку заведения.</p>
+  {% endif %}
+  {% for cat in menu %}
+  <h2>{{ cat.name }}</h2>
+  {% for item in cat.items %}
+  <div class="menu-item">
+    {% if item.photo_url %}
+    <img src="{{ item.photo_url }}" alt="{{ item.name }}" width="72" height="72" loading="lazy" />
+    {% else %}
+    <div class="ph" aria-hidden="true"></div>
+    {% endif %}
+    <div>
+      <strong>{{ item.name }}</strong>
+      {% if item.description %}<div class="muted">{{ item.description }}</div>{% endif %}
+    </div>
+    <div class="price">{{ item.price }} ₽</div>
+  </div>
+  {% endfor %}
+  {% endfor %}
+  <p>
+    <a class="cta cta-primary" href="/m/{{ org_slug }}">Заказать онлайн</a>
+    <a class="cta cta-outline" href="/o/{{ org_slug }}">Карточка заведения</a>
+  </p>
+</article>
+{% endblock %}
