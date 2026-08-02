@@ -56,6 +56,16 @@ export default function PublicOrgPage({ slug }) {
   }, [slug]);
 
   useEffect(() => {
+    if (!error) return;
+    setPageMeta({
+      title: "Организация не найдена — Вместе",
+      description: "Такой организации нет на платформе Вместе.",
+      path: `/o/${slug}`,
+      robots: "noindex,nofollow",
+    });
+  }, [error, slug]);
+
+  useEffect(() => {
     if (!org) return;
     setPageMeta({
       title: `${org.organization_name} — ${org.sphere_label || "Вместе"}`,
@@ -63,6 +73,7 @@ export default function PublicOrgPage({ slug }) {
         org.card_note ||
         `${org.organization_name}${org.organization_address ? `, ${org.organization_address}` : ""}. Онлайн на Вместе.`,
       path: `/o/${org.slug}`,
+      robots: "index,follow",
     });
   }, [org]);
 

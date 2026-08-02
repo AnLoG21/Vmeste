@@ -9,12 +9,16 @@ Allow: /m/
 Allow: /city/
 Allow: /legal/
 
+# Дубли HTML-файлов (канонические URL без .html)
+Disallow: /*.html$
+
 # Личный кабинет и приложение — не индексировать
 Disallow: /cabinet
 Disallow: /settings
 Disallow: /subscriptions
 Disallow: /organization
 Disallow: /cafe
+Disallow: /cafe-orders
 Disallow: /staff
 Disallow: /reviews
 Disallow: /bookings
@@ -30,5 +34,8 @@ Disallow: /api/
 Disallow: /admin
 Disallow: /admin/
 Disallow: /media/
+
+# Разрешаем файл подтверждения Яндекс.Вебмастера
+Allow: /yandex_84ec889f078f5b2d.html
 
 Sitemap: https://vsevmeste.space/sitemap.xml

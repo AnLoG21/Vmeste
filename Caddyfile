@@ -10,6 +10,16 @@ www.{$DOMAIN} {
 		file_server
 	}
 
+	# Динамический sitemap (организации + города) — для Яндекс.Вебмастера
+	handle /sitemap.xml {
+		rewrite * /api/users/sitemap.xml
+		reverse_proxy web:8000 {
+			header_up Host {host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
 	@backend path /api/* /admin* /static/*
 	handle @backend {
 		reverse_proxy web:8000 {

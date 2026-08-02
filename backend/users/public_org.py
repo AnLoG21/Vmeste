@@ -1,4 +1,6 @@
 from django.db.models import Avg, Count
+from django.http import HttpResponse
+from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -9,6 +11,12 @@ from reviews.models import Review, ReviewPhoto
 from .models import User
 from .org_profile import default_working_hours
 from .slug_utils import ensure_organization_slug
+
+SITE_ORIGIN = "https://vsevmeste.space"
+CITY_SITEMAP = (
+    ("moscow", "Москва"),
+    ("spb", "Санкт-Петербург"),
+)
 
 
 def build_public_org_payload(provider, request):
@@ -125,3 +133,48 @@ class PublicOrganizationSitemapView(APIView):
                 }
             )
         return Response({"organizations": items})
+
+
+class SitemapXmlView(APIView):
+    """Динамический sitemap.xml для Яндекса/Google: главные + города + /o/ и /m/."""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        today = timezone.localdate().isoformat()
+        urls = [
+            ("/", "1.0", "weekly"),
+            ("/businesses", "0.95", "weekly"),
+            ("/contacts", "0.9", "monthly"),
+            ("/offer", "0.8", "monthly"),
+            ("/privacy", "0.6", "monthly"),
+        ]
+        for key, _title in CITY_SITEMAP:
+            urls.append((f"/city/{key}", "0.85", "weekly"))
+
+        qs = (
+            User.objects.filter(role=User.Role.PROVIDER, is_active=True)
+            .exclude(organization_name="")
+            .order_by("id")[:500]
+        )
+        for u in qs:
+            slug = ensure_organization_slug(u)
+            urls.append((f"/o/{slug}", "0.8", "weekly"))
+            if u.provider_sphere == User.ProviderSphere.CAFE_RESTAURANT:
+                urls.append((f"/m/{slug}", "0.7", "weekly"))
+
+        lines = [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        ]
+        for path, priority, freq in urls:
+            lines.append("  <url>")
+            lines.append(f"    <loc>{SITE_ORIGIN}{path}</loc>")
+            lines.append(f"    <lastmod>{today}</lastmod>")
+            lines.append(f"    <changefreq>{freq}</changefreq>")
+            lines.append(f"    <priority>{priority}</priority>")
+            lines.append("  </url>")
+        lines.append("</urlset>")
+        xml = "\n".join(lines) + "\n"
+        return HttpResponse(xml, content_type="application/xml; charset=utf-8")
