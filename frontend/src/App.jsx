@@ -10059,13 +10059,13 @@ export default function App() {
           }}
         >
           <img
-            src={accessToken ? logoMain : "/favicon.png"}
+            src={logoMain}
             alt="Вместе"
             className="brand-logo"
-            width={accessToken ? 320 : 56}
-            height={accessToken ? 160 : 56}
+            width={320}
+            height={160}
             decoding="async"
-            fetchPriority={accessToken ? "auto" : "high"}
+            fetchPriority="high"
             onError={(e) => {
               e.currentTarget.style.display = "none";
             }}
