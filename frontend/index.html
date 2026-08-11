@@ -156,22 +156,54 @@
         ]
       }
     </script>
-    <link rel="stylesheet" href="/legal.css" />
     <style>
+      body {
+        margin: 0;
+        background: #fff8f2;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: #1a1208;
+      }
       .static-home {
         max-width: 880px;
         margin: 0 auto;
         padding: 2rem 1.25rem 3rem;
       }
       .static-home h1 {
-        font-size: 1.85rem;
-        line-height: 1.25;
+        font-size: clamp(1.75rem, 3vw, 2.5rem);
+        line-height: 1.2;
         margin: 0 0 1rem;
+        color: #1a1208;
       }
       .static-home .lead {
         font-size: 1.05rem;
-        color: #333;
+        color: #5c3d1e;
         margin-bottom: 1.5rem;
+      }
+      .legal-pricing {
+        display: grid;
+        gap: 1rem;
+        margin: 1rem 0;
+      }
+      .legal-pricing article {
+        border: 1px solid #ffd9bd;
+        border-radius: 12px;
+        padding: 1rem;
+        background: #fff;
+      }
+      .legal-pricing h3 {
+        margin: 0 0 0.35rem;
+        font-size: 1.05rem;
+      }
+      .legal-price {
+        font-weight: 600;
+        color: #1a1208;
+      }
+      .legal-meta {
+        color: #5c3d1e;
+        font-size: 0.9rem;
+      }
+      .static-home a {
+        color: #9a4000;
       }
     </style>
   </head>

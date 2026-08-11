@@ -1,5 +1,7 @@
 import { createPortal } from "react-dom";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import "./styles.css";
+import "./mobile.css";
 import logoMain from "./assets/logo-main.png";
 import LandingPage from "./LandingPage.jsx";
 import SubscriptionsPage from "./SubscriptionsPage.jsx";
@@ -2868,11 +2870,15 @@ export default function App() {
       ];
 
   useEffect(() => {
-    loadRoles();
-    loadSpheres();
     handleVerifyEmailFromUrl();
     handleConfirmPasswordChangeFromUrl();
   }, []);
+
+  useEffect(() => {
+    if (!accessToken && !showAuthModal) return;
+    loadRoles();
+    loadSpheres();
+  }, [accessToken, showAuthModal]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -10053,9 +10059,13 @@ export default function App() {
           }}
         >
           <img
-            src={logoMain}
+            src={accessToken ? logoMain : "/favicon.png"}
             alt="Вместе"
             className="brand-logo"
+            width={accessToken ? 320 : 56}
+            height={accessToken ? 160 : 56}
+            decoding="async"
+            fetchPriority={accessToken ? "auto" : "high"}
             onError={(e) => {
               e.currentTarget.style.display = "none";
             }}

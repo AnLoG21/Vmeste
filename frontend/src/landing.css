@@ -38,12 +38,12 @@
 }
 
 .landing-header-btn--primary {
-  background: #ff7a00;
+  background: #c45c00;
   color: #fff;
 }
 
 .landing-header-btn--primary:hover {
-  background: #eb6f00;
+  background: #a33d00;
 }
 
 .landing-hero {
@@ -96,8 +96,8 @@
 
 .landing-btn--outline {
   background: #fff;
-  color: #c85a00;
-  border: 2px solid #ffbf8a;
+  color: #9a4000;
+  border: 2px solid #c85a00;
 }
 
 .landing-btn--outline:hover {
@@ -501,7 +501,7 @@
 }
 
 .landing-footer-nav a {
-  color: #c85a00;
+  color: #9a4000;
   text-decoration: none;
 }
 
@@ -512,11 +512,16 @@
 .landing-footer-meta {
   margin: 6px 0 0;
   font-size: 0.88rem;
-  color: #6b4423;
+  color: #5c3d1e;
+}
+
+.landing-footer-meta a {
+  color: #9a4000;
+  font-weight: 600;
 }
 
 .landing-footer a {
-  color: #c85a00;
+  color: #9a4000;
 }
 
 .legal-page {
@@ -813,6 +818,66 @@
 .businesses-cat h3 { margin: 0 0 8px; font-size: 1rem; }
 .businesses-cat ul { margin: 0; padding-left: 1.1rem; }
 .businesses-footer { margin-top: 28px; color: #5a3a22; }
+
+/* Cookie banner (guest/legal pages without full App CSS) */
+.cookie-consent {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 10050;
+  pointer-events: none;
+}
+
+.cookie-consent-inner {
+  pointer-events: auto;
+  max-width: 720px;
+  margin: 0 auto;
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid #ffd9bd;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
+}
+
+.cookie-consent-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #1a1208;
+}
+
+.cookie-consent-text a {
+  color: #9a4000;
+  font-weight: 600;
+}
+
+.cookie-consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cookie-consent-btn {
+  width: auto !important;
+  min-width: 140px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #c85a00;
+  background: #fff;
+  color: #9a4000;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cookie-consent-btn--primary {
+  background: #c45c00;
+  color: #fff;
+  border-color: #c45c00;
+}
 
 .subscriptions-policy {
   margin: 12px 0 18px;

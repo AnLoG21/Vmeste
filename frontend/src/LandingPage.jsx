@@ -49,10 +49,18 @@ export default function LandingPage({ onLogin, onRegister }) {
   }, []);
 
   useEffect(() => {
-    fetch(`${API_URL}/subscriptions/plans/`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setPlans(Array.isArray(data) ? data : []))
-      .catch(() => setPlans([]));
+    const run = () => {
+      fetch(`${API_URL}/subscriptions/plans/`)
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => setPlans(Array.isArray(data) ? data : []))
+        .catch(() => setPlans([]));
+    };
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(run, { timeout: 2500 });
+      return () => cancelIdleCallback(id);
+    }
+    const t = setTimeout(run, 800);
+    return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
