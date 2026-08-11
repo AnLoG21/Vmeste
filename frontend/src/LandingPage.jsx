@@ -12,6 +12,8 @@ import {
 } from "./seo/schema.js";
 import { setPageMeta } from "./seo/setPageMeta.js";
 import { phoneFieldProps } from "./phone.js";
+import LandingDemo from "./LandingDemo.jsx";
+import LandingLightbox from "./LandingLightbox.jsx";
 
 function formatPlanPrice(plan) {
   if (plan?.plan_type === "trial" || plan?.slug === "starter") return "7 дней бесплатно";
@@ -19,6 +21,89 @@ function formatPlanPrice(plan) {
   if (!value) return "По заявке";
   return `${value.toLocaleString("ru-RU")} ₽ / месяц`;
 }
+
+const CASES = [
+  {
+    initials: "АН",
+    name: "Анна",
+    role: "студия ламимейкинга",
+    text: "Разгрузила вечер от звонков: клиенты записываются сами по ссылке и с карты. За первый месяц — десятки новых обращений без рекламы в соцсетях.",
+  },
+  {
+    initials: "ДК",
+    name: "Дмитрий",
+    role: "автосервис",
+    text: "Вынес прайс и слоты в онлайн: меньше «пересечений» в гараже, понятный календарь по мастерам и история обращений в одном месте.",
+  },
+  {
+    initials: "МЛ",
+    name: "Марина",
+    role: "салон красоты",
+    text: "Добавила мастеров с отдельными графиками. Владелец видит записи и аналитику, сотрудники — только своё расписание и чаты с клиентами.",
+  },
+  {
+    initials: "ИС",
+    name: "Игорь",
+    role: "кафе",
+    text: "Гости заказывают с телефона по QR: меню с фото, статусы столов и оплата без очереди к официанту на кассе.",
+  },
+];
+
+const INTEGRATIONS = [
+  {
+    title: "Уведомления в кабинете",
+    status: "now",
+    text: "Статусы записей, приглашения сотрудников и сервисные события — сразу в личном кабинете.",
+  },
+  {
+    title: "Push в мобильном приложении",
+    status: "now",
+    text: "Android-приложение Вместе умеет принимать push о важных событиях (при разрешении пользователя).",
+  },
+  {
+    title: "Чаты с клиентами",
+    status: "now",
+    text: "Переписка внутри платформы: уточнить детали визита без потери контекста записи.",
+  },
+  {
+    title: "ЮKassa",
+    status: "now",
+    text: "Оплата подписки и онлайн-оплата заказов в сценарии кафе/ресторана.",
+  },
+  {
+    title: "Telegram / WhatsApp",
+    status: "soon",
+    text: "Сервисные сообщения и акции в мессенджеры — в планах и через индивидуальную автоматизацию.",
+  },
+  {
+    title: "Google / Яндекс Календарь",
+    status: "soon",
+    text: "Синхронизация слотов с внешними календарями пока не встроена; можно заказать как кастомную интеграцию.",
+  },
+  {
+    title: "SMS / email о записи",
+    status: "soon",
+    text: "Автоподтверждения и напоминания по SMS/email — в дорожной карте. Сейчас клиент видит статус в кабинете и чате.",
+  },
+];
+
+const PREVIEWS = [
+  {
+    id: "booking",
+    title: "Запись с телефона",
+    caption: "Клиент выбирает услугу и время",
+  },
+  {
+    id: "calendar",
+    title: "Календарь мастера",
+    caption: "Подтверждение и свободные окна",
+  },
+  {
+    id: "stats",
+    title: "Аналитика",
+    caption: "Выручка и популярные услуги",
+  },
+];
 
 export default function LandingPage({ onLogin, onRegister }) {
   const requestRef = useRef(null);
@@ -33,6 +118,8 @@ export default function LandingPage({ onLogin, onRegister }) {
   });
   const [formStatus, setFormStatus] = useState("");
   const [plans, setPlans] = useState([]);
+  const [demoOpen, setDemoOpen] = useState(false);
+  const [lightbox, setLightbox] = useState(null);
 
   const homeJsonLd = useMemo(
     () => [organizationJsonLd(), websiteJsonLd(), softwareApplicationJsonLd(), faqPageJsonLd(HOME_FAQ)],
@@ -64,10 +151,16 @@ export default function LandingPage({ onLogin, onRegister }) {
   }, []);
 
   useEffect(() => {
-    if (window.location.hash === "#pricing") {
+    const hash = window.location.hash;
+    if (hash === "#pricing") {
       pricingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else if (window.location.hash === "#request" || window.location.hash === "#automation-request") {
+    } else if (hash === "#request" || hash === "#automation-request") {
       requestRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (hash === "#demo") {
+      setDemoOpen(true);
+    } else if (hash && hash.length > 1) {
+      const el = document.getElementById(hash.slice(1));
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, []);
 
@@ -111,344 +204,569 @@ export default function LandingPage({ onLogin, onRegister }) {
   return (
     <div className="landing">
       <JsonLd id="vmeste-home-jsonld" data={homeJsonLd} />
+      <LandingDemo open={demoOpen} onClose={() => setDemoOpen(false)} onRegister={onRegister} />
+      <LandingLightbox
+        open={Boolean(lightbox)}
+        title={lightbox?.title}
+        onClose={() => setLightbox(null)}
+      >
+        {lightbox?.id === "booking" && (
+          <div className="landing-preview-zoom landing-preview-zoom--phone">
+            <div className="landing-preview-card landing-preview-card--booking">
+              <span>Сегодня</span>
+              <strong>16:30 · Гель-лак</strong>
+              <em>Мастер Анна · 2 200 ₽</em>
+              <div className="landing-preview-btn">Подтвердить запись</div>
+            </div>
+          </div>
+        )}
+        {lightbox?.id === "calendar" && (
+          <div className="landing-preview-zoom">
+            <div className="landing-preview-card landing-preview-card--calendar">
+              <strong>Календарь · среда</strong>
+              <ul>
+                <li>10:00 Мария — стрижка</li>
+                <li>12:00 свободно</li>
+                <li>14:30 Игорь — диагностика</li>
+                <li>17:00 Елена — маникюр</li>
+              </ul>
+            </div>
+          </div>
+        )}
+        {lightbox?.id === "stats" && (
+          <div className="landing-preview-zoom">
+            <div className="landing-preview-card landing-preview-card--stats">
+              <strong>Выручка · 7 дней</strong>
+              <div className="landing-demo-bars landing-demo-bars--lg" aria-hidden="true">
+                {[40, 55, 48, 70, 62, 85, 78].map((h, i) => (
+                  <div key={i} className="landing-demo-bar" style={{ height: `${h}%` }} />
+                ))}
+              </div>
+              <p>Популярно: гель-лак · 47 записей</p>
+            </div>
+          </div>
+        )}
+      </LandingLightbox>
+
       <main>
-      <section className="landing-hero">
-        <div className="landing-hero-content">
-          <h1 className="landing-hero-title">
-            Вместе — платформа для записи и автоматизации вашего бизнеса
-          </h1>
-          <p className="landing-hero-lead">
-            Онлайн-запись клиентов, каталог услуг, чаты, карта организаций и управление командой —
-            всё в одном сервисе. Подключайтесь за минуты или закажите индивидуальную автоматизацию
-            под процессы вашей компании.
+        <section className="landing-hero">
+          <div className="landing-hero-content">
+            <h1 className="landing-hero-title">
+              Вместе — платформа для записи и автоматизации вашего бизнеса
+            </h1>
+            <p className="landing-hero-lead">
+              Онлайн-запись клиентов, каталог услуг, чаты, карта организаций и управление командой —
+              всё в одном сервисе. Подключайтесь за минуты или закажите индивидуальную автоматизацию
+              под процессы вашей компании.
+            </p>
+            <div className="landing-hero-actions">
+              <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
+                Попробовать бесплатно
+              </button>
+              <button
+                type="button"
+                className="landing-btn landing-btn--outline"
+                onClick={() => setDemoOpen(true)}
+              >
+                Посмотреть демо
+              </button>
+              <button type="button" className="landing-btn landing-btn--outline" onClick={scrollToPricing}>
+                Тарифы
+              </button>
+            </div>
+          </div>
+          <div className="landing-hero-visual" aria-hidden="true">
+            <div className="landing-hero-card">
+              <span className="landing-hero-card-icon">📅</span>
+              <strong>Онлайн-запись</strong>
+              <p>Клиенты записываются сами — вы управляете расписанием</p>
+            </div>
+            <div className="landing-hero-card">
+              <span className="landing-hero-card-icon">💬</span>
+              <strong>Чаты</strong>
+              <p>Общение с клиентами прямо в платформе</p>
+            </div>
+            <div className="landing-hero-card">
+              <span className="landing-hero-card-icon">🗺️</span>
+              <strong>Карта</strong>
+              <p>Клиенты находят вас на интерактивной карте</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="landing-section" id="quick-start">
+          <h2>Быстрый старт за 3 шага</h2>
+          <p className="landing-section-lead">
+            Настройка не займёт недели. Базовый запуск — в день регистрации.
+          </p>
+          <ol className="landing-timeline">
+            <li>
+              <span className="landing-timeline-step">1</span>
+              <div>
+                <strong>Зарегистрируйтесь за 2 минуты</strong>
+                <p>Email, подтверждение и вход в кабинет.</p>
+              </div>
+            </li>
+            <li>
+              <span className="landing-timeline-step">2</span>
+              <div>
+                <strong>Внесите услуги и цены</strong>
+                <p>Готовые шаблоны для салона, сервиса и кафе — или свой список.</p>
+              </div>
+            </li>
+            <li>
+              <span className="landing-timeline-step">3</span>
+              <div>
+                <strong>Поделитесь ссылкой</strong>
+                <p>Вставьте в соцсети, на сайт или отправьте клиентам — запись пойдёт сама.</p>
+              </div>
+            </li>
+          </ol>
+          <div className="landing-hero-actions">
+            <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
+              Начать использовать
+            </button>
+            <button type="button" className="landing-btn landing-btn--outline" onClick={() => setDemoOpen(true)}>
+              Сначала демо
+            </button>
+          </div>
+        </section>
+
+        <section className="landing-section" id="demo">
+          <h2>Посмотрите, как это выглядит</h2>
+          <p className="landing-section-lead">
+            Не нужно покупать «кота в мешке»: откройте демо клиента, календаря записей и аналитики.
+            Превью можно увеличить — удобно и с телефона, и с компьютера.
+          </p>
+          <div className="landing-previews">
+            {PREVIEWS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className="landing-preview"
+                onClick={() => setLightbox(p)}
+                aria-label={`${p.title}: открыть крупнее`}
+              >
+                <div className={`landing-preview-thumb landing-preview-thumb--${p.id}`} aria-hidden="true" />
+                <strong>{p.title}</strong>
+                <span>{p.caption}</span>
+                <em>Нажмите, чтобы рассмотреть</em>
+              </button>
+            ))}
+          </div>
+          <button type="button" className="landing-btn landing-btn--outline" onClick={() => setDemoOpen(true)}>
+            Открыть интерактивное демо
+          </button>
+        </section>
+
+        <section className="landing-section">
+          <h2>Что такое Вместе?</h2>
+          <p className="landing-section-lead">
+            Вместе — современная экосистема для сервисного бизнеса: салонов красоты, сервисных
+            центров, студий и любых организаций, где важны запись, коммуникация и прозрачность.
+          </p>
+          <div className="landing-features">
+            <article className="landing-feature">
+              <h3>Для клиентов</h3>
+              <ul>
+                <li>Поиск организаций на карте по сфере и рейтингу</li>
+                <li>Запись на удобное время без звонков</li>
+                <li>Чат с исполнителем и история визитов</li>
+                <li>Отзывы и оценки</li>
+              </ul>
+            </article>
+            <article className="landing-feature">
+              <h3>Для бизнеса</h3>
+              <ul>
+                <li>Каталог услуг и категорий</li>
+                <li>Календарь интервалов и управление сотрудниками</li>
+                <li>Подтверждение и отмена записей</li>
+                <li>Галерея, контакты и график работы организации</li>
+              </ul>
+            </article>
+            <article className="landing-feature landing-feature--accent">
+              <h3>Подписка</h3>
+              <p>
+                Сначала можно активировать <strong>бесплатную неделю «Старт»</strong> — один раз.
+                Дальше тариф «Бизнес» за 990 ₽/мес с полным функционалом. Оплата через ЮKassa, перед
+                оплатой можно ввести промокод.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section className="landing-section" id="cases">
+          <h2>Как бизнес использует Вместе</h2>
+          <p className="landing-section-lead">
+            Типовые сценарии запуска — чтобы было понятно, какую задачу закрывает платформа на
+            практике.
+          </p>
+          <div className="landing-cases">
+            {CASES.map((c) => (
+              <article key={c.name + c.role} className="landing-case">
+                <div className="landing-case-avatar" aria-hidden="true">
+                  {c.initials}
+                </div>
+                <div>
+                  <h3>
+                    {c.name}, {c.role}
+                  </h3>
+                  <p>{c.text}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+          <p className="landing-note">
+            Хотите опубликовать свой кейс с фото? Напишите на{" "}
+            <a href={`mailto:${SITE_LEGAL.email}`}>{SITE_LEGAL.email}</a>.
+          </p>
+        </section>
+
+        <section className="landing-section landing-businesses" id="businesses">
+          <h2>Для каких бизнесов уже готово</h2>
+          <p className="landing-section-lead">
+            Подключайте готовую сферу с каталогом услуг — или закажите индивидуальную настройку.
+          </p>
+          <div className="landing-businesses-grid">
+            <a className="landing-biz-card" href="/businesses#hair_salon">
+              <span className="landing-biz-emoji" aria-hidden="true">
+                💇
+              </span>
+              <strong>Салоны красоты</strong>
+              <span>Запись, мастера, услуги</span>
+              <span className="landing-biz-link">Подробнее →</span>
+            </a>
+            <a className="landing-biz-card" href="/businesses#service_center">
+              <span className="landing-biz-emoji" aria-hidden="true">
+                🔧
+              </span>
+              <strong>Сервисные центры</strong>
+              <span>Диагностика и ремонт</span>
+              <span className="landing-biz-link">Подробнее →</span>
+            </a>
+            <a className="landing-biz-card" href="/businesses#cafe_restaurant">
+              <span className="landing-biz-emoji" aria-hidden="true">
+                🍽️
+              </span>
+              <strong>Кафе и рестораны</strong>
+              <span>Зал, QR, меню, оплата</span>
+              <span className="landing-biz-link">Подробнее →</span>
+            </a>
+            <a className="landing-biz-card landing-biz-card--more" href="/#automation-request">
+              <span className="landing-biz-emoji" aria-hidden="true">
+                ✨
+              </span>
+              <strong>Другая сфера</strong>
+              <span>Индивидуальная автоматизация</span>
+              <span className="landing-biz-link">Оставить заявку →</span>
+            </a>
+          </div>
+        </section>
+
+        <section className="landing-section" id="value">
+          <h2>Больше, чем просто запись</h2>
+          <p className="landing-section-lead">
+            CRM-ценность — в возврате клиентов, оплатах и цифрах для решений. Ниже — что уже работает
+            и что готовим.
+          </p>
+          <div className="landing-value-grid">
+            <article className="landing-value-card">
+              <h3>Удержание клиентов</h3>
+              <ul>
+                <li>
+                  <strong>Чаты и история визитов</strong> — клиент не «теряется» после первой записи.
+                </li>
+                <li>
+                  <strong>Уведомления в кабинете и push</strong> — статусы записей под рукой.
+                </li>
+                <li>
+                  <strong>Автонапоминания «не был 4 недели»</strong>, кэшбэк и бонусы — в планах и
+                  доступны как кастом при автоматизации.
+                </li>
+              </ul>
+            </article>
+            <article className="landing-value-card">
+              <h3>Эквайринг и предоплата</h3>
+              <ul>
+                <li>
+                  <strong>ЮKassa</strong> для подписки и онлайн-оплаты заказов в кафе.
+                </li>
+                <li>
+                  <strong>Борьба с неприходами:</strong> частичная/полная предоплата при записи на
+                  услуги — в развитии; для кафе онлайн-оплата уже доступна.
+                </li>
+              </ul>
+            </article>
+            <article className="landing-value-card">
+              <h3>Аналитика руководителя</h3>
+              <ul>
+                <li>График выручки и динамика записей</li>
+                <li>Рейтинг популярных услуг</li>
+                <li>Обзор нагрузки — чтобы видеть, что приносит деньги</li>
+              </ul>
+              <button type="button" className="landing-link-btn" onClick={() => setDemoOpen(true)}>
+                Открыть демо аналитики →
+              </button>
+            </article>
+            <article className="landing-value-card">
+              <h3>Команда и роли</h3>
+              <ul>
+                <li>Подходит соло-мастеру и студии</li>
+                <li>Отдельные графики сотрудников</li>
+                <li>Ограничение прав: сотрудник видит свои записи, без лишней финансовой базы</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="landing-section" id="integrations">
+          <h2>Интеграции и уведомления</h2>
+          <p className="landing-section-lead">
+            Прозрачно: что уже подключено, а что планируем — без размытых обещаний.
+          </p>
+          <div className="landing-integrations">
+            {INTEGRATIONS.map((item) => (
+              <article key={item.title} className="landing-integration">
+                <div className="landing-integration-top">
+                  <h3>{item.title}</h3>
+                  <span className={`landing-status landing-status--${item.status}`}>
+                    {item.status === "now" ? "Доступно" : "В планах"}
+                  </span>
+                </div>
+                <p>{item.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="landing-section landing-pricing" ref={pricingRef} id="pricing">
+          <h2>Тарифы и цены</h2>
+          <p className="landing-section-lead">
+            <strong>Старт</strong> — бесплатная неделя полного доступа (только один раз, потом
+            пропадает). <strong>Бизнес</strong> — 990 ₽/мес за весь основной функционал. Перед
+            оплатой можно ввести промокод или сразу перейти к ЮKassa.
+          </p>
+          <div className="subscriptions-plans landing-pricing-grid">
+            {plans.map((plan) => (
+              <article key={plan.id} className="subscriptions-plan-card">
+                <h3>
+                  {(plan.plan_type === "trial" || plan.slug === "starter") && "🎁 "}
+                  {plan.slug === "business" && "💼 "}
+                  {plan.plan_type === "custom" && "🛠️ "}
+                  {plan.name}
+                </h3>
+                <p className="subscriptions-plan-desc">{plan.description}</p>
+                <p className="subscriptions-plan-price">{formatPlanPrice(plan)}</p>
+                {Array.isArray(plan.features) && plan.features.length > 0 && (
+                  <ul className="subscriptions-plan-features">
+                    {plan.features.map((feature) => (
+                      <li key={feature}>{feature}</li>
+                    ))}
+                  </ul>
+                )}
+                {plan.plan_type === "trial" || plan.slug === "starter" ? (
+                  <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
+                    Попробовать бесплатно
+                  </button>
+                ) : Number(plan.price_monthly) > 0 ? (
+                  <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
+                    Выбрать тариф
+                  </button>
+                ) : (
+                  <button type="button" className="landing-btn landing-btn--outline" onClick={scrollToRequest}>
+                    Оставить заявку
+                  </button>
+                )}
+              </article>
+            ))}
+          </div>
+          <p className="landing-note">
+            Оплачивая подписку, вы принимаете условия{" "}
+            <a href="/offer">публичной оферты</a>. При досрочной отмене в день оплаты (не пробный
+            период и не промокод) деньги возвращаются.
+          </p>
+        </section>
+
+        <section className="landing-section landing-delivery">
+          <h2>Получение услуги после оплаты</h2>
+          <p className="landing-section-lead">
+            Вместе — облачный онлайн-сервис (SaaS). Физическая доставка товаров не производится.
+          </p>
+          <ol className="landing-steps">
+            <li>Зарегистрируйтесь на сайте и подтвердите email.</li>
+            <li>Войдите в личный кабинет и откройте раздел «Подписки».</li>
+            <li>
+              Активируйте бесплатную неделю «Старт» или оплатите «Бизнес» через ЮKassa (можно с
+              промокодом).
+            </li>
+            <li>После активации доступ появляется сразу — статус подписки станет «Активна».</li>
+          </ol>
+        </section>
+
+        <section className="landing-section landing-section--automation">
+          <div className="landing-automation-text">
+            <h2>Индивидуальная автоматизация</h2>
+            <p>
+              Нужно больше, чем стандартный функционал? Мы разработаем персональное решение под ваш
+              бизнес: интеграции, нестандартные сценарии записи, отчёты, брендирование и обучение
+              команды.
+            </p>
+            <ol className="landing-steps">
+              <li>Оставьте заявку с контактами (email обязателен)</li>
+              <li>Мы свяжемся с вами и обсудим задачи</li>
+              <li>Реализуем автоматизацию и подключим к платформе</li>
+              <li>Вы пользуетесь сервисом и оплачиваете подписку</li>
+            </ol>
+            <p className="landing-note">
+              Для работы с подпиской и личным кабинетом{" "}
+              <button type="button" className="landing-link-btn" onClick={onRegister}>
+                зарегистрируйтесь
+              </button>{" "}
+              на платформе.
+            </p>
+          </div>
+        </section>
+
+        <section className="landing-section landing-request" ref={requestRef} id="automation-request">
+          <h2>Оставить заявку на автоматизацию</h2>
+          <p className="landing-section-lead">
+            Укажите email — он обязателен, чтобы мы могли ответить. Телефон и Telegram — по желанию,
+            заполните хотя бы один удобный способ связи.
+          </p>
+          <form className="landing-request-form" onSubmit={submitRequest}>
+            <input
+              placeholder="Ваше имя *"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required
+            />
+            <input
+              type="email"
+              placeholder="Email *"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              required
+            />
+            <input
+              placeholder="Телефон"
+              {...phoneFieldProps(form.phone, (phone) => setForm({ ...form, phone }))}
+            />
+            <input
+              placeholder="Telegram (@username)"
+              value={form.telegram}
+              onChange={(e) => setForm({ ...form, telegram: e.target.value })}
+            />
+            <textarea
+              placeholder="Расскажите о вашем бизнесе и задачах"
+              rows={4}
+              value={form.message}
+              onChange={(e) => setForm({ ...form, message: e.target.value })}
+            />
+            <label className="checkbox landing-consent-item">
+              <input
+                type="checkbox"
+                checked={Boolean(form.accept_privacy)}
+                onChange={(e) => setForm({ ...form, accept_privacy: e.target.checked })}
+                required
+              />
+              <span>
+                Согласен(на) на обработку персональных данных согласно{" "}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer">
+                  политике конфиденциальности
+                </a>{" "}
+                (версия {SITE_LEGAL.privacyVersion})
+              </span>
+            </label>
+            <button type="submit" className="landing-btn landing-btn--primary">
+              Отправить заявку
+            </button>
+            {formStatus && <p className="landing-form-status">{formStatus}</p>}
+          </form>
+        </section>
+
+        <section className="landing-section landing-roadmap">
+          <h2>Функционал платформы</h2>
+          <p className="landing-section-lead">
+            Мы развиваем Вместе поэтапно: сначала базовые инструменты для записи и коммуникации,
+            затем — оплата, автоматизация и расширенная аналитика.
+          </p>
+          <div className="landing-roadmap-grid">
+            <article className="landing-roadmap-card landing-roadmap-card--now">
+              <h3>Уже доступно</h3>
+              <ul>
+                <li>Регистрация и вход с подтверждением email</li>
+                <li>Роли: клиент, исполнитель (организация), сотрудник</li>
+                <li>Онлайн-запись и календарь интервалов</li>
+                <li>Каталог услуг с шаблонами: салон красоты, сервисный центр, кафе/рестораны</li>
+                <li>
+                  Кафе: план зала, QR и PIN столов, меню (новинки, фото, кБЖУ), самовывоз/доставка,
+                  оплата
+                </li>
+                <li>Публичные страницы организаций (/o/…) для SEO</li>
+                <li>Карта организаций, поиск и фильтры для клиентов</li>
+                <li>Чаты между клиентами и организациями</li>
+                <li>Отзывы и рейтинг организаций</li>
+                <li>Управление сотрудниками и правами доступа</li>
+                <li>Аналитика: выручка, услуги, динамика записей</li>
+                <li>Профиль организации: адрес, график, галерея, контакты</li>
+                <li>История записей и уведомления в личном кабинете</li>
+                <li>Подписки и оплата через ЮKassa</li>
+                <li>Заявка на индивидуальную автоматизацию</li>
+                <li>Согласия 152‑ФЗ, cookies/Метрика, удаление аккаунта</li>
+              </ul>
+            </article>
+            <article className="landing-roadmap-card landing-roadmap-card--planned">
+              <h3>В планах</h3>
+              <ul>
+                <li>Email- и SMS-уведомления о записях и напоминания</li>
+                <li>Расширенные push-сценарии и доработка мобильного приложения</li>
+                <li>Онлайн-предоплата услуг при записи (не только подписка и заказы кафе)</li>
+                <li>Печать QR и конструктор рассадки — доработка UX</li>
+                <li>Посадочные страницы по городам и сферам</li>
+                <li>Несколько филиалов у одной организации</li>
+                <li>Интеграции: календари, 1С, CRM, мессенджеры, телефония</li>
+                <li>Новые сферы бизнеса и отраслевые шаблоны</li>
+                <li>Программа лояльности и абонементы для клиентов</li>
+                <li>Онлайн-запись через виджет на сайте организации</li>
+                <li>Расширенная автоматизация под ключ для крупного бизнеса</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="landing-section landing-faq" id="faq">
+          <h2>Частые вопросы</h2>
+          <p className="landing-section-lead">
+            Ответы про запуск, отличия от аналогов, мобильный доступ и гео-поиск.
+          </p>
+          {HOME_FAQ.map((item) => (
+            <details key={item.question} className="landing-faq-item">
+              <summary>{item.question}</summary>
+              <p>{item.answer}</p>
+            </details>
+          ))}
+        </section>
+
+        <section className="landing-section landing-cta" id="start">
+          <h2>Готовы начать?</h2>
+          <p>
+            Попробуйте бесплатно 7 дней или сначала откройте демо — без обязательств и без скролла
+            обратно наверх.
           </p>
           <div className="landing-hero-actions">
             <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
-              7 дней бесплатно
+              Попробовать бесплатно
             </button>
-            <button type="button" className="landing-btn landing-btn--outline" onClick={scrollToPricing}>
-              Тарифы
+            <button type="button" className="landing-btn landing-btn--outline" onClick={() => setDemoOpen(true)}>
+              Посмотреть демо
             </button>
-            <button type="button" className="landing-btn landing-btn--outline" onClick={scrollToRequest}>
-              Заказать автоматизацию
+            <button type="button" className="landing-btn landing-btn--ghost" onClick={onLogin}>
+              Уже есть аккаунт — войти
             </button>
           </div>
-        </div>
-        <div className="landing-hero-visual" aria-hidden="true">
-          <div className="landing-hero-card">
-            <span className="landing-hero-card-icon">📅</span>
-            <strong>Онлайн-запись</strong>
-            <p>Клиенты записываются сами — вы управляете расписанием</p>
-          </div>
-          <div className="landing-hero-card">
-            <span className="landing-hero-card-icon">💬</span>
-            <strong>Чаты</strong>
-            <p>Общение с клиентами прямо в платформе</p>
-          </div>
-          <div className="landing-hero-card">
-            <span className="landing-hero-card-icon">🗺️</span>
-            <strong>Карта</strong>
-            <p>Клиенты находят вас на интерактивной карте</p>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="landing-section">
-        <h2>Что такое Вместе?</h2>
-        <p className="landing-section-lead">
-          Вместе — это современная экосистема для сервисного бизнеса: салонов красоты, сервисных
-          центров, студий и любых организаций, где важны запись, коммуникация и прозрачность.
-        </p>
-        <div className="landing-features">
-          <article className="landing-feature">
-            <h3>Для клиентов</h3>
-            <ul>
-              <li>Поиск организаций на карте по сфере и рейтингу</li>
-              <li>Запись на удобное время без звонков</li>
-              <li>Чат с исполнителем и история визитов</li>
-              <li>Отзывы и оценки</li>
-            </ul>
-          </article>
-          <article className="landing-feature">
-            <h3>Для бизнеса</h3>
-            <ul>
-              <li>Каталог услуг и категорий</li>
-              <li>Календарь интервалов и управление сотрудниками</li>
-              <li>Подтверждение и отмена записей</li>
-              <li>Галерея, контакты и график работы организации</li>
-            </ul>
-          </article>
-          <article className="landing-feature landing-feature--accent">
-            <h3>Подписка</h3>
-            <p>
-              Сначала можно активировать <strong>бесплатную неделю «Старт»</strong> — один раз.
-              Дальше тариф «Бизнес» за 990 ₽/мес с полным функционалом. Оплата через ЮKassa, перед
-              оплатой можно ввести промокод.
-            </p>
-          </article>
-        </div>
-      </section>
-
-      <section className="landing-section landing-businesses" id="businesses">
-        <h2>Для каких бизнесов уже готово</h2>
-        <p className="landing-section-lead">
-          Подключайте готовую сферу с каталогом услуг — или закажите индивидуальную настройку.
-        </p>
-        <div className="landing-businesses-grid">
-          <a className="landing-biz-card" href="/businesses#hair_salon">
-            <span className="landing-biz-emoji" aria-hidden="true">
-              💇
-            </span>
-            <h3>Салон красоты</h3>
-            <p>Стрижки, окрашивание, маникюр, брови — запись и мастера в одном сервисе.</p>
-            <span className="landing-biz-link">Подробнее →</span>
-          </a>
-          <a className="landing-biz-card" href="/businesses#service_center">
-            <span className="landing-biz-emoji" aria-hidden="true">
-              🔧
-            </span>
-            <h3>Сервисный центр</h3>
-            <p>Ремонт техники, диагностика, статусы заказов и чат с клиентом.</p>
-            <span className="landing-biz-link">Подробнее →</span>
-          </a>
-          <a className="landing-biz-card" href="/businesses#cafe_restaurant">
-            <span className="landing-biz-emoji" aria-hidden="true">
-              🍽️
-            </span>
-            <h3>Кафе и рестораны</h3>
-            <p>План зала, QR столов, меню с новинками, самовывоз и доставка.</p>
-            <span className="landing-biz-link">Подробнее →</span>
-          </a>
-          <a className="landing-biz-card landing-biz-card--more" href="/#automation-request">
-            <span className="landing-biz-emoji" aria-hidden="true">
-              ✨
-            </span>
-            <h3>Ваша сфера</h3>
-            <p>Нужен другой бизнес? Сделаем каталог и сценарии под вас.</p>
-            <span className="landing-biz-link">Оставить заявку →</span>
-          </a>
-        </div>
-        <p className="landing-note">
-          Полный обзор отраслей и услуг — на странице{" "}
-          <a href="/businesses">«Для бизнеса»</a>.
-        </p>
-      </section>
-
-      <section className="landing-section landing-pricing" ref={pricingRef} id="pricing">
-        <h2>Тарифы и цены</h2>
-        <p className="landing-section-lead">
-          <strong>Старт</strong> — бесплатная неделя полного доступа (только один раз, потом
-          пропадает). <strong>Бизнес</strong> — 990 ₽/мес за весь основной функционал. Перед оплатой
-          можно ввести промокод или сразу перейти к ЮKassa.
-        </p>
-        <div className="subscriptions-plans landing-pricing-grid">
-          {plans.map((plan) => (
-            <article key={plan.id} className="subscriptions-plan-card">
-              <h3>
-                {(plan.plan_type === "trial" || plan.slug === "starter") && "🎁 "}
-                {plan.slug === "business" && "💼 "}
-                {plan.plan_type === "custom" && "🛠️ "}
-                {plan.name}
-              </h3>
-              <p className="subscriptions-plan-desc">{plan.description}</p>
-              <p className="subscriptions-plan-price">{formatPlanPrice(plan)}</p>
-              {Array.isArray(plan.features) && plan.features.length > 0 && (
-                <ul className="subscriptions-plan-features">
-                  {plan.features.map((feature) => (
-                    <li key={feature}>{feature}</li>
-                  ))}
-                </ul>
-              )}
-              {plan.plan_type === "trial" || plan.slug === "starter" ? (
-                <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
-                  Попробовать бесплатно
-                </button>
-              ) : Number(plan.price_monthly) > 0 ? (
-                <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
-                  Выбрать тариф
-                </button>
-              ) : (
-                <button type="button" className="landing-btn landing-btn--outline" onClick={scrollToRequest}>
-                  Оставить заявку
-                </button>
-              )}
-            </article>
-          ))}
-        </div>
-        <p className="landing-note">
-          Оплачивая подписку, вы принимаете условия{" "}
-          <a href="/offer">публичной оферты</a>. При досрочной отмене в день оплаты (не пробный
-          период и не промокод) деньги возвращаются.
-        </p>
-      </section>
-
-      <section className="landing-section landing-delivery">
-        <h2>Получение услуги после оплаты</h2>
-        <p className="landing-section-lead">
-          Вместе — облачный онлайн-сервис (SaaS). Физическая доставка товаров не производится.
-        </p>
-        <ol className="landing-steps">
-          <li>Зарегистрируйтесь на сайте и подтвердите email.</li>
-          <li>Войдите в личный кабинет и откройте раздел «Подписки».</li>
-          <li>Активируйте бесплатную неделю «Старт» или оплатите «Бизнес» через ЮKassa (можно с промокодом).</li>
-          <li>
-            После активации доступ появляется сразу — статус подписки станет «Активна».
-          </li>
-        </ol>
-      </section>
-
-      <section className="landing-section landing-section--automation">
-        <div className="landing-automation-text">
-          <h2>Индивидуальная автоматизация</h2>
-          <p>
-            Нужно больше, чем стандартный функционал? Мы разработаем персональное решение под ваш
-            бизнес: интеграции, нестандартные сценарии записи, отчёты, брендирование и обучение
-            команды.
-          </p>
-          <ol className="landing-steps">
-            <li>Оставьте заявку с контактами (email обязателен)</li>
-            <li>Мы свяжемся с вами и обсудим задачи</li>
-            <li>Реализуем автоматизацию и подключим к платформе</li>
-            <li>Вы пользуетесь сервисом и оплачиваете подписку</li>
-          </ol>
-          <p className="landing-note">
-            Для работы с подпиской и личным кабинетом{" "}
-            <button type="button" className="landing-link-btn" onClick={onRegister}>
-              зарегистрируйтесь
-            </button>
-            {" "}на платформе.
-          </p>
-        </div>
-      </section>
-
-      <section className="landing-section landing-request" ref={requestRef} id="automation-request">
-        <h2>Оставить заявку на автоматизацию</h2>
-        <p className="landing-section-lead">
-          Укажите email — он обязателен, чтобы мы могли ответить. Телефон и Telegram — по желанию,
-          заполните хотя бы один удобный способ связи.
-        </p>
-        <form className="landing-request-form" onSubmit={submitRequest}>
-          <input
-            placeholder="Ваше имя *"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            required
-          />
-          <input
-            type="email"
-            placeholder="Email *"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            required
-          />
-          <input
-            placeholder="Телефон"
-            {...phoneFieldProps(form.phone, (phone) => setForm({ ...form, phone }))}
-          />
-          <input
-            placeholder="Telegram (@username)"
-            value={form.telegram}
-            onChange={(e) => setForm({ ...form, telegram: e.target.value })}
-          />
-          <textarea
-            placeholder="Расскажите о вашем бизнесе и задачах"
-            rows={4}
-            value={form.message}
-            onChange={(e) => setForm({ ...form, message: e.target.value })}
-          />
-          <label className="checkbox landing-consent-item">
-            <input
-              type="checkbox"
-              checked={Boolean(form.accept_privacy)}
-              onChange={(e) => setForm({ ...form, accept_privacy: e.target.checked })}
-              required
-            />
-            <span>
-              Согласен(на) на обработку персональных данных согласно{" "}
-              <a href="/privacy" target="_blank" rel="noopener noreferrer">
-                политике конфиденциальности
-              </a>{" "}
-              (версия {SITE_LEGAL.privacyVersion})
-            </span>
-          </label>
-          <button type="submit" className="landing-btn landing-btn--primary">
-            Отправить заявку
-          </button>
-          {formStatus && <p className="landing-form-status">{formStatus}</p>}
-        </form>
-      </section>
-
-      <section className="landing-section landing-roadmap">
-        <h2>Функционал платформы</h2>
-        <p className="landing-section-lead">
-          Мы развиваем Вместе поэтапно: сначала базовые инструменты для записи и коммуникации,
-          затем — оплата, автоматизация и расширенная аналитика.
-        </p>
-        <div className="landing-roadmap-grid">
-          <article className="landing-roadmap-card landing-roadmap-card--now">
-            <h3>Уже доступно</h3>
-            <ul>
-              <li>Регистрация и вход с подтверждением email</li>
-              <li>Роли: клиент, исполнитель (организация), сотрудник</li>
-              <li>Онлайн-запись и календарь интервалов</li>
-              <li>Каталог услуг с шаблонами: салон красоты, сервисный центр, кафе/рестораны</li>
-              <li>Кафе: план зала, QR и PIN столов, меню (новинки, фото, кБЖУ), самовывоз/доставка, оплата</li>
-              <li>Публичные страницы организаций (/o/…) для SEO</li>
-              <li>Карта организаций, поиск и фильтры для клиентов</li>
-              <li>Чаты между клиентами и организациями</li>
-              <li>Отзывы и рейтинг организаций</li>
-              <li>Управление сотрудниками и правами доступа</li>
-              <li>Профиль организации: адрес, график, галерея, контакты</li>
-              <li>История записей и уведомления в личном кабинете</li>
-              <li>Подписки и оплата через ЮKassa</li>
-              <li>Заявка на индивидуальную автоматизацию</li>
-              <li>Согласия 152‑ФЗ, cookies/Метрика, удаление аккаунта</li>
-            </ul>
-          </article>
-          <article className="landing-roadmap-card landing-roadmap-card--planned">
-            <h3>В планах</h3>
-            <ul>
-              <li>Email- и SMS-уведомления о записях и напоминания</li>
-              <li>Push-уведомления и мобильное приложение</li>
-              <li>Онлайн-оплата услуг при записи (не только подписка и заказы кафе)</li>
-              <li>Печать QR и конструктор рассадки «как в редакторе зала» — доработка UX</li>
-              <li>Посадочные страницы по городам и сферам</li>
-              <li>Отчёты и аналитика для бизнеса</li>
-              <li>Несколько филиалов у одной организации</li>
-              <li>Интеграции: 1С, CRM, мессенджеры, телефония</li>
-              <li>Новые сферы бизнеса и отраслевые шаблоны</li>
-              <li>Программа лояльности и абонементы для клиентов</li>
-              <li>Онлайн-запись через виджет на сайте организации</li>
-              <li>Расширенная автоматизация под ключ для крупного бизнеса</li>
-            </ul>
-          </article>
-        </div>
-      </section>
-
-      <section className="landing-section landing-cta">
-        <h2>Готовы начать?</h2>
-        <p>Создайте аккаунт за пару минут и откройте все возможности Вместе.</p>
-        <div className="landing-hero-actions">
-          <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
-            Зарегистрироваться
-          </button>
-          <button type="button" className="landing-btn landing-btn--ghost" onClick={onLogin}>
-            Уже есть аккаунт — войти
-          </button>
-        </div>
-      </section>
-
-      <section className="landing-section landing-faq" id="faq">
-        <h2>Частые вопросы</h2>
-        <p className="landing-section-lead">Коротко о сервисе, тарифах и запуске.</p>
-        {HOME_FAQ.map((item) => (
-          <details key={item.question} className="landing-faq-item">
-            <summary>{item.question}</summary>
-            <p>{item.answer}</p>
-          </details>
-        ))}
-      </section>
-      </main>
+        </main>
 
       <footer className="landing-footer">
         <p>
@@ -460,6 +778,8 @@ export default function LandingPage({ onLogin, onRegister }) {
           {SITE_LEGAL.executorName} · {SITE_LEGAL.status} · {SITE_LEGAL.city}
         </p>
         <nav className="landing-footer-nav" aria-label="Разделы сайта">
+          <a href="/#demo">Демо</a>
+          <a href="/#cases">Кейсы</a>
           <a href="/businesses">Для бизнеса</a>
           <a href="/city/moscow">Москва</a>
           <a href="/city/spb">Санкт-Петербург</a>
