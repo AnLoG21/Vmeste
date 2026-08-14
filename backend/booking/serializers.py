@@ -242,6 +242,10 @@ class BookingSerializer(serializers.ModelSerializer):
             "slot_starts_at",
             "slot_ends_at",
             "review",
+            "payment_status",
+            "prepay_amount",
+            "payment_url",
+            "paid_at",
         ]
         read_only_fields = [
             "client",
@@ -257,6 +261,10 @@ class BookingSerializer(serializers.ModelSerializer):
             "slot_starts_at",
             "slot_ends_at",
             "review",
+            "payment_status",
+            "prepay_amount",
+            "payment_url",
+            "paid_at",
         ]
 
     def get_organization_name(self, obj):

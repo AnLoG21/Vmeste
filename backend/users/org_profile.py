@@ -14,6 +14,12 @@ from .slug_utils import ensure_organization_slug
 ORG_GALLERY_MAX_PHOTOS = 5
 
 
+def _prepay_public(provider):
+    from booking.acquiring import prepay_public_info
+
+    return prepay_public_info(provider)
+
+
 def default_working_hours():
     base = {"open": "09:00", "close": "18:00", "closed": False}
     return {key: dict(base) for key in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")}
@@ -99,6 +105,7 @@ class OrganizationClientProfileView(APIView):
                 "reviews_count": agg["cnt"] or 0,
                 "gallery_photos": gallery,
                 "review_photos": review_photos,
+                "prepay": _prepay_public(provider),
             }
         )
 

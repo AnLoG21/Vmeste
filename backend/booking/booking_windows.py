@@ -138,6 +138,9 @@ def _anon_busy_indexes(start, end, booked) -> set:
 
 
 def list_available_windows(provider_id: int, service_id: int, book_date, extra_minutes: int = 0) -> list[dict]:
+    from .acquiring import expire_unpaid_bookings
+
+    expire_unpaid_bookings(provider_id)
     try:
         service = Service.objects.get(pk=service_id, provider_id=provider_id, is_active=True)
     except Service.DoesNotExist:
@@ -285,6 +288,7 @@ def book_time_window(
     client,
     comment: str,
     selected_options: list | None = None,
+    notify: bool = True,
 ):
     """Забронировать окно внутри свободного интервала без разрезания исходного слота."""
     service = Service.objects.get(pk=service_id, provider_id=provider_id, is_active=True)
@@ -359,7 +363,8 @@ def book_time_window(
     try:
         from .booking_actions import notify_new_booking
 
-        notify_new_booking(booking)
+        if notify:
+            notify_new_booking(booking)
     except Exception:
         pass
     return booking

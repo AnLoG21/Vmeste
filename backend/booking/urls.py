@@ -2,7 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .analytics import AnalyticsSummaryView
-from .views import AvailabilitySlotViewSet, BookingViewSet, ProviderStaffViewSet
+from .views import AcquiringSettingsView, AvailabilitySlotViewSet, BookingViewSet, ProviderStaffViewSet
 
 router = DefaultRouter()
 router.register(r"slots", AvailabilitySlotViewSet, basename="booking-slots")
@@ -11,5 +11,6 @@ router.register(r"", BookingViewSet, basename="booking")
 
 urlpatterns = [
     path("analytics/", AnalyticsSummaryView.as_view(), name="booking-analytics"),
+    path("acquiring/", AcquiringSettingsView.as_view(), name="booking-acquiring"),
     path("", include(router.urls)),
 ]

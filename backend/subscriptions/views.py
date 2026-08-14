@@ -464,6 +464,16 @@ class YooKassaWebhookView(APIView):
             return Response({"detail": "ignored"})
         yk_id = obj.get("id")
         meta = obj.get("metadata") or {}
+        if meta.get("type") == "booking" or meta.get("booking_id"):
+            from booking.acquiring import mark_booking_paid
+            from booking.models import Booking
+
+            booking = Booking.objects.filter(yookassa_payment_id=yk_id).first()
+            if not booking and meta.get("booking_id"):
+                booking = Booking.objects.filter(pk=meta.get("booking_id")).first()
+            if booking:
+                mark_booking_paid(booking)
+                return Response({"detail": "ok"})
         if meta.get("type") == "cafe_order" or (not Payment.objects.filter(yookassa_payment_id=yk_id).exists()):
             from cafe.models import CafeOrder
             from cafe.receipt_service import send_order_receipt_after_payment

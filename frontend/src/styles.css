@@ -4464,6 +4464,12 @@ body.theme-dark .tg-chat-search {
   color: #fff;
 }
 
+.booking-calendar .calendar-slot.booking.booking-slot--pending {
+  background: #f0a202;
+  border-color: #d48900;
+  color: #3d2a00;
+}
+
 .booking-calendar .calendar-slot.booking.booking-slot--overdue {
   background: #8b5a2b;
   border-color: #6e4520;
@@ -5702,6 +5708,16 @@ body.theme-dark .field-label {
 .booking-history-status--manual-hold {
   background: rgba(0, 0, 0, 0.06);
   color: #444;
+}
+
+.booking-history-status--pending {
+  background: rgba(240, 162, 2, 0.18);
+  color: #9a6b00;
+}
+
+.booking-history-status--paid {
+  background: rgba(46, 125, 50, 0.12);
+  color: #2e7d32;
 }
 
 .booking-history-review {
@@ -7601,6 +7617,11 @@ html.native-app .page-logged .hero.top-row {
 .calendar-slot-compact.booking-slot--new {
   background: #e85d5d;
   color: #fff;
+}
+
+.calendar-slot-compact.booking-slot--pending {
+  background: #f0a202;
+  color: #3d2a00;
 }
 
 .calendar-slot-compact.booking-slot--overdue {

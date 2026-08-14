@@ -63,12 +63,15 @@ def create_payment(
         return None
 
 
-def get_payment(payment_id: str) -> dict | None:
-    if not _configured() or not payment_id:
+def get_payment(payment_id: str, shop_id: str | None = None, secret_key: str | None = None) -> dict | None:
+    sid = shop_id or settings.YOOKASSA_SHOP_ID
+    secret = secret_key or settings.YOOKASSA_SECRET_KEY
+    if not sid or not secret or not payment_id:
         return None
+    auth = base64.b64encode(f"{sid}:{secret}".encode()).decode()
     req = urllib.request.Request(
         f"https://api.yookassa.ru/v3/payments/{payment_id}",
-        headers={"Authorization": f"Basic {_auth_header()}"},
+        headers={"Authorization": f"Basic {auth}"},
         method="GET",
     )
     try:

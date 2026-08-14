@@ -110,6 +110,8 @@ def confirm_booking(booking, actor):
     msg_tpl = (getattr(provider, "booking_confirm_message_default", None) or "").strip()
     if not msg_tpl:
         return False, "confirm_message_not_set"
+    if getattr(booking, "payment_status", "none") == "pending":
+        return False, "prepay_required"
     booking.status = Booking.Status.CONFIRMED
     booking.save(update_fields=["status"])
     text = msg_tpl.replace("{date}", format_booking_when(booking))

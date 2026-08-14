@@ -10,6 +10,7 @@ from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.views import APIView
 from rest_framework.response import Response
 
 from catalog.models import Service
@@ -436,6 +437,30 @@ class BookingViewSet(viewsets.ModelViewSet):
             return self._booking_queryset(Booking.objects.filter(provider_id__in=provider_ids))
         return self._booking_queryset(Booking.objects.filter(client=user))
 
+    def _respond_created_booking(self, booking):
+        from django.db import transaction as db_transaction
+
+        from .acquiring import attach_prepay_if_needed
+        from .booking_actions import notify_new_booking
+
+        try:
+            extra = attach_prepay_if_needed(booking)
+        except ValueError as e:
+            db_transaction.set_rollback(True)
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        booking.refresh_from_db()
+        if not extra:
+            try:
+                notify_new_booking(booking)
+            except Exception:
+                pass
+        ser = self.get_serializer(booking)
+        data = ser.data
+        if extra:
+            data["confirmation_url"] = extra.get("confirmation_url") or ""
+            data["prepay_amount"] = extra.get("prepay_amount")
+        return Response(data, status=status.HTTP_201_CREATED)
+
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         if not _acts_as_client(request.user):
@@ -469,13 +494,13 @@ class BookingViewSet(viewsets.ModelViewSet):
                     request.user,
                     comment,
                     selected_options=snapshots,
+                    notify=False,
                 )
             except Service.DoesNotExist:
                 return Response({"detail": "Услуга не найдена."}, status=status.HTTP_400_BAD_REQUEST)
             except ValueError as e:
                 return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-            ser = self.get_serializer(booking)
-            return Response(ser.data, status=status.HTTP_201_CREATED)
+            return self._respond_created_booking(booking)
 
         if not slot_id:
             return Response({"detail": "Укажите слот или время."}, status=status.HTTP_400_BAD_REQUEST)
@@ -503,14 +528,33 @@ class BookingViewSet(viewsets.ModelViewSet):
             staff_id=int(staff_id) if staff_id not in (None, "", "null") else slot.staff_id,
             comment=comment,
         )
-        try:
-            from .booking_actions import notify_new_booking
+        return self._respond_created_booking(booking)
 
-            notify_new_booking(booking)
-        except Exception:
-            pass
-        ser = self.get_serializer(booking)
-        return Response(ser.data, status=status.HTTP_201_CREATED)
+    @action(detail=True, methods=["post"], url_path="pay")
+    def pay(self, request, pk=None):
+        from .acquiring import attach_prepay_if_needed, sync_booking_from_yookassa
+
+        booking = Booking.objects.filter(pk=pk).first()
+        if not booking or booking.client_id != request.user.id:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if booking.status == Booking.Status.CANCELLED:
+            return Response({"detail": "Запись отменена."}, status=status.HTTP_400_BAD_REQUEST)
+        sync_booking_from_yookassa(booking)
+        booking.refresh_from_db()
+        if booking.payment_status == "paid":
+            return Response(self.get_serializer(booking).data)
+        if booking.payment_status == "pending" and booking.payment_url:
+            data = self.get_serializer(booking).data
+            data["confirmation_url"] = booking.payment_url
+            return Response(data)
+        try:
+            extra = attach_prepay_if_needed(booking)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        data = self.get_serializer(booking).data
+        if extra:
+            data["confirmation_url"] = extra.get("confirmation_url") or ""
+        return Response(data)
 
     @action(detail=True, methods=["post"])
     def confirm(self, request, pk=None):
@@ -523,7 +567,10 @@ class BookingViewSet(viewsets.ModelViewSet):
             return Response(status=status.HTTP_403_FORBIDDEN)
         ok, err = confirm_booking(booking, request.user)
         if not ok:
-            return Response({"code": err}, status=status.HTTP_400_BAD_REQUEST)
+            payload = {"code": err}
+            if err == "prepay_required":
+                payload["detail"] = "Клиент ещё не внёс предоплату — подтвердить запись нельзя."
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(booking).data)
 
     @action(detail=True, methods=["post"], url_path="cancel-by-org")
@@ -573,3 +620,58 @@ class BookingViewSet(viewsets.ModelViewSet):
                 )
             return Response(payload, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(booking).data)
+
+
+class AcquiringSettingsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != "provider":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        from .acquiring import get_or_create_acquiring, resolve_yookassa_keys
+
+        acq = get_or_create_acquiring(request.user)
+        shop, secret = resolve_yookassa_keys(request.user)
+        return Response(
+            {
+                "prepay_mode": acq.prepay_mode,
+                "prepay_percent": acq.prepay_percent,
+                "yookassa_shop_id": acq.yookassa_shop_id or "",
+                "has_yookassa": bool(shop and secret),
+            }
+        )
+
+    def patch(self, request):
+        if request.user.role != "provider":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        from .acquiring import get_or_create_acquiring, resolve_yookassa_keys
+        from .models import ProviderAcquiring
+
+        acq = get_or_create_acquiring(request.user)
+        data = request.data or {}
+        if "prepay_mode" in data:
+            mode = str(data.get("prepay_mode") or "").strip()
+            if mode not in {c[0] for c in ProviderAcquiring.PrepayMode.choices}:
+                return Response({"prepay_mode": ["Некорректный режим."]}, status=status.HTTP_400_BAD_REQUEST)
+            acq.prepay_mode = mode
+        if "prepay_percent" in data:
+            try:
+                pct = int(data.get("prepay_percent"))
+            except (TypeError, ValueError):
+                return Response({"prepay_percent": ["Укажите число 1–100."]}, status=status.HTTP_400_BAD_REQUEST)
+            acq.prepay_percent = min(100, max(1, pct))
+        if "yookassa_shop_id" in data:
+            acq.yookassa_shop_id = str(data.get("yookassa_shop_id") or "").strip()
+        secret = data.get("yookassa_secret_key")
+        if secret is not None and str(secret).strip():
+            acq.yookassa_secret_key = str(secret).strip()
+        acq.save()
+        shop, secret_ok = resolve_yookassa_keys(request.user)
+        return Response(
+            {
+                "prepay_mode": acq.prepay_mode,
+                "prepay_percent": acq.prepay_percent,
+                "yookassa_shop_id": acq.yookassa_shop_id or "",
+                "has_yookassa": bool(shop and secret_ok),
+            }
+        )

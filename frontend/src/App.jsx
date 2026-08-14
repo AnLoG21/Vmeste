@@ -1403,6 +1403,8 @@ function bookingSlotStatusModifier(bookingOrStatus, endsAt) {
   if (status === "cancelled") return "booking-slot--cancelled";
   if (status === "done") return "booking-slot--done";
   if (status === "manual_hold") return "booking-slot--manual-hold";
+  const pay = typeof bookingOrStatus === "object" ? bookingOrStatus.payment_status : "";
+  if (pay === "pending") return "booking-slot--pending";
   const endMs = endRaw ? new Date(endRaw).getTime() : NaN;
   if (Number.isFinite(endMs) && endMs < Date.now() && (status === "new" || status === "confirmed")) {
     return "booking-slot--overdue";
@@ -1417,6 +1419,7 @@ function bookingSlotCompactIcon(statusModifier) {
   if (statusModifier === "booking-slot--done") return "✓";
   if (statusModifier === "booking-slot--overdue") return "!";
   if (statusModifier === "booking-slot--confirmed") return "●";
+  if (statusModifier === "booking-slot--pending") return "₽";
   if (statusModifier === "booking-slot--manual-hold") return "○";
   return "○";
 }
@@ -1429,8 +1432,26 @@ const BOOKING_STATUS_LABELS = {
   manual_hold: "Ручная бронь",
 };
 
-function bookingStatusLabel(status) {
-  return BOOKING_STATUS_LABELS[status] || status || "";
+function bookingStatusLabel(statusOrBooking) {
+  if (typeof statusOrBooking === "object" && statusOrBooking) {
+    const pay = statusOrBooking.payment_status;
+    if (pay === "pending") return "Ожидает оплату";
+    if (pay === "paid" && statusOrBooking.status === "new") return "Предоплата внесена";
+    if (pay === "expired") return "Оплата не прошла";
+    return BOOKING_STATUS_LABELS[statusOrBooking.status] || statusOrBooking.status || "";
+  }
+  return BOOKING_STATUS_LABELS[statusOrBooking] || statusOrBooking || "";
+}
+
+function bookingPrepayHint(prepay) {
+  if (!prepay?.ready) return "";
+  if (prepay.mode === "full") {
+    return "Для записи нужна полная предоплата через ЮKassa. Слот держится 20 минут до оплаты.";
+  }
+  if (prepay.mode === "percent") {
+    return `Для записи нужна предоплата ${prepay.percent}% через ЮKassa. Слот держится 20 минут до оплаты.`;
+  }
+  return "";
 }
 
 function formatInAppNotificationText(n) {
@@ -2492,6 +2513,14 @@ export default function App() {
   const [orgGalleryPhotos, setOrgGalleryPhotos] = useState([]);
   const [orgProfileSaveStatus, setOrgProfileSaveStatus] = useState("");
   const [orgBookingMessages, setOrgBookingMessages] = useState({ confirm: "", cancel: "", done: "" });
+  const [orgAcquiringForm, setOrgAcquiringForm] = useState({
+    prepay_mode: "off",
+    prepay_percent: 50,
+    yookassa_shop_id: "",
+    yookassa_secret_key: "",
+    has_yookassa: false,
+  });
+  const [orgAcquiringSaveStatus, setOrgAcquiringSaveStatus] = useState("");
   const [orgSettingsHighlight, setOrgSettingsHighlight] = useState("");
   const [bookingMessageError, setBookingMessageError] = useState(null);
   const [reviewModalBooking, setReviewModalBooking] = useState(null);
@@ -2794,6 +2823,17 @@ export default function App() {
         const data = await res.json();
         setOrgGalleryPhotos(Array.isArray(data) ? data : data.photos || []);
       }
+      const acqRes = await authFetch(`${API_URL}/booking/acquiring/`);
+      if (acqRes.ok) {
+        const acq = await acqRes.json();
+        setOrgAcquiringForm({
+          prepay_mode: acq.prepay_mode || "off",
+          prepay_percent: acq.prepay_percent || 50,
+          yookassa_shop_id: acq.yookassa_shop_id || "",
+          yookassa_secret_key: "",
+          has_yookassa: Boolean(acq.has_yookassa),
+        });
+      }
     })();
   }, [accessToken, me?.role, currentView]);
 
@@ -2896,6 +2936,36 @@ export default function App() {
       })
       .catch(() => {});
     window.history.replaceState({}, document.title, window.location.pathname);
+  }, [accessToken]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("booking_payment") !== "success" || !accessToken) return;
+    setVerifyStatus("Проверяем оплату записи…");
+    setCurrentView("bookings");
+    const bookingId = params.get("booking_id");
+    const reload = () => {
+      authFetch(`${API_URL}/booking/`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data) setBookings(normalizeBookingsList(data));
+        })
+        .catch(() => {});
+    };
+    const afterSync = () => {
+      reload();
+      setVerifyStatus("Если оплата прошла, статус записи обновится в течение минуты.");
+    };
+    if (bookingId) {
+      authFetch(`${API_URL}/booking/${bookingId}/pay/`, { method: "POST", body: "{}" })
+        .then(() => afterSync())
+        .catch(() => afterSync());
+    } else {
+      afterSync();
+    }
+    const t = window.setTimeout(reload, 2500);
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return () => window.clearTimeout(t);
   }, [accessToken]);
 
   function openAuth(mode) {
@@ -7364,6 +7434,10 @@ export default function App() {
       return;
     }
     const created = await response.json().catch(() => ({}));
+    if (created.confirmation_url) {
+      window.location.href = created.confirmation_url;
+      return;
+    }
     await reloadBookingsList();
     const monthKey = isoMonthKey(created.slot_starts_at || win.starts_at);
     if (monthKey) setBookingsMonth(monthKey);
@@ -7381,6 +7455,23 @@ export default function App() {
     setClientBookModalOpen(false);
     setMapOrgPopup(null);
     setCurrentView(me?.role === "provider" ? "my_bookings" : "bookings");
+  }
+
+  async function resumeBookingPayment(bookingId, event) {
+    event?.stopPropagation?.();
+    event?.preventDefault?.();
+    const res = await authFetch(`${API_URL}/booking/${bookingId}/pay/`, { method: "POST", body: "{}" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setClientStatus(data.detail || "Не удалось открыть оплату.");
+      return;
+    }
+    if (data.confirmation_url) {
+      window.location.href = data.confirmation_url;
+      return;
+    }
+    setClientStatus("Оплата уже обработана.");
+    await reloadBookingsList();
   }
 
   function bookingClientLabel(it) {
@@ -7471,6 +7562,7 @@ export default function App() {
       || err.code === "cancel_message_not_set"
       || err.code === "done_message_not_set"
       || err.code === "booking_not_started_yet"
+      || err.code === "prepay_required"
     ) {
       setBookingMessageError({ code: err.code, detail: err.detail || "" });
     }
@@ -7606,6 +7698,37 @@ export default function App() {
     }
     setOrgProfileSaveStatus("Сохранено.");
     loadMe();
+  }
+
+  async function saveOrgAcquiring(event) {
+    event?.preventDefault?.();
+    setOrgAcquiringSaveStatus("");
+    const payload = {
+      prepay_mode: orgAcquiringForm.prepay_mode,
+      prepay_percent: Number(orgAcquiringForm.prepay_percent) || 50,
+      yookassa_shop_id: orgAcquiringForm.yookassa_shop_id || "",
+    };
+    if ((orgAcquiringForm.yookassa_secret_key || "").trim()) {
+      payload.yookassa_secret_key = orgAcquiringForm.yookassa_secret_key.trim();
+    }
+    const res = await authFetch(`${API_URL}/booking/acquiring/`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setOrgAcquiringSaveStatus(data.detail || data.prepay_mode?.[0] || data.prepay_percent?.[0] || "Не удалось сохранить.");
+      return;
+    }
+    setOrgAcquiringForm((p) => ({
+      ...p,
+      prepay_mode: data.prepay_mode || p.prepay_mode,
+      prepay_percent: data.prepay_percent || p.prepay_percent,
+      yookassa_shop_id: data.yookassa_shop_id || "",
+      yookassa_secret_key: "",
+      has_yookassa: Boolean(data.has_yookassa),
+    }));
+    setOrgAcquiringSaveStatus("Сохранено.");
   }
 
   async function uploadOrgGalleryPhoto(file) {
@@ -8143,7 +8266,7 @@ export default function App() {
     const done = it.status === "done";
     return (
       <div className="booking-actions-bar" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-        {isOrg && !cancelled && it.status === "new" && (
+        {isOrg && !cancelled && it.status === "new" && it.payment_status !== "pending" && (
           <button type="button" className="booking-action-btn booking-action-btn--confirm" title="Подтвердить" onClick={(e) => orgBookingAction(it.id, "confirm", e)}>
             ✓
           </button>
@@ -8171,6 +8294,16 @@ export default function App() {
             onClick={(e) => orgBookingAction(it.id, "mark-done", e)}
           >
             Услуга оказана
+          </button>
+        )}
+        {isClient && !cancelled && it.payment_status === "pending" && (
+          <button
+            type="button"
+            className="ghost-btn small"
+            title="Оплатить предоплату"
+            onClick={(e) => resumeBookingPayment(it.id, e)}
+          >
+            Оплатить
           </button>
         )}
         {isClient && !cancelled && (
@@ -8269,7 +8402,7 @@ export default function App() {
                         </div>
                         <div className="booking-slot-name">{bookingSlotSecondaryLabel(it)}</div>
                         {it.status && it.status !== "confirmed" && !it.is_manual_hold && it.status !== "manual_hold" && (
-                          <div className="booking-slot-status">{bookingStatusLabel(it.status)}</div>
+                          <div className="booking-slot-status">{bookingStatusLabel(it)}</div>
                         )}
                         {renderBookingSlotActions(it)}
                       </div>
@@ -8286,8 +8419,8 @@ export default function App() {
                         <div
                           key={it.id}
                           className={["calendar-slot-compact", mod].filter(Boolean).join(" ")}
-                          title={`${time} · ${bookingSlotSecondaryLabel(it)} · ${bookingStatusLabel(it.status)}`}
-                          aria-label={`${time} ${bookingStatusLabel(it.status)}`}
+                          title={`${time} · ${bookingSlotSecondaryLabel(it)} · ${bookingStatusLabel(it)}`}
+                          aria-label={`${time} ${bookingStatusLabel(it)}`}
                         >
                           <span className="calendar-slot-compact-icon" aria-hidden>
                             {bookingSlotCompactIcon(mod)}
@@ -8451,13 +8584,20 @@ export default function App() {
                         b.status === "done" && "booking-history-status--done",
                         b.status === "confirmed" && "booking-history-status--confirmed",
                         b.status === "manual_hold" && "booking-history-status--manual-hold",
+                        b.payment_status === "pending" && "booking-history-status--pending",
+                        b.payment_status === "paid" && b.status === "new" && "booking-history-status--paid",
                       ]
                         .filter(Boolean)
                         .join(" ")}
                     >
-                      {bookingStatusLabel(b.status)}
+                      {bookingStatusLabel(b)}
                     </span>
                   </div>
+                  {isClient && b.payment_status === "pending" && b.status !== "cancelled" ? (
+                    <button type="button" className="ghost-btn small" onClick={(e) => resumeBookingPayment(b.id, e)}>
+                      Оплатить {b.prepay_amount ? formatBookingPrice(b.prepay_amount) : ""}
+                    </button>
+                  ) : null}
                   {renderBookingHistoryReview(b)}
                 </li>
               );
@@ -9326,7 +9466,73 @@ export default function App() {
               </p>
             </aside>
 
-            
+            <h3>Предоплата при записи (ЮKassa)</h3>
+            <p className="muted small">
+              Чтобы снизить неприходы, включите частичную или полную предоплату. Деньги идут в магазин ЮKassa
+              организации, не на счёт платформы. Неоплаченная запись снимается через 20 минут.
+            </p>
+            <form onSubmit={saveOrgAcquiring} className="form">
+              <label className="field-label" htmlFor="org-prepay-mode">Режим предоплаты</label>
+              <select
+                id="org-prepay-mode"
+                value={orgAcquiringForm.prepay_mode}
+                onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, prepay_mode: e.target.value }))}
+              >
+                <option value="off">Выключена</option>
+                <option value="percent">Частичная (процент от стоимости)</option>
+                <option value="full">Полная стоимость услуги</option>
+              </select>
+              {orgAcquiringForm.prepay_mode === "percent" ? (
+                <label className="field-label" htmlFor="org-prepay-percent">
+                  Процент предоплаты
+                  <input
+                    id="org-prepay-percent"
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={orgAcquiringForm.prepay_percent}
+                    onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, prepay_percent: e.target.value }))}
+                  />
+                </label>
+              ) : null}
+              <label className="field-label" htmlFor="org-yk-shop">
+                ЮKassa Shop ID
+                <input
+                  id="org-yk-shop"
+                  type="text"
+                  autoComplete="off"
+                  value={orgAcquiringForm.yookassa_shop_id}
+                  onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, yookassa_shop_id: e.target.value }))}
+                />
+              </label>
+              <label className="field-label" htmlFor="org-yk-secret">
+                ЮKassa Secret Key
+                <input
+                  id="org-yk-secret"
+                  type="password"
+                  autoComplete="new-password"
+                  value={orgAcquiringForm.yookassa_secret_key}
+                  onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, yookassa_secret_key: e.target.value }))}
+                  placeholder={orgAcquiringForm.has_yookassa ? "••••••••" : ""}
+                />
+              </label>
+              {me?.provider_sphere === "cafe_restaurant" ? (
+                <p className="muted small">
+                  Для кафе можно оставить поля пустыми, если ключи уже указаны в настройках зала — они подставятся автоматически.
+                </p>
+              ) : null}
+              <p className="muted small">
+                В кабинете ЮKassa включите HTTP-уведомления payment.succeeded на
+                {" "}/api/subscriptions/webhook/yookassa/ — иначе статус предоплаты обновится только когда клиент вернётся на сайт.
+              </p>
+              {orgAcquiringForm.prepay_mode !== "off" && !orgAcquiringForm.has_yookassa && !(orgAcquiringForm.yookassa_shop_id && orgAcquiringForm.yookassa_secret_key) ? (
+                <p className="status">
+                  Предоплата включена, но ключи ЮKassa не указаны — клиент не сможет записаться, пока не заполните Shop ID и Secret.
+                </p>
+              ) : null}
+              <button type="submit">Сохранить эквайринг</button>
+              <p className="status">{orgAcquiringSaveStatus}</p>
+            </form>
 
             <h3>Карточка для клиентов</h3>
 
@@ -12955,12 +13161,16 @@ export default function App() {
             <h3>
               {bookingMessageError.code === "booking_not_started_yet"
                 ? "Рано отмечать выполнение"
-                : "Сообщение не задано"}
+                : bookingMessageError.code === "prepay_required"
+                  ? "Нужна предоплата"
+                  : "Сообщение не задано"}
             </h3>
             <p className="muted">
               {bookingMessageError.code === "booking_not_started_yet"
                 ? bookingMessageError.detail
                   || "Отметить «услуга оказана» можно только после начала записи по времени."
+                : bookingMessageError.code === "prepay_required"
+                  ? bookingMessageError.detail || "Клиент ещё не внёс предоплату — подтвердить запись нельзя."
                 : bookingMessageError.code === "confirm_message_not_set"
                   ? "Сообщение для подтверждения записи не задано. Задайте его в настройках организации."
                   : bookingMessageError.code === "done_message_not_set"
@@ -12968,7 +13178,7 @@ export default function App() {
                     : "Сообщение об отмене записи не задано. Задайте его в настройках организации."}
             </p>
             <div className="row-2">
-              {bookingMessageError.code !== "booking_not_started_yet" ? (
+              {bookingMessageError.code !== "booking_not_started_yet" && bookingMessageError.code !== "prepay_required" ? (
                 <button type="button" onClick={() => goOrgSettingsForBookingMessage(bookingMessageError.code)}>
                   Перейти в настройки
                 </button>
@@ -13187,6 +13397,9 @@ export default function App() {
                   ))}
                 </div>
               )}
+              {bookingPrepayHint(mapOrgProfile?.prepay) ? (
+                <p className="muted small">{bookingPrepayHint(mapOrgProfile.prepay)}</p>
+              ) : null}
               <form onSubmit={createClientBooking} className="form">
                 <select value={clientBookingForm.serviceId} onChange={(e) => setClientBookingForm((p) => ({ ...p, serviceId: e.target.value, optionIds: [], windowKey: "" }))} required disabled={!clientBookingForm.provider || providerServices.length === 0}>
                   <option value="">Услуга</option>
@@ -13308,7 +13521,9 @@ export default function App() {
                   value={clientBookingForm.comment}
                   onChange={(e) => setClientBookingForm((p) => ({ ...p, comment: e.target.value }))}
                 />
-                <button type="submit" disabled={!clientBookingForm.windowKey}>Подтвердить</button>
+                <button type="submit" disabled={!clientBookingForm.windowKey}>
+                  {mapOrgProfile?.prepay?.ready ? "Перейти к оплате" : "Подтвердить"}
+                </button>
               </form>
               <p className="status">{clientStatus}</p>
             </div>
@@ -13387,7 +13602,7 @@ export default function App() {
                               })}
                             </strong>
                             <div>{bookingSlotSecondaryLabel(it)}</div>
-                            {it.status ? <div className="muted">{bookingStatusLabel(it.status)}</div> : null}
+                            {it.status ? <div className="muted">{bookingStatusLabel(it)}</div> : null}
                             {renderBookingSlotActions(it)}
                           </>
                         ) : (

@@ -78,6 +78,49 @@ class Booking(models.Model):
         help_text="Снимок выбранных допов: [{id,name,price,extra_minutes}, …]",
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    payment_status = models.CharField(
+        max_length=20,
+        default="none",
+        choices=[
+            ("none", "Без оплаты"),
+            ("pending", "Ожидает оплату"),
+            ("paid", "Оплачено"),
+            ("expired", "Оплата не прошла"),
+        ],
+        db_index=True,
+    )
+    prepay_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    yookassa_payment_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    payment_url = models.URLField(blank=True, default="")
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+
+class ProviderAcquiring(models.Model):
+    class PrepayMode(models.TextChoices):
+        OFF = "off", "Выключена"
+        PERCENT = "percent", "Частичная"
+        FULL = "full", "Полная"
+
+    provider = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="acquiring",
+    )
+    yookassa_shop_id = models.CharField(max_length=64, blank=True, default="")
+    yookassa_secret_key = models.CharField(max_length=128, blank=True, default="")
+    prepay_mode = models.CharField(
+        max_length=16,
+        choices=PrepayMode.choices,
+        default=PrepayMode.OFF,
+    )
+    prepay_percent = models.PositiveSmallIntegerField(
+        default=50,
+        help_text="Процент предоплаты при режиме «частичная» (1–100).",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def has_yookassa(self) -> bool:
+        return bool((self.yookassa_shop_id or "").strip() and (self.yookassa_secret_key or "").strip())
 
 
 class ProviderStaff(models.Model):
