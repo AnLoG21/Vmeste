@@ -7,23 +7,9 @@ export default defineConfig(({ mode }) => ({
   base: mode === "mobile" ? "./" : "/",
   server: { port: 5173, host: true },
   build: {
+    // Source maps and gzip reports only slow Rollup's "rendering chunks" step on the VPS.
+    sourcemap: false,
+    reportCompressedSize: false,
     cssCodeSplit: true,
-    sourcemap: mode !== "mobile",
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (
-            id.includes("node_modules/react-dom") ||
-            id.includes("node_modules/react/") ||
-            id.includes("node_modules/scheduler")
-          ) {
-            return "vendor-react";
-          }
-          if (id.includes("node_modules")) {
-            return "vendor";
-          }
-        },
-      },
-    },
   },
 }));
