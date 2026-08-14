@@ -86,6 +86,11 @@ class User(AbstractUser):
         blank=True,
         help_text="Публичный URL /o/<slug>/",
     )
+    is_demo = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Общий демо-аккаунт: при выходе из демо пользовательские данные откатываются.",
+    )
     provider_authority_confirmed_at = models.DateTimeField(
         null=True,
         blank=True,

@@ -317,6 +317,28 @@ button:hover {
   color: #fff4d6;
 }
 
+.demo-mode-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 12px 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #fff3e0;
+  border: 1px solid #ffd0a8;
+  color: #5c3d1e;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.demo-mode-banner .landing-btn {
+  width: auto;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
 .suggestions {
   display: grid;
   gap: 6px;

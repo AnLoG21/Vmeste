@@ -9,6 +9,8 @@ from .views import (
     ChangePasswordView,
     ConfirmPasswordChangeView,
     DeleteAccountView,
+    DemoExitView,
+    DemoLoginView,
     MeView,
     PresencePingView,
     ResendVerificationView,
@@ -39,5 +41,7 @@ urlpatterns = [
     path("change-password/", ChangePasswordView.as_view(), name="user-change-password"),
     path("confirm-password-change/", ConfirmPasswordChangeView.as_view(), name="user-confirm-password-change"),
     path("change-email/", ChangeEmailView.as_view(), name="user-change-email"),
+    path("demo-login/", DemoLoginView.as_view(), name="user-demo-login"),
+    path("demo-exit/", DemoExitView.as_view(), name="user-demo-exit"),
     path("automation-request/", AutomationRequestView.as_view(), name="automation-request"),
 ]

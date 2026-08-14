@@ -13,7 +13,6 @@ import {
 import { setPageMeta } from "./seo/setPageMeta.js";
 import { phoneFieldProps } from "./phone.js";
 import LandingDemo from "./LandingDemo.jsx";
-import LandingLightbox from "./LandingLightbox.jsx";
 
 function formatPlanPrice(plan) {
   if (plan?.plan_type === "trial" || plan?.slug === "starter") return "7 дней бесплатно";
@@ -51,61 +50,48 @@ const CASES = [
 
 const INTEGRATIONS = [
   {
-    title: "Уведомления в кабинете",
-    status: "now",
-    text: "Статусы записей, приглашения сотрудников и сервисные события — сразу в личном кабинете.",
-  },
-  {
-    title: "Push в мобильном приложении",
-    status: "now",
-    text: "Android-приложение Вместе умеет принимать push о важных событиях (при разрешении пользователя).",
-  },
-  {
-    title: "Чаты с клиентами",
-    status: "now",
-    text: "Переписка внутри платформы: уточнить детали визита без потери контекста записи.",
-  },
-  {
-    title: "ЮKassa",
-    status: "now",
-    text: "Оплата подписки и онлайн-оплата заказов в сценарии кафе/ресторана.",
-  },
-  {
-    title: "Telegram / WhatsApp",
+    title: "Google Календарь",
     status: "soon",
-    text: "Сервисные сообщения и акции в мессенджеры — в планах и через индивидуальную автоматизацию.",
+    text: "Двусторонняя синхронизация слотов с Google Calendar — в подключении. Сейчас расписание живёт в кабинете Вместе.",
   },
   {
-    title: "Google / Яндекс Календарь",
+    title: "Яндекс Календарь",
     status: "soon",
-    text: "Синхронизация слотов с внешними календарями пока не встроена; можно заказать как кастомную интеграцию.",
+    text: "Выгрузка и приём событий из Яндекс Календаря — в подключении, можно заказать как кастом.",
   },
   {
-    title: "SMS / email о записи",
+    title: "Telegram",
     status: "soon",
-    text: "Автоподтверждения и напоминания по SMS/email — в дорожной карте. Сейчас клиент видит статус в кабинете и чате.",
+    text: "Сервисные сообщения и акции в Telegram-бот — в подключении. Сейчас клиент видит статус в чате платформы.",
+  },
+  {
+    title: "WhatsApp",
+    status: "soon",
+    text: "Напоминания и подтверждения в WhatsApp — в подключении / через индивидуальную автоматизацию.",
+  },
+  {
+    title: "SMS",
+    status: "soon",
+    text: "SMS о подтверждении и напоминании о визите — в дорожной карте.",
+  },
+  {
+    title: "Push-уведомления",
+    status: "now",
+    text: "Клиент и мастер получают push в Android-приложении Вместе (если разрешили уведомления).",
+  },
+  {
+    title: "Кабинет и чат",
+    status: "now",
+    text: "Подтверждение сеанса сразу видно в личном кабинете и в чате с организацией — без звонка.",
+  },
+  {
+    title: "ЮKassa (эквайринг)",
+    status: "now",
+    text: "Безопасная онлайн-оплата подписки и заказов в кафе. Предоплата услуг — модуль борьбы с неприходами.",
   },
 ];
 
-const PREVIEWS = [
-  {
-    id: "booking",
-    title: "Запись с телефона",
-    caption: "Клиент выбирает услугу и время",
-  },
-  {
-    id: "calendar",
-    title: "Календарь мастера",
-    caption: "Подтверждение и свободные окна",
-  },
-  {
-    id: "stats",
-    title: "Аналитика",
-    caption: "Выручка и популярные услуги",
-  },
-];
-
-export default function LandingPage({ onLogin, onRegister }) {
+export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
   const requestRef = useRef(null);
   const pricingRef = useRef(null);
   const [form, setForm] = useState({
@@ -119,7 +105,18 @@ export default function LandingPage({ onLogin, onRegister }) {
   const [formStatus, setFormStatus] = useState("");
   const [plans, setPlans] = useState([]);
   const [demoOpen, setDemoOpen] = useState(false);
-  const [lightbox, setLightbox] = useState(null);
+
+  async function startFromPage(sphere) {
+    if (!onStartDemo) {
+      setDemoOpen(true);
+      return;
+    }
+    try {
+      await onStartDemo(sphere);
+    } catch {
+      setDemoOpen(true);
+    }
+  }
 
   const homeJsonLd = useMemo(
     () => [organizationJsonLd(), websiteJsonLd(), softwareApplicationJsonLd(), faqPageJsonLd(HOME_FAQ)],
@@ -204,49 +201,12 @@ export default function LandingPage({ onLogin, onRegister }) {
   return (
     <div className="landing">
       <JsonLd id="vmeste-home-jsonld" data={homeJsonLd} />
-      <LandingDemo open={demoOpen} onClose={() => setDemoOpen(false)} onRegister={onRegister} />
-      <LandingLightbox
-        open={Boolean(lightbox)}
-        title={lightbox?.title}
-        onClose={() => setLightbox(null)}
-      >
-        {lightbox?.id === "booking" && (
-          <div className="landing-preview-zoom landing-preview-zoom--phone">
-            <div className="landing-preview-card landing-preview-card--booking">
-              <span>Сегодня</span>
-              <strong>16:30 · Гель-лак</strong>
-              <em>Мастер Анна · 2 200 ₽</em>
-              <div className="landing-preview-btn">Подтвердить запись</div>
-            </div>
-          </div>
-        )}
-        {lightbox?.id === "calendar" && (
-          <div className="landing-preview-zoom">
-            <div className="landing-preview-card landing-preview-card--calendar">
-              <strong>Календарь · среда</strong>
-              <ul>
-                <li>10:00 Мария — стрижка</li>
-                <li>12:00 свободно</li>
-                <li>14:30 Игорь — диагностика</li>
-                <li>17:00 Елена — маникюр</li>
-              </ul>
-            </div>
-          </div>
-        )}
-        {lightbox?.id === "stats" && (
-          <div className="landing-preview-zoom">
-            <div className="landing-preview-card landing-preview-card--stats">
-              <strong>Выручка · 7 дней</strong>
-              <div className="landing-demo-bars landing-demo-bars--lg" aria-hidden="true">
-                {[40, 55, 48, 70, 62, 85, 78].map((h, i) => (
-                  <div key={i} className="landing-demo-bar" style={{ height: `${h}%` }} />
-                ))}
-              </div>
-              <p>Популярно: гель-лак · 47 записей</p>
-            </div>
-          </div>
-        )}
-      </LandingLightbox>
+      <LandingDemo
+        open={demoOpen}
+        onClose={() => setDemoOpen(false)}
+        onRegister={onRegister}
+        onStartDemo={onStartDemo}
+      />
 
       <main>
         <section className="landing-hero">
@@ -333,30 +293,32 @@ export default function LandingPage({ onLogin, onRegister }) {
         </section>
 
         <section className="landing-section" id="demo">
-          <h2>Посмотрите, как это выглядит</h2>
+          <h2>Живое демо кабинета</h2>
           <p className="landing-section-lead">
-            Не нужно покупать «кота в мешке»: откройте демо клиента, календаря записей и аналитики.
-            Превью можно увеличить — удобно и с телефона, и с компьютера.
+            Не картинки, а настоящий общий аккаунт. Выберите сферу — внутри уже есть сотрудники,
+            услуги, записи и заказы. Можно создавать своё. При выходе из демо новые данные
+            очищаются, исходные остаются.
           </p>
-          <div className="landing-previews">
-            {PREVIEWS.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                className="landing-preview"
-                onClick={() => setLightbox(p)}
-                aria-label={`${p.title}: открыть крупнее`}
-              >
-                <div className={`landing-preview-thumb landing-preview-thumb--${p.id}`} aria-hidden="true" />
-                <strong>{p.title}</strong>
-                <span>{p.caption}</span>
-                <em>Нажмите, чтобы рассмотреть</em>
-              </button>
-            ))}
+          <div className="landing-demo-spheres landing-demo-spheres--page">
+            <button type="button" className="landing-demo-sphere" onClick={() => startFromPage("hair_salon")}>
+              <span className="landing-demo-sphere-emoji" aria-hidden="true">💇</span>
+              <strong>Салон красоты</strong>
+              <span>Мастера, прайс, календарь записей</span>
+              <em>Открыть кабинет</em>
+            </button>
+            <button type="button" className="landing-demo-sphere" onClick={() => startFromPage("service_center")}>
+              <span className="landing-demo-sphere-emoji" aria-hidden="true">🔧</span>
+              <strong>Автосервис</strong>
+              <span>Приёмка, механики, слоты диагностики</span>
+              <em>Открыть кабинет</em>
+            </button>
+            <button type="button" className="landing-demo-sphere" onClick={() => startFromPage("cafe_restaurant")}>
+              <span className="landing-demo-sphere-emoji" aria-hidden="true">🍽️</span>
+              <strong>Кафе</strong>
+              <span>Зал, PIN столов, меню и заказы</span>
+              <em>Открыть кабинет</em>
+            </button>
           </div>
-          <button type="button" className="landing-btn landing-btn--outline" onClick={() => setDemoOpen(true)}>
-            Открыть интерактивное демо
-          </button>
         </section>
 
         <section className="landing-section">
@@ -485,16 +447,16 @@ export default function LandingPage({ onLogin, onRegister }) {
                 </li>
               </ul>
             </article>
-            <article className="landing-value-card">
-              <h3>Эквайринг и предоплата</h3>
+            <article className="landing-value-card landing-value-card--accent">
+              <h3>Встроенный эквайринг</h3>
+              <p className="landing-acquiring-lead">
+                Борьба с неприходами: настройте частичную или полную предоплату за услуги через
+                безопасный встроенный эквайринг.
+              </p>
               <ul>
-                <li>
-                  <strong>ЮKassa</strong> для подписки и онлайн-оплаты заказов в кафе.
-                </li>
-                <li>
-                  <strong>Борьба с неприходами:</strong> частичная/полная предоплата при записи на
-                  услуги — в развитии; для кафе онлайн-оплата уже доступна.
-                </li>
+                <li>Оплата через ЮKassa — без «серых» переводов</li>
+                <li>Онлайн-оплата заказов в кафе уже работает</li>
+                <li>Предоплата записи на услуги подключается в кабинете по мере раскатки модуля</li>
               </ul>
             </article>
             <article className="landing-value-card">
@@ -504,8 +466,8 @@ export default function LandingPage({ onLogin, onRegister }) {
                 <li>Рейтинг популярных услуг</li>
                 <li>Обзор нагрузки — чтобы видеть, что приносит деньги</li>
               </ul>
-              <button type="button" className="landing-link-btn" onClick={() => setDemoOpen(true)}>
-                Открыть демо аналитики →
+              <button type="button" className="landing-link-btn" onClick={() => startFromPage("hair_salon")}>
+                Открыть демо кабинета →
               </button>
             </article>
             <article className="landing-value-card">
@@ -520,17 +482,33 @@ export default function LandingPage({ onLogin, onRegister }) {
         </section>
 
         <section className="landing-section" id="integrations">
-          <h2>Интеграции и уведомления</h2>
+          <h2>Интеграции, календари и уведомления</h2>
           <p className="landing-section-lead">
-            Прозрачно: что уже подключено, а что планируем — без размытых обещаний.
+            Как клиент узнаёт, что сеанс подтверждён, и с чем можно связать календарь.
           </p>
+          <div className="landing-notify-strip">
+            <article>
+              <h3>Подтверждение записи</h3>
+              <p>
+                Сейчас: статус в кабинете, чат с организацией и push в приложении. Далее — SMS,
+                Telegram-бот и WhatsApp.
+              </p>
+            </article>
+            <article>
+              <h3>Календари</h3>
+              <p>
+                Google Календарь и Яндекс Календарь — в подключении (синхронизация слотов). Пока
+                мастер ведёт расписание в Вместе.
+              </p>
+            </article>
+          </div>
           <div className="landing-integrations">
             {INTEGRATIONS.map((item) => (
               <article key={item.title} className="landing-integration">
                 <div className="landing-integration-top">
                   <h3>{item.title}</h3>
                   <span className={`landing-status landing-status--${item.status}`}>
-                    {item.status === "now" ? "Доступно" : "В планах"}
+                    {item.status === "now" ? "Доступно" : "В подключении"}
                   </span>
                 </div>
                 <p>{item.text}</p>

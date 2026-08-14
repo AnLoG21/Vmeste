@@ -3950,6 +3950,7 @@ export default function App() {
   function logout() {
     localStorage.removeItem("vmeste_access");
     localStorage.removeItem("vmeste_refresh");
+    localStorage.removeItem("vmeste_demo");
     setAccessToken("");
     setRefreshToken("");
     setMe(null);
@@ -3957,6 +3958,38 @@ export default function App() {
     setCurrentView("bookings");
     setAuthStatus("Вы вышли.");
     resetPushRegistration();
+  }
+
+  async function exitDemoSession() {
+    const demo = localStorage.getItem("vmeste_demo") === "1" || Boolean(me?.is_demo);
+    if (demo && accessToken) {
+      try {
+        await authFetch(`${API_URL}/users/demo-exit/`, { method: "POST" });
+      } catch {
+        /* still leave the cabinet */
+      }
+    }
+    logout();
+  }
+
+  async function startDemo(sphere) {
+    const response = await fetch(`${API_URL}/users/demo-login/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sphere }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.detail || "Не удалось открыть демо.");
+    }
+    setAccessToken(data.access);
+    setRefreshToken(data.refresh);
+    localStorage.setItem("vmeste_access", data.access);
+    localStorage.setItem("vmeste_refresh", data.refresh);
+    localStorage.setItem("vmeste_demo", "1");
+    setShowAuthModal(false);
+    setCurrentView(sphere === "cafe_restaurant" ? "cafe" : "bookings");
+    setAuthStatus("");
   }
 
   async function deleteMyAccount(event) {
@@ -10276,17 +10309,29 @@ export default function App() {
                     <span className="menu-item-label">Заказы</span>
                   </button>
                 )}
-                <button type="button" className="menu-dropdown-item" onClick={logout}>
+                <button type="button" className="menu-dropdown-item" onClick={exitDemoSession}>
                   <span className="menu-item-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" /></svg>
                   </span>
-                  <span className="menu-item-label">Выйти</span>
+                  <span className="menu-item-label">{me?.is_demo ? "Выйти из демо" : "Выйти"}</span>
                 </button>
               </div>
             )}
           </div>
         )}
       </header>
+
+      {accessToken && me?.is_demo && (
+        <div className="demo-mode-banner" role="status">
+          <span>
+            Демо-режим: общий кабинет «{me.organization_name || "Вместе"}». Можно нажимать и создавать.
+            При выходе ваши новые данные удалятся, исходные останутся.
+          </span>
+          <button type="button" className="landing-btn landing-btn--outline" onClick={exitDemoSession}>
+            Выйти из демо
+          </button>
+        </div>
+      )}
 
       {intervalToast && (
         <div className="interval-toast" role="alert">
@@ -10310,7 +10355,11 @@ export default function App() {
 
       <main className={`grid${centeredWorkspace ? " grid-centered-workspace" : ""}`}>
         {!accessToken && (
-          <LandingPage onLogin={() => openAuth("login")} onRegister={() => openAuth("register")} />
+          <LandingPage
+            onLogin={() => openAuth("login")}
+            onRegister={() => openAuth("register")}
+            onStartDemo={startDemo}
+          />
         )}
 
         {!accessToken && showAuthModal && createPortal(

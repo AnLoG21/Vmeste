@@ -54,8 +54,9 @@ class UserSerializer(serializers.ModelSerializer):
             "anonymous_seat_count",
             "provider_license_number",
             "organization_slug",
+            "is_demo",
         ]
-        read_only_fields = ["id", "username", "email", "role", "email_verified", "organization_slug"]
+        read_only_fields = ["id", "username", "email", "role", "email_verified", "organization_slug", "is_demo"]
 
 
 class ProviderGalleryPhotoSerializer(serializers.ModelSerializer):

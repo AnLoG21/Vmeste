@@ -198,6 +198,11 @@ class DeleteAccountView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         user = request.user
+        if getattr(user, "is_demo", False):
+            return Response(
+                {"detail": "Демо-аккаунт нельзя удалить."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if not password or not user.check_password(password):
             return Response({"password": ["Неверный пароль."]}, status=status.HTTP_400_BAD_REQUEST)
         if user.role == User.Role.PROVIDER:
@@ -253,6 +258,11 @@ class ChangePasswordView(APIView):
         ser = ChangePasswordSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         u = request.user
+        if getattr(u, "is_demo", False):
+            return Response(
+                {"detail": "В демо-режиме пароль менять нельзя."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if not u.check_password(ser.validated_data["old_password"]):
             return Response({"old_password": ["Неверный пароль."]}, status=status.HTTP_400_BAD_REQUEST)
         if settings.SKIP_EMAIL_VERIFICATION:
@@ -315,6 +325,11 @@ class ChangeEmailView(APIView):
     def post(self, request):
         ser = ChangeEmailSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
+        if getattr(request.user, "is_demo", False):
+            return Response(
+                {"detail": "В демо-режиме email менять нельзя."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         new_email = ser.validated_data["new_email"].strip().lower()
         if User.objects.filter(email__iexact=new_email).exclude(pk=request.user.pk).exists():
             return Response(
@@ -349,3 +364,50 @@ class ChangeEmailView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         return Response({"detail": "Email изменён. Подтвердите новый адрес по ссылке из письма (это письмо о смене почты)."})
+
+
+class DemoLoginView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        from .demo import DEMO_SPHERES, login_demo
+
+        sphere = (request.data.get("sphere") or "").strip()
+        if sphere not in DEMO_SPHERES:
+            return Response(
+                {
+                    "detail": "Выберите сферу: салон красоты, автосервис или кафе.",
+                    "spheres": [{"key": k, "label": v["label"]} for k, v in DEMO_SPHERES.items()],
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            data = login_demo(sphere)
+        except Exception as exc:
+            return Response(
+                {
+                    "detail": (
+                        str(exc)
+                        if settings.DEBUG
+                        else "Не удалось открыть демо. Попробуйте ещё раз через минуту."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(data)
+
+
+class DemoExitView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from .demo import exit_demo
+
+        if not getattr(request.user, "is_demo", False):
+            return Response({"detail": "ok"})
+        try:
+            exit_demo(request.user)
+        except Exception:
+            pass
+        return Response({"detail": "Демо-данные восстановлены."})
+
