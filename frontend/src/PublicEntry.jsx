@@ -9,7 +9,7 @@ import OfferPage from "./legal/OfferPage.jsx";
 import PrivacyPage from "./legal/PrivacyPage.jsx";
 import PublicOrgPage from "./legal/PublicOrgPage.jsx";
 import HomeFallback from "./HomeFallback.jsx";
-import { viewFromPath } from "./viewRoutes.js";
+import { shouldLoadApp } from "./viewRoutes.js";
 import "./landing.css";
 
 const App = lazy(() => import("./App.jsx"));
@@ -40,16 +40,15 @@ export default function PublicEntry() {
   const tableMatch = path.match(/^\/t\/([^/]+)$/);
   const menuMatch = path.match(/^\/m\/([^/]+)$/);
   const cityMatch = path.match(/^\/city\/([^/]+)$/);
-  const appView = viewFromPath(path);
+  const appView = shouldLoadApp(path);
 
   let content;
-  if (path === "/") content = <LazyApp />;
+  if (appView) content = <LazyApp />;
   else if (LegalPage) content = <LegalPage />;
   else if (orgMatch) content = <PublicOrgPage slug={decodeURIComponent(orgMatch[1])} />;
   else if (tableMatch) content = <CafeGuestPage mode="table" keyId={decodeURIComponent(tableMatch[1])} />;
   else if (menuMatch) content = <CafeGuestPage mode="org" keyId={decodeURIComponent(menuMatch[1])} />;
   else if (cityMatch) content = <CityPage cityKey={decodeURIComponent(cityMatch[1]).toLowerCase()} />;
-  else if (appView) content = <LazyApp />;
   else content = <NotFoundPage />;
 
   return (

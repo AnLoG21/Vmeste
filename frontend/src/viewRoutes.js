@@ -32,6 +32,16 @@ export function viewFromPath(pathname) {
   return PATH_TO_VIEW[path] || null;
 }
 
+/** Paths that load the App shell but are not cabinet views (email links, etc.). */
+export const APP_SHELL_PATHS = new Set(["/verify-email", "/confirm-password-change"]);
+
+export function shouldLoadApp(pathname) {
+  const path = (pathname || "/").replace(/\/+$/, "") || "/";
+  if (path === "/") return true;
+  if (APP_SHELL_PATHS.has(path)) return true;
+  return Boolean(viewFromPath(path));
+}
+
 export function navigateView(view, { replace = false } = {}) {
   if (typeof window === "undefined") return;
   const path = pathForView(view);
