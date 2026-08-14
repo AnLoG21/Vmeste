@@ -3,9 +3,11 @@ WORKDIR /app
 ARG VITE_API_URL=http://localhost:8000/api
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 ENV VITE_API_URL=${VITE_API_URL}
-ENV NODE_ENV=production
+# Keep install layer cacheable; production mode only for the Vite step.
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+ENV NPM_CONFIG_FUND=false
+ENV NPM_CONFIG_AUDIT=false
 
-# Install deps first so this layer stays cached when only src/ changes
 COPY package*.json ./
 RUN npm config set registry "${NPM_REGISTRY}" \
   && npm config set fetch-retries 5 \
@@ -18,6 +20,7 @@ COPY index.html vite.config.js ./
 COPY public ./public
 COPY src ./src
 
+ENV NODE_ENV=production
 RUN node node_modules/vite/bin/vite.js build
 
 FROM nginx:1.27-alpine
