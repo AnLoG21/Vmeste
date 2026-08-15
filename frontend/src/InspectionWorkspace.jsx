@@ -269,28 +269,58 @@ export default function InspectionWorkspace({
 
   async function downloadPdf(kind) {
     if (!report) return;
-    const path = kind === "agreement" ? `documents/agreement` : `documents/work-order`;
-    const res = await authFetch(`${API_URL}/inspections/reports/${report.id}/${path}/`, {
-      method: "GET",
-      headers: { Accept: "application/pdf" },
-    });
-    if (!res.ok) {
+    setBusy(true);
+    setStatus("");
+    const path = kind === "agreement" ? "agreement-pdf" : "work-order-pdf";
+    try {
+      const res = await authFetch(`${API_URL}/inspections/reports/${report.id}/${path}/`, {
+        method: "GET",
+        headers: { Accept: "application/pdf,*/*" },
+      });
+      const ctype = (res.headers.get("content-type") || "").toLowerCase();
+      if (!res.ok || ctype.includes("application/json")) {
+        const err = await res.json().catch(() => ({}));
+        setStatus(err.detail || `Не удалось скачать PDF (${res.status}).`);
+        return;
+      }
+      const blob = await res.blob();
+      if (!blob || blob.size < 40) {
+        setStatus("PDF пустой — попробуйте ещё раз.");
+        return;
+      }
+      const pdfBlob = blob.type === "application/pdf" ? blob : new Blob([blob], { type: "application/pdf" });
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${kind}-${report.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+      setStatus("Документ скачан.");
+    } catch {
+      setStatus("Ошибка сети при скачивании PDF.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteReport() {
+    if (!report) return;
+    if (!window.confirm(`Удалить отчёт #${report.id}? Это действие нельзя отменить.`)) return;
+    setBusy(true);
+    setStatus("");
+    const res = await authFetch(`${API_URL}/inspections/reports/${report.id}/`, { method: "DELETE" });
+    setBusy(false);
+    if (!res.ok && res.status !== 204) {
       const err = await res.json().catch(() => ({}));
-      setStatus(err.detail || "Документ пока недоступен.");
+      setStatus(err.detail || "Не удалось удалить отчёт.");
       return;
     }
-    const blob = await res.blob();
-    if (!blob || blob.size < 50) {
-      setStatus("PDF пустой — попробуйте ещё раз.");
-      return;
-    }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${kind}-${report.id}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setStatus("Документ скачан.");
+    setSelectedId(null);
+    setReport(null);
+    await loadList();
+    setStatus("Отчёт удалён.");
   }
 
   const isDraft = report?.status === "draft";
@@ -591,10 +621,10 @@ export default function InspectionWorkspace({
                     <p className="inspection-total">
                       Итого утверждено: <strong>{money(report.grand_total)}</strong>
                     </p>
-                    <button type="button" className="ghost-btn" onClick={() => downloadPdf("agreement")}>
+                    <button type="button" className="ghost-btn" disabled={busy} onClick={() => downloadPdf("agreement")}>
                       Акт согласования (PDF)
                     </button>
-                    <button type="button" className="ghost-btn" onClick={() => downloadPdf("work-order")}>
+                    <button type="button" className="ghost-btn" disabled={busy} onClick={() => downloadPdf("work-order")}>
                       Заказ-наряд (PDF)
                     </button>
                   </>
@@ -602,6 +632,9 @@ export default function InspectionWorkspace({
                 {report.status === "sent" && (
                   <p className="muted">Ожидаем выбор клиента. Итог появится после утверждения.</p>
                 )}
+                <button type="button" className="ghost-btn" disabled={busy} onClick={deleteReport}>
+                  Удалить отчёт
+                </button>
               </div>
             </>
           )}

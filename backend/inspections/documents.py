@@ -22,9 +22,16 @@ def _rub(value) -> str:
 
 
 def _find_cyrillic_font() -> tuple[str | None, str | None]:
-    """Return (regular_path, bold_path)."""
-    regular_candidates = []
-    bold_candidates = []
+    """Return (regular_path, bold_path). Prefer packaged fonts, then system."""
+    pkg_dir = os.path.join(os.path.dirname(__file__), "fonts")
+    regular_candidates = [
+        os.path.join(pkg_dir, "DejaVuSans.ttf"),
+        os.path.join(pkg_dir, "arial.ttf"),
+    ]
+    bold_candidates = [
+        os.path.join(pkg_dir, "DejaVuSans-Bold.ttf"),
+        os.path.join(pkg_dir, "arialbd.ttf"),
+    ]
     if platform.system() == "Windows":
         regular_candidates.extend(
             [

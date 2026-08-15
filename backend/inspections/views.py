@@ -141,10 +141,6 @@ class InspectionReportViewSet(viewsets.ModelViewSet):
         report = self.get_object()
         if not _can_manage_reports(request.user):
             return Response(status=status.HTTP_403_FORBIDDEN)
-        if report.status not in (InspectionReport.Status.DRAFT, InspectionReport.Status.CANCELLED):
-            report.status = InspectionReport.Status.CANCELLED
-            report.save(update_fields=["status", "updated_at"])
-            return Response(InspectionReportSerializer(report, context={"request": request}).data)
         report.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -192,24 +188,28 @@ class InspectionReportViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
-    @action(detail=True, methods=["get"], url_path="documents/agreement")
+    @action(detail=True, methods=["get"], url_path="agreement-pdf")
     def agreement_pdf(self, request, pk=None):
         return self._pdf_response(request, "agreement")
 
-    @action(detail=True, methods=["get"], url_path="documents/work-order")
+    @action(detail=True, methods=["get"], url_path="work-order-pdf")
     def work_order_pdf(self, request, pk=None):
         return self._pdf_response(request, "work-order")
 
     def _pdf_response(self, request, doc_type):
         report = self.get_object()
+        provider = _provider_for_user(request.user)
         is_client = request.user.role == User.Role.CLIENT and report.client_id == request.user.id
-        is_org = _can_manage_reports(request.user) and report.provider_id == getattr(
-            _provider_for_user(request.user), "id", None
-        )
+        is_org = bool(provider and report.provider_id == provider.id and _can_manage_reports(request.user))
         if not is_client and not is_org:
-            return Response(status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Нет доступа к документу."}, status=status.HTTP_403_FORBIDDEN)
         if report.status != InspectionReport.Status.APPROVED:
             return Response({"detail": "Документы доступны после утверждения."}, status=status.HTTP_400_BAD_REQUEST)
+        report = (
+            InspectionReport.objects.select_related("provider", "client")
+            .prefetch_related("items")
+            .get(pk=report.pk)
+        )
         try:
             if doc_type == "agreement":
                 raw = build_agreement_pdf(report)
@@ -222,8 +222,10 @@ class InspectionReportViewSet(viewsets.ModelViewSet):
 
             logging.getLogger(__name__).exception("inspection PDF failed for report %s", report.id)
             return Response({"detail": "Не удалось сформировать PDF."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        raw = bytes(raw)
         resp = HttpResponse(raw, content_type="application/pdf")
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        resp["Content-Length"] = str(len(raw))
         return resp
 
 
@@ -346,3 +348,38 @@ class InspectionPublicApproveView(APIView):
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         report.refresh_from_db()
         return Response(InspectionReportSerializer(report, context={"request": request}).data)
+
+
+class InspectionPublicPdfView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request, token, doc_type):
+        if doc_type not in ("agreement", "work-order"):
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        report = (
+            InspectionReport.objects.select_related("provider", "client")
+            .prefetch_related("items")
+            .filter(share_token=token, status=InspectionReport.Status.APPROVED)
+            .first()
+        )
+        if not report:
+            return Response({"detail": "Документ недоступен."}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            if doc_type == "agreement":
+                raw = build_agreement_pdf(report)
+                filename = f"agreement-{report.id}.pdf"
+            else:
+                raw = build_work_order_pdf(report)
+                filename = f"work-order-{report.id}.pdf"
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception("public inspection PDF failed for report %s", report.id)
+            return Response({"detail": "Не удалось сформировать PDF."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        raw = bytes(raw)
+        resp = HttpResponse(raw, content_type="application/pdf")
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        resp["Content-Length"] = str(len(raw))
+        return resp
+

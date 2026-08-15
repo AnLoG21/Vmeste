@@ -21,7 +21,10 @@ def _rub(value) -> str:
 
 
 def _find_cyrillic_font() -> str | None:
-    candidates = []
+    pkg_font = os.path.join(os.path.dirname(__file__), "..", "inspections", "fonts", "DejaVuSans.ttf")
+    candidates = [
+        os.path.normpath(pkg_font),
+    ]
     if platform.system() == "Windows":
         candidates.extend(
             [
@@ -66,12 +69,18 @@ def build_cafe_order_receipt_pdf(
     bold_path = None
     if font_path:
         pdf.add_font("Main", "", font_path)
+        bold_candidates = [
+            os.path.normpath(
+                os.path.join(os.path.dirname(__file__), "..", "inspections", "fonts", "DejaVuSans-Bold.ttf")
+            ),
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        ]
         if platform.system() == "Windows":
-            candidates = [r"C:\Windows\Fonts\arialbd.ttf", r"C:\Windows\Fonts\segoeuib.ttf"]
-            for p in candidates:
-                if os.path.isfile(p):
-                    bold_path = p
-                    break
+            bold_candidates.extend([r"C:\Windows\Fonts\arialbd.ttf", r"C:\Windows\Fonts\segoeuib.ttf"])
+        for p in bold_candidates:
+            if os.path.isfile(p):
+                bold_path = p
+                break
         if bold_path:
             pdf.add_font("Main", "B", bold_path)
         family = "Main"

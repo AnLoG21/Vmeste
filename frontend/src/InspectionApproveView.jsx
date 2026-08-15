@@ -243,6 +243,54 @@ export default function InspectionApproveView({
     onApproved?.(data);
   }
 
+  async function downloadPdf(kind) {
+    if (!report || report.status !== "approved") return;
+    setBusy(true);
+    setStatus("");
+    const path = kind === "agreement" ? "agreement" : "work-order";
+    try {
+      let res;
+      if (mode === "public" && token) {
+        res = await fetch(`${API_URL}/inspections/public/${token}/${path}-pdf/`, {
+          headers: { Accept: "application/pdf,*/*" },
+        });
+      } else if (authFetch && report.id) {
+        res = await authFetch(`${API_URL}/inspections/reports/${report.id}/${path}-pdf/`, {
+          method: "GET",
+          headers: { Accept: "application/pdf,*/*" },
+        });
+      } else {
+        setStatus("Нет доступа к PDF.");
+        return;
+      }
+      const ctype = (res.headers.get("content-type") || "").toLowerCase();
+      if (!res.ok || ctype.includes("application/json")) {
+        const err = await res.json().catch(() => ({}));
+        setStatus(err.detail || `Не удалось скачать PDF (${res.status}).`);
+        return;
+      }
+      const blob = await res.blob();
+      if (!blob || blob.size < 40) {
+        setStatus("PDF пустой — попробуйте ещё раз.");
+        return;
+      }
+      const pdfBlob = blob.type === "application/pdf" ? blob : new Blob([blob], { type: "application/pdf" });
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${kind}-${report.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+      setStatus("Документ скачан.");
+    } catch {
+      setStatus("Ошибка сети при скачивании PDF.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="inspection-approve">
@@ -339,6 +387,16 @@ export default function InspectionApproveView({
           <button type="button" disabled={busy} onClick={approve}>
             Утвердить ремонт
           </button>
+        )}
+        {report.status === "approved" && (
+          <div className="inspection-actions" style={{ marginTop: 8 }}>
+            <button type="button" className="ghost-btn" disabled={busy} onClick={() => downloadPdf("agreement")}>
+              Акт согласования (PDF)
+            </button>
+            <button type="button" className="ghost-btn" disabled={busy} onClick={() => downloadPdf("work-order")}>
+              Заказ-наряд (PDF)
+            </button>
+          </div>
         )}
         {onBackToChats ? (
           <button type="button" className="ghost-btn" onClick={onBackToChats}>
