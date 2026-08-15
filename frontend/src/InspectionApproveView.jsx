@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { API_URL } from "./config.js";
 import "./landing.css";
 
@@ -8,19 +9,99 @@ const SEVERITY_META = {
   ok: { label: "В порядке", order: 2 },
 };
 
-function money(v) {
+export function money(v) {
   const n = Number(v);
   if (Number.isNaN(n)) return "0 ₽";
   return `${n.toLocaleString("ru-RU", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽`;
 }
 
-function lineTotal(it) {
+export function lineTotal(it) {
   return Number(it.parts_price || 0) + Number(it.labor_price || 0);
+}
+
+export function InspectionPhotoLightbox({ items, index, onClose, onStep }) {
+  const touchX = useRef(0);
+  useEffect(() => {
+    if (!items?.length) return undefined;
+    function onKey(e) {
+      if (e.key === "Escape") onClose?.();
+      if (e.key === "ArrowLeft") onStep?.(-1);
+      if (e.key === "ArrowRight") onStep?.(1);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [items, onClose, onStep]);
+
+  if (!items?.length || typeof document === "undefined") return null;
+  return createPortal(
+    <div className="photo-lightbox-backdrop" onClick={onClose} role="presentation">
+      {items.length > 1 ? (
+        <>
+          <button type="button" className="photo-lightbox-nav photo-lightbox-nav--prev" aria-label="Назад" onClick={(e) => { e.stopPropagation(); onStep?.(-1); }}>
+            ‹
+          </button>
+          <button type="button" className="photo-lightbox-nav photo-lightbox-nav--next" aria-label="Далее" onClick={(e) => { e.stopPropagation(); onStep?.(1); }}>
+            ›
+          </button>
+          <p className="photo-lightbox-counter">
+            {index + 1} / {items.length}
+          </p>
+        </>
+      ) : null}
+      <div className="photo-lightbox-inner" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Просмотр фото">
+        <button type="button" className="photo-lightbox-close" aria-label="Закрыть" onClick={onClose}>
+          ×
+        </button>
+        <div
+          className="photo-lightbox-viewport"
+          onTouchStart={(e) => {
+            touchX.current = e.touches?.[0]?.clientX ?? 0;
+          }}
+          onTouchEnd={(e) => {
+            if (items.length < 2) return;
+            const x = e.changedTouches?.[0]?.clientX ?? 0;
+            const dx = x - touchX.current;
+            if (Math.abs(dx) > 40) onStep?.(dx < 0 ? 1 : -1);
+          }}
+        >
+          {items.map((item, i) => (
+            <div
+              key={item.id || i}
+              className={["photo-lightbox-slide", i === index && "photo-lightbox-slide--active"].filter(Boolean).join(" ")}
+            >
+              <img className="photo-lightbox-img" src={item.url} alt="" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+export function InspectionItemBlock({ it, severityLabel, showPrices = true }) {
+  return (
+    <div className="inspection-item-lines">
+      <div className="inspection-item-title">{it.title}</div>
+      {severityLabel ? (
+        <div className={`inspection-item-severity inspection-item-severity--${it.severity}`}>
+          {severityLabel}
+        </div>
+      ) : null}
+      {showPrices && it.severity !== "ok" ? (
+        <div className="inspection-item-prices">
+          <span>Запчасти: {money(it.parts_price)}</span>
+          <span>Работа: {money(it.labor_price)}</span>
+          <span className="inspection-item-line-total">Итого: {money(lineTotal(it))}</span>
+        </div>
+      ) : null}
+      {it.description ? <p className="inspection-item-desc muted small">{it.description}</p> : null}
+    </div>
+  );
 }
 
 /**
  * Public / authenticated client approval UI for an inspection report.
- * mode: "public" uses token; "cabinet" uses authFetch + report id.
  */
 export default function InspectionApproveView({
   mode = "public",
@@ -29,27 +110,35 @@ export default function InspectionApproveView({
   authFetch,
   initialReport = null,
   onApproved,
+  onBackToChats,
+  onOpenPhotos,
 }) {
   const [report, setReport] = useState(initialReport);
   const [selected, setSelected] = useState(() => new Set());
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(!initialReport);
   const [busy, setBusy] = useState(false);
+  const [lightbox, setLightbox] = useState(null);
+
+  function openPhotos(photos, startIndex = 0) {
+    const items = (photos || []).map((ph, i) => ({ id: ph.id || i, url: ph.url }));
+    if (!items.length) return;
+    if (onOpenPhotos) {
+      onOpenPhotos(items, startIndex);
+      return;
+    }
+    setLightbox({ items, index: startIndex });
+  }
 
   useEffect(() => {
     if (initialReport) {
       setReport(initialReport);
-      const pre = new Set(
-        (initialReport.items || [])
-          .filter((i) => i.client_selected || (i.selectable && i.severity === "critical"))
-          .map((i) => i.id),
-      );
-      if (initialReport.status === "sent") {
-        // Pre-check critical for convenience when opening fresh
-        const crit = (initialReport.items || []).filter((i) => i.selectable && i.severity === "critical").map((i) => i.id);
-        setSelected(new Set(crit));
+      if (initialReport.status === "approved") {
+        setSelected(new Set((initialReport.items || []).filter((i) => i.client_selected).map((i) => i.id)));
       } else {
-        setSelected(pre);
+        setSelected(
+          new Set((initialReport.items || []).filter((i) => i.selectable && i.severity === "critical").map((i) => i.id)),
+        );
       }
       setLoading(false);
       return;
@@ -166,6 +255,11 @@ export default function InspectionApproveView({
     return (
       <div className="inspection-approve">
         <p className="status">{status || "Отчёт не найден."}</p>
+        {onBackToChats ? (
+          <button type="button" className="ghost-btn" onClick={onBackToChats}>
+            ← В чаты
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -174,6 +268,11 @@ export default function InspectionApproveView({
 
   return (
     <div className="inspection-approve">
+      {onBackToChats ? (
+        <button type="button" className="ghost-btn inspection-back-chats" onClick={onBackToChats}>
+          ← В чаты
+        </button>
+      ) : null}
       <header className="inspection-approve-head">
         <p className="muted small">{report.organization_name || "Сервисный центр"}</p>
         <h1>Согласование работ</h1>
@@ -205,24 +304,22 @@ export default function InspectionApproveView({
                           checked={checked}
                           onChange={() => toggle(it.id)}
                         />
-                        <span>
-                          <strong>{it.title}</strong>
-                          {it.description ? <span className="muted small">{it.description}</span> : null}
-                          <span className="inspection-approve-price">{money(lineTotal(it))}</span>
-                        </span>
+                        <InspectionItemBlock it={it} showPrices />
                       </label>
                     ) : (
-                      <div>
-                        <strong>{it.title}</strong>
-                        {it.description ? <p className="muted small">{it.description}</p> : null}
-                      </div>
+                      <InspectionItemBlock it={it} showPrices={false} />
                     )}
                     {(it.photos || []).length > 0 && (
                       <div className="inspection-photos">
-                        {it.photos.map((ph) => (
-                          <a key={ph.id} href={ph.url} target="_blank" rel="noreferrer">
+                        {it.photos.map((ph, idx) => (
+                          <button
+                            key={ph.id}
+                            type="button"
+                            className="inspection-photo-btn"
+                            onClick={() => openPhotos(it.photos, idx)}
+                          >
                             <img src={ph.url} alt="" />
-                          </a>
+                          </button>
                         ))}
                       </div>
                     )}
@@ -236,15 +333,35 @@ export default function InspectionApproveView({
 
       <footer className="inspection-approve-footer">
         <p className="inspection-total">
-          Итого: <strong>{money(liveTotal)}</strong>
+          Итого к оплате: <strong>{money(liveTotal)}</strong>
         </p>
         {!readOnly && (
           <button type="button" disabled={busy} onClick={approve}>
             Утвердить ремонт
           </button>
         )}
+        {onBackToChats ? (
+          <button type="button" className="ghost-btn" onClick={onBackToChats}>
+            Вернуться в чаты
+          </button>
+        ) : null}
         {status ? <p className="status">{status}</p> : null}
       </footer>
+
+      {lightbox ? (
+        <InspectionPhotoLightbox
+          items={lightbox.items}
+          index={lightbox.index}
+          onClose={() => setLightbox(null)}
+          onStep={(delta) =>
+            setLightbox((prev) => {
+              if (!prev?.items?.length) return prev;
+              const n = prev.items.length;
+              return { ...prev, index: (prev.index + delta + n) % n };
+            })
+          }
+        />
+      ) : null}
     </div>
   );
 }
@@ -254,7 +371,15 @@ export function InspectionPublicPage({ token }) {
   return (
     <div className="landing-shell inspection-public-page">
       <div className="landing-container" style={{ maxWidth: 720, padding: "24px 16px 48px" }}>
+        <p className="muted small" style={{ marginBottom: 12 }}>
+          Войдите в кабинет Вместе, чтобы обсудить работы в чате с сервисом.
+        </p>
         <InspectionApproveView mode="public" token={token} />
+        <p style={{ marginTop: 16 }}>
+          <a className="landing-btn landing-btn--outline" href="/">
+            На главную Вместе
+          </a>
+        </p>
       </div>
     </div>
   );

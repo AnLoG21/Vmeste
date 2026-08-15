@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import platform
 from decimal import Decimal
@@ -13,31 +14,47 @@ from booking.booking_actions import client_display_name
 
 from .models import InspectionItem, InspectionReport
 
+logger = logging.getLogger(__name__)
+
 
 def _rub(value) -> str:
-    return f"{Decimal(value):.2f} ₽"
+    return f"{Decimal(value):.2f} руб."
 
 
-def _find_cyrillic_font() -> str | None:
-    candidates = []
+def _find_cyrillic_font() -> tuple[str | None, str | None]:
+    """Return (regular_path, bold_path)."""
+    regular_candidates = []
+    bold_candidates = []
     if platform.system() == "Windows":
-        candidates.extend(
+        regular_candidates.extend(
             [
                 r"C:\Windows\Fonts\arial.ttf",
                 r"C:\Windows\Fonts\segoeui.ttf",
             ]
         )
-    candidates.extend(
+        bold_candidates.extend(
+            [
+                r"C:\Windows\Fonts\arialbd.ttf",
+                r"C:\Windows\Fonts\segoeuib.ttf",
+            ]
+        )
+    regular_candidates.extend(
         [
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
             "/usr/share/fonts/TTF/DejaVuSans.ttf",
             "/usr/share/fonts/dejavu/DejaVuSans.ttf",
         ]
     )
-    for path in candidates:
-        if os.path.isfile(path):
-            return path
-    return None
+    bold_candidates.extend(
+        [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+        ]
+    )
+    regular = next((p for p in regular_candidates if os.path.isfile(p)), None)
+    bold = next((p for p in bold_candidates if os.path.isfile(p)), None)
+    return regular, bold
 
 
 def _org_name(report: InspectionReport) -> str:
@@ -47,7 +64,7 @@ def _org_name(report: InspectionReport) -> str:
 
 def _vehicle_line(report: InspectionReport) -> str:
     parts = [p for p in (report.vehicle_title, report.vehicle_plate, report.vehicle_vin) if (p or "").strip()]
-    return " · ".join(parts) if parts else "—"
+    return " / ".join(parts) if parts else "-"
 
 
 SEVERITY_LABELS = {
@@ -57,36 +74,49 @@ SEVERITY_LABELS = {
 }
 
 
+def _safe(text: str) -> str:
+    """Strip characters that break core fonts; keep Cyrillic via Unicode fonts."""
+    if not text:
+        return ""
+    return (
+        str(text)
+        .replace("₽", "руб.")
+        .replace("·", "-")
+        .replace("✓", "[+]")
+        .replace("○", "[ ]")
+        .replace("—", "-")
+        .replace("–", "-")
+    )
+
+
 def _build_pdf(report: InspectionReport, *, doc_title: str, selected_only: bool) -> bytes:
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    font_path = _find_cyrillic_font()
-    bold_path = None
+    font_path, bold_path = _find_cyrillic_font()
     if font_path:
         pdf.add_font("Main", "", font_path)
-        if platform.system() == "Windows":
-            for p in (r"C:\Windows\Fonts\arialbd.ttf", r"C:\Windows\Fonts\segoeuib.ttf"):
-                if os.path.isfile(p):
-                    bold_path = p
-                    break
         if bold_path:
             pdf.add_font("Main", "B", bold_path)
         family = "Main"
+        can_bold = bool(bold_path)
     else:
         family = "Helvetica"
+        can_bold = True
+        logger.warning("No Cyrillic TTF found for inspection PDF; text may be incomplete")
 
     def write_line(text: str, size: int = 11, bold: bool = False):
-        style = "B" if bold and (family == "Helvetica" or bold_path) else ""
+        style = "B" if bold and can_bold else ""
         pdf.set_font(family, style=style, size=size)
-        pdf.multi_cell(0, size * 0.5, text)
+        pdf.multi_cell(0, max(5, int(size * 0.55)), _safe(text))
         pdf.ln(1)
 
     write_line(_org_name(report), size=16, bold=True)
     write_line(doc_title, size=13, bold=True)
-    write_line(f"Отчёт №{report.id}", size=11)
-    write_line(f"Клиент: {client_display_name(report.client) or report.client.username}", size=10)
+    write_line(f"Otchet N{report.id}" if family == "Helvetica" else f"Отчёт №{report.id}", size=11)
+    client = client_display_name(report.client) or (report.client.username if report.client else "")
+    write_line(f"Клиент: {client}", size=10)
     write_line(f"Авто: {_vehicle_line(report)}", size=10)
     if report.approved_at:
         when = timezone.localtime(report.approved_at).strftime("%d.%m.%Y %H:%M")
@@ -101,33 +131,33 @@ def _build_pdf(report: InspectionReport, *, doc_title: str, selected_only: bool)
     items = list(report.items.all())
     if selected_only:
         items = [i for i in items if i.client_selected and i.severity != InspectionItem.Severity.OK]
-    else:
-        items = [i for i in items if i.severity != InspectionItem.Severity.OK or True]
 
+    if not items:
+        write_line("Нет утверждённых позиций.", size=10)
     for item in items:
-        if selected_only and not item.client_selected:
-            continue
         sev = SEVERITY_LABELS.get(item.severity, item.severity)
-        mark = "✓" if item.client_selected else ("—" if item.severity == InspectionItem.Severity.OK else "○")
+        write_line(f"[+] [{sev}] {item.title}", size=10, bold=True)
         write_line(
-            f"{mark} [{sev}] {item.title} — запчасти {_rub(item.parts_price)}, работа {_rub(item.labor_price)}",
+            f"    Запчасти: {_rub(item.parts_price)}  |  Работа: {_rub(item.labor_price)}",
             size=10,
         )
         if (item.description or "").strip():
-            write_line(f"   {item.description.strip()}", size=9)
+            write_line(f"    {item.description.strip()}", size=9)
 
     pdf.ln(4)
     write_line(f"Запчасти: {_rub(report.parts_total)}", size=10)
     write_line(f"Работы: {_rub(report.labor_total)}", size=10)
     write_line(f"Итого: {_rub(report.grand_total)}", size=13, bold=True)
     write_line(
-        "Электронная отметка клиента на платформе Вместе. Споры по неутверждённым позициям не принимаются.",
+        "Электронная отметка клиента на платформе Вместе.",
         size=8,
     )
 
     out = pdf.output()
+    if isinstance(out, (bytes, bytearray)):
+        return bytes(out)
     if isinstance(out, str):
-        return out.encode("latin-1")
+        return out.encode("latin-1", errors="replace")
     return bytes(out)
 
 

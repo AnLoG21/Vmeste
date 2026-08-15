@@ -42,6 +42,7 @@ class Message(models.Model):
         VOICE = "voice", "Voice"
         VIDEO_NOTE = "video_note", "Video note"
         LINK = "link", "Link"
+        INSPECTION = "inspection", "Inspection report"
 
     conversation = models.ForeignKey(
         Conversation, on_delete=models.CASCADE, related_name="messages"

@@ -37,9 +37,8 @@ def public_url_for(report: InspectionReport) -> str:
 def notify_inspection_sent(report: InspectionReport) -> None:
     from notifications.models import InAppNotification
     from notifications.push import notify_users
-    from chat.services import post_booking_message
+    from chat.services import post_inspection_message
 
-    url = public_url_for(report)
     org = (getattr(report.provider, "organization_name", None) or report.provider.username or "Сервис").strip()
     vehicle = (report.vehicle_title or report.vehicle_plate or "авто").strip()
     title = "Диагностика завершена"
@@ -53,14 +52,13 @@ def notify_inspection_sent(report: InspectionReport) -> None:
             "inspection_id": str(report.id),
             "share_token": str(report.share_token),
             "view": "inspections",
-            "url": url,
         },
     )
     try:
-        post_booking_message(
+        post_inspection_message(
             report.provider,
             report.client,
-            f"Диагностика вашего авто завершена. Согласуйте перечень работ: {url}",
+            report,
             sender=report.created_by or report.provider,
         )
     except Exception:

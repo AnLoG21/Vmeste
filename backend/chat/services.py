@@ -75,6 +75,8 @@ def message_preview_text(message: Message) -> str:
         return f"📎 {name}"
     if message.kind == Message.Kind.LINK:
         return (message.text or (message.payload or {}).get("url") or "Ссылка")[:240]
+    if message.kind == Message.Kind.INSPECTION:
+        return (message.text or "Согласование диагностики")[:240]
     return (message.text or "")[:240]
 
 
@@ -122,6 +124,32 @@ def post_booking_message(provider, client, text, sender=None):
         sender=sender,
         kind=Message.Kind.TEXT,
         text=text.strip(),
+    )
+
+
+def post_inspection_message(provider, client, report, sender=None):
+    """Карточка согласования диагностики в чате (без сырой ссылки)."""
+    sender = sender or provider
+    conv, _ = get_or_create_client_conversation(provider, client)
+    vehicle = " · ".join(
+        p for p in (report.vehicle_title, report.vehicle_plate) if (p or "").strip()
+    ) or "авто"
+    org = (getattr(provider, "organization_name", None) or provider.username or "Сервис").strip()
+    text = f"Диагностика завершена — согласуйте работы по {vehicle}"
+    payload = {
+        "inspection_id": report.id,
+        "share_token": str(report.share_token),
+        "organization_name": org,
+        "vehicle": vehicle,
+        "status": report.status,
+        "items_count": report.items.exclude(severity="ok").count(),
+    }
+    return Message.objects.create(
+        conversation=conv,
+        sender=sender,
+        kind=Message.Kind.INSPECTION,
+        payload=payload,
+        text=text,
     )
 
 

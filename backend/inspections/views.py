@@ -210,12 +210,18 @@ class InspectionReportViewSet(viewsets.ModelViewSet):
             return Response(status=status.HTTP_403_FORBIDDEN)
         if report.status != InspectionReport.Status.APPROVED:
             return Response({"detail": "Документы доступны после утверждения."}, status=status.HTTP_400_BAD_REQUEST)
-        if doc_type == "agreement":
-            raw = build_agreement_pdf(report)
-            filename = f"agreement-{report.id}.pdf"
-        else:
-            raw = build_work_order_pdf(report)
-            filename = f"work-order-{report.id}.pdf"
+        try:
+            if doc_type == "agreement":
+                raw = build_agreement_pdf(report)
+                filename = f"agreement-{report.id}.pdf"
+            else:
+                raw = build_work_order_pdf(report)
+                filename = f"work-order-{report.id}.pdf"
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception("inspection PDF failed for report %s", report.id)
+            return Response({"detail": "Не удалось сформировать PDF."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         resp = HttpResponse(raw, content_type="application/pdf")
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         return resp

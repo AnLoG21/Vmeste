@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { InspectionItemBlock, InspectionPhotoLightbox, money } from "./InspectionApproveView.jsx";
 
 const SEVERITY_OPTIONS = [
   { value: "critical", label: "Критично" },
@@ -13,12 +14,6 @@ const STATUS_LABELS = {
   cancelled: "Отменён",
 };
 
-function money(v) {
-  const n = Number(v);
-  if (Number.isNaN(n)) return "0 ₽";
-  return `${n.toLocaleString("ru-RU", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽`;
-}
-
 function emptyItemForm() {
   return {
     title: "",
@@ -32,7 +27,15 @@ function emptyItemForm() {
 /**
  * Org/staff workspace for interactive vehicle intake reports.
  */
-export default function InspectionWorkspace({ authFetch, API_URL, me, bookings = [], onOpenBookingCreate }) {
+export default function InspectionWorkspace({
+  authFetch,
+  API_URL,
+  me,
+  bookings = [],
+  initialReportId = null,
+  onConsumedInitialReportId,
+  onOpenPhotos,
+}) {
   const [list, setList] = useState([]);
   const [status, setStatus] = useState("");
   const [selectedId, setSelectedId] = useState(null);
@@ -48,6 +51,17 @@ export default function InspectionWorkspace({ authFetch, API_URL, me, bookings =
   });
   const [itemForm, setItemForm] = useState(emptyItemForm());
   const [busy, setBusy] = useState(false);
+  const [lightbox, setLightbox] = useState(null);
+
+  function openItemPhotos(photos, startIndex = 0) {
+    const items = (photos || []).map((ph, i) => ({ id: ph.id || i, url: ph.url }));
+    if (!items.length) return;
+    if (onOpenPhotos) {
+      onOpenPhotos(items, startIndex);
+      return;
+    }
+    setLightbox({ items, index: startIndex });
+  }
 
   const clientOptions = useMemo(() => {
     const map = new Map();
@@ -105,6 +119,12 @@ export default function InspectionWorkspace({ authFetch, API_URL, me, bookings =
     if (selectedId) loadReport(selectedId);
     else setReport(null);
   }, [selectedId, loadReport]);
+
+  useEffect(() => {
+    if (!initialReportId) return;
+    setSelectedId(Number(initialReportId));
+    onConsumedInitialReportId?.();
+  }, [initialReportId, onConsumedInitialReportId]);
 
   async function createReport(e) {
     e.preventDefault();
@@ -250,18 +270,27 @@ export default function InspectionWorkspace({ authFetch, API_URL, me, bookings =
   async function downloadPdf(kind) {
     if (!report) return;
     const path = kind === "agreement" ? `documents/agreement` : `documents/work-order`;
-    const res = await authFetch(`${API_URL}/inspections/reports/${report.id}/${path}/`);
+    const res = await authFetch(`${API_URL}/inspections/reports/${report.id}/${path}/`, {
+      method: "GET",
+      headers: { Accept: "application/pdf" },
+    });
     if (!res.ok) {
-      setStatus("Документ пока недоступен.");
+      const err = await res.json().catch(() => ({}));
+      setStatus(err.detail || "Документ пока недоступен.");
       return;
     }
     const blob = await res.blob();
+    if (!blob || blob.size < 50) {
+      setStatus("PDF пустой — попробуйте ещё раз.");
+      return;
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `${kind}-${report.id}.pdf`;
     a.click();
     URL.revokeObjectURL(url);
+    setStatus("Документ скачан.");
   }
 
   const isDraft = report?.status === "draft";
@@ -280,7 +309,6 @@ export default function InspectionWorkspace({ authFetch, API_URL, me, bookings =
           onClick={() => {
             setCreating(true);
             setSelectedId(null);
-            if (typeof onOpenBookingCreate === "function") onOpenBookingCreate();
           }}
         >
           Новый отчёт
@@ -449,18 +477,21 @@ export default function InspectionWorkspace({ authFetch, API_URL, me, bookings =
                 {(report.items || []).map((it) => (
                   <li key={it.id} className={`inspection-item inspection-item--${it.severity}`}>
                     <div className="inspection-item-main">
-                      <strong>{it.title}</strong>
-                      <span className="muted small">
-                        {SEVERITY_OPTIONS.find((s) => s.value === it.severity)?.label || it.severity}
-                        {" · "}
-                        запчасти {money(it.parts_price)}, работа {money(it.labor_price)}
-                      </span>
-                      {it.description ? <p className="small">{it.description}</p> : null}
+                      <InspectionItemBlock
+                        it={it}
+                        severityLabel={SEVERITY_OPTIONS.find((s) => s.value === it.severity)?.label || it.severity}
+                        showPrices={it.severity !== "ok"}
+                      />
                       <div className="inspection-photos">
-                        {(it.photos || []).map((ph) => (
-                          <a key={ph.id} href={ph.url} target="_blank" rel="noreferrer">
+                        {(it.photos || []).map((ph, idx) => (
+                          <button
+                            key={ph.id}
+                            type="button"
+                            className="inspection-photo-btn"
+                            onClick={() => openItemPhotos(it.photos, idx)}
+                          >
                             <img src={ph.url} alt="" />
-                          </a>
+                          </button>
                         ))}
                       </div>
                       {isDraft && (
@@ -576,7 +607,20 @@ export default function InspectionWorkspace({ authFetch, API_URL, me, bookings =
           )}
         </div>
       </div>
-      {me?.organization_name ? null : null}
+      {lightbox ? (
+        <InspectionPhotoLightbox
+          items={lightbox.items}
+          index={lightbox.index}
+          onClose={() => setLightbox(null)}
+          onStep={(delta) =>
+            setLightbox((prev) => {
+              if (!prev?.items?.length) return prev;
+              const n = prev.items.length;
+              return { ...prev, index: (prev.index + delta + n) % n };
+            })
+          }
+        />
+      ) : null}
     </section>
   );
 }

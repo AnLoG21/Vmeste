@@ -1275,6 +1275,10 @@ function chatMessagePlainText(m) {
     const p = m.payload;
     return [p.review_text, p.reply_text].filter(Boolean).join(" ");
   }
+  if (m.kind === "inspection") {
+    if (m.text) return m.text;
+    return m.payload?.vehicle ? `Диагностика: ${m.payload.vehicle}` : "Согласование диагностики";
+  }
   if (m.kind === "image") return m.text || "Фото";
   if (m.kind === "video") return m.text || "Видео";
   if (m.kind === "video_note") return m.text || "Видеосообщение";
@@ -1284,6 +1288,30 @@ function chatMessagePlainText(m) {
 }
 
 function renderChatMessageBody(m, opts = {}) {
+  if (m.kind === "inspection" && m.payload) {
+    const p = m.payload;
+    return (
+      <div className="tg-msg-inspection-card">
+        <div className="tg-msg-inspection-head">
+          <span className="tg-msg-inspection-label">Диагностика</span>
+          {p.organization_name ? (
+            <span className="muted small">{p.organization_name}</span>
+          ) : null}
+        </div>
+        <p className="tg-msg-inspection-vehicle">{p.vehicle || "Автомобиль"}</p>
+        <p className="muted small">
+          {p.items_count != null ? `Позиций к согласованию: ${p.items_count}` : "Согласуйте перечень работ"}
+        </p>
+        <button
+          type="button"
+          className="tg-msg-inspection-btn"
+          onClick={() => opts.onOpenInspection?.(p.inspection_id)}
+        >
+          Открыть согласование
+        </button>
+      </div>
+    );
+  }
   if (m.kind === "review_reply" && m.payload) {
     const p = m.payload;
     const rating = Math.min(5, Math.max(0, Number(p.rating) || 0));
@@ -2435,6 +2463,7 @@ export default function App() {
   const [authStatus, setAuthStatus] = useState("");
   const [sellerStatus, setSellerStatus] = useState("");
   const [clientStatus, setClientStatus] = useState("");
+  const [pendingInspectionId, setPendingInspectionId] = useState(null);
   const [verifyStatus, setVerifyStatus] = useState("");
   const [resendStatus, setResendStatus] = useState("");
   const [verifyEmailNotice, setVerifyEmailNotice] = useState(null);
@@ -3990,7 +4019,7 @@ export default function App() {
         Authorization: `Bearer ${tokenValue}`,
         ...(options.headers || {}),
       };
-      if (!isFormData && !headers["Content-Type"]) {
+      if (!isFormData && options.body != null && options.body !== "" && !headers["Content-Type"]) {
         headers["Content-Type"] = "application/json";
       }
       return fetch(url, { ...options, headers });
@@ -10888,9 +10917,8 @@ export default function App() {
                       onClick={() => {
                         if (n.kind === "inspection" || n.payload?.view === "inspections") {
                           markInAppNotificationsRead([n.id]);
-                          if (n.payload?.url && me?.role === "client") {
-                            window.location.href = n.payload.url;
-                            return;
+                          if (n.payload?.inspection_id) {
+                            setPendingInspectionId(Number(n.payload.inspection_id));
                           }
                           setCurrentView("inspections");
                           return;
@@ -11088,10 +11116,20 @@ export default function App() {
             API_URL={API_URL}
             me={me}
             bookings={bookings}
+            initialReportId={pendingInspectionId}
+            onConsumedInitialReportId={() => setPendingInspectionId(null)}
+            onOpenPhotos={openOrgPhotoLightbox}
           />
         )}
         {accessToken && currentView === "inspections" && me?.role === "client" && (
-          <ClientInspectionsPanel authFetch={authFetch} API_URL={API_URL} />
+          <ClientInspectionsPanel
+            authFetch={authFetch}
+            API_URL={API_URL}
+            initialReportId={pendingInspectionId}
+            onConsumedInitialReportId={() => setPendingInspectionId(null)}
+            onBackToChats={() => setCurrentView("chats")}
+            onOpenPhotos={openOrgPhotoLightbox}
+          />
         )}
         {accessToken && currentView === "staff" && canManageOrgSettings && renderStaffManagement()}
 
@@ -11470,6 +11508,11 @@ export default function App() {
                               </div>
                               {renderChatMessageBody(m, {
                                 onOpenPhotos: (items, index) => openChatPhotosLightbox(items, index),
+                                onOpenInspection: (inspectionId) => {
+                                  setPendingInspectionId(inspectionId ? Number(inspectionId) : null);
+                                  setCurrentView("inspections");
+                                  setMenuOpen(false);
+                                },
                               })}
                               <div className="tg-msg-meta">
                                 <div className="tg-msg-time">
