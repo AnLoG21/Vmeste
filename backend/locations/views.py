@@ -105,6 +105,8 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
                 provider_reviews_count=Subquery(reviews_count_sub),
             )
         )
+        if not getattr(request.user, "is_demo", False):
+            qs = qs.filter(provider__is_demo=False)
 
         search = (request.query_params.get("search") or "").strip()
         if search:
@@ -217,6 +219,8 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
             organization_latitude__isnull=False,
             organization_longitude__isnull=False,
         ).exclude(id__in=seen_providers)
+        if not getattr(request.user, "is_demo", False):
+            providers_qs = providers_qs.filter(is_demo=False)
 
         search = (request.query_params.get("search") or "").strip()
         if search:

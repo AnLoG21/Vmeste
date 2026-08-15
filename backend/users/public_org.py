@@ -101,6 +101,7 @@ class PublicOrganizationBySlugView(APIView):
                 organization_slug__iexact=slug,
                 role=User.Role.PROVIDER,
                 is_active=True,
+                is_demo=False,
             )
         except User.DoesNotExist:
             return Response({"detail": "Организация не найдена."}, status=status.HTTP_404_NOT_FOUND)
@@ -115,7 +116,7 @@ class PublicOrganizationSitemapView(APIView):
 
     def get(self, request):
         qs = (
-            User.objects.filter(role=User.Role.PROVIDER, is_active=True)
+            User.objects.filter(role=User.Role.PROVIDER, is_active=True, is_demo=False)
             .exclude(organization_name="")
             .order_by("id")[:500]
         )
@@ -154,7 +155,7 @@ class SitemapXmlView(APIView):
             urls.append((f"/city/{key}", "0.85", "weekly", today))
 
         qs = (
-            User.objects.filter(role=User.Role.PROVIDER, is_active=True)
+            User.objects.filter(role=User.Role.PROVIDER, is_active=True, is_demo=False)
             .exclude(organization_name="")
             .exclude(organization_slug="")
             .order_by("id")[:1000]
