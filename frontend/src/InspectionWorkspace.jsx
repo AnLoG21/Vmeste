@@ -326,7 +326,7 @@ export default function InspectionWorkspace({
   const isDraft = report?.status === "draft";
 
   return (
-    <section className="card full-width inspection-workspace">
+    <section className={["card", "full-width", "inspection-workspace", selectedId && !creating && "has-selected"].filter(Boolean).join(" ")}>
       <div className="inspection-workspace-head">
         <div>
           <h2>Интерактивная приёмка</h2>
@@ -334,15 +334,29 @@ export default function InspectionWorkspace({
             Составьте отчёт с фото дефектов, отправьте клиенту на согласование и скачайте акт / заказ-наряд.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setCreating(true);
-            setSelectedId(null);
-          }}
-        >
-          Новый отчёт
-        </button>
+        <div className="inspection-workspace-head-actions">
+          {selectedId && !creating ? (
+            <button
+              type="button"
+              className="ghost-btn inspection-mobile-back"
+              onClick={() => {
+                setSelectedId(null);
+                setReport(null);
+              }}
+            >
+              ← К списку
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              setCreating(true);
+              setSelectedId(null);
+            }}
+          >
+            Новый отчёт
+          </button>
+        </div>
       </div>
 
       <p className="status">{status}</p>

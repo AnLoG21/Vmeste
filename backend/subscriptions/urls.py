@@ -4,12 +4,15 @@ from .views import (
     ActivateTrialView,
     ApplyPromoView,
     CancelSubscriptionView,
+    CloudPaymentsWebhookView,
     ConfirmPaymentView,
     CreatePaymentView,
     MyPaymentsView,
     MySubscriptionsView,
     PlansListView,
     RenewSubscriptionView,
+    RobokassaWebhookView,
+    TBankWebhookView,
     ToggleAutoRenewView,
     YooKassaWebhookView,
 )
@@ -26,4 +29,7 @@ urlpatterns = [
     path("auto-renew/", ToggleAutoRenewView.as_view(), name="toggle-auto-renew"),
     path("cancel/", CancelSubscriptionView.as_view(), name="cancel-subscription"),
     path("webhook/yookassa/", YooKassaWebhookView.as_view(), name="yookassa-webhook"),
+    path("webhook/tbank/", TBankWebhookView.as_view(), name="tbank-webhook"),
+    path("webhook/cloudpayments/", CloudPaymentsWebhookView.as_view(), name="cloudpayments-webhook"),
+    path("webhook/robokassa/", RobokassaWebhookView.as_view(), name="robokassa-webhook"),
 ]

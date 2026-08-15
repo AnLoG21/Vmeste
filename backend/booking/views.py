@@ -625,30 +625,54 @@ class BookingViewSet(viewsets.ModelViewSet):
 class AcquiringSettingsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    def _payload(self, request, acq):
+        from .acquiring import resolve_payment_setup
+        from payments.gateway import PROVIDERS, provider_ready
+
+        code, creds = resolve_payment_setup(request.user)
+        return {
+            "payment_provider": acq.payment_provider or "yookassa",
+            "prepay_mode": acq.prepay_mode,
+            "prepay_percent": acq.prepay_percent,
+            "yookassa_shop_id": acq.yookassa_shop_id or "",
+            "has_yookassa": bool((acq.yookassa_shop_id or "").strip() and (acq.yookassa_secret_key or "").strip()),
+            "tbank_terminal_key": acq.tbank_terminal_key or "",
+            "has_tbank": bool((acq.tbank_terminal_key or "").strip() and (acq.tbank_password or "").strip()),
+            "cloudpayments_public_id": acq.cloudpayments_public_id or "",
+            "has_cloudpayments": bool(
+                (acq.cloudpayments_public_id or "").strip() and (acq.cloudpayments_api_secret or "").strip()
+            ),
+            "robokassa_merchant_login": acq.robokassa_merchant_login or "",
+            "has_robokassa": bool(
+                (acq.robokassa_merchant_login or "").strip()
+                and (acq.robokassa_password1 or "").strip()
+                and (acq.robokassa_password2 or "").strip()
+            ),
+            "has_payment_keys": provider_ready(code, creds),
+            "providers": [{"key": k, "label": v} for k, v in PROVIDERS],
+        }
+
     def get(self, request):
         if request.user.role != "provider":
             return Response(status=status.HTTP_403_FORBIDDEN)
-        from .acquiring import get_or_create_acquiring, resolve_yookassa_keys
+        from .acquiring import get_or_create_acquiring
 
         acq = get_or_create_acquiring(request.user)
-        shop, secret = resolve_yookassa_keys(request.user)
-        return Response(
-            {
-                "prepay_mode": acq.prepay_mode,
-                "prepay_percent": acq.prepay_percent,
-                "yookassa_shop_id": acq.yookassa_shop_id or "",
-                "has_yookassa": bool(shop and secret),
-            }
-        )
+        return Response(self._payload(request, acq))
 
     def patch(self, request):
         if request.user.role != "provider":
             return Response(status=status.HTTP_403_FORBIDDEN)
-        from .acquiring import get_or_create_acquiring, resolve_yookassa_keys
+        from .acquiring import get_or_create_acquiring
         from .models import ProviderAcquiring
 
         acq = get_or_create_acquiring(request.user)
         data = request.data or {}
+        if "payment_provider" in data:
+            code = str(data.get("payment_provider") or "").strip()
+            if code not in {c[0] for c in ProviderAcquiring._meta.get_field("payment_provider").choices}:
+                return Response({"payment_provider": ["Некорректный эквайер."]}, status=status.HTTP_400_BAD_REQUEST)
+            acq.payment_provider = code
         if "prepay_mode" in data:
             mode = str(data.get("prepay_mode") or "").strip()
             if mode not in {c[0] for c in ProviderAcquiring.PrepayMode.choices}:
@@ -660,18 +684,25 @@ class AcquiringSettingsView(APIView):
             except (TypeError, ValueError):
                 return Response({"prepay_percent": ["Укажите число 1–100."]}, status=status.HTTP_400_BAD_REQUEST)
             acq.prepay_percent = min(100, max(1, pct))
-        if "yookassa_shop_id" in data:
-            acq.yookassa_shop_id = str(data.get("yookassa_shop_id") or "").strip()
-        secret = data.get("yookassa_secret_key")
-        if secret is not None and str(secret).strip():
-            acq.yookassa_secret_key = str(secret).strip()
+        str_fields = [
+            "yookassa_shop_id",
+            "tbank_terminal_key",
+            "cloudpayments_public_id",
+            "robokassa_merchant_login",
+        ]
+        for f in str_fields:
+            if f in data:
+                setattr(acq, f, str(data.get(f) or "").strip())
+        secret_fields = [
+            "yookassa_secret_key",
+            "tbank_password",
+            "cloudpayments_api_secret",
+            "robokassa_password1",
+            "robokassa_password2",
+        ]
+        for f in secret_fields:
+            if f in data and str(data.get(f) or "").strip():
+                setattr(acq, f, str(data.get(f)).strip())
         acq.save()
-        shop, secret_ok = resolve_yookassa_keys(request.user)
-        return Response(
-            {
-                "prepay_mode": acq.prepay_mode,
-                "prepay_percent": acq.prepay_percent,
-                "yookassa_shop_id": acq.yookassa_shop_id or "",
-                "has_yookassa": bool(shop and secret_ok),
-            }
-        )
+        return Response(self._payload(request, acq))
+

@@ -412,7 +412,7 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
             ["enable_dine_in", "За столом"],
             ["enable_takeaway", "Самовывоз"],
             ["enable_delivery", "Доставка"],
-            ["accept_online_payment", "Онлайн-оплата (ЮKassa)"],
+            ["accept_online_payment", "Онлайн-оплата"],
             ["accept_cash", "Наличные"],
             ["accept_card_on_spot", "Картой на месте"],
           ].map(([key, label]) => (
@@ -452,15 +452,26 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
               onBlur={() => saveSettings({ delivery_min_order: settings.delivery_min_order })}
             />
           </label>
-          <h3 className="cafe-form-span2">Онлайн-оплата в ЮKassa организации</h3>
+          <h3 className="cafe-form-span2">Онлайн-оплата организации</h3>
           <p className="muted small cafe-form-span2">
-            Деньги за онлайн-заказы идут только в магазин организации. Без Shop ID и Secret Key вариант «Онлайн»
-            у гостя не появится, а попытка оплаты вернёт ошибку — оплата через ЮKassa платформы не используется.
-            Сервисный сбор 3% учитывается в чеке отдельно; реквизиты ниже — для договоров/выплат и сверки.
+            Деньги за онлайн-заказы идут в магазин выбранного эквайера. Без ключей вариант «Онлайн» у гостя не
+            появится. Сервисный сбор 3% учитывается в чеке отдельно; реквизиты ниже — для сверки.
           </p>
-          {!settings.has_yookassa && settings.accept_online_payment ? (
+          <label className="cafe-form-span2">
+            Эквайер
+            <select
+              value={settings.payment_provider || "yookassa"}
+              onChange={(e) => saveSettings({ payment_provider: e.target.value })}
+            >
+              <option value="yookassa">ЮKassa</option>
+              <option value="tbank">Т‑Банк</option>
+              <option value="cloudpayments">CloudPayments</option>
+              <option value="robokassa">Robokassa</option>
+            </select>
+          </label>
+          {!settings.has_payment_keys && settings.accept_online_payment ? (
             <p className="status cafe-form-span2">
-              Онлайн включён, но ключи ЮKassa не указаны — гости не смогут оплатить онлайн, пока не заполните Shop ID и Secret.
+              Онлайн включён, но ключи выбранного эквайера не указаны — гости не смогут оплатить онлайн.
             </p>
           ) : null}
           {[
@@ -470,27 +481,119 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
             ["payout_bik", "БИК"],
             ["payout_account", "Расчётный счёт"],
             ["payout_corr_account", "Корр. счёт"],
-            ["yookassa_shop_id", "ЮKassa Shop ID *"],
-            ["yookassa_secret_key", "ЮKassa Secret Key *"],
           ].map(([key, label]) => (
             <label key={key} className={key === "payout_bank_name" ? "cafe-form-span2" : ""}>
               {label}
               <input
-                type={key === "yookassa_secret_key" ? "password" : "text"}
+                type="text"
                 value={settings[key] || ""}
                 onChange={(e) => setSettings({ ...settings, [key]: e.target.value })}
                 onBlur={() => saveSettings({ [key]: settings[key] || "" })}
-                placeholder={key === "yookassa_secret_key" && settings.has_yookassa ? "••••••••" : ""}
               />
             </label>
           ))}
-          <h3 className="cafe-form-span2">Другие платёжные сервисы</h3>
-          <p className="muted small cafe-form-span2">
-            Сейчас доступна только ЮKassa организации (выше). Подключение СБП, CloudPayments, Тинькофф и других
-            эквайеров — по заявке:{" "}
-            <a href="/#automation-request">индивидуальная автоматизация</a> или{" "}
-            <a href="/contacts">контакты</a>. После подключения сервис появится здесь рядом с ЮKassa.
-          </p>
+          {(settings.payment_provider || "yookassa") === "yookassa" ? (
+            <>
+              <label>
+                ЮKassa Shop ID *
+                <input
+                  type="text"
+                  value={settings.yookassa_shop_id || ""}
+                  onChange={(e) => setSettings({ ...settings, yookassa_shop_id: e.target.value })}
+                  onBlur={() => saveSettings({ yookassa_shop_id: settings.yookassa_shop_id || "" })}
+                />
+              </label>
+              <label>
+                ЮKassa Secret Key *
+                <input
+                  type="password"
+                  value={settings.yookassa_secret_key || ""}
+                  onChange={(e) => setSettings({ ...settings, yookassa_secret_key: e.target.value })}
+                  onBlur={() => saveSettings({ yookassa_secret_key: settings.yookassa_secret_key || "" })}
+                  placeholder={settings.has_yookassa ? "••••••••" : ""}
+                />
+              </label>
+            </>
+          ) : null}
+          {settings.payment_provider === "tbank" ? (
+            <>
+              <label>
+                Terminal Key *
+                <input
+                  type="text"
+                  value={settings.tbank_terminal_key || ""}
+                  onChange={(e) => setSettings({ ...settings, tbank_terminal_key: e.target.value })}
+                  onBlur={() => saveSettings({ tbank_terminal_key: settings.tbank_terminal_key || "" })}
+                />
+              </label>
+              <label>
+                Password *
+                <input
+                  type="password"
+                  value={settings.tbank_password || ""}
+                  onChange={(e) => setSettings({ ...settings, tbank_password: e.target.value })}
+                  onBlur={() => saveSettings({ tbank_password: settings.tbank_password || "" })}
+                  placeholder={settings.has_tbank ? "••••••••" : ""}
+                />
+              </label>
+            </>
+          ) : null}
+          {settings.payment_provider === "cloudpayments" ? (
+            <>
+              <label>
+                Public ID *
+                <input
+                  type="text"
+                  value={settings.cloudpayments_public_id || ""}
+                  onChange={(e) => setSettings({ ...settings, cloudpayments_public_id: e.target.value })}
+                  onBlur={() => saveSettings({ cloudpayments_public_id: settings.cloudpayments_public_id || "" })}
+                />
+              </label>
+              <label>
+                API Secret *
+                <input
+                  type="password"
+                  value={settings.cloudpayments_api_secret || ""}
+                  onChange={(e) => setSettings({ ...settings, cloudpayments_api_secret: e.target.value })}
+                  onBlur={() => saveSettings({ cloudpayments_api_secret: settings.cloudpayments_api_secret || "" })}
+                  placeholder={settings.has_cloudpayments ? "••••••••" : ""}
+                />
+              </label>
+            </>
+          ) : null}
+          {settings.payment_provider === "robokassa" ? (
+            <>
+              <label>
+                Merchant Login *
+                <input
+                  type="text"
+                  value={settings.robokassa_merchant_login || ""}
+                  onChange={(e) => setSettings({ ...settings, robokassa_merchant_login: e.target.value })}
+                  onBlur={() => saveSettings({ robokassa_merchant_login: settings.robokassa_merchant_login || "" })}
+                />
+              </label>
+              <label>
+                Пароль #1 *
+                <input
+                  type="password"
+                  value={settings.robokassa_password1 || ""}
+                  onChange={(e) => setSettings({ ...settings, robokassa_password1: e.target.value })}
+                  onBlur={() => saveSettings({ robokassa_password1: settings.robokassa_password1 || "" })}
+                  placeholder={settings.has_robokassa ? "••••••••" : ""}
+                />
+              </label>
+              <label>
+                Пароль #2 *
+                <input
+                  type="password"
+                  value={settings.robokassa_password2 || ""}
+                  onChange={(e) => setSettings({ ...settings, robokassa_password2: e.target.value })}
+                  onBlur={() => saveSettings({ robokassa_password2: settings.robokassa_password2 || "" })}
+                  placeholder={settings.has_robokassa ? "••••••••" : ""}
+                />
+              </label>
+            </>
+          ) : null}
         </div>
       )}
 

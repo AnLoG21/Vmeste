@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .analytics import AnalyticsSummaryView
+from .calendar_feed import CalendarFeedView, CalendarSettingsView
 from .views import AcquiringSettingsView, AvailabilitySlotViewSet, BookingViewSet, ProviderStaffViewSet
 
 router = DefaultRouter()
@@ -12,5 +13,7 @@ router.register(r"", BookingViewSet, basename="booking")
 urlpatterns = [
     path("analytics/", AnalyticsSummaryView.as_view(), name="booking-analytics"),
     path("acquiring/", AcquiringSettingsView.as_view(), name="booking-acquiring"),
+    path("calendar/settings/", CalendarSettingsView.as_view(), name="booking-calendar-settings"),
+    path("calendar/<str:token>.ics", CalendarFeedView.as_view(), name="booking-calendar-ics"),
     path("", include(router.urls)),
 ]

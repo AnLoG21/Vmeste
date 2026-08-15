@@ -239,7 +239,7 @@ const BOOKMARK_CATALOG = [
   { id: "organization", label: "Организация", roles: ["provider"] },
   { id: "cafe", label: "Зал и меню", roles: ["provider"] },
   { id: "cafe_orders", label: "Заказы", roles: ["provider"] },
-  { id: "inspections", label: "Приёмка", roles: ["provider", "staff", "client"] },
+  { id: "inspections", label: "Приёмка", roles: ["provider", "staff"] },
   { id: "analytics", label: "Аналитика", roles: ["provider", "staff"], menuIcon: "analytics" },
 ];
 
@@ -248,7 +248,7 @@ const DEFAULT_SUBNAV_BOOKMARKS = {
   provider: ["bookings", "client_map", "my_bookings", "chats"],
   staff: ["bookings", "reviews", "chats"],
   provider_cafe: ["cafe_orders", "cafe", "client_map", "my_bookings", "chats"],
-  provider_service: ["inspections", "bookings", "client_map", "my_bookings", "chats"],
+  provider_service: ["bookings", "client_map", "my_bookings", "chats", "inspections"],
 };
 
 function defaultSubnavBookmarks(role, sphere) {
@@ -259,9 +259,7 @@ function defaultSubnavBookmarks(role, sphere) {
     return [...DEFAULT_SUBNAV_BOOKMARKS.provider_service];
   }
   if (role === "client") {
-    return [...DEFAULT_SUBNAV_BOOKMARKS.client, "inspections"].filter(
-      (id, i, arr) => arr.indexOf(id) === i,
-    );
+    return [...DEFAULT_SUBNAV_BOOKMARKS.client];
   }
   return [...(DEFAULT_SUBNAV_BOOKMARKS[role] || DEFAULT_SUBNAV_BOOKMARKS.client)];
 }
@@ -278,6 +276,9 @@ function loadSubnavBookmarks(role, sphere) {
       BOOKMARK_CATALOG.filter((b) => b.roles.includes(role)).map((b) => b.id)
     );
     let next = list.filter((id) => allowed.has(id));
+    if (role === "client") {
+      next = next.filter((id) => id !== "inspections");
+    }
     if (role === "provider" && sphere === "cafe_restaurant") {
       next = next.filter((id) => id !== "bookings");
       if (!next.includes("cafe_orders")) next = ["cafe_orders", ...next];
@@ -2558,13 +2559,27 @@ export default function App() {
   const [orgProfileSaveStatus, setOrgProfileSaveStatus] = useState("");
   const [orgBookingMessages, setOrgBookingMessages] = useState({ confirm: "", cancel: "", done: "" });
   const [orgAcquiringForm, setOrgAcquiringForm] = useState({
+    payment_provider: "yookassa",
     prepay_mode: "off",
     prepay_percent: 50,
     yookassa_shop_id: "",
     yookassa_secret_key: "",
     has_yookassa: false,
+    tbank_terminal_key: "",
+    tbank_password: "",
+    has_tbank: false,
+    cloudpayments_public_id: "",
+    cloudpayments_api_secret: "",
+    has_cloudpayments: false,
+    robokassa_merchant_login: "",
+    robokassa_password1: "",
+    robokassa_password2: "",
+    has_robokassa: false,
+    has_payment_keys: false,
   });
   const [orgAcquiringSaveStatus, setOrgAcquiringSaveStatus] = useState("");
+  const [orgCalendarLinks, setOrgCalendarLinks] = useState(null);
+  const [orgCalendarStatus, setOrgCalendarStatus] = useState("");
   const [orgSettingsHighlight, setOrgSettingsHighlight] = useState("");
   const [bookingMessageError, setBookingMessageError] = useState(null);
   const [reviewModalBooking, setReviewModalBooking] = useState(null);
@@ -2871,13 +2886,27 @@ export default function App() {
       if (acqRes.ok) {
         const acq = await acqRes.json();
         setOrgAcquiringForm({
+          payment_provider: acq.payment_provider || "yookassa",
           prepay_mode: acq.prepay_mode || "off",
           prepay_percent: acq.prepay_percent || 50,
           yookassa_shop_id: acq.yookassa_shop_id || "",
           yookassa_secret_key: "",
           has_yookassa: Boolean(acq.has_yookassa),
+          tbank_terminal_key: acq.tbank_terminal_key || "",
+          tbank_password: "",
+          has_tbank: Boolean(acq.has_tbank),
+          cloudpayments_public_id: acq.cloudpayments_public_id || "",
+          cloudpayments_api_secret: "",
+          has_cloudpayments: Boolean(acq.has_cloudpayments),
+          robokassa_merchant_login: acq.robokassa_merchant_login || "",
+          robokassa_password1: "",
+          robokassa_password2: "",
+          has_robokassa: Boolean(acq.has_robokassa),
+          has_payment_keys: Boolean(acq.has_payment_keys),
         });
       }
+      const calRes = await authFetch(`${API_URL}/booking/calendar/settings/`);
+      if (calRes.ok) setOrgCalendarLinks(await calRes.json());
     })();
   }, [accessToken, me?.role, currentView]);
 
@@ -6644,9 +6673,9 @@ export default function App() {
       return false;
     }
     if (id === "inspections") {
-      if (role === "client") return true;
+      if (role === "client") return false;
       if (role === "provider") return me?.provider_sphere === "service_center";
-      if (role === "staff") return staffHasPerm("manage_bookings");
+      if (role === "staff") return staffHasPerm("manage_bookings") && (me?.provider_sphere === "service_center" || me?.employer_sphere === "service_center");
       return false;
     }
     return true;
@@ -7777,12 +7806,23 @@ export default function App() {
     event?.preventDefault?.();
     setOrgAcquiringSaveStatus("");
     const payload = {
+      payment_provider: orgAcquiringForm.payment_provider || "yookassa",
       prepay_mode: orgAcquiringForm.prepay_mode,
       prepay_percent: Number(orgAcquiringForm.prepay_percent) || 50,
       yookassa_shop_id: orgAcquiringForm.yookassa_shop_id || "",
+      tbank_terminal_key: orgAcquiringForm.tbank_terminal_key || "",
+      cloudpayments_public_id: orgAcquiringForm.cloudpayments_public_id || "",
+      robokassa_merchant_login: orgAcquiringForm.robokassa_merchant_login || "",
     };
-    if ((orgAcquiringForm.yookassa_secret_key || "").trim()) {
-      payload.yookassa_secret_key = orgAcquiringForm.yookassa_secret_key.trim();
+    const secrets = [
+      "yookassa_secret_key",
+      "tbank_password",
+      "cloudpayments_api_secret",
+      "robokassa_password1",
+      "robokassa_password2",
+    ];
+    for (const key of secrets) {
+      if ((orgAcquiringForm[key] || "").trim()) payload[key] = orgAcquiringForm[key].trim();
     }
     const res = await authFetch(`${API_URL}/booking/acquiring/`, {
       method: "PATCH",
@@ -7790,18 +7830,41 @@ export default function App() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setOrgAcquiringSaveStatus(data.detail || data.prepay_mode?.[0] || data.prepay_percent?.[0] || "Не удалось сохранить.");
+      setOrgAcquiringSaveStatus(data.detail || data.prepay_mode?.[0] || data.payment_provider?.[0] || "Не удалось сохранить.");
       return;
     }
     setOrgAcquiringForm((p) => ({
       ...p,
+      payment_provider: data.payment_provider || p.payment_provider,
       prepay_mode: data.prepay_mode || p.prepay_mode,
       prepay_percent: data.prepay_percent || p.prepay_percent,
       yookassa_shop_id: data.yookassa_shop_id || "",
       yookassa_secret_key: "",
       has_yookassa: Boolean(data.has_yookassa),
+      tbank_terminal_key: data.tbank_terminal_key || "",
+      tbank_password: "",
+      has_tbank: Boolean(data.has_tbank),
+      cloudpayments_public_id: data.cloudpayments_public_id || "",
+      cloudpayments_api_secret: "",
+      has_cloudpayments: Boolean(data.has_cloudpayments),
+      robokassa_merchant_login: data.robokassa_merchant_login || "",
+      robokassa_password1: "",
+      robokassa_password2: "",
+      has_robokassa: Boolean(data.has_robokassa),
+      has_payment_keys: Boolean(data.has_payment_keys),
     }));
     setOrgAcquiringSaveStatus("Сохранено.");
+  }
+
+  async function rotateOrgCalendarToken() {
+    setOrgCalendarStatus("");
+    const res = await authFetch(`${API_URL}/booking/calendar/settings/`, { method: "POST", body: "{}" });
+    if (!res.ok) {
+      setOrgCalendarStatus("Не удалось обновить ссылку.");
+      return;
+    }
+    setOrgCalendarLinks(await res.json());
+    setOrgCalendarStatus("Новая ссылка календаря создана. Старая больше не работает.");
   }
 
   async function uploadOrgGalleryPhoto(file) {
@@ -8615,6 +8678,15 @@ export default function App() {
     return (
       <section className="card full-width booking-history-card">
         <h2>История записей</h2>
+        {isClient ? (
+          <p className="muted small" style={{ marginTop: 0 }}>
+            Согласования диагностики и приёмки —{" "}
+            <button type="button" className="booking-history-link" onClick={() => setCurrentView("inspections")}>
+              открыть список
+            </button>
+            .
+          </p>
+        ) : null}
         {sorted.length === 0 ? (
           <p className="muted">Записей пока нет.</p>
         ) : (
@@ -8682,6 +8754,15 @@ export default function App() {
                   {isClient && b.payment_status === "pending" && b.status !== "cancelled" ? (
                     <button type="button" className="ghost-btn small" onClick={(e) => resumeBookingPayment(b.id, e)}>
                       Оплатить {b.prepay_amount ? formatBookingPrice(b.prepay_amount) : ""}
+                    </button>
+                  ) : null}
+                  {!isClient && me?.provider_sphere === "service_center" && canManageBookings() && b.client && !isManualHold ? (
+                    <button
+                      type="button"
+                      className="ghost-btn small"
+                      onClick={() => startInspectionFromBooking(b)}
+                    >
+                      Приёмка по записи
                     </button>
                   ) : null}
                   {renderBookingHistoryReview(b)}
@@ -9552,12 +9633,23 @@ export default function App() {
               </p>
             </aside>
 
-            <h3>Предоплата при записи (ЮKassa)</h3>
+            <h3>Предоплата при записи</h3>
             <p className="muted small">
-              Чтобы снизить неприходы, включите частичную или полную предоплату. Деньги идут в магазин ЮKassa
-              организации, не на счёт платформы. Неоплаченная запись снимается через 20 минут.
+              Чтобы снизить неприходы, включите частичную или полную предоплату. Деньги идут в магазин выбранного
+              эквайера организации, не на счёт платформы. Неоплаченная запись снимается через 20 минут.
             </p>
             <form onSubmit={saveOrgAcquiring} className="form">
+              <label className="field-label" htmlFor="org-pay-provider">Эквайер</label>
+              <select
+                id="org-pay-provider"
+                value={orgAcquiringForm.payment_provider}
+                onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, payment_provider: e.target.value }))}
+              >
+                <option value="yookassa">ЮKassa</option>
+                <option value="tbank">Т‑Банк (Тинькофф)</option>
+                <option value="cloudpayments">CloudPayments</option>
+                <option value="robokassa">Robokassa</option>
+              </select>
               <label className="field-label" htmlFor="org-prepay-mode">Режим предоплаты</label>
               <select
                 id="org-prepay-mode"
@@ -9581,44 +9673,157 @@ export default function App() {
                   />
                 </label>
               ) : null}
-              <label className="field-label" htmlFor="org-yk-shop">
-                ЮKassa Shop ID
-                <input
-                  id="org-yk-shop"
-                  type="text"
-                  autoComplete="off"
-                  value={orgAcquiringForm.yookassa_shop_id}
-                  onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, yookassa_shop_id: e.target.value }))}
-                />
-              </label>
-              <label className="field-label" htmlFor="org-yk-secret">
-                ЮKassa Secret Key
-                <input
-                  id="org-yk-secret"
-                  type="password"
-                  autoComplete="new-password"
-                  value={orgAcquiringForm.yookassa_secret_key}
-                  onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, yookassa_secret_key: e.target.value }))}
-                  placeholder={orgAcquiringForm.has_yookassa ? "••••••••" : ""}
-                />
-              </label>
+              {orgAcquiringForm.payment_provider === "yookassa" ? (
+                <>
+                  <label className="field-label" htmlFor="org-yk-shop">
+                    ЮKassa Shop ID
+                    <input
+                      id="org-yk-shop"
+                      type="text"
+                      autoComplete="off"
+                      value={orgAcquiringForm.yookassa_shop_id}
+                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, yookassa_shop_id: e.target.value }))}
+                    />
+                  </label>
+                  <label className="field-label" htmlFor="org-yk-secret">
+                    ЮKassa Secret Key
+                    <input
+                      id="org-yk-secret"
+                      type="password"
+                      autoComplete="new-password"
+                      value={orgAcquiringForm.yookassa_secret_key}
+                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, yookassa_secret_key: e.target.value }))}
+                      placeholder={orgAcquiringForm.has_yookassa ? "••••••••" : ""}
+                    />
+                  </label>
+                  <p className="muted small">
+                    HTTP-уведомления payment.succeeded → /api/subscriptions/webhook/yookassa/
+                  </p>
+                </>
+              ) : null}
+              {orgAcquiringForm.payment_provider === "tbank" ? (
+                <>
+                  <label className="field-label">
+                    Terminal Key
+                    <input
+                      type="text"
+                      autoComplete="off"
+                      value={orgAcquiringForm.tbank_terminal_key}
+                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, tbank_terminal_key: e.target.value }))}
+                    />
+                  </label>
+                  <label className="field-label">
+                    Password
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      value={orgAcquiringForm.tbank_password}
+                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, tbank_password: e.target.value }))}
+                      placeholder={orgAcquiringForm.has_tbank ? "••••••••" : ""}
+                    />
+                  </label>
+                  <p className="muted small">NotificationURL → /api/subscriptions/webhook/tbank/</p>
+                </>
+              ) : null}
+              {orgAcquiringForm.payment_provider === "cloudpayments" ? (
+                <>
+                  <label className="field-label">
+                    Public ID
+                    <input
+                      type="text"
+                      autoComplete="off"
+                      value={orgAcquiringForm.cloudpayments_public_id}
+                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, cloudpayments_public_id: e.target.value }))}
+                    />
+                  </label>
+                  <label className="field-label">
+                    API Secret
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      value={orgAcquiringForm.cloudpayments_api_secret}
+                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, cloudpayments_api_secret: e.target.value }))}
+                      placeholder={orgAcquiringForm.has_cloudpayments ? "••••••••" : ""}
+                    />
+                  </label>
+                  <p className="muted small">Check/Pay уведомления → /api/subscriptions/webhook/cloudpayments/</p>
+                </>
+              ) : null}
+              {orgAcquiringForm.payment_provider === "robokassa" ? (
+                <>
+                  <label className="field-label">
+                    Merchant Login
+                    <input
+                      type="text"
+                      autoComplete="off"
+                      value={orgAcquiringForm.robokassa_merchant_login}
+                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, robokassa_merchant_login: e.target.value }))}
+                    />
+                  </label>
+                  <label className="field-label">
+                    Пароль #1
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      value={orgAcquiringForm.robokassa_password1}
+                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, robokassa_password1: e.target.value }))}
+                      placeholder={orgAcquiringForm.has_robokassa ? "••••••••" : ""}
+                    />
+                  </label>
+                  <label className="field-label">
+                    Пароль #2
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      value={orgAcquiringForm.robokassa_password2}
+                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, robokassa_password2: e.target.value }))}
+                      placeholder={orgAcquiringForm.has_robokassa ? "••••••••" : ""}
+                    />
+                  </label>
+                  <p className="muted small">Result URL → /api/subscriptions/webhook/robokassa/</p>
+                </>
+              ) : null}
               {me?.provider_sphere === "cafe_restaurant" ? (
                 <p className="muted small">
                   Для кафе можно оставить поля пустыми, если ключи уже указаны в настройках зала — они подставятся автоматически.
                 </p>
               ) : null}
-              <p className="muted small">
-                В кабинете ЮKassa включите HTTP-уведомления payment.succeeded на
-                {" "}/api/subscriptions/webhook/yookassa/ — иначе статус предоплаты обновится только когда клиент вернётся на сайт.
-              </p>
-              {orgAcquiringForm.prepay_mode !== "off" && !orgAcquiringForm.has_yookassa && !(orgAcquiringForm.yookassa_shop_id && orgAcquiringForm.yookassa_secret_key) ? (
+              {orgAcquiringForm.prepay_mode !== "off" && !orgAcquiringForm.has_payment_keys ? (
                 <p className="status">
-                  Предоплата включена, но ключи ЮKassa не указаны — клиент не сможет записаться, пока не заполните Shop ID и Secret.
+                  Предоплата включена, но ключи выбранного эквайера не указаны — клиент не сможет записаться, пока не заполните их.
                 </p>
               ) : null}
               <button type="submit">Сохранить эквайринг</button>
               <p className="status">{orgAcquiringSaveStatus}</p>
             </form>
+
+            <h3>Календари (Google / Яндекс)</h3>
+            <p className="muted small">
+              Подпишите календарь записей по ссылке ICS — события появятся в Google Календаре или Яндекс Календаре и будут обновляться автоматически.
+            </p>
+            {orgCalendarLinks ? (
+              <div className="form">
+                <label className="field-label">
+                  Ссылка ICS
+                  <input type="text" readOnly value={orgCalendarLinks.ics_url || ""} onFocus={(e) => e.target.select()} />
+                </label>
+                <div className="row-2">
+                  <a className="ghost-btn" href={orgCalendarLinks.google_url || "#"} target="_blank" rel="noreferrer">
+                    Открыть в Google
+                  </a>
+                  <a className="ghost-btn" href={orgCalendarLinks.webcal_url || "#"}>
+                    webcal://
+                  </a>
+                </div>
+                <p className="muted small">{orgCalendarLinks.yandex_hint}</p>
+                <button type="button" className="ghost-btn" onClick={rotateOrgCalendarToken}>
+                  Сменить ссылку (сбросить старую)
+                </button>
+                <p className="status">{orgCalendarStatus}</p>
+              </div>
+            ) : (
+              <p className="muted small">Загрузка ссылки…</p>
+            )}
 
             <h3>Карточка для клиентов</h3>
 
@@ -10710,6 +10915,34 @@ export default function App() {
                 <form onSubmit={onSubmit} className="form">
                   {registerStep === 1 && (
                     <>
+                      <div className="auth-role-tabs" role="tablist" aria-label="Тип аккаунта">
+                        {[
+                          { key: "client", label: "Клиент" },
+                          { key: "provider", label: "Для бизнеса" },
+                          { key: "staff", label: "Сотрудник" },
+                        ].map((tab) => (
+                          <button
+                            key={tab.key}
+                            type="button"
+                            role="tab"
+                            aria-selected={form.role === tab.key}
+                            className={["auth-role-tab", form.role === tab.key && "is-active"].filter(Boolean).join(" ")}
+                            onClick={() => {
+                              setForm({ ...form, role: tab.key });
+                              if (tab.key !== "provider") setRegisterStep(1);
+                            }}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="muted small auth-role-hint">
+                        {form.role === "client"
+                          ? "Базовая регистрация для записи к организациям."
+                          : form.role === "provider"
+                            ? "Кабинет организации: услуги, запись, эквайринг."
+                            : "Вход сотрудника по приглашению организации."}
+                      </p>
                       <input placeholder="Фамилия" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required />
                       <input placeholder="Имя" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required />
                       <input placeholder="Отчество (при наличии)" value={form.patronymic} onChange={(e) => setForm({ ...form, patronymic: e.target.value })} />
@@ -10719,9 +10952,6 @@ export default function App() {
                         placeholder="Телефон"
                         {...phoneFieldProps(form.phone, (phone) => setForm({ ...form, phone }))}
                       />
-                      <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                        {roleOptions.map((item) => <option key={item.key} value={item.key}>{item.value}</option>)}
-                      </select>
                       <PasswordInput
                         placeholder="Пароль"
                         value={form.password}
@@ -12583,6 +12813,14 @@ export default function App() {
                   ) : (
                   <div className="map-org-sheet-body">
                   <div className="map-org-sheet-header">
+                    <button
+                      type="button"
+                      className="map-org-sheet-close"
+                      aria-label="Закрыть"
+                      onClick={closeMapOrgSheet}
+                    >
+                      ×
+                    </button>
                     {(() => {
                       const sphereKey = mapOrgPopup.provider_sphere || mapOrgProfile?.provider_sphere;
                       const sphereLabel =

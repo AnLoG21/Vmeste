@@ -481,3 +481,60 @@ html.native-app .interval-calendar .calendar-slot-compact-end {
     content: "–";
   }
 }
+
+/* Inspection / приёмка — телефоны */
+@media (max-width: 800px) {
+  .inspection-workspace .inspection-layout {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .inspection-workspace .inspection-list {
+    max-height: none;
+  }
+
+  .inspection-workspace.has-selected .inspection-list {
+    display: none;
+  }
+
+  .inspection-workspace:not(.has-selected) .inspection-detail {
+    display: none;
+  }
+
+  .inspection-workspace .row-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .inspection-workspace .inspection-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 0 4px;
+    background: linear-gradient(180deg, transparent, #fff 28%);
+  }
+
+  .inspection-workspace .inspection-actions > button,
+  .inspection-workspace .inspection-actions .ghost-btn {
+    width: 100%;
+  }
+
+  .inspection-approve {
+    padding-bottom: 24px;
+  }
+
+  .inspection-approve-footer {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    padding-top: 8px;
+    padding-bottom: env(safe-area-inset-bottom, 8px);
+  }
+
+  .inspection-photos {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+

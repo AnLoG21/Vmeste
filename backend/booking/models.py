@@ -106,8 +106,26 @@ class ProviderAcquiring(models.Model):
         on_delete=models.CASCADE,
         related_name="acquiring",
     )
+    payment_provider = models.CharField(
+        max_length=32,
+        default="yookassa",
+        choices=[
+            ("yookassa", "ЮKassa"),
+            ("tbank", "Т‑Банк"),
+            ("cloudpayments", "CloudPayments"),
+            ("robokassa", "Robokassa"),
+        ],
+    )
     yookassa_shop_id = models.CharField(max_length=64, blank=True, default="")
     yookassa_secret_key = models.CharField(max_length=128, blank=True, default="")
+    tbank_terminal_key = models.CharField(max_length=128, blank=True, default="")
+    tbank_password = models.CharField(max_length=128, blank=True, default="")
+    cloudpayments_public_id = models.CharField(max_length=128, blank=True, default="")
+    cloudpayments_api_secret = models.CharField(max_length=128, blank=True, default="")
+    robokassa_merchant_login = models.CharField(max_length=128, blank=True, default="")
+    robokassa_password1 = models.CharField(max_length=128, blank=True, default="")
+    robokassa_password2 = models.CharField(max_length=128, blank=True, default="")
+    calendar_ics_token = models.CharField(max_length=64, blank=True, default="", db_index=True)
     prepay_mode = models.CharField(
         max_length=16,
         choices=PrepayMode.choices,
@@ -121,6 +139,24 @@ class ProviderAcquiring(models.Model):
 
     def has_yookassa(self) -> bool:
         return bool((self.yookassa_shop_id or "").strip() and (self.yookassa_secret_key or "").strip())
+
+    def payment_creds(self) -> dict:
+        return {
+            "shop_id": self.yookassa_shop_id,
+            "secret_key": self.yookassa_secret_key,
+            "terminal_key": self.tbank_terminal_key,
+            "password": self.tbank_password,
+            "public_id": self.cloudpayments_public_id,
+            "api_secret": self.cloudpayments_api_secret,
+            "merchant_login": self.robokassa_merchant_login,
+            "password1": self.robokassa_password1,
+            "password2": self.robokassa_password2,
+        }
+
+    def has_payment_keys(self) -> bool:
+        from payments.gateway import provider_ready
+
+        return provider_ready(self.payment_provider, self.payment_creds())
 
 
 class ProviderStaff(models.Model):

@@ -2,9 +2,8 @@ import { useEffect } from "react";
 import "../landing.css";
 import { SITE_LEGAL } from "./siteLegal.js";
 import JsonLd from "../seo/JsonLd.jsx";
-import { breadcrumbListJsonLd, faqPageJsonLd } from "../seo/schema.js";
+import { breadcrumbListJsonLd, faqPageJsonLd, organizationJsonLd } from "../seo/schema.js";
 import { setPageMeta } from "../seo/setPageMeta.js";
-import LegalLayout from "./LegalLayout.jsx";
 
 const BUSINESSES = [
   {
@@ -19,18 +18,9 @@ const BUSINESSES = [
       "Чат с клиентом и отзывы",
     ],
     categories: [
-      {
-        name: "Волосы",
-        items: ["Женская / мужская / детская стрижка", "Сложное окрашивание", "Укладки и уход"],
-      },
-      {
-        name: "Ногти и брови",
-        items: ["Маникюр и покрытие", "Педикюр", "Оформление бровей и ресниц"],
-      },
-      {
-        name: "Организация",
-        items: ["Онлайн-запись", "График мастеров", "Галерея и карта"],
-      },
+      { name: "Волосы", items: ["Женская / мужская / детская стрижка", "Сложное окрашивание", "Укладки и уход"] },
+      { name: "Ногти и брови", items: ["Маникюр и покрытие", "Педикюр", "Оформление бровей и ресниц"] },
+      { name: "Организация", items: ["Онлайн-запись", "График мастеров", "Галерея и карта"] },
     ],
   },
   {
@@ -46,18 +36,9 @@ const BUSINESSES = [
       "Команда мастеров и интервалы",
     ],
     categories: [
-      {
-        name: "Устройства",
-        items: ["Смартфоны и планшеты", "Ноутбуки и ПК", "Бытовая техника"],
-      },
-      {
-        name: "Сервис",
-        items: ["Диагностика", "Замена комплектующих", "Срочный ремонт"],
-      },
-      {
-        name: "Клиенты",
-        items: ["Онлайн-запись", "Чат и уведомления", "История обращений"],
-      },
+      { name: "Устройства", items: ["Смартфоны и планшеты", "Ноутбуки и ПК", "Бытовая техника"] },
+      { name: "Сервис", items: ["Диагностика", "Замена комплектующих", "Срочный ремонт"] },
+      { name: "Клиенты", items: ["Онлайн-запись", "Чат и уведомления", "История обращений"] },
     ],
   },
   {
@@ -72,18 +53,9 @@ const BUSINESSES = [
       "Режимы: за столом / самовывоз / доставка + оплата",
     ],
     categories: [
-      {
-        name: "Зал",
-        items: ["План помещения", "Столы и PIN", "Ссылки QR"],
-      },
-      {
-        name: "Меню",
-        items: ["Категории и новинки", "Блюда и фото", "Граммы и калории"],
-      },
-      {
-        name: "Заказы",
-        items: ["Онлайн ЮKassa", "Наличные / карта на месте", "Статусы кухни"],
-      },
+      { name: "Зал", items: ["План помещения", "Столы и PIN", "Ссылки QR"] },
+      { name: "Меню", items: ["Категории и новинки", "Блюда и фото", "Граммы и калории"] },
+      { name: "Заказы", items: ["Онлайн-эквайринг", "Наличные / карта на месте", "Статусы кухни"] },
     ],
   },
 ];
@@ -115,15 +87,20 @@ export default function BusinessesPage() {
     });
   }, []);
 
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && hash.length > 1) {
+      const el = document.getElementById(hash.slice(1));
+      window.setTimeout(() => el?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    }
+  }, []);
+
   return (
-    <LegalLayout
-      title="Для каких бизнесов уже есть функционал"
-      path="/businesses"
-      description="Готовые каталоги услуг, запись, чаты и управление командой."
-    >
+    <div className="landing businesses-landing">
       <JsonLd
         id="vmeste-businesses-jsonld"
         data={[
+          organizationJsonLd(),
           breadcrumbListJsonLd([
             { name: "Главная", path: "/" },
             { name: "Для бизнеса", path: "/businesses" },
@@ -131,62 +108,104 @@ export default function BusinessesPage() {
           faqPageJsonLd(FAQ),
         ]}
       />
-      <p className="businesses-lead">
-        Готовые каталоги услуг, запись, чаты и управление командой — подключайте сферу и
-        запускайтесь быстрее. Ниже подробности по каждой отрасли.
-      </p>
 
-      <div className="businesses-list">
-        {BUSINESSES.map((biz) => (
-          <section key={biz.id} id={biz.id} className="businesses-card">
-            <div className="businesses-card-head">
-              <span className="businesses-emoji" aria-hidden="true">
-                {biz.emoji}
-              </span>
-              <div>
-                <h2>{biz.title}</h2>
-                <p>{biz.lead}</p>
-              </div>
-            </div>
-            <ul className="businesses-highlights">
-              {biz.highlights.map((h) => (
-                <li key={h}>{h}</li>
-              ))}
-            </ul>
-            <div className="businesses-cats">
-              {biz.categories.map((cat) => (
-                <article key={cat.name} className="businesses-cat">
-                  <h3>{cat.name}</h3>
-                  <ul>
-                    {cat.items.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </article>
-              ))}
-            </div>
+      <header className="businesses-topbar">
+        <a href="/" className="businesses-brand">
+          Вместе
+        </a>
+        <nav className="businesses-topnav" aria-label="Разделы">
+          <a href="/#pricing">Тарифы</a>
+          <a href="/contacts">Контакты</a>
+          <a href="/" className="landing-btn landing-btn--primary businesses-top-cta">
+            Войти
+          </a>
+        </nav>
+      </header>
+
+      <main>
+        <section className="businesses-hero-band">
+          <p className="businesses-kicker">Для бизнеса</p>
+          <h1>Готовые сценарии под вашу сферу</h1>
+          <p className="businesses-lead">
+            Каталоги услуг, запись, чаты и управление командой — подключайте сферу и запускайтесь быстрее.
+            Ниже подробности по каждой отрасли.
+          </p>
+          <div className="businesses-jump">
+            {BUSINESSES.map((biz) => (
+              <a key={biz.id} href={`#${biz.id}`} className="businesses-jump-chip">
+                <span aria-hidden="true">{biz.emoji}</span> {biz.title}
+              </a>
+            ))}
+          </div>
+        </section>
+
+        <div className="businesses-page">
+          <div className="businesses-list">
+            {BUSINESSES.map((biz) => (
+              <section key={biz.id} id={biz.id} className="businesses-card">
+                <div className="businesses-card-head">
+                  <span className="businesses-emoji" aria-hidden="true">
+                    {biz.emoji}
+                  </span>
+                  <div>
+                    <h2>{biz.title}</h2>
+                    <p>{biz.lead}</p>
+                  </div>
+                </div>
+                <ul className="businesses-highlights">
+                  {biz.highlights.map((h) => (
+                    <li key={h}>{h}</li>
+                  ))}
+                </ul>
+                <div className="businesses-cats">
+                  {biz.categories.map((cat) => (
+                    <article key={cat.name} className="businesses-cat">
+                      <h3>{cat.name}</h3>
+                      <ul>
+                        {cat.items.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </article>
+                  ))}
+                </div>
+                <a className="landing-btn landing-btn--outline" href="/#demo">
+                  Посмотреть демо
+                </a>
+              </section>
+            ))}
+          </div>
+
+          <section className="landing-section" style={{ padding: "1.5rem 0 0" }}>
+            <h2>Частые вопросы</h2>
+            {FAQ.map((item) => (
+              <details key={item.question} className="landing-faq-item">
+                <summary>{item.question}</summary>
+                <p>{item.answer}</p>
+              </details>
+            ))}
           </section>
-        ))}
-      </div>
 
-      <section className="landing-section" style={{ padding: "1.5rem 0 0" }}>
-        <h2>Частые вопросы</h2>
-        {FAQ.map((item) => (
-          <details key={item.question} className="landing-faq-item">
-            <summary>{item.question}</summary>
-            <p>{item.answer}</p>
-          </details>
-        ))}
-      </section>
+          <p className="businesses-footer">
+            Нужна своя сфера? Оставьте заявку на{" "}
+            <a href="/#automation-request">индивидуальную автоматизацию</a> — подключим каталог под ваш процесс.
+          </p>
+        </div>
+      </main>
 
-      <p>
-        Нужна своя сфера? Оставьте заявку на{" "}
-        <a href="/#automation-request">индивидуальную автоматизацию</a> — подключим каталог под ваш
-        процесс.
-      </p>
-      <p className="landing-note">
-        {SITE_LEGAL.serviceName} · <a href="/contacts">Контакты</a> · <a href="/offer">Оферта</a>
-      </p>
-    </LegalLayout>
+      <footer className="landing-footer">
+        <p>
+          {SITE_LEGAL.serviceName} · ИНН {SITE_LEGAL.inn} ·{" "}
+          <a href={`mailto:${SITE_LEGAL.email}`}>{SITE_LEGAL.email}</a>
+        </p>
+        <nav className="landing-footer-nav" aria-label="Разделы сайта">
+          <a href="/">Главная</a>
+          <a href="/businesses">Для бизнеса</a>
+          <a href="/contacts">Контакты</a>
+          <a href="/offer">Оферта</a>
+          <a href="/privacy">Конфиденциальность</a>
+        </nav>
+      </footer>
+    </div>
   );
 }

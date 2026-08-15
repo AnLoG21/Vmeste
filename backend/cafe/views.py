@@ -9,7 +9,6 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from subscriptions.yookassa_client import create_payment
 from .models import (
     CafeFloorPlan,
     CafeGuestSession,
@@ -109,8 +108,15 @@ class CafeSettingsView(APIView):
             return Response(status=status.HTTP_403_FORBIDDEN)
         obj = _get_or_create_settings(request.user)
         data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
-        if not str(data.get("yookassa_secret_key") or "").strip():
-            data.pop("yookassa_secret_key", None)
+        for secret_key in (
+            "yookassa_secret_key",
+            "tbank_password",
+            "cloudpayments_api_secret",
+            "robokassa_password1",
+            "robokassa_password2",
+        ):
+            if not str(data.get(secret_key) or "").strip():
+                data.pop(secret_key, None)
         if request.data.get("clear_logo") in ("1", "true", True):
             if obj.logo:
                 obj.logo.delete(save=False)
@@ -864,12 +870,16 @@ class CafeGuestOrderCreateView(APIView):
             org_secret = (settings_obj.yookassa_secret_key or "").strip()
 
             if pay_method == CafeOrder.PayMethod.ONLINE:
-                if not (org_shop_id and org_secret):
+                from payments.gateway import create_org_payment, provider_ready
+
+                code = settings_obj.payment_provider or "yookassa"
+                creds = settings_obj.payment_creds()
+                if not provider_ready(code, creds):
                     order.delete()
                     return Response(
                         {
                             "pay_method": [
-                                "Онлайн-оплата недоступна: укажите Shop ID и Secret Key ЮKassa организации."
+                                "Онлайн-оплата недоступна: укажите ключи выбранного эквайера в настройках зала."
                             ]
                         },
                         status=status.HTTP_400_BAD_REQUEST,
@@ -882,23 +892,25 @@ class CafeGuestOrderCreateView(APIView):
                     else f"{settings.FRONTEND_URL}/m/{provider.organization_slug}"
                 )
                 return_url = f"{return_base}?order={order.id}"
-                yk = create_payment(
-                    amount=str(order.total),
+                pay = create_org_payment(
+                    provider_code=code,
+                    creds=creds,
+                    amount=order.total,
                     description=f"Заказ #{order.id} — {provider.organization_name or 'Вместе'}",
                     return_url=return_url,
+                    fail_url=return_url,
                     metadata={"type": "cafe_order", "order_id": str(order.id)},
-                    shop_id=org_shop_id,
-                    secret_key=org_secret,
+                    order_id=f"c{order.id}",
                 )
-                if yk and yk.get("id"):
-                    order.yookassa_payment_id = yk["id"]
-                    order.confirmation_url = (yk.get("confirmation") or {}).get("confirmation_url") or ""
+                if pay and pay.get("id"):
+                    order.yookassa_payment_id = pay["id"]
+                    order.confirmation_url = pay.get("confirmation_url") or ""
                     order.save(update_fields=["yookassa_payment_id", "confirmation_url", "updated_at"])
                 else:
                     order.delete()
                     return Response(
                         {
-                            "detail": "Не удалось создать платёж в ЮKassa организации. Проверьте ключи магазина."
+                            "detail": "Не удалось создать платёж. Проверьте ключи эквайера организации."
                         },
                         status=status.HTTP_502_BAD_GATEWAY,
                     )

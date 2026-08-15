@@ -501,3 +501,155 @@ class YooKassaWebhookView(APIView):
                 payment.subscription.save(update_fields=["source", "updated_at"])
                 _activate_subscription(payment.subscription)
         return Response({"detail": "ok"})
+
+
+def _mark_cafe_paid_by_payment_id(payment_id: str, meta: dict | None = None) -> bool:
+    from cafe.models import CafeOrder
+    from cafe.receipt_service import send_order_receipt_after_payment
+
+    cafe_order = CafeOrder.objects.filter(yookassa_payment_id=payment_id).first()
+    if not cafe_order and meta and meta.get("order_id"):
+        cafe_order = CafeOrder.objects.filter(pk=meta.get("order_id")).first()
+    if not cafe_order:
+        return False
+    was_paid = cafe_order.status == CafeOrder.Status.PAID
+    if cafe_order.status != CafeOrder.Status.PAID:
+        cafe_order.status = CafeOrder.Status.PAID
+        cafe_order.paid_at = timezone.now()
+        cafe_order.save(update_fields=["status", "paid_at", "updated_at"])
+    if not was_paid:
+        send_order_receipt_after_payment(cafe_order)
+    return True
+
+
+def _mark_booking_paid_by_payment_id(payment_id: str, meta: dict | None = None) -> bool:
+    from booking.acquiring import mark_booking_paid
+    from booking.models import Booking
+
+    booking = Booking.objects.filter(yookassa_payment_id=payment_id).first()
+    if not booking and meta and meta.get("booking_id"):
+        booking = Booking.objects.filter(pk=meta.get("booking_id")).first()
+    if not booking:
+        return False
+    mark_booking_paid(booking)
+    return True
+
+
+class TBankWebhookView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        from booking.models import ProviderAcquiring
+        from cafe.models import CafeSettings
+        from payments.gateway import verify_tbank_token
+
+        data = request.data if isinstance(request.data, dict) else {}
+        status_name = str(data.get("Status") or "").upper()
+        payment_id = str(data.get("PaymentId") or "")
+        terminal = str(data.get("TerminalKey") or "")
+        if status_name not in ("CONFIRMED", "AUTHORIZED"):
+            return Response("OK")
+        password = ""
+        acq = ProviderAcquiring.objects.filter(tbank_terminal_key=terminal).first()
+        if acq:
+            password = acq.tbank_password or ""
+        else:
+            cafe = CafeSettings.objects.filter(tbank_terminal_key=terminal).first()
+            if cafe:
+                password = cafe.tbank_password or ""
+        if password and not verify_tbank_token(dict(data), password):
+            return Response({"detail": "bad token"}, status=status.HTTP_400_BAD_REQUEST)
+        meta = data.get("DATA") if isinstance(data.get("DATA"), dict) else {}
+        if _mark_booking_paid_by_payment_id(payment_id, meta) or _mark_cafe_paid_by_payment_id(payment_id, meta):
+            return Response("OK")
+        order_id = str(data.get("OrderId") or "")
+        if order_id.startswith("b") and order_id[1:].isdigit():
+            if _mark_booking_paid_by_payment_id(payment_id, {"booking_id": order_id[1:]}):
+                return Response("OK")
+        if order_id.startswith("c") and order_id[1:].isdigit():
+            if _mark_cafe_paid_by_payment_id(payment_id, {"order_id": order_id[1:]}):
+                return Response("OK")
+        return Response("OK")
+
+
+class CloudPaymentsWebhookView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        from booking.models import ProviderAcquiring
+        from cafe.models import CafeSettings
+        from payments.gateway import verify_cloudpayments_hmac
+
+        raw = request.body or b""
+        sig = request.headers.get("Content-HMAC") or request.headers.get("X-Content-HMAC") or ""
+        data = request.data if isinstance(request.data, dict) else {}
+        invoice = str(data.get("InvoiceId") or data.get("InvoiceID") or "")
+        tx = str(data.get("TransactionId") or data.get("TransactionID") or "")
+        secrets_list = list(
+            ProviderAcquiring.objects.exclude(cloudpayments_api_secret="")
+            .values_list("cloudpayments_api_secret", flat=True)[:50]
+        ) + list(
+            CafeSettings.objects.exclude(cloudpayments_api_secret="")
+            .values_list("cloudpayments_api_secret", flat=True)[:50]
+        )
+        if secrets_list and not any(verify_cloudpayments_hmac(raw, sig, s) for s in secrets_list):
+            return Response({"code": 13})
+        if invoice.startswith("b") and invoice[1:].isdigit():
+            _mark_booking_paid_by_payment_id(tx or invoice, {"booking_id": invoice[1:]})
+        elif invoice.startswith("c") and invoice[1:].isdigit():
+            _mark_cafe_paid_by_payment_id(tx or invoice, {"order_id": invoice[1:]})
+        else:
+            _mark_booking_paid_by_payment_id(tx or invoice) or _mark_cafe_paid_by_payment_id(tx or invoice)
+        return Response({"code": 0})
+
+
+class RobokassaWebhookView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        return self._handle(request)
+
+    def get(self, request):
+        return self._handle(request)
+
+    def _handle(self, request):
+        from django.http import HttpResponse
+
+        from booking.models import ProviderAcquiring
+        from cafe.models import CafeSettings
+        from payments.gateway import verify_robokassa_result
+
+        src = request.data if request.method == "POST" and request.data else request.query_params
+        out_sum = str(src.get("OutSum") or "")
+        inv_id = str(src.get("InvId") or "")
+        signature = str(src.get("SignatureValue") or "")
+        shp = {k: str(src.get(k)) for k in src.keys() if str(k).startswith("Shp_")}
+        password2 = ""
+        for acq in ProviderAcquiring.objects.exclude(robokassa_password2="")[:80]:
+            if verify_robokassa_result(
+                out_sum=out_sum, inv_id=inv_id, signature=signature, password2=acq.robokassa_password2, shp=shp
+            ):
+                password2 = acq.robokassa_password2
+                break
+        if not password2:
+            for cafe in CafeSettings.objects.exclude(robokassa_password2="")[:80]:
+                if verify_robokassa_result(
+                    out_sum=out_sum, inv_id=inv_id, signature=signature, password2=cafe.robokassa_password2, shp=shp
+                ):
+                    password2 = cafe.robokassa_password2
+                    break
+        if not password2:
+            return Response("bad sign", status=status.HTTP_400_BAD_REQUEST)
+        meta_type = shp.get("Shp_type") or ""
+        booking_id = shp.get("Shp_booking_id") or ""
+        order_id = shp.get("Shp_order_id") or ""
+        if meta_type == "booking" or booking_id:
+            _mark_booking_paid_by_payment_id(inv_id, {"booking_id": booking_id})
+        elif meta_type == "cafe_order" or order_id:
+            _mark_cafe_paid_by_payment_id(inv_id, {"order_id": order_id})
+        else:
+            _mark_booking_paid_by_payment_id(inv_id) or _mark_cafe_paid_by_payment_id(inv_id)
+        return HttpResponse(f"OK{inv_id}")

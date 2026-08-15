@@ -1,14 +1,15 @@
-"""YooKassa prepayment for service bookings (no-show protection)."""
+"""YooKassa / multi-PSP prepayment for service bookings (no-show protection)."""
 
 from __future__ import annotations
 
+import secrets
 from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
 from django.utils import timezone
 
-from subscriptions.yookassa_client import create_payment
+from payments.gateway import create_org_payment, provider_ready, sync_payment_status
 
 from .models import Booking, ProviderAcquiring
 
@@ -27,33 +28,51 @@ def booking_service_total(booking) -> Decimal:
 
 def get_or_create_acquiring(provider) -> ProviderAcquiring:
     obj, _ = ProviderAcquiring.objects.get_or_create(provider=provider)
+    if not (obj.calendar_ics_token or "").strip():
+        obj.calendar_ics_token = secrets.token_urlsafe(24)
+        obj.save(update_fields=["calendar_ics_token"])
     return obj
 
 
-def resolve_yookassa_keys(provider) -> tuple[str, str]:
-    shop = secret = ""
+def ensure_calendar_token(provider) -> str:
+    acq = get_or_create_acquiring(provider)
+    if not (acq.calendar_ics_token or "").strip():
+        acq.calendar_ics_token = secrets.token_urlsafe(24)
+        acq.save(update_fields=["calendar_ics_token"])
+    return acq.calendar_ics_token
+
+
+def resolve_payment_setup(provider) -> tuple[str, dict]:
+    """Return (provider_code, creds) for booking prepay."""
     acq = ProviderAcquiring.objects.filter(provider=provider).first()
-    if acq:
-        shop = (acq.yookassa_shop_id or "").strip()
-        secret = (acq.yookassa_secret_key or "").strip()
-    if (not shop or not secret) and getattr(provider, "provider_sphere", "") == "cafe_restaurant":
+    code = (acq.payment_provider if acq else "yookassa") or "yookassa"
+    creds = acq.payment_creds() if acq else {}
+    if not provider_ready(code, creds) and getattr(provider, "provider_sphere", "") == "cafe_restaurant":
         cafe = getattr(provider, "cafe_settings", None)
-        if cafe:
-            shop = shop or (cafe.yookassa_shop_id or "").strip()
-            secret = secret or (cafe.yookassa_secret_key or "").strip()
-    return shop, secret
+        if cafe and provider_ready(cafe.payment_provider, cafe.payment_creds()):
+            return cafe.payment_provider or "yookassa", cafe.payment_creds()
+    return code, creds
+
+
+def resolve_yookassa_keys(provider) -> tuple[str, str]:
+    """Back-compat helper for callers that still expect shop/secret pair."""
+    code, creds = resolve_payment_setup(provider)
+    if code != "yookassa":
+        return "", ""
+    return (creds.get("shop_id") or "").strip(), (creds.get("secret_key") or "").strip()
 
 
 def prepay_public_info(provider) -> dict:
     acq = ProviderAcquiring.objects.filter(provider=provider).first()
     mode = (acq.prepay_mode if acq else ProviderAcquiring.PrepayMode.OFF) or ProviderAcquiring.PrepayMode.OFF
     percent = int(acq.prepay_percent) if acq else 50
-    shop, secret = resolve_yookassa_keys(provider)
-    ready = mode != ProviderAcquiring.PrepayMode.OFF and bool(shop and secret)
+    code, creds = resolve_payment_setup(provider)
+    ready = mode != ProviderAcquiring.PrepayMode.OFF and provider_ready(code, creds)
     return {
         "mode": mode,
         "percent": percent,
         "ready": ready,
+        "payment_provider": code,
     }
 
 
@@ -93,35 +112,38 @@ def attach_prepay_if_needed(booking: Booking) -> dict | None:
         amount = (total * Decimal(percent) / Decimal(100)).quantize(Decimal("0.01"))
         if amount <= 0:
             amount = total
-    shop, secret = resolve_yookassa_keys(booking.provider)
-    if not shop or not secret:
+    code, creds = resolve_payment_setup(booking.provider)
+    if not provider_ready(code, creds):
         raise ValueError(
-            "Организация включила предоплату, но не указала Shop ID и Secret Key ЮKassa."
+            "Организация включила предоплату, но не указала ключи выбранного эквайера."
         )
     front = (getattr(settings, "FRONTEND_URL", "") or "https://vsevmeste.space").rstrip("/")
     return_url = f"{front}/bookings?booking_payment=success&booking_id={booking.id}"
-    yk = create_payment(
-        amount=str(amount),
+    pay = create_org_payment(
+        provider_code=code,
+        creds=creds,
+        amount=amount,
         description=f"Предоплата записи: {getattr(booking.service, 'name', 'услуга')}"[:128],
         return_url=return_url,
+        fail_url=return_url,
         metadata={"type": "booking", "booking_id": str(booking.id)},
-        shop_id=shop,
-        secret_key=secret,
+        order_id=f"b{booking.id}",
     )
-    if not yk:
-        raise ValueError("Не удалось создать платёж в ЮKassa. Проверьте ключи магазина организации.")
-    url = ((yk.get("confirmation") or {}).get("confirmation_url")) or ""
+    if not pay:
+        raise ValueError("Не удалось создать платёж. Проверьте ключи эквайера организации.")
+    url = pay.get("confirmation_url") or ""
     booking.payment_status = "pending"
     booking.prepay_amount = amount
-    booking.yookassa_payment_id = yk.get("id") or ""
+    booking.yookassa_payment_id = pay.get("id") or ""
     booking.payment_url = url
     booking.save(update_fields=["payment_status", "prepay_amount", "yookassa_payment_id", "payment_url"])
     if not url:
-        raise ValueError("ЮKassa не вернула ссылку на оплату.")
+        raise ValueError("Эквайер не вернул ссылку на оплату.")
     return {
         "confirmation_url": url,
         "prepay_amount": str(amount),
         "payment_status": "pending",
+        "payment_provider": code,
     }
 
 
@@ -140,15 +162,13 @@ def mark_booking_paid(booking: Booking) -> None:
 
 
 def sync_booking_from_yookassa(booking: Booking) -> bool:
+    """Sync payment status from the configured PSP (name kept for call-site compat)."""
     if booking.payment_status == "paid":
         return True
     if not booking.yookassa_payment_id:
         return False
-    from subscriptions.yookassa_client import get_payment
-
-    shop, secret = resolve_yookassa_keys(booking.provider)
-    yk = get_payment(booking.yookassa_payment_id, shop_id=shop, secret_key=secret)
-    if yk and yk.get("status") == "succeeded":
+    code, creds = resolve_payment_setup(booking.provider)
+    if sync_payment_status(provider_code=code, payment_id=booking.yookassa_payment_id, creds=creds):
         mark_booking_paid(booking)
         return True
     return False
