@@ -8,6 +8,8 @@ import SubscriptionsPage from "./SubscriptionsPage.jsx";
 import AnalyticsPage from "./AnalyticsPage.jsx";
 import CafeOrdersPage from "./CafeOrdersPage.jsx";
 import CafeProviderWorkspace from "./CafeProviderWorkspace.jsx";
+import InspectionWorkspace from "./InspectionWorkspace.jsx";
+import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
 import "./landing.css";
@@ -237,6 +239,7 @@ const BOOKMARK_CATALOG = [
   { id: "organization", label: "Организация", roles: ["provider"] },
   { id: "cafe", label: "Зал и меню", roles: ["provider"] },
   { id: "cafe_orders", label: "Заказы", roles: ["provider"] },
+  { id: "inspections", label: "Приёмка", roles: ["provider", "staff", "client"] },
   { id: "analytics", label: "Аналитика", roles: ["provider", "staff"], menuIcon: "analytics" },
 ];
 
@@ -245,11 +248,20 @@ const DEFAULT_SUBNAV_BOOKMARKS = {
   provider: ["bookings", "client_map", "my_bookings", "chats"],
   staff: ["bookings", "reviews", "chats"],
   provider_cafe: ["cafe_orders", "cafe", "client_map", "my_bookings", "chats"],
+  provider_service: ["inspections", "bookings", "client_map", "my_bookings", "chats"],
 };
 
 function defaultSubnavBookmarks(role, sphere) {
   if (role === "provider" && sphere === "cafe_restaurant") {
     return [...DEFAULT_SUBNAV_BOOKMARKS.provider_cafe];
+  }
+  if (role === "provider" && sphere === "service_center") {
+    return [...DEFAULT_SUBNAV_BOOKMARKS.provider_service];
+  }
+  if (role === "client") {
+    return [...DEFAULT_SUBNAV_BOOKMARKS.client, "inspections"].filter(
+      (id, i, arr) => arr.indexOf(id) === i,
+    );
   }
   return [...(DEFAULT_SUBNAV_BOOKMARKS[role] || DEFAULT_SUBNAV_BOOKMARKS.client)];
 }
@@ -1474,6 +1486,9 @@ function formatInAppNotificationText(n) {
   }
   if (n?.kind === "chat_message") return "Новое сообщение в чате";
   if (n?.kind === "review") return "Новый отзыв";
+  if (n?.kind === "inspection") {
+    return (n?.payload?.title || n?.payload?.body || "Согласование диагностики").trim();
+  }
   return "Уведомление";
 }
 
@@ -6599,6 +6614,12 @@ export default function App() {
     } else if (id === "cafe" || id === "cafe_orders") {
       return false;
     }
+    if (id === "inspections") {
+      if (role === "client") return true;
+      if (role === "provider") return me?.provider_sphere === "service_center";
+      if (role === "staff") return staffHasPerm("manage_bookings");
+      return false;
+    }
     return true;
   }
 
@@ -7568,6 +7589,29 @@ export default function App() {
     }
   }
 
+  async function startInspectionFromBooking(booking) {
+    if (!booking?.client) {
+      setClientStatus("У записи нет клиента.");
+      return;
+    }
+    const res = await authFetch(`${API_URL}/inspections/reports/`, {
+      method: "POST",
+      body: JSON.stringify({
+        client: Number(booking.client),
+        booking: Number(booking.id),
+        vehicle_title: "",
+        notes: booking.service_name ? `По записи: ${booking.service_name}` : "",
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setClientStatus(err.detail || err.client?.[0] || "Не удалось создать отчёт приёмки.");
+      return;
+    }
+    setCurrentView("inspections");
+    setClientStatus("Черновик приёмки создан — откройте раздел «Приёмка».");
+  }
+
   function bookingHasStarted(it) {
     if (!it?.slot_starts_at) return true;
     const start = new Date(it.slot_starts_at).getTime();
@@ -8269,6 +8313,19 @@ export default function App() {
         {isOrg && !cancelled && it.status === "new" && it.payment_status !== "pending" && (
           <button type="button" className="booking-action-btn booking-action-btn--confirm" title="Подтвердить" onClick={(e) => orgBookingAction(it.id, "confirm", e)}>
             ✓
+          </button>
+        )}
+        {isOrg && !cancelled && it.client && (me?.provider_sphere === "service_center" || me?.role === "staff") && (
+          <button
+            type="button"
+            className="ghost-btn small"
+            title="Создать отчёт приёмки"
+            onClick={(e) => {
+              e.stopPropagation();
+              void startInspectionFromBooking(it);
+            }}
+          >
+            Приёмка
           </button>
         )}
         {isOrg && !cancelled && (
@@ -10284,7 +10341,7 @@ export default function App() {
       : { backgroundColor: activeChatWallpaper }
     : undefined;
   const tgMainDark = activeChatWallpaper === "#1e2a24";
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "inspections"].includes(currentView);
 
   return (
     <div className={`page${accessToken ? " page-logged" : " page--guest"}`}>
@@ -10513,6 +10570,12 @@ export default function App() {
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("cafe_orders"); setMenuOpen(false); }}>
                     <span className="menu-item-icon" aria-hidden="true">🧾</span>
                     <span className="menu-item-label">Заказы</span>
+                  </button>
+                )}
+                {isBookmarkAvailable("inspections") && !subnavBookmarks.includes("inspections") && (
+                  <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("inspections"); setMenuOpen(false); }}>
+                    <span className="menu-item-icon" aria-hidden="true">🔧</span>
+                    <span className="menu-item-label">Приёмка</span>
                   </button>
                 )}
                 <button type="button" className="menu-dropdown-item" onClick={exitDemoSession}>
@@ -10819,8 +10882,23 @@ export default function App() {
                   <div key={n.id} className="chat-notif-card">
                     <p>{formatInAppNotificationText(n)}</p>
                     {n.payload?.when ? <p className="muted small">{n.payload.when}</p> : null}
-                    <button type="button" className="ghost-btn" onClick={() => markInAppNotificationsRead([n.id])}>
-                      Понятно
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      onClick={() => {
+                        if (n.kind === "inspection" || n.payload?.view === "inspections") {
+                          markInAppNotificationsRead([n.id]);
+                          if (n.payload?.url && me?.role === "client") {
+                            window.location.href = n.payload.url;
+                            return;
+                          }
+                          setCurrentView("inspections");
+                          return;
+                        }
+                        markInAppNotificationsRead([n.id]);
+                      }}
+                    >
+                      {n.kind === "inspection" ? "Открыть" : "Понятно"}
                     </button>
                   </div>
                 ))}
@@ -11003,6 +11081,17 @@ export default function App() {
         )}
         {accessToken && currentView === "cafe_orders" && me?.role === "provider" && me?.provider_sphere === "cafe_restaurant" && (
           <CafeOrdersPage authFetch={authFetch} API_URL={API_URL} />
+        )}
+        {accessToken && currentView === "inspections" && (me?.role === "provider" || me?.role === "staff") && (
+          <InspectionWorkspace
+            authFetch={authFetch}
+            API_URL={API_URL}
+            me={me}
+            bookings={bookings}
+          />
+        )}
+        {accessToken && currentView === "inspections" && me?.role === "client" && (
+          <ClientInspectionsPanel authFetch={authFetch} API_URL={API_URL} />
         )}
         {accessToken && currentView === "staff" && canManageOrgSettings && renderStaffManagement()}
 

@@ -29,6 +29,8 @@ Disallow: /map
 Disallow: /book
 Disallow: /my-bookings
 Disallow: /my-reviews
+Disallow: /inspections
+Disallow: /i/
 Disallow: /t/
 Disallow: /api/
 Disallow: /admin

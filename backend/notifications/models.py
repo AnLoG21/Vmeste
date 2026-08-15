@@ -9,6 +9,7 @@ class InAppNotification(models.Model):
         BOOKING = "booking", "Запись"
         REVIEW = "review", "Отзыв"
         SUBSCRIPTION = "subscription", "Подписка"
+        INSPECTION = "inspection", "Приёмка / согласование"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

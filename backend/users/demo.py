@@ -145,7 +145,9 @@ def _wipe_visitor_data(provider, cfg: dict):
     from chat.models import Conversation, ConversationMember
     from locations.models import ProviderLocation
     from reviews.models import Review
+    from inspections.models import InspectionReport
 
+    InspectionReport.objects.filter(provider=provider).delete()
     Booking.objects.filter(provider=provider).delete()
     AvailabilitySlot.objects.filter(provider=provider).delete()
     Review.objects.filter(provider=provider).delete()
@@ -354,6 +356,46 @@ def _seed_reviews(provider, clients, staff_links):
         )
 
 
+def _seed_inspection(provider, clients, staff_links):
+    from inspections.models import InspectionItem, InspectionReport
+    from inspections.services import send_report
+
+    if not clients:
+        return
+    client = clients[0]
+    creator = staff_links[0].staff if staff_links else provider
+    report = InspectionReport.objects.create(
+        provider=provider,
+        client=client,
+        created_by=creator,
+        vehicle_title="Hyundai Solaris",
+        vehicle_plate="А123ВС777",
+        vehicle_vin="Z94CT41AADR123456",
+        notes="Демо-отчёт после ТО. Можно открыть как клиент или утвердить по ссылке.",
+    )
+    samples = [
+        ("Тормозные колодки передние", "Износ критический, нужна замена.", "critical", "4200", "2500"),
+        ("Пыльник ШРУСа", "Небольшой разрыв, рекомендуется замена.", "recommended", "1800", "1200"),
+        ("Уровень масла", "В норме после замены.", "ok", "0", "0"),
+        ("Воздушный фильтр", "Загрязнён, замена по регламенту.", "recommended", "900", "400"),
+        ("Аккумулятор", "Нагрузка в норме.", "ok", "0", "0"),
+    ]
+    for i, (title, desc, sev, parts, labor) in enumerate(samples):
+        InspectionItem.objects.create(
+            report=report,
+            title=title,
+            description=desc,
+            severity=sev,
+            parts_price=parts,
+            labor_price=labor,
+            sort_order=i,
+        )
+    try:
+        send_report(report)
+    except Exception:
+        pass
+
+
 def _seed_location(provider, cfg: dict):
     from locations.models import ProviderLocation
 
@@ -445,6 +487,8 @@ def seed_sphere(sphere: str, *, reset: bool = True) -> User:
         else:
             _seed_slots_and_bookings(provider, staff_links, clients, services)
             _seed_reviews(provider, clients, staff_links)
+            if sphere == User.ProviderSphere.SERVICE_CENTER:
+                _seed_inspection(provider, clients, staff_links)
         if staff_links and services:
             for link in staff_links:
                 link.assigned_services.set(services[:6])
