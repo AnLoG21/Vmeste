@@ -2985,6 +2985,20 @@ export default function App() {
   useEffect(() => {
     handleVerifyEmailFromUrl();
     handleConfirmPasswordChangeFromUrl();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("register") === "1" || params.get("auth") === "register") {
+      openAuth("register");
+      params.delete("register");
+      params.delete("auth");
+      const q = params.toString();
+      window.history.replaceState({}, document.title, `${window.location.pathname}${q ? `?${q}` : ""}${window.location.hash || ""}`);
+    } else if (params.get("login") === "1" || params.get("auth") === "login") {
+      openAuth("login");
+      params.delete("login");
+      params.delete("auth");
+      const q = params.toString();
+      window.history.replaceState({}, document.title, `${window.location.pathname}${q ? `?${q}` : ""}${window.location.hash || ""}`);
+    }
   }, []);
 
   useEffect(() => {

@@ -9,6 +9,7 @@ const BUSINESSES = [
   {
     id: "hair_salon",
     emoji: "💇",
+    accent: "#c45c00",
     title: "Салон красоты",
     lead: "Готовый каталог парикмахерских и beauty-услуг, запись клиентов и работа мастеров в одном месте.",
     highlights: [
@@ -26,6 +27,7 @@ const BUSINESSES = [
   {
     id: "service_center",
     emoji: "🔧",
+    accent: "#2f5d50",
     title: "Сервисный центр",
     lead: "Приём техники в ремонт, каталог услуг по направлениям и понятная запись для клиентов.",
     highlights: [
@@ -44,6 +46,7 @@ const BUSINESSES = [
   {
     id: "cafe_restaurant",
     emoji: "🍽️",
+    accent: "#8b3a2a",
     title: "Кафе и рестораны",
     lead: "Соберите план зала, выдайте столам QR и PIN, ведите меню и принимайте заказы за столом, навынос и с доставкой.",
     highlights: [
@@ -110,29 +113,46 @@ export default function BusinessesPage() {
       />
 
       <header className="businesses-topbar">
-        <a href="/" className="businesses-brand">
-          Вместе
+        <a href="/" className="businesses-brand" aria-label="Вместе — на главную">
+          <span className="businesses-brand-mark" aria-hidden="true">
+            В
+          </span>
+          <span>Вместе</span>
         </a>
         <nav className="businesses-topnav" aria-label="Разделы">
           <a href="/#pricing">Тарифы</a>
+          <a href="/#demo">Демо</a>
           <a href="/contacts">Контакты</a>
-          <a href="/" className="landing-btn landing-btn--primary businesses-top-cta">
+          <a href="/" className="landing-btn landing-btn--outline businesses-top-login">
             Войти
+          </a>
+          <a href="/?register=1" className="landing-btn landing-btn--primary businesses-top-cta">
+            Регистрация
           </a>
         </nav>
       </header>
 
       <main>
         <section className="businesses-hero-band">
-          <p className="businesses-kicker">Для бизнеса</p>
-          <h1>Готовые сценарии под вашу сферу</h1>
-          <p className="businesses-lead">
-            Каталоги услуг, запись, чаты и управление командой — подключайте сферу и запускайтесь быстрее.
-            Ниже подробности по каждой отрасли.
-          </p>
-          <div className="businesses-jump">
+          <div className="businesses-hero-copy">
+            <p className="businesses-kicker">Для бизнеса</p>
+            <h1>Готовые сценарии под вашу сферу</h1>
+            <p className="businesses-lead">
+              Каталоги услуг, запись, чаты и управление командой — подключайте сферу и запускайтесь быстрее.
+              Ниже подробности по каждой отрасли.
+            </p>
+            <div className="businesses-hero-actions">
+              <a className="landing-btn landing-btn--primary" href="/?register=1">
+                Попробовать бесплатно
+              </a>
+              <a className="landing-btn landing-btn--outline" href="/#pricing">
+                Тарифы
+              </a>
+            </div>
+          </div>
+          <div className="businesses-jump" aria-label="Перейти к сфере">
             {BUSINESSES.map((biz) => (
-              <a key={biz.id} href={`#${biz.id}`} className="businesses-jump-chip">
+              <a key={biz.id} href={`#${biz.id}`} className="businesses-jump-chip" style={{ "--biz-accent": biz.accent }}>
                 <span aria-hidden="true">{biz.emoji}</span> {biz.title}
               </a>
             ))}
@@ -142,7 +162,12 @@ export default function BusinessesPage() {
         <div className="businesses-page">
           <div className="businesses-list">
             {BUSINESSES.map((biz) => (
-              <section key={biz.id} id={biz.id} className="businesses-card">
+              <section
+                key={biz.id}
+                id={biz.id}
+                className="businesses-card"
+                style={{ "--biz-accent": biz.accent }}
+              >
                 <div className="businesses-card-head">
                   <span className="businesses-emoji" aria-hidden="true">
                     {biz.emoji}
@@ -169,14 +194,19 @@ export default function BusinessesPage() {
                     </article>
                   ))}
                 </div>
-                <a className="landing-btn landing-btn--outline" href="/#demo">
-                  Посмотреть демо
-                </a>
+                <div className="businesses-card-actions">
+                  <a className="landing-btn landing-btn--primary" href="/?register=1">
+                    Подключить
+                  </a>
+                  <a className="landing-btn landing-btn--outline" href="/#demo">
+                    Смотреть демо
+                  </a>
+                </div>
               </section>
             ))}
           </div>
 
-          <section className="landing-section" style={{ padding: "1.5rem 0 0" }}>
+          <section className="landing-section businesses-faq">
             <h2>Частые вопросы</h2>
             {FAQ.map((item) => (
               <details key={item.question} className="landing-faq-item">
@@ -186,10 +216,15 @@ export default function BusinessesPage() {
             ))}
           </section>
 
-          <p className="businesses-footer">
-            Нужна своя сфера? Оставьте заявку на{" "}
-            <a href="/#automation-request">индивидуальную автоматизацию</a> — подключим каталог под ваш процесс.
-          </p>
+          <section className="businesses-cta-band">
+            <h2>Нужна своя сфера?</h2>
+            <p>
+              Оставьте заявку на индивидуальную автоматизацию — подключим каталог и процессы под ваш бизнес.
+            </p>
+            <a className="landing-btn landing-btn--primary" href="/#automation-request">
+              Оставить заявку
+            </a>
+          </section>
         </div>
       </main>
 

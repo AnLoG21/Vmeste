@@ -160,9 +160,13 @@ https://vmeste.ru/api/subscriptions/webhook/yookassa/
 ## Обслуживание
 
 ```bash
-# Обновление после git push
+# Обновление после git push (и frontend, и backend)
 cd /opt/vmeste && git pull
 docker compose -f docker-compose.prod.yml up -d --build
+
+# Только UI (лендинг, /businesses, кабинет) — если менялся только frontend
+cd /opt/vmeste && git pull
+docker compose -f docker-compose.prod.yml up -d --build frontend
 
 # Логи
 docker compose -f docker-compose.prod.yml logs -f web
@@ -171,6 +175,12 @@ docker compose -f docker-compose.prod.yml logs -f web
 docker compose -f docker-compose.prod.yml exec -T db \
   pg_dump -U vmeste_user vmeste > backup_$(date +%F).sql
 ```
+
+После деплоя фронта сделайте hard-refresh (`Ctrl+F5`): иначе браузер может держать старый JS/CSS.
+
+### Автодеплой после push
+
+См. [AUTO-DEPLOY.md](./AUTO-DEPLOY.md): GitHub Actions по push в `main` сам тянет код и пересобирает **frontend + web**, чтобы UI не отставал от бэкенда.
 
 ---
 
