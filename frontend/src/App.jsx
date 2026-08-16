@@ -2580,6 +2580,37 @@ export default function App() {
   const [orgAcquiringSaveStatus, setOrgAcquiringSaveStatus] = useState("");
   const [orgCalendarLinks, setOrgCalendarLinks] = useState(null);
   const [orgCalendarStatus, setOrgCalendarStatus] = useState("");
+  const [orgMessagingForm, setOrgMessagingForm] = useState({
+    remind_clients: true,
+    remind_org: true,
+    notify_org_on_new: true,
+    enable_telegram: false,
+    enable_max: false,
+    enable_whatsapp: false,
+    enable_sms: false,
+    telegram_bot_token: "",
+    telegram_notify_chat_id: "",
+    has_telegram: false,
+    has_platform_telegram: false,
+    has_org_telegram_token: false,
+    max_bot_token: "",
+    max_notify_chat_id: "",
+    has_max: false,
+    wa_api_url: "https://api.green-api.com",
+    wa_id_instance: "",
+    wa_api_token: "",
+    has_whatsapp: false,
+    sms_api_id: "",
+    has_sms_org: false,
+    reminder_template: "",
+  });
+  const [orgMessagingSaveStatus, setOrgMessagingSaveStatus] = useState("");
+  const [clientNotifyForm, setClientNotifyForm] = useState({
+    notify_booking_reminders: true,
+    notify_booking_status: true,
+  });
+  const [clientNotifyStatus, setClientNotifyStatus] = useState("");
+  const [telegramLinkInfo, setTelegramLinkInfo] = useState(null);
   const [orgSettingsHighlight, setOrgSettingsHighlight] = useState("");
   const [bookingMessageError, setBookingMessageError] = useState(null);
   const [reviewModalBooking, setReviewModalBooking] = useState(null);
@@ -2907,8 +2938,28 @@ export default function App() {
       }
       const calRes = await authFetch(`${API_URL}/booking/calendar/settings/`);
       if (calRes.ok) setOrgCalendarLinks(await calRes.json());
+      const msgRes = await authFetch(`${API_URL}/booking/messaging/`);
+      if (msgRes.ok) {
+        const m = await msgRes.json();
+        setOrgMessagingForm((p) => ({
+          ...p,
+          ...m,
+          telegram_bot_token: "",
+          max_bot_token: "",
+          wa_api_token: "",
+          sms_api_id: "",
+        }));
+      }
     })();
   }, [accessToken, me?.role, currentView]);
+
+  useEffect(() => {
+    if (!me || me.role !== "client") return;
+    setClientNotifyForm({
+      notify_booking_reminders: me.notify_booking_reminders !== false,
+      notify_booking_status: me.notify_booking_status !== false,
+    });
+  }, [me?.id, me?.notify_booking_reminders, me?.notify_booking_status, me?.role]);
 
   function staffHasPerm(key) {
     if (me?.role === "provider") return true;
@@ -7881,6 +7932,76 @@ export default function App() {
     setOrgCalendarStatus("Новая ссылка календаря создана. Старая больше не работает.");
   }
 
+  async function saveOrgMessaging(event) {
+    event?.preventDefault?.();
+    setOrgMessagingSaveStatus("");
+    const payload = {
+      remind_clients: Boolean(orgMessagingForm.remind_clients),
+      remind_org: Boolean(orgMessagingForm.remind_org),
+      notify_org_on_new: Boolean(orgMessagingForm.notify_org_on_new),
+      enable_telegram: Boolean(orgMessagingForm.enable_telegram),
+      enable_max: Boolean(orgMessagingForm.enable_max),
+      enable_whatsapp: Boolean(orgMessagingForm.enable_whatsapp),
+      enable_sms: Boolean(orgMessagingForm.enable_sms),
+      telegram_notify_chat_id: orgMessagingForm.telegram_notify_chat_id || "",
+      max_notify_chat_id: orgMessagingForm.max_notify_chat_id || "",
+      wa_api_url: orgMessagingForm.wa_api_url || "https://api.green-api.com",
+      wa_id_instance: orgMessagingForm.wa_id_instance || "",
+      reminder_template: orgMessagingForm.reminder_template || "",
+    };
+    for (const key of ["telegram_bot_token", "max_bot_token", "wa_api_token", "sms_api_id"]) {
+      if ((orgMessagingForm[key] || "").trim()) payload[key] = orgMessagingForm[key].trim();
+    }
+    const res = await authFetch(`${API_URL}/booking/messaging/`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setOrgMessagingSaveStatus(data.detail || "Не удалось сохранить.");
+      return;
+    }
+    setOrgMessagingForm((p) => ({
+      ...p,
+      ...data,
+      telegram_bot_token: "",
+      max_bot_token: "",
+      wa_api_token: "",
+      sms_api_id: "",
+    }));
+    setOrgMessagingSaveStatus("Сохранено.");
+  }
+
+  async function saveClientNotifyPrefs(event) {
+    event?.preventDefault?.();
+    setClientNotifyStatus("");
+    const res = await authFetch(`${API_URL}/users/me/`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        notify_booking_reminders: Boolean(clientNotifyForm.notify_booking_reminders),
+        notify_booking_status: Boolean(clientNotifyForm.notify_booking_status),
+      }),
+    });
+    if (!res.ok) {
+      setClientNotifyStatus("Не удалось сохранить.");
+      return;
+    }
+    const data = await res.json().catch(() => ({}));
+    setMe((prev) => (prev ? { ...prev, ...data } : prev));
+    setClientNotifyStatus("Сохранено.");
+  }
+
+  async function loadTelegramLink() {
+    const res = await authFetch(`${API_URL}/notifications/telegram/link/`);
+    if (res.ok) setTelegramLinkInfo(await res.json());
+  }
+
+  async function unlinkTelegram() {
+    await authFetch(`${API_URL}/notifications/telegram/link/`, { method: "DELETE" });
+    setTelegramLinkInfo((p) => (p ? { ...p, linked: false, telegram_chat_id: "" } : p));
+    loadMe();
+  }
+
   async function uploadOrgGalleryPhoto(file) {
     if (!file) return false;
     if (orgGalleryPhotos.length >= ORG_GALLERY_MAX_PHOTOS) {
@@ -9582,6 +9703,57 @@ export default function App() {
             <p className="status">{resendStatus}</p>
           </>
         )}
+        {me?.role === "client" ? (
+          <form onSubmit={saveClientNotifyPrefs} className="form">
+            <h3>Уведомления о записях</h3>
+            <p className="muted small">Push всегда; SMS и мессенджеры — если организация включила каналы и указала ключи.</p>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={Boolean(clientNotifyForm.notify_booking_reminders)}
+                onChange={(e) => setClientNotifyForm((p) => ({ ...p, notify_booking_reminders: e.target.checked }))}
+              />
+              Напоминания за 24 ч и 2 ч до визита
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={Boolean(clientNotifyForm.notify_booking_status)}
+                onChange={(e) => setClientNotifyForm((p) => ({ ...p, notify_booking_status: e.target.checked }))}
+              />
+              Статусы: подтверждение, отмена, услуга оказана
+            </label>
+            <button type="submit">Сохранить уведомления</button>
+            <p className="status">{clientNotifyStatus}</p>
+            <h4>Telegram</h4>
+            <p className="muted small">Привяжите чат, чтобы получать напоминания в Telegram (нужен бот организации).</p>
+            <div className="row-2">
+              <button type="button" className="ghost-btn" onClick={loadTelegramLink}>
+                Показать код / ссылку
+              </button>
+              {telegramLinkInfo?.linked ? (
+                <button type="button" className="ghost-btn" onClick={unlinkTelegram}>
+                  Отвязать
+                </button>
+              ) : null}
+            </div>
+            {telegramLinkInfo ? (
+              <div>
+                <p className="muted small">
+                  {telegramLinkInfo.linked ? "Привязан." : "Не привязан."} Код:{" "}
+                  <code>{telegramLinkInfo.link_token}</code>
+                </p>
+                {telegramLinkInfo.deep_link ? (
+                  <a href={telegramLinkInfo.deep_link} target="_blank" rel="noreferrer">
+                    Открыть бота
+                  </a>
+                ) : (
+                  <p className="muted small">{telegramLinkInfo.hint}</p>
+                )}
+              </div>
+            ) : null}
+          </form>
+        ) : null}
       </section>
     );
   }
@@ -9838,6 +10010,177 @@ export default function App() {
             ) : (
               <p className="muted small">Загрузка ссылки…</p>
             )}
+
+            <h3>Напоминания и мессенджеры</h3>
+            <p className="muted small">
+              Напоминания за 24 ч и 2 ч до записи: клиентам и организации. Каналы — Telegram, MAX, WhatsApp (Green-API), SMS.
+              SMS: ключ платформы или свой SMS.ru api_id. Клиент может отключить напоминания в своих настройках.
+            </p>
+            <form onSubmit={saveOrgMessaging} className="form">
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={Boolean(orgMessagingForm.remind_clients)}
+                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, remind_clients: e.target.checked }))}
+                />
+                Напоминания клиентам
+              </label>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={Boolean(orgMessagingForm.remind_org)}
+                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, remind_org: e.target.checked }))}
+                />
+                Напоминания организации (себе)
+              </label>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={Boolean(orgMessagingForm.notify_org_on_new)}
+                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, notify_org_on_new: e.target.checked }))}
+                />
+                Уведомлять о новой записи
+              </label>
+              <label className="field-label">
+                Шаблон напоминания
+                <textarea
+                  rows={3}
+                  value={orgMessagingForm.reminder_template}
+                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, reminder_template: e.target.value }))}
+                  placeholder="Напоминание: запись в {org} на {service} — {date}."
+                />
+              </label>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={Boolean(orgMessagingForm.enable_telegram)}
+                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_telegram: e.target.checked }))}
+                />
+                Telegram
+              </label>
+              {orgMessagingForm.enable_telegram ? (
+                <>
+                  {orgMessagingForm.has_platform_telegram ? (
+                    <p className="muted small">
+                      Используется бот платформы. Достаточно указать Chat ID организации. Свой token —
+                      только если нужен отдельный бот.
+                    </p>
+                  ) : null}
+                  <label className="field-label">
+                    Bot token{orgMessagingForm.has_platform_telegram ? " (свой, необязательно)" : ""}
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      value={orgMessagingForm.telegram_bot_token}
+                      onChange={(e) => setOrgMessagingForm((p) => ({ ...p, telegram_bot_token: e.target.value }))}
+                      placeholder={
+                        orgMessagingForm.has_org_telegram_token || orgMessagingForm.has_platform_telegram
+                          ? "••••••••"
+                          : ""
+                      }
+                    />
+                  </label>
+                  <label className="field-label">
+                    Chat ID (чат организации)
+                    <input
+                      type="text"
+                      value={orgMessagingForm.telegram_notify_chat_id}
+                      onChange={(e) => setOrgMessagingForm((p) => ({ ...p, telegram_notify_chat_id: e.target.value }))}
+                    />
+                  </label>
+                </>
+              ) : null}
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={Boolean(orgMessagingForm.enable_max)}
+                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_max: e.target.checked }))}
+                />
+                MAX
+              </label>
+              {orgMessagingForm.enable_max ? (
+                <>
+                  <label className="field-label">
+                    Bot token
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      value={orgMessagingForm.max_bot_token}
+                      onChange={(e) => setOrgMessagingForm((p) => ({ ...p, max_bot_token: e.target.value }))}
+                      placeholder={orgMessagingForm.has_max ? "••••••••" : ""}
+                    />
+                  </label>
+                  <label className="field-label">
+                    Chat ID
+                    <input
+                      type="text"
+                      value={orgMessagingForm.max_notify_chat_id}
+                      onChange={(e) => setOrgMessagingForm((p) => ({ ...p, max_notify_chat_id: e.target.value }))}
+                    />
+                  </label>
+                </>
+              ) : null}
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={Boolean(orgMessagingForm.enable_whatsapp)}
+                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_whatsapp: e.target.checked }))}
+                />
+                WhatsApp (Green-API)
+              </label>
+              {orgMessagingForm.enable_whatsapp ? (
+                <>
+                  <label className="field-label">
+                    API URL
+                    <input
+                      type="text"
+                      value={orgMessagingForm.wa_api_url}
+                      onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_api_url: e.target.value }))}
+                    />
+                  </label>
+                  <label className="field-label">
+                    idInstance
+                    <input
+                      type="text"
+                      value={orgMessagingForm.wa_id_instance}
+                      onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_id_instance: e.target.value }))}
+                    />
+                  </label>
+                  <label className="field-label">
+                    apiTokenInstance
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      value={orgMessagingForm.wa_api_token}
+                      onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_api_token: e.target.value }))}
+                      placeholder={orgMessagingForm.has_whatsapp ? "••••••••" : ""}
+                    />
+                  </label>
+                </>
+              ) : null}
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={Boolean(orgMessagingForm.enable_sms)}
+                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_sms: e.target.checked }))}
+                />
+                SMS (SMS.ru)
+              </label>
+              {orgMessagingForm.enable_sms ? (
+                <label className="field-label">
+                  api_id организации (если пусто — ключ платформы)
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={orgMessagingForm.sms_api_id}
+                    onChange={(e) => setOrgMessagingForm((p) => ({ ...p, sms_api_id: e.target.value }))}
+                    placeholder={orgMessagingForm.has_sms_org ? "••••••••" : ""}
+                  />
+                </label>
+              ) : null}
+              <button type="submit">Сохранить каналы</button>
+              <p className="status">{orgMessagingSaveStatus}</p>
+            </form>
 
             <h3>Карточка для клиентов</h3>
 

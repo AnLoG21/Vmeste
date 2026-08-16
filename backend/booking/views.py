@@ -706,3 +706,81 @@ class AcquiringSettingsView(APIView):
         acq.save()
         return Response(self._payload(request, acq))
 
+
+
+class MessagingSettingsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _payload(self, msg):
+        from django.conf import settings as dj_settings
+
+        platform_tg = bool((getattr(dj_settings, "TELEGRAM_BOT_TOKEN", None) or "").strip())
+        return {
+            "remind_clients": msg.remind_clients,
+            "remind_org": msg.remind_org,
+            "notify_org_on_new": msg.notify_org_on_new,
+            "enable_telegram": msg.enable_telegram,
+            "enable_max": msg.enable_max,
+            "enable_whatsapp": msg.enable_whatsapp,
+            "enable_sms": msg.enable_sms,
+            "telegram_notify_chat_id": msg.telegram_notify_chat_id or "",
+            "has_telegram": msg.has_telegram(),
+            "has_platform_telegram": platform_tg,
+            "has_org_telegram_token": bool((msg.telegram_bot_token or "").strip()),
+            "max_notify_chat_id": msg.max_notify_chat_id or "",
+            "has_max": msg.has_max(),
+            "wa_api_url": msg.wa_api_url or "https://api.green-api.com",
+            "wa_id_instance": msg.wa_id_instance or "",
+            "has_whatsapp": msg.has_whatsapp(),
+            "has_sms_org": msg.has_sms_org(),
+            "reminder_template": msg.reminder_template or "",
+        }
+
+    def get(self, request):
+        if request.user.role != "provider":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        from notifications.delivery import get_or_create_messaging
+
+        msg = get_or_create_messaging(request.user)
+        return Response(self._payload(msg))
+
+    def patch(self, request):
+        if request.user.role != "provider":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        from notifications.delivery import get_or_create_messaging
+
+        msg = get_or_create_messaging(request.user)
+        data = request.data or {}
+        bool_fields = [
+            "remind_clients",
+            "remind_org",
+            "notify_org_on_new",
+            "enable_telegram",
+            "enable_max",
+            "enable_whatsapp",
+            "enable_sms",
+        ]
+        for f in bool_fields:
+            if f in data:
+                setattr(msg, f, bool(data.get(f)))
+        str_fields = [
+            "telegram_notify_chat_id",
+            "max_notify_chat_id",
+            "wa_api_url",
+            "wa_id_instance",
+            "reminder_template",
+        ]
+        for f in str_fields:
+            if f in data:
+                setattr(msg, f, str(data.get(f) or "").strip())
+        secrets = [
+            "telegram_bot_token",
+            "max_bot_token",
+            "wa_api_token",
+            "sms_api_id",
+        ]
+        for f in secrets:
+            if f in data and str(data.get(f) or "").strip():
+                setattr(msg, f, str(data.get(f)).strip())
+        msg.save()
+        return Response(self._payload(msg))

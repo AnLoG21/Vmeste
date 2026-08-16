@@ -55,9 +55,20 @@ class UserSerializer(serializers.ModelSerializer):
             "provider_license_number",
             "organization_slug",
             "is_demo",
+            "notify_booking_reminders",
+            "notify_booking_status",
+            "telegram_chat_id",
         ]
-        read_only_fields = ["id", "username", "email", "role", "email_verified", "organization_slug", "is_demo"]
-
+        read_only_fields = [
+            "id",
+            "username",
+            "email",
+            "role",
+            "email_verified",
+            "organization_slug",
+            "is_demo",
+            "telegram_chat_id",
+        ]
 
 class ProviderGalleryPhotoSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()

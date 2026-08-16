@@ -102,6 +102,29 @@ class User(AbstractUser):
         default="",
         help_text="Номер лицензии организации (необязательно).",
     )
+    notify_booking_reminders = models.BooleanField(
+        default=True,
+        help_text="Клиент: получать напоминания о записи (24ч / 2ч).",
+    )
+    notify_booking_status = models.BooleanField(
+        default=True,
+        help_text="Клиент: уведомления о подтверждении / отмене / завершении.",
+    )
+    telegram_chat_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Telegram chat_id после /start у бота организации или платформы.",
+    )
+    max_user_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="MAX user id после привязки.",
+    )
+    telegram_link_token = models.CharField(max_length=64, blank=True, default="")
 
 
 class ProviderGalleryPhoto(models.Model):

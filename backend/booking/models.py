@@ -93,6 +93,8 @@ class Booking(models.Model):
     yookassa_payment_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     payment_url = models.URLField(blank=True, default="")
     paid_at = models.DateTimeField(null=True, blank=True)
+    reminder_24h_sent = models.BooleanField(default=False)
+    reminder_2h_sent = models.BooleanField(default=False)
 
 
 class ProviderAcquiring(models.Model):
@@ -157,6 +159,60 @@ class ProviderAcquiring(models.Model):
         from payments.gateway import provider_ready
 
         return provider_ready(self.payment_provider, self.payment_creds())
+
+
+DEFAULT_REMINDER_TEMPLATE = (
+    "Напоминание: запись в {org} на {service} — {date}. Ждём вас! Вместе"
+)
+
+
+class ProviderMessagingSettings(models.Model):
+    provider = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="messaging_settings",
+    )
+    remind_clients = models.BooleanField(default=True)
+    remind_org = models.BooleanField(default=True)
+    notify_org_on_new = models.BooleanField(default=True)
+    enable_telegram = models.BooleanField(default=False)
+    enable_max = models.BooleanField(default=False)
+    enable_whatsapp = models.BooleanField(default=False)
+    enable_sms = models.BooleanField(default=False)
+    telegram_bot_token = models.CharField(max_length=128, blank=True, default="")
+    telegram_notify_chat_id = models.CharField(max_length=64, blank=True, default="")
+    max_bot_token = models.CharField(max_length=128, blank=True, default="")
+    max_notify_chat_id = models.CharField(max_length=64, blank=True, default="")
+    wa_api_url = models.CharField(max_length=255, blank=True, default="https://api.green-api.com")
+    wa_id_instance = models.CharField(max_length=64, blank=True, default="")
+    wa_api_token = models.CharField(max_length=128, blank=True, default="")
+    sms_api_id = models.CharField(max_length=128, blank=True, default="")
+    reminder_template = models.TextField(blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def reminder_text(self) -> str:
+        return (self.reminder_template or "").strip() or DEFAULT_REMINDER_TEMPLATE
+
+    def resolved_telegram_bot_token(self) -> str:
+        """Org token, else platform TELEGRAM_BOT_TOKEN from .env."""
+        org = (self.telegram_bot_token or "").strip()
+        if org:
+            return org
+        from django.conf import settings as dj_settings
+
+        return (getattr(dj_settings, "TELEGRAM_BOT_TOKEN", None) or "").strip()
+
+    def has_telegram(self) -> bool:
+        return bool(self.resolved_telegram_bot_token() and (self.telegram_notify_chat_id or "").strip())
+
+    def has_max(self) -> bool:
+        return bool((self.max_bot_token or "").strip() and (self.max_notify_chat_id or "").strip())
+
+    def has_whatsapp(self) -> bool:
+        return bool((self.wa_id_instance or "").strip() and (self.wa_api_token or "").strip())
+
+    def has_sms_org(self) -> bool:
+        return bool((self.sms_api_id or "").strip())
 
 
 class ProviderStaff(models.Model):

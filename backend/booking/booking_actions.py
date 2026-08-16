@@ -79,27 +79,23 @@ def booking_notification_payload(booking, *, extra=None) -> dict:
 
 
 def notify_new_booking(booking):
-    """Push + in-app notification to provider and assigned staff."""
+    """Push + channels to provider and assigned staff."""
+    service_name = getattr(getattr(booking, "service", None), "name", None) or "Услуга"
+    when = format_booking_when(booking) or ""
+    client = client_display_name(getattr(booking, "client", None))
+    parts = [p for p in (service_name, when) if p]
+    body = " · ".join(parts)
+    if client:
+        body = f"{client}: {body}" if body else client
     try:
-        from notifications.models import InAppNotification
-        from notifications.push import notify_users
+        from notifications.delivery import deliver_booking_event
 
-        service_name = getattr(getattr(booking, "service", None), "name", None) or "Услуга"
-        when = format_booking_when(booking) or ""
-        client = client_display_name(getattr(booking, "client", None))
-        parts = [p for p in (service_name, when) if p]
-        body = " · ".join(parts)
-        if client:
-            body = f"{client}: {body}" if body else client
-        recipients = {booking.provider_id}
-        if booking.staff_id:
-            recipients.add(booking.staff_id)
-        notify_users(
-            list(recipients),
-            kind=InAppNotification.Kind.BOOKING,
-            title="Новая запись",
-            body=body[:240] or "Клиент записался",
-            payload=booking_notification_payload(booking),
+        deliver_booking_event(
+            booking,
+            "new",
+            body or "Клиент записался",
+            audience="org",
+            title_org="Новая запись",
         )
     except Exception:
         pass
@@ -117,17 +113,15 @@ def confirm_booking(booking, actor):
     text = msg_tpl.replace("{date}", format_booking_when(booking))
     post_booking_message(provider, booking.client, text, sender=actor)
     try:
-        from notifications.models import InAppNotification
-        from notifications.push import notify_users
+        from notifications.delivery import deliver_booking_event
 
-        if booking.client_id:
-            notify_users(
-                [booking.client_id],
-                kind=InAppNotification.Kind.BOOKING,
-                title="Запись подтверждена",
-                body=text[:240] or "Ваша запись подтверждена",
-                payload=booking_notification_payload(booking),
-            )
+        deliver_booking_event(
+            booking,
+            "confirm",
+            text,
+            audience="client",
+            title_client="Запись подтверждена",
+        )
     except Exception:
         pass
     return True, None
@@ -144,6 +138,18 @@ def cancel_booking_by_org(booking, actor):
     release_booking_occupancy(booking)
     text = msg_tpl.replace("{date}", when)
     post_booking_message(provider, booking.client, text, sender=actor)
+    try:
+        from notifications.delivery import deliver_booking_event
+
+        deliver_booking_event(
+            booking,
+            "cancel",
+            text,
+            audience="client",
+            title_client="Запись отменена",
+        )
+    except Exception:
+        pass
     return True, None
 
 
@@ -161,6 +167,18 @@ def mark_booking_done(booking, actor):
     booking.save(update_fields=["status"])
     text = msg_tpl.replace("{date}", format_booking_when(booking))
     post_booking_message(provider, booking.client, text, sender=actor)
+    try:
+        from notifications.delivery import deliver_booking_event
+
+        deliver_booking_event(
+            booking,
+            "done",
+            text,
+            audience="client",
+            title_client="Услуга оказана",
+        )
+    except Exception:
+        pass
     return True, None
 
 
@@ -175,22 +193,18 @@ def cancel_booking_by_client(booking):
     release_booking_occupancy(booking)
     post_booking_message(provider, client, text, sender=client)
     try:
-        from notifications.models import InAppNotification
-        from notifications.push import notify_users
+        from notifications.delivery import deliver_booking_event
 
         client_name = client_display_name(client)
         body = " · ".join(p for p in (service_name, when) if p)
         if client_name:
             body = f"{client_name}: {body}" if body else client_name
-        recipients = {provider.id if hasattr(provider, "id") else booking.provider_id}
-        if booking.staff_id:
-            recipients.add(booking.staff_id)
-        notify_users(
-            list(recipients),
-            kind=InAppNotification.Kind.BOOKING,
-            title="Запись отменена клиентом",
-            body=body[:240] or text,
-            payload=booking_notification_payload(booking),
+        deliver_booking_event(
+            booking,
+            "cancel_by_client",
+            body or text,
+            audience="org",
+            title_org="Запись отменена клиентом",
         )
     except Exception:
         pass

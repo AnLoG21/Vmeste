@@ -204,4 +204,15 @@ CELERY_BEAT_SCHEDULE = {
         "task": "subscriptions.send_expiry_reminders",
         "schedule": 3600.0,
     },
+    "booking-reminders-every-10-min": {
+        "task": "booking.send_booking_reminders",
+        "schedule": 600.0,
+    },
 }
+
+# SMS.ru platform key (org can override via ProviderMessagingSettings.sms_api_id)
+SMSRU_API_ID = os.environ.get("SMSRU_API_ID", "")
+# Platform Telegram bot: username for deep-links; token used by all orgs unless they set their own
+TELEGRAM_BOT_USERNAME = os.environ.get("TELEGRAM_BOT_USERNAME", "")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+

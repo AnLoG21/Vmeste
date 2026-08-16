@@ -13,7 +13,7 @@ git checkout main
 git reset --hard origin/main
 
 echo "[deploy] building and starting services..."
-docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans web frontend caddy
+            docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans web frontend caddy celery_worker celery_beat
 
 echo "[deploy] pruning dangling images (safe)..."
 docker image prune -f >/dev/null 2>&1 || true
