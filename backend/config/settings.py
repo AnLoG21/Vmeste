@@ -208,6 +208,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "booking.send_booking_reminders",
         "schedule": 600.0,
     },
+    "telegram-poll-every-8-sec": {
+        "task": "notifications.poll_telegram",
+        "schedule": 8.0,
+    },
 }
 
 # SMS.ru platform key (org can override via ProviderMessagingSettings.sms_api_id)

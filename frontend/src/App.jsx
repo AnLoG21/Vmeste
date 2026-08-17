@@ -8015,19 +8015,14 @@ export default function App() {
 
   async function refreshOrgTelegramLink() {
     const linkRes = await authFetch(`${API_URL}/booking/messaging/telegram-link/`);
-    const msgRes = await authFetch(`${API_URL}/booking/messaging/`);
-    if (linkRes.ok) setOrgTelegramLinkInfo(await linkRes.json());
-    if (msgRes.ok) {
-      const m = await msgRes.json();
-      setOrgMessagingForm((p) => ({
-        ...p,
-        ...m,
-        telegram_bot_token: "",
-        max_bot_token: "",
-        wa_api_token: "",
-        sms_api_id: "",
-      }));
-    }
+    if (!linkRes.ok) return;
+    const data = await linkRes.json();
+    setOrgTelegramLinkInfo(data);
+    setOrgMessagingForm((p) => ({
+      ...p,
+      telegram_notify_chat_id: data.telegram_notify_chat_id || p.telegram_notify_chat_id,
+      enable_telegram: true,
+    }));
   }
 
   async function unlinkOrgTelegram() {
