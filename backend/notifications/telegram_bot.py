@@ -64,6 +64,13 @@ def _chat_id_help(chat_id: str) -> str:
     )
 
 
+def _command_and_arg(text: str) -> tuple[str, str]:
+    """Parse '/start@BotName payload' → ('/start', 'payload')."""
+    first, _, rest = text.strip().partition(" ")
+    cmd = first.split("@", 1)[0].lower()
+    return cmd, rest.strip()
+
+
 def handle_telegram_update(update: dict) -> None:
     message = update.get("message") or update.get("edited_message") or {}
     chat = message.get("chat") or {}
@@ -72,16 +79,13 @@ def handle_telegram_update(update: dict) -> None:
     if not chat_id or not text:
         return
 
-    lower = text.lower()
-    if lower.startswith("/chatid"):
+    cmd, arg = _command_and_arg(text)
+    if cmd == "/chatid":
         _reply(chat_id, f"Ваш Chat ID: {chat_id}")
         return
 
-    if not text.startswith("/start"):
+    if cmd != "/start":
         return
-
-    parts = text.split(maxsplit=1)
-    arg = (parts[1] if len(parts) > 1 else "").strip()
 
     if arg.startswith(ORG_START_PREFIX):
         _bind_org(chat_id, arg[len(ORG_START_PREFIX) :])
