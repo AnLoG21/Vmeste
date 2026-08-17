@@ -10157,6 +10157,7 @@ export default function App() {
                       )}
                       <p className="muted small">
                         Или напишите боту /start или /chatid — он пришлёт Chat ID для ручного ввода выше.
+                        Если бот молчит (VPS может не видеть Telegram), нажмите «Проверить привязку» после Start.
                       </p>
                     </div>
                   ) : null}

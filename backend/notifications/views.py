@@ -1,3 +1,4 @@
+from rest_framework.parsers import JSONParser
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -92,15 +93,26 @@ class TelegramWebhookView(APIView):
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    parser_classes = [JSONParser]
 
     def post(self, request):
+        import json
+        import logging
+
         from .telegram_bot import handle_telegram_update
 
-        update = request.data if isinstance(request.data, dict) else {}
+        logger = logging.getLogger(__name__)
+        update = request.data if isinstance(request.data, dict) else None
+        if not update and request.body:
+            try:
+                update = json.loads(request.body.decode("utf-8"))
+            except json.JSONDecodeError:
+                logger.warning("telegram webhook: invalid JSON body")
+                return Response({"ok": True})
+        if not isinstance(update, dict):
+            return Response({"ok": True})
         try:
             handle_telegram_update(update)
         except Exception:
-            import logging
-
-            logging.getLogger(__name__).exception("telegram webhook failed")
+            logger.exception("telegram webhook failed")
         return Response({"ok": True})

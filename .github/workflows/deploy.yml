@@ -32,3 +32,17 @@ jobs:
             git reset --hard origin/main
             chmod +x scripts/deploy-prod.sh
             ./scripts/deploy-prod.sh
+
+      - name: Register Telegram webhook
+        if: ${{ secrets.TELEGRAM_BOT_TOKEN != '' }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_URL: ${{ secrets.TELEGRAM_WEBHOOK_URL }}
+        run: |
+          WEBHOOK="${TELEGRAM_WEBHOOK_URL:-https://vsevmeste.space/api/notifications/telegram/webhook/}"
+          curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
+            -d "url=${WEBHOOK}" \
+            -d 'allowed_updates=["message","edited_message"]'
+          echo
+          curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo"
+          echo

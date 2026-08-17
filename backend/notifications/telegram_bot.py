@@ -42,8 +42,14 @@ def client_deep_link(link_token: str) -> str:
 def _reply(chat_id: str, text: str) -> None:
     token = platform_bot_token()
     if not token or not chat_id or not text:
+        logger.warning("Telegram reply skipped: token=%s chat_id=%s", bool(token), bool(chat_id))
         return
-    send_telegram(bot_token=token, chat_id=chat_id, text=text)
+    ok = send_telegram(bot_token=token, chat_id=chat_id, text=text)
+    if not ok:
+        logger.error(
+            "Telegram reply failed chat_id=%s (VPS may block api.telegram.org — set TELEGRAM_API_BASE or TELEGRAM_HTTP_PROXY)",
+            chat_id,
+        )
 
 
 def _chat_id_help(chat_id: str) -> str:

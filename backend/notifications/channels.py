@@ -36,8 +36,13 @@ def send_telegram(*, bot_token: str, chat_id: str, text: str) -> bool:
     cid = (chat_id or "").strip()
     if not token or not cid or not text:
         return False
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    data = _post_json(url, {"chat_id": cid, "text": text[:4000], "disable_web_page_preview": True})
+    from .telegram_api import telegram_post
+
+    data = telegram_post(
+        token=token,
+        method="sendMessage",
+        payload={"chat_id": cid, "text": text[:4000], "disable_web_page_preview": True},
+    )
     return bool(data and data.get("ok"))
 
 
