@@ -6,25 +6,19 @@ def noop_notification_task():
     return None
 
 
-@shared_task(name="notifications.poll_telegram")
+@shared_task(name="notifications.poll_telegram", time_limit=25, soft_time_limit=20)
 def poll_telegram_task():
-    from django.conf import settings
     from django.core.cache import cache
 
-    from .telegram_api import delete_webhook, get_updates, get_webhook_info
+    from .telegram_api import delete_webhook, get_updates
     from .telegram_bot import handle_telegram_update, platform_bot_token
 
     token = platform_bot_token()
     if not token:
         return {"skipped": "no_token"}
 
-    # RU VPS: Telegram often cannot POST webhook inbound. Polling via proxy works.
-    flag = cache.get("telegram_webhook_cleared")
-    if not flag:
-        info = get_webhook_info(token=token) or {}
-        url = ((info.get("result") or {}).get("url") or "").strip()
-        if url:
-            delete_webhook(token=token)
+    if not cache.get("telegram_webhook_cleared"):
+        delete_webhook(token=token)
         cache.set("telegram_webhook_cleared", True, timeout=86400)
 
     offset = cache.get("telegram_update_offset")
