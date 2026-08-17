@@ -2658,7 +2658,6 @@ export default function App() {
     has_whatsapp: false,
     sms_api_id: "",
     has_sms_org: false,
-    reminder_template: "",
     new_booking_template: "",
   });
   const [orgMessagingSaveStatus, setOrgMessagingSaveStatus] = useState("");
@@ -8005,7 +8004,6 @@ export default function App() {
       max_notify_chat_id: orgMessagingForm.max_notify_chat_id || "",
       wa_api_url: orgMessagingForm.wa_api_url || "https://api.green-api.com",
       wa_id_instance: orgMessagingForm.wa_id_instance || "",
-      reminder_template: orgMessagingForm.reminder_template || "",
       new_booking_template: orgMessagingForm.new_booking_template || "",
     };
     for (const key of ["telegram_bot_token", "max_bot_token", "wa_api_token", "sms_api_id"]) {
@@ -10142,15 +10140,6 @@ export default function App() {
                   tokens={["org", "service", "date"]}
                 />
               ) : null}
-              <label className="field-label">
-                Шаблон напоминания
-                <textarea
-                  rows={3}
-                  value={orgMessagingForm.reminder_template}
-                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, reminder_template: e.target.value }))}
-                  placeholder="Напоминание: запись в {org} на {service} — {date}."
-                />
-              </label>
               <label className="checkbox">
                 <input
                   type="checkbox"
