@@ -19,12 +19,13 @@ def get_or_create_messaging(provider):
     return obj
 
 
-def render_reminder_template(tpl: str, *, org: str, service: str, date: str) -> str:
+def render_reminder_template(tpl: str, *, org: str, service: str, date: str, client: str = "") -> str:
     return (
         (tpl or "")
         .replace("{org}", org or "")
         .replace("{service}", service or "")
         .replace("{date}", date or "")
+        .replace("{client}", client or "")
     )
 
 
@@ -185,11 +186,21 @@ def deliver_booking_event(
     _fanout_org_channels(msg, booking.provider, body)
 
 
-def build_reminder_text(booking) -> str:
-    from booking.booking_actions import format_booking_when
+def _booking_template_vars(booking) -> dict:
+    from booking.booking_actions import client_display_name, format_booking_when
 
-    msg = get_or_create_messaging(booking.provider)
     org = (getattr(booking.provider, "organization_name", None) or "").strip() or "Организация"
     service = getattr(getattr(booking, "service", None), "name", None) or "услуга"
     date = format_booking_when(booking)
-    return render_reminder_template(msg.reminder_text(), org=org, service=service, date=date)
+    client = client_display_name(getattr(booking, "client", None))
+    return {"org": org, "service": service, "date": date, "client": client}
+
+
+def build_reminder_text(booking) -> str:
+    msg = get_or_create_messaging(booking.provider)
+    return render_reminder_template(msg.reminder_text(), **_booking_template_vars(booking))
+
+
+def build_new_booking_text(booking) -> str:
+    msg = get_or_create_messaging(booking.provider)
+    return render_reminder_template(msg.new_booking_text(), **_booking_template_vars(booking))

@@ -164,6 +164,7 @@ class ProviderAcquiring(models.Model):
 DEFAULT_REMINDER_TEMPLATE = (
     "Напоминание: запись в {org} на {service} — {date}. Ждём вас! Вместе"
 )
+DEFAULT_NEW_BOOKING_TEMPLATE = "Новая запись в {org}: {service} — {date}."
 
 
 class ProviderMessagingSettings(models.Model):
@@ -188,11 +189,15 @@ class ProviderMessagingSettings(models.Model):
     wa_api_token = models.CharField(max_length=128, blank=True, default="")
     sms_api_id = models.CharField(max_length=128, blank=True, default="")
     reminder_template = models.TextField(blank=True, default="")
+    new_booking_template = models.TextField(blank=True, default="")
     telegram_org_link_token = models.CharField(max_length=64, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
 
     def reminder_text(self) -> str:
         return (self.reminder_template or "").strip() or DEFAULT_REMINDER_TEMPLATE
+
+    def new_booking_text(self) -> str:
+        return (self.new_booking_template or "").strip() or DEFAULT_NEW_BOOKING_TEMPLATE
 
     def resolved_telegram_bot_token(self) -> str:
         """Org token, else platform TELEGRAM_BOT_TOKEN from .env."""

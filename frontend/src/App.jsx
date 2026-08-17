@@ -1728,9 +1728,25 @@ function groupSavedIntervalsByStaff(intervals, orgStaff) {
   });
 }
 
+const BOOKING_TOKEN_DEFS = {
+  org: { token: "{org}", label: "Организация", title: "Название организации" },
+  service: { token: "{service}", label: "Услуга", title: "Название услуги" },
+  date: { token: "{date}", label: "Дата и время записи", title: "Дата и время записи клиента" },
+};
+const BOOKING_TOKEN_SPLIT_RE = /(\{org\}|\{service\}|\{date\})/g;
 const BOOKING_MESSAGE_DATE_TOKEN = "{date}";
 const bookingTokenDragRef = { el: null };
 const bookingTokenPointerRef = { active: false, token: null, editorRoot: null, onComplete: null };
+
+function bookingTokenKindFromValue(value) {
+  const raw = String(value || "").trim();
+  if (raw.startsWith("{") && raw.endsWith("}")) {
+    const kind = raw.slice(1, -1);
+    if (BOOKING_TOKEN_DEFS[kind]) return kind;
+    return null;
+  }
+  return BOOKING_TOKEN_DEFS[raw] ? raw : null;
+}
 
 function stopBookingTokenPointerDrag() {
   document.getElementById("booking-token-ghost")?.remove();
@@ -1752,7 +1768,8 @@ function onBookingTokenPointerMove(e) {
   if (!ghost) {
     ghost = document.createElement("div");
     ghost.id = "booking-token-ghost";
-    ghost.textContent = "Дата и время";
+    const kind = bookingTokenPointerRef.token?.dataset?.bookingToken || "date";
+    ghost.textContent = BOOKING_TOKEN_DEFS[kind]?.label || "Дата и время";
     Object.assign(ghost.style, {
       position: "fixed",
       zIndex: "9999",
@@ -1812,7 +1829,7 @@ function getBookingEditorCaretAtPoint(root, clientX, clientY, excludeToken = nul
   let node = document.elementFromPoint(clientX, clientY);
   if (!node || !root.contains(node)) return null;
 
-  const hitToken = node.closest?.("[data-booking-token='date']");
+  const hitToken = node.closest?.("[data-booking-token]");
   if (hitToken && root.contains(hitToken) && hitToken !== excludeToken) {
     const range = document.createRange();
     const rect = hitToken.getBoundingClientRect();
@@ -1859,14 +1876,19 @@ function insertBookingTokenAtRange(root, range, token) {
   }
 }
 
-function dropBookingTokenAtPoint(root, clientX, clientY, { moveToken = null, createNew = false, onAfterChange } = {}) {
+function dropBookingTokenAtPoint(
+  root,
+  clientX,
+  clientY,
+  { moveToken = null, createNew = false, tokenKind = "date", onAfterChange } = {},
+) {
   if (!root) return;
   const rect = root.getBoundingClientRect();
   if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return;
 
   const range = getBookingEditorCaretAtPoint(root, clientX, clientY, moveToken || null);
   let token = moveToken;
-  if (createNew) token = createBookingTokenElement(root, onAfterChange);
+  if (createNew) token = createBookingTokenElement(root, onAfterChange, tokenKind);
   else if (token?.parentNode) token.remove();
 
   insertBookingTokenAtRange(root, range, token);
@@ -1876,7 +1898,7 @@ function dropBookingTokenAtPoint(root, clientX, clientY, { moveToken = null, cre
 
 function parseBookingMessage(value) {
   if (!value) return [""];
-  return value.split(/(\{date\})/g);
+  return value.split(BOOKING_TOKEN_SPLIT_RE);
 }
 
 function serializeBookingEditor(root) {
@@ -1889,8 +1911,9 @@ function serializeBookingEditor(root) {
     }
     if (node.nodeType !== Node.ELEMENT_NODE) return;
     const el = node;
-    if (el.dataset?.bookingToken === "date") {
-      out += BOOKING_MESSAGE_DATE_TOKEN;
+    const kind = el.dataset?.bookingToken;
+    if (kind && BOOKING_TOKEN_DEFS[kind]) {
+      out += BOOKING_TOKEN_DEFS[kind].token;
       return;
     }
     if (el.tagName === "BR") {
@@ -1928,8 +1951,10 @@ function bindInlineBookingTokenDrag(token, editorRoot, onAfterChange) {
   token.addEventListener("dragstart", (e) => {
     bookingTokenDragRef.el = token;
     token.classList.add("booking-msg-token--dragging");
+    const kind = token.dataset?.bookingToken || "date";
     e.dataTransfer.setData("application/x-booking-token-move", "1");
-    e.dataTransfer.setData("text/plain", BOOKING_MESSAGE_DATE_TOKEN);
+    e.dataTransfer.setData("application/x-booking-token", kind);
+    e.dataTransfer.setData("text/plain", BOOKING_TOKEN_DEFS[kind]?.token || BOOKING_MESSAGE_DATE_TOKEN);
     e.dataTransfer.effectAllowed = "move";
     try {
       e.dataTransfer.setDragImage(document.createElement("span"), 0, 0);
@@ -1943,14 +1968,14 @@ function bindInlineBookingTokenDrag(token, editorRoot, onAfterChange) {
   });
 }
 
-function createBookingTokenElement(editorRoot, onAfterChange) {
+function createBookingTokenElement(editorRoot, onAfterChange, kind = "date") {
+  const def = BOOKING_TOKEN_DEFS[kind] || BOOKING_TOKEN_DEFS.date;
   const wrap = document.createElement("span");
   wrap.contentEditable = "false";
-  wrap.dataset.bookingToken = "date";
+  wrap.dataset.bookingToken = kind;
   wrap.className = "booking-msg-token booking-msg-token--inline";
-  wrap.setAttribute("title", "Дата и время записи клиента");
-  wrap.innerHTML =
-    '<span class="booking-msg-token-grip" aria-hidden="true">⋮⋮</span> Дата и время записи <span class="booking-msg-token-remove" role="button" tabindex="0" aria-label="Убрать дату и время">×</span>';
+  wrap.setAttribute("title", def.title);
+  wrap.innerHTML = `<span class="booking-msg-token-grip" aria-hidden="true">⋮⋮</span> ${def.label} <span class="booking-msg-token-remove" role="button" tabindex="0" aria-label="Убрать ${def.label.toLowerCase()}">×</span>`;
   bindInlineBookingTokenDrag(wrap, editorRoot, onAfterChange);
   return wrap;
 }
@@ -1963,8 +1988,9 @@ function syncBookingEditorFromValue(root, value, onAfterChange) {
   if (!root) return;
   root.innerHTML = "";
   parseBookingMessage(value).forEach((part) => {
-    if (part === BOOKING_MESSAGE_DATE_TOKEN) {
-      root.appendChild(createBookingTokenElement(root, onAfterChange));
+    const kind = part.match(/^\{(\w+)\}$/)?.[1];
+    if (kind && BOOKING_TOKEN_DEFS[kind]) {
+      root.appendChild(createBookingTokenElement(root, onAfterChange, kind));
     } else if (part) {
       root.appendChild(document.createTextNode(part));
     }
@@ -1972,10 +1998,10 @@ function syncBookingEditorFromValue(root, value, onAfterChange) {
   resizeBookingEditor(root);
 }
 
-function insertBookingTokenAtSelection(root, onAfterChange) {
+function insertBookingTokenAtSelection(root, onAfterChange, kind = "date") {
   if (!root) return;
   root.focus();
-  const token = createBookingTokenElement(root, onAfterChange);
+  const token = createBookingTokenElement(root, onAfterChange, kind);
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) {
     root.appendChild(token);
@@ -1996,11 +2022,13 @@ function insertBookingTokenAtSelection(root, onAfterChange) {
   onAfterChange?.();
 }
 
-function BookingMsgDateToken({ onPointerDown, onDragStart, onRemove, onClick, className = "" }) {
+function BookingMsgToken({ kind = "date", onPointerDown, onDragStart, onRemove, onClick, className = "" }) {
+  const def = BOOKING_TOKEN_DEFS[kind] || BOOKING_TOKEN_DEFS.date;
   return (
     <button
       type="button"
       draggable
+      data-booking-token={kind}
       className={["booking-msg-token", className].filter(Boolean).join(" ")}
       style={{ touchAction: "none" }}
       onPointerDown={onPointerDown}
@@ -2011,13 +2039,13 @@ function BookingMsgDateToken({ onPointerDown, onDragStart, onRemove, onClick, cl
       <span className="booking-msg-token-grip" aria-hidden="true">
         ⋮⋮
       </span>
-      Дата и время записи
+      {def.label}
       {onRemove ? (
         <span
           role="button"
           tabIndex={0}
           className="booking-msg-token-remove"
-          aria-label="Убрать дату и время"
+          aria-label={`Убрать ${def.label.toLowerCase()}`}
           onClick={(e) => {
             e.stopPropagation();
             onRemove();
@@ -2037,12 +2065,22 @@ function BookingMsgDateToken({ onPointerDown, onDragStart, onRemove, onClick, cl
   );
 }
 
-function BookingMessageField({ id, label, value, onChange, placeholder, highlighted, presetKey }) {
+function BookingMessageField({
+  id,
+  label,
+  value,
+  onChange,
+  placeholder,
+  highlighted,
+  presetKey,
+  tokens = ["date"],
+}) {
   const hintPlaceholder =
     placeholder || BOOKING_MSG_PRESETS[presetKey]?.[0] || "Текст сообщения клиенту…";
   const editorRef = useRef(null);
   const syncingRef = useRef(false);
-  const isEmpty = !value.trim();
+  const isEmpty = !(value || "").trim();
+  const tokenKinds = tokens.filter((kind) => BOOKING_TOKEN_DEFS[kind]);
 
   function emitFromEditor() {
     const el = editorRef.current;
@@ -2053,8 +2091,9 @@ function BookingMessageField({ id, label, value, onChange, placeholder, highligh
     resizeBookingEditor(el);
   }
 
-  function onTokenDragStart(e) {
-    e.dataTransfer.setData("text/plain", BOOKING_MESSAGE_DATE_TOKEN);
+  function onTokenDragStart(kind, e) {
+    e.dataTransfer.setData("application/x-booking-token", kind);
+    e.dataTransfer.setData("text/plain", BOOKING_TOKEN_DEFS[kind]?.token || BOOKING_MESSAGE_DATE_TOKEN);
     e.dataTransfer.effectAllowed = "copy";
     try {
       e.dataTransfer.setDragImage(document.createElement("span"), 0, 0);
@@ -2063,7 +2102,7 @@ function BookingMessageField({ id, label, value, onChange, placeholder, highligh
     }
   }
 
-  function onPalettePointerDown(e) {
+  function onPalettePointerDown(kind, e) {
     if (e.button !== 0) return;
     const startX = e.clientX;
     const startY = e.clientY;
@@ -2073,13 +2112,17 @@ function BookingMessageField({ id, label, value, onChange, placeholder, highligh
       editorRoot: root,
       onComplete: (x, y, editorRoot) => {
         if (Math.hypot(x - startX, y - startY) < 8) return;
-        dropBookingTokenAtPoint(editorRoot || root, x, y, { createNew: true, onAfterChange: emitFromEditor });
+        dropBookingTokenAtPoint(editorRoot || root, x, y, {
+          createNew: true,
+          tokenKind: kind,
+          onAfterChange: emitFromEditor,
+        });
       },
     });
   }
 
-  function insertToken() {
-    insertBookingTokenAtSelection(editorRef.current, emitFromEditor);
+  function insertToken(kind) {
+    insertBookingTokenAtSelection(editorRef.current, emitFromEditor, kind);
   }
 
   useEffect(() => {
@@ -2129,13 +2172,20 @@ function BookingMessageField({ id, label, value, onChange, placeholder, highligh
             dropBookingTokenAtPoint(el, e.clientX, e.clientY, { moveToken: moving, onAfterChange: emitFromEditor });
             return;
           }
-          if (e.dataTransfer.getData("text/plain") === BOOKING_MESSAGE_DATE_TOKEN) {
-            dropBookingTokenAtPoint(el, e.clientX, e.clientY, { createNew: true, onAfterChange: emitFromEditor });
+          const droppedKind = bookingTokenKindFromValue(
+            e.dataTransfer.getData("application/x-booking-token") || e.dataTransfer.getData("text/plain"),
+          );
+          if (droppedKind) {
+            dropBookingTokenAtPoint(el, e.clientX, e.clientY, {
+              createNew: true,
+              tokenKind: droppedKind,
+              onAfterChange: emitFromEditor,
+            });
           }
         }}
         onClick={(e) => {
           const removeBtn = e.target.closest(".booking-msg-token-remove");
-          const token = e.target.closest("[data-booking-token='date']");
+          const token = e.target.closest("[data-booking-token]");
           if (removeBtn && token) {
             e.preventDefault();
             token.remove();
@@ -2157,12 +2207,18 @@ function BookingMessageField({ id, label, value, onChange, placeholder, highligh
           emitFromEditor();
         }}
       />
-      <BookingMsgDateToken
-        className="booking-msg-token--palette"
-        onPointerDown={onPalettePointerDown}
-        onDragStart={onTokenDragStart}
-        onClick={insertToken}
-      />
+      <div className="booking-msg-token-palette">
+        {tokenKinds.map((kind) => (
+          <BookingMsgToken
+            key={kind}
+            kind={kind}
+            className="booking-msg-token--palette"
+            onPointerDown={(e) => onPalettePointerDown(kind, e)}
+            onDragStart={(e) => onTokenDragStart(kind, e)}
+            onClick={() => insertToken(kind)}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -2603,6 +2659,7 @@ export default function App() {
     sms_api_id: "",
     has_sms_org: false,
     reminder_template: "",
+    new_booking_template: "",
   });
   const [orgMessagingSaveStatus, setOrgMessagingSaveStatus] = useState("");
   const [clientNotifyForm, setClientNotifyForm] = useState({
@@ -7949,6 +8006,7 @@ export default function App() {
       wa_api_url: orgMessagingForm.wa_api_url || "https://api.green-api.com",
       wa_id_instance: orgMessagingForm.wa_id_instance || "",
       reminder_template: orgMessagingForm.reminder_template || "",
+      new_booking_template: orgMessagingForm.new_booking_template || "",
     };
     for (const key of ["telegram_bot_token", "max_bot_token", "wa_api_token", "sms_api_id"]) {
       if ((orgMessagingForm[key] || "").trim()) payload[key] = orgMessagingForm[key].trim();
@@ -10074,6 +10132,16 @@ export default function App() {
                 />
                 Уведомлять о новой записи
               </label>
+              {orgMessagingForm.notify_org_on_new ? (
+                <BookingMessageField
+                  id="org-msg-new-booking"
+                  label="Текст уведомления о новой записи"
+                  value={orgMessagingForm.new_booking_template || ""}
+                  onChange={(v) => setOrgMessagingForm((p) => ({ ...p, new_booking_template: v }))}
+                  placeholder="Новая запись в {org}: {service} — {date}."
+                  tokens={["org", "service", "date"]}
+                />
+              ) : null}
               <label className="field-label">
                 Шаблон напоминания
                 <textarea
@@ -10137,11 +10205,25 @@ export default function App() {
                   </div>
                   {orgTelegramLinkInfo ? (
                     <div>
-                      <p className="muted small">
-                        {orgTelegramLinkInfo.linked || orgMessagingForm.telegram_notify_chat_id
-                          ? `Привязан. Chat ID: ${orgMessagingForm.telegram_notify_chat_id || orgTelegramLinkInfo.telegram_notify_chat_id}`
-                          : "Не привязан."}{" "}
-                        {orgTelegramLinkInfo.bot_username ? `@${orgTelegramLinkInfo.bot_username}` : ""}
+                      <p
+                        className={`telegram-bind-status ${
+                          orgTelegramLinkInfo.linked || orgMessagingForm.telegram_notify_chat_id
+                            ? "telegram-bind-status--ok"
+                            : "telegram-bind-status--bad"
+                        }`}
+                      >
+                        <span className="telegram-bind-mark" aria-hidden="true">
+                          {orgTelegramLinkInfo.linked || orgMessagingForm.telegram_notify_chat_id ? "✓" : "✕"}
+                        </span>
+                        <span>
+                          {orgTelegramLinkInfo.linked || orgMessagingForm.telegram_notify_chat_id
+                            ? `Привязан. Chat ID: ${orgMessagingForm.telegram_notify_chat_id || orgTelegramLinkInfo.telegram_notify_chat_id}${
+                                orgTelegramLinkInfo.bot_username
+                                  ? ` @${orgTelegramLinkInfo.bot_username}`
+                                  : ""
+                              }`
+                            : "Не привязан."}
+                        </span>
                       </p>
                       {orgTelegramLinkInfo.deep_link ? (
                         <a href={orgTelegramLinkInfo.deep_link} target="_blank" rel="noreferrer">

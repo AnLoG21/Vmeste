@@ -734,6 +734,7 @@ class MessagingSettingsView(APIView):
             "has_whatsapp": msg.has_whatsapp(),
             "has_sms_org": msg.has_sms_org(),
             "reminder_template": msg.reminder_template or "",
+            "new_booking_template": msg.new_booking_template or "",
         }
 
     def get(self, request):
@@ -769,6 +770,7 @@ class MessagingSettingsView(APIView):
             "wa_api_url",
             "wa_id_instance",
             "reminder_template",
+            "new_booking_template",
         ]
         for f in str_fields:
             if f in data:

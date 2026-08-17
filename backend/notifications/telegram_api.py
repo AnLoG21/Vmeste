@@ -27,7 +27,7 @@ def telegram_get(*, token: str, method: str, params: dict | None = None) -> dict
         return None
     url = f"{_api_base()}/bot{token}/{method}"
     try:
-        resp = requests.get(url, params=params or {}, timeout=(5, 15), proxies=_proxies())
+        resp = requests.get(url, params=params or {}, timeout=(10, 30), proxies=_proxies())
         data = resp.json() if resp.content else {}
         if not resp.ok or not data.get("ok"):
             logger.error("Telegram API GET %s HTTP %s: %s", method, resp.status_code, str(data)[:500])
@@ -44,7 +44,7 @@ def telegram_post(*, token: str, method: str, payload: dict) -> dict | None:
         return None
     url = f"{_api_base()}/bot{token}/{method}"
     try:
-        resp = requests.post(url, json=payload, timeout=(5, 15), proxies=_proxies())
+        resp = requests.post(url, json=payload, timeout=(10, 30), proxies=_proxies())
         data = resp.json() if resp.content else {}
         if not resp.ok or not data.get("ok"):
             logger.error("Telegram API %s HTTP %s: %s", method, resp.status_code, str(data)[:500])

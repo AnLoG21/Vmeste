@@ -80,16 +80,10 @@ def booking_notification_payload(booking, *, extra=None) -> dict:
 
 def notify_new_booking(booking):
     """Push + channels to provider and assigned staff."""
-    service_name = getattr(getattr(booking, "service", None), "name", None) or "Услуга"
-    when = format_booking_when(booking) or ""
-    client = client_display_name(getattr(booking, "client", None))
-    parts = [p for p in (service_name, when) if p]
-    body = " · ".join(parts)
-    if client:
-        body = f"{client}: {body}" if body else client
     try:
-        from notifications.delivery import deliver_booking_event
+        from notifications.delivery import build_new_booking_text, deliver_booking_event
 
+        body = build_new_booking_text(booking)
         deliver_booking_event(
             booking,
             "new",

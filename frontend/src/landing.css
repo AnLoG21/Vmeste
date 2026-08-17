@@ -38,12 +38,13 @@
 }
 
 .landing-header-btn--primary {
-  background: #c45c00;
+  background: linear-gradient(135deg, #ff8c1a, #ff6a00);
   color: #fff;
+  box-shadow: 0 4px 14px rgba(255, 122, 0, 0.28);
 }
 
 .landing-header-btn--primary:hover {
-  background: #a33d00;
+  background: linear-gradient(135deg, #ff7a00, #e85f00);
 }
 
 .landing-hero {
