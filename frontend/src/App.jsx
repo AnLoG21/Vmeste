@@ -9828,9 +9828,18 @@ export default function App() {
             </div>
             {telegramLinkInfo ? (
               <div>
-                <p className="muted small">
-                  {telegramLinkInfo.linked ? "Привязан." : "Не привязан."} Код:{" "}
-                  <code>{telegramLinkInfo.link_token}</code>
+                <p
+                  className={`telegram-bind-status ${
+                    telegramLinkInfo.linked ? "telegram-bind-status--ok" : "telegram-bind-status--bad"
+                  }`}
+                >
+                  <span className="telegram-bind-mark" aria-hidden="true">
+                    {telegramLinkInfo.linked ? "✓" : "✕"}
+                  </span>
+                  <span>
+                    {telegramLinkInfo.linked ? "Привязан." : "Не привязан."} Код:{" "}
+                    <code>{telegramLinkInfo.link_token}</code>
+                  </span>
                 </p>
                 {telegramLinkInfo.deep_link ? (
                   <a href={telegramLinkInfo.deep_link} target="_blank" rel="noreferrer">
