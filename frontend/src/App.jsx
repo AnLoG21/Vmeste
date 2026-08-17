@@ -10131,14 +10131,18 @@ export default function App() {
                 Уведомлять о новой записи
               </label>
               {orgMessagingForm.notify_org_on_new ? (
-                <BookingMessageField
-                  id="org-msg-new-booking"
-                  label="Текст уведомления о новой записи"
-                  value={orgMessagingForm.new_booking_template || ""}
-                  onChange={(v) => setOrgMessagingForm((p) => ({ ...p, new_booking_template: v }))}
-                  placeholder="Новая запись в {org}: {service} — {date}."
-                  tokens={["org", "service", "date"]}
-                />
+                <>
+                  <BookingMessageField
+                    id="org-msg-new-booking"
+                    label="Текст уведомления о новой записи"
+                    value={orgMessagingForm.new_booking_template || ""}
+                    onChange={(v) => setOrgMessagingForm((p) => ({ ...p, new_booking_template: v }))}
+                    placeholder="Новая запись в {org}: {service} — {date}."
+                    tokens={["org", "service", "date"]}
+                  />
+                  <button type="submit">Сохранить</button>
+                  <p className="status">{orgMessagingSaveStatus}</p>
+                </>
               ) : null}
               <label className="checkbox">
                 <input
