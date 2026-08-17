@@ -784,3 +784,49 @@ class MessagingSettingsView(APIView):
                 setattr(msg, f, str(data.get(f)).strip())
         msg.save()
         return Response(self._payload(msg))
+
+
+class TelegramOrgLinkView(APIView):
+    """Provider: deep-link to bind org notify chat via platform bot."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != "provider":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        import secrets
+
+        from notifications.delivery import get_or_create_messaging
+        from notifications.telegram_bot import org_deep_link, org_start_param, platform_bot_username
+
+        msg = get_or_create_messaging(request.user)
+        if not (msg.telegram_org_link_token or "").strip():
+            msg.telegram_org_link_token = secrets.token_urlsafe(12)
+            msg.save(update_fields=["telegram_org_link_token"])
+        bot_username = platform_bot_username()
+        return Response(
+            {
+                "link_token": msg.telegram_org_link_token,
+                "start_param": org_start_param(msg.telegram_org_link_token),
+                "telegram_notify_chat_id": msg.telegram_notify_chat_id or "",
+                "linked": bool((msg.telegram_notify_chat_id or "").strip()),
+                "deep_link": org_deep_link(msg.telegram_org_link_token),
+                "bot_username": bot_username,
+                "hint": (
+                    f"Откройте @{bot_username} по ссылке и нажмите Start — Chat ID подставится сам. "
+                    "Или отправьте боту /start или /chatid — он пришлёт Chat ID для ручного ввода."
+                )
+                if bot_username
+                else "Укажите TELEGRAM_BOT_USERNAME на платформе.",
+            }
+        )
+
+    def delete(self, request):
+        if request.user.role != "provider":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        from notifications.delivery import get_or_create_messaging
+
+        msg = get_or_create_messaging(request.user)
+        msg.telegram_notify_chat_id = ""
+        msg.save(update_fields=["telegram_notify_chat_id"])
+        return Response({"ok": True, "linked": False, "telegram_notify_chat_id": ""})

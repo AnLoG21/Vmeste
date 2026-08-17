@@ -56,21 +56,27 @@ class TelegramLinkTokenView(APIView):
     def get(self, request):
         import secrets
 
-        from django.conf import settings
+        from notifications.telegram_bot import client_deep_link, platform_bot_username
 
         user = request.user
         if not (user.telegram_link_token or "").strip():
             user.telegram_link_token = secrets.token_urlsafe(16)
             user.save(update_fields=["telegram_link_token"])
-        bot_username = (getattr(settings, "TELEGRAM_BOT_USERNAME", None) or "").strip()
-        deep = f"https://t.me/{bot_username}?start={user.telegram_link_token}" if bot_username else ""
+        deep = client_deep_link(user.telegram_link_token)
+        bot_username = platform_bot_username()
         return Response(
             {
                 "link_token": user.telegram_link_token,
                 "telegram_chat_id": user.telegram_chat_id or "",
                 "linked": bool((user.telegram_chat_id or "").strip()),
                 "deep_link": deep,
-                "hint": "Откройте бота и отправьте /start с кодом, либо перейдите по deep_link.",
+                "bot_username": bot_username,
+                "hint": (
+                    f"Откройте @{bot_username} и нажмите Start по ссылке — привязка автоматическая. "
+                    "Или отправьте /start без кода: бот пришлёт Chat ID."
+                )
+                if bot_username
+                else "Укажите TELEGRAM_BOT_USERNAME на платформе.",
             }
         )
 
@@ -82,48 +88,19 @@ class TelegramLinkTokenView(APIView):
 
 
 class TelegramWebhookView(APIView):
-    """Telegram bot updates: /start <link_token> binds chat_id to user."""
+    """Telegram bot updates: /start, /chatid, org/client linking."""
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
 
     def post(self, request):
-        from users.models import User
-
-        from .channels import send_telegram
+        from .telegram_bot import handle_telegram_update
 
         update = request.data if isinstance(request.data, dict) else {}
-        message = update.get("message") or update.get("edited_message") or {}
-        chat = message.get("chat") or {}
-        chat_id = str(chat.get("id") or "")
-        text = str(message.get("text") or "").strip()
-        if not chat_id or not text.startswith("/start"):
-            return Response({"ok": True})
-        parts = text.split(maxsplit=1)
-        token = (parts[1] if len(parts) > 1 else "").strip()
-        if not token:
-            return Response({"ok": True})
-        user = User.objects.filter(telegram_link_token=token).first()
-        if not user:
-            return Response({"ok": True})
-        user.telegram_chat_id = chat_id
-        user.save(update_fields=["telegram_chat_id"])
-        from django.conf import settings as dj_settings
+        try:
+            handle_telegram_update(update)
+        except Exception:
+            import logging
 
-        from booking.models import ProviderMessagingSettings
-
-        token = (getattr(dj_settings, "TELEGRAM_BOT_TOKEN", None) or "").strip()
-        if not token:
-            bot = (
-                ProviderMessagingSettings.objects.filter(enable_telegram=True)
-                .exclude(telegram_bot_token="")
-                .first()
-            )
-            token = (bot.telegram_bot_token if bot else "") or ""
-        if token:
-            send_telegram(
-                bot_token=token,
-                chat_id=chat_id,
-                text="Telegram привязан к аккаунту Вместе. Вы будете получать напоминания о записях.",
-            )
+            logging.getLogger(__name__).exception("telegram webhook failed")
         return Response({"ok": True})

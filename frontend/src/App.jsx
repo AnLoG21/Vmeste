@@ -2611,6 +2611,7 @@ export default function App() {
   });
   const [clientNotifyStatus, setClientNotifyStatus] = useState("");
   const [telegramLinkInfo, setTelegramLinkInfo] = useState(null);
+  const [orgTelegramLinkInfo, setOrgTelegramLinkInfo] = useState(null);
   const [orgSettingsHighlight, setOrgSettingsHighlight] = useState("");
   const [bookingMessageError, setBookingMessageError] = useState(null);
   const [reviewModalBooking, setReviewModalBooking] = useState(null);
@@ -8002,6 +8003,41 @@ export default function App() {
     loadMe();
   }
 
+  async function loadOrgTelegramLink() {
+    const res = await authFetch(`${API_URL}/booking/messaging/telegram-link/`);
+    if (!res.ok) return;
+    const data = await res.json();
+    setOrgTelegramLinkInfo(data);
+    if (data.telegram_notify_chat_id) {
+      setOrgMessagingForm((p) => ({ ...p, telegram_notify_chat_id: data.telegram_notify_chat_id }));
+    }
+  }
+
+  async function refreshOrgTelegramLink() {
+    const linkRes = await authFetch(`${API_URL}/booking/messaging/telegram-link/`);
+    const msgRes = await authFetch(`${API_URL}/booking/messaging/`);
+    if (linkRes.ok) setOrgTelegramLinkInfo(await linkRes.json());
+    if (msgRes.ok) {
+      const m = await msgRes.json();
+      setOrgMessagingForm((p) => ({
+        ...p,
+        ...m,
+        telegram_bot_token: "",
+        max_bot_token: "",
+        wa_api_token: "",
+        sms_api_id: "",
+      }));
+    }
+  }
+
+  async function unlinkOrgTelegram() {
+    await authFetch(`${API_URL}/booking/messaging/telegram-link/`, { method: "DELETE" });
+    setOrgTelegramLinkInfo((p) =>
+      p ? { ...p, linked: false, telegram_notify_chat_id: "" } : p,
+    );
+    setOrgMessagingForm((p) => ({ ...p, telegram_notify_chat_id: "" }));
+  }
+
   async function uploadOrgGalleryPhoto(file) {
     if (!file) return false;
     if (orgGalleryPhotos.length >= ORG_GALLERY_MAX_PHOTOS) {
@@ -9726,7 +9762,9 @@ export default function App() {
             <button type="submit">Сохранить уведомления</button>
             <p className="status">{clientNotifyStatus}</p>
             <h4>Telegram</h4>
-            <p className="muted small">Привяжите чат, чтобы получать напоминания в Telegram (нужен бот организации).</p>
+            <p className="muted small">
+              Привяжите чат через бота платформы — напоминания придут в Telegram, если организация включила канал.
+            </p>
             <div className="row-2">
               <button type="button" className="ghost-btn" onClick={loadTelegramLink}>
                 Показать код / ссылку
@@ -10086,8 +10124,42 @@ export default function App() {
                       type="text"
                       value={orgMessagingForm.telegram_notify_chat_id}
                       onChange={(e) => setOrgMessagingForm((p) => ({ ...p, telegram_notify_chat_id: e.target.value }))}
+                      placeholder="Привяжите через бота или вставьте вручную"
                     />
                   </label>
+                  <div className="row-2">
+                    <button type="button" className="ghost-btn" onClick={loadOrgTelegramLink}>
+                      Привязать через бота
+                    </button>
+                    <button type="button" className="ghost-btn" onClick={refreshOrgTelegramLink}>
+                      Проверить привязку
+                    </button>
+                    {orgTelegramLinkInfo?.linked || orgMessagingForm.telegram_notify_chat_id ? (
+                      <button type="button" className="ghost-btn" onClick={unlinkOrgTelegram}>
+                        Отвязать
+                      </button>
+                    ) : null}
+                  </div>
+                  {orgTelegramLinkInfo ? (
+                    <div>
+                      <p className="muted small">
+                        {orgTelegramLinkInfo.linked || orgMessagingForm.telegram_notify_chat_id
+                          ? `Привязан. Chat ID: ${orgMessagingForm.telegram_notify_chat_id || orgTelegramLinkInfo.telegram_notify_chat_id}`
+                          : "Не привязан."}{" "}
+                        {orgTelegramLinkInfo.bot_username ? `@${orgTelegramLinkInfo.bot_username}` : ""}
+                      </p>
+                      {orgTelegramLinkInfo.deep_link ? (
+                        <a href={orgTelegramLinkInfo.deep_link} target="_blank" rel="noreferrer">
+                          Открыть бота и нажать Start
+                        </a>
+                      ) : (
+                        <p className="muted small">{orgTelegramLinkInfo.hint}</p>
+                      )}
+                      <p className="muted small">
+                        Или напишите боту /start или /chatid — он пришлёт Chat ID для ручного ввода выше.
+                      </p>
+                    </div>
+                  ) : null}
                 </>
               ) : null}
               <label className="checkbox">

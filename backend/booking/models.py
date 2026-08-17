@@ -188,6 +188,7 @@ class ProviderMessagingSettings(models.Model):
     wa_api_token = models.CharField(max_length=128, blank=True, default="")
     sms_api_id = models.CharField(max_length=128, blank=True, default="")
     reminder_template = models.TextField(blank=True, default="")
+    telegram_org_link_token = models.CharField(max_length=64, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
 
     def reminder_text(self) -> str:

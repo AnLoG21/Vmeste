@@ -9,6 +9,7 @@ from .views import (
     BookingViewSet,
     MessagingSettingsView,
     ProviderStaffViewSet,
+    TelegramOrgLinkView,
 )
 
 router = DefaultRouter()
@@ -20,6 +21,7 @@ urlpatterns = [
     path("analytics/", AnalyticsSummaryView.as_view(), name="booking-analytics"),
     path("acquiring/", AcquiringSettingsView.as_view(), name="booking-acquiring"),
     path("messaging/", MessagingSettingsView.as_view(), name="booking-messaging"),
+    path("messaging/telegram-link/", TelegramOrgLinkView.as_view(), name="booking-messaging-telegram-link"),
     path("calendar/settings/", CalendarSettingsView.as_view(), name="booking-calendar-settings"),
     path("calendar/<str:token>.ics", CalendarFeedView.as_view(), name="booking-calendar-ics"),
     path("", include(router.urls)),
