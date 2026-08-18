@@ -3152,6 +3152,39 @@ export default function App() {
         { key: "cafe_restaurant", value: "Кафе и рестораны" },
         { key: "marketplaces", value: "Маркетплейсы" },
       ];
+  const needsOnboarding = Boolean(accessToken && me && me.profile_complete === false);
+  const onboardingPrefillIdRef = useRef(null);
+
+  useEffect(() => {
+    if (!needsOnboarding || !me?.id) return;
+    if (onboardingPrefillIdRef.current === me.id) return;
+    onboardingPrefillIdRef.current = me.id;
+    setForm((p) => ({
+      ...p,
+      role: me.role || p.role,
+      first_name: me.first_name || "",
+      last_name: me.last_name || "",
+      patronymic: me.patronymic || "",
+      email: me.email || "",
+      phone: me.phone || p.phone || "+7",
+      provider_sphere: me.provider_sphere || "",
+      organization_name: me.organization_name || "",
+      organization_address: me.organization_address || "",
+      entrance: me.organization_entrance || "",
+      floor: me.organization_floor || "",
+      apartment: me.organization_apartment || "",
+      intercom: me.organization_intercom || "",
+      organization_address_details: me.organization_address_extra || "",
+      organization_latitude: String(me.organization_latitude || p.organization_latitude || "55.751244"),
+      organization_longitude: String(me.organization_longitude || p.organization_longitude || "37.618423"),
+      provider_license_number: me.provider_license_number || "",
+      confirm_provider_authority: Boolean(me.provider_authority_confirmed),
+    }));
+    setRegisterStep(me.role === "provider" ? 2 : 1);
+    setAuthMode("register");
+    setShowAuthModal(true);
+    setAuthStatus("");
+  }, [needsOnboarding, me]);
 
   useEffect(() => {
     handleVerifyEmailFromUrl();
@@ -4116,14 +4149,21 @@ export default function App() {
   }, [accessToken, currentView, me?.role, me?.id, staffEffectivePerms.manage_chats]);
 
   useEffect(() => {
-    if (showAuthModal && authMode === "register" && form.role === "provider") initMap();
-  }, [showAuthModal, authMode, registerStep, form.role]);
+    if ((showAuthModal || needsOnboarding) && (authMode === "register" || needsOnboarding) && form.role === "provider") {
+      initMap();
+    }
+  }, [showAuthModal, authMode, registerStep, form.role, form.provider_sphere, needsOnboarding]);
 
   useEffect(() => {
-    if (showAuthModal && authMode === "register" && form.role === "provider" && registerStep === 2) {
+    if (
+      (showAuthModal || needsOnboarding) &&
+      (authMode === "register" || needsOnboarding) &&
+      form.role === "provider" &&
+      (registerStep === 2 || needsOnboarding)
+    ) {
       detectCityByGeolocation();
     }
-  }, [showAuthModal, authMode, form.role, registerStep]);
+  }, [showAuthModal, authMode, form.role, registerStep, needsOnboarding]);
 
   useEffect(() => {
     if (me?.role !== "provider" || !me?.id) {
@@ -4370,6 +4410,9 @@ export default function App() {
     setCurrentView("bookings");
     setAuthStatus("Вы вышли.");
     resetPushRegistration();
+    onboardingPrefillIdRef.current = null;
+    setShowAuthModal(false);
+    setRegisterStep(1);
   }
 
   async function exitDemoSession() {
@@ -4525,6 +4568,88 @@ export default function App() {
     }
     setAuthStatus("");
     setRegisterStep(2);
+  }
+
+  async function completeOnboarding(event) {
+    event.preventDefault();
+    setAuthStatus("");
+    setStatus("");
+    if (!me?.id) return;
+    if (!String(form.first_name || "").trim() || !String(form.last_name || "").trim()) {
+      setAuthStatus("Укажите имя и фамилию.");
+      return;
+    }
+    if (me.role === "provider") {
+      if (!String(form.provider_sphere || "").trim()) {
+        setAuthStatus("Выберите сферу услуг.");
+        return;
+      }
+      if (!String(form.organization_name || "").trim()) {
+        setAuthStatus("Укажите название организации.");
+        return;
+      }
+      if (form.provider_sphere !== "marketplaces" && !String(form.organization_address || "").trim()) {
+        setAuthStatus("Укажите адрес организации.");
+        return;
+      }
+      if (!form.confirm_provider_authority && !me.provider_authority_confirmed) {
+        setAuthStatus("Подтвердите право оказывать услуги.");
+        return;
+      }
+    }
+    setStatus("Сохраняем...");
+    const payload = {
+      first_name: String(form.first_name || "").trim(),
+      last_name: String(form.last_name || "").trim(),
+      patronymic: String(form.patronymic || "").trim(),
+      phone: String(form.phone || "").trim(),
+    };
+    if (!(me.email || "").trim() && String(form.email || "").trim()) {
+      payload.email = String(form.email || "").trim();
+    }
+    if (me.role === "provider") {
+      payload.provider_sphere = form.provider_sphere;
+      payload.organization_name = String(form.organization_name || "").trim();
+      payload.organization_address =
+        simplifyCommaAddressLine(String(form.organization_address || "").trim()) ||
+        String(form.organization_address || "").trim();
+      payload.organization_latitude = form.organization_latitude;
+      payload.organization_longitude = form.organization_longitude;
+      payload.organization_entrance = form.entrance || "";
+      payload.organization_floor = form.floor || "";
+      payload.organization_apartment = form.apartment || "";
+      payload.organization_intercom = form.intercom || "";
+      payload.organization_address_extra = form.organization_address_details || "";
+      payload.provider_license_number = String(form.provider_license_number || "").trim();
+      payload.confirm_provider_authority = Boolean(form.confirm_provider_authority);
+    }
+    const response = await authFetch(`${API_URL}/users/me/`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setStatus("");
+      setAuthStatus(
+        data.detail ||
+          data.email?.[0] ||
+          data.organization_name?.[0] ||
+          data.provider_sphere?.[0] ||
+          "Не удалось сохранить данные. Проверьте поля."
+      );
+      return;
+    }
+    setMe((prev) => ({ ...prev, ...data }));
+    setForm(emptyRegisterForm);
+    setRegisterStep(1);
+    destroyRegMap();
+    setShowAuthModal(false);
+    setStatus("");
+    setAuthStatus("");
+    onboardingPrefillIdRef.current = null;
+    if (data.role === "provider" && data.provider_sphere === "cafe_restaurant") setCurrentView("cafe_orders");
+    else if (data.role === "provider" && data.provider_sphere === "marketplaces") setCurrentView("marketplaces");
+    else if (data.role === "provider") setCurrentView("bookings");
   }
 
   async function resendVerification() {
@@ -11726,10 +11851,12 @@ export default function App() {
           />
         )}
 
-        {(showAuthModal && (!accessToken || authMode === "reset")) && createPortal(
+        {(showAuthModal && (!accessToken || authMode === "reset" || needsOnboarding)) && createPortal(
           <div className="auth-modal-overlay" role="presentation">
             <div className="auth-modal" role="dialog" aria-modal="true">
+              {needsOnboarding ? null : (
               <button type="button" className="auth-modal-close" onClick={closeAuth} aria-label="Закрыть">×</button>
+              )}
               {verifyEmailNotice ? (
                 <div className="auth-verify-panel">
                   <h2>Подтвердите email</h2>
@@ -11759,7 +11886,19 @@ export default function App() {
                 </div>
               ) : (
                 <>
-              <h2>{authMode === "reset" ? "Новый пароль" : authMode === "forgot" ? "Сброс пароля" : authMode === "login" ? "Вход" : "Регистрация"}</h2>
+              <h2>
+                {needsOnboarding
+                  ? me?.role === "provider"
+                    ? "Данные организации"
+                    : "Завершите регистрацию"
+                  : authMode === "reset"
+                    ? "Новый пароль"
+                    : authMode === "forgot"
+                      ? "Сброс пароля"
+                      : authMode === "login"
+                        ? "Вход"
+                        : "Регистрация"}
+              </h2>
               {authMode === "reset" ? (
                 <form onSubmit={confirmPasswordReset} className="form">
                   <p className="muted small">Придумайте новый пароль для входа во Вместе.</p>
@@ -11815,9 +11954,13 @@ export default function App() {
                   </button>
                 </form>
               ) : (
-                <form onSubmit={onSubmit} className="form">
+                <form onSubmit={needsOnboarding ? completeOnboarding : onSubmit} className="form">
                   {registerStep === 1 && (
                     <>
+                      {needsOnboarding ? (
+                        <p className="muted small">VK и другие сервисы не подставляют все поля — укажите недостающие данные.</p>
+                      ) : (
+                        <>
                       <div className="auth-role-tabs" role="tablist" aria-label="Тип аккаунта">
                         {[
                           { key: "client", label: "Клиент" },
@@ -11846,15 +11989,33 @@ export default function App() {
                             ? "Кабинет организации: услуги, запись, эквайринг."
                             : "Вход сотрудника по приглашению организации."}
                       </p>
+                        </>
+                      )}
                       <input placeholder="Фамилия" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required />
                       <input placeholder="Имя" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required />
                       <input placeholder="Отчество (при наличии)" value={form.patronymic} onChange={(e) => setForm({ ...form, patronymic: e.target.value })} />
-                      <input placeholder="Логин" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required />
-                      <input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+                      {needsOnboarding ? null : (
+                        <input placeholder="Логин" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required />
+                      )}
+                      <input
+                        placeholder="Email"
+                        type="email"
+                        value={form.email}
+                        onChange={(e) => setForm({ ...form, email: e.target.value })}
+                        required={!needsOnboarding}
+                        disabled={needsOnboarding && Boolean((me?.email || "").trim())}
+                      />
                       <input
                         placeholder="Телефон"
                         {...phoneFieldProps(form.phone, (phone) => setForm({ ...form, phone }))}
                       />
+                      {needsOnboarding ? (
+                        <>
+                          <button type="submit">Продолжить</button>
+                          <button type="button" className="ghost-btn" onClick={logout}>Выйти</button>
+                        </>
+                      ) : (
+                        <>
                       <PasswordInput
                         placeholder="Пароль"
                         value={form.password}
@@ -11909,25 +12070,39 @@ export default function App() {
                         </span>
                       </label>
                       {form.role === "provider" ? <button type="button" onClick={continueProviderRegistration}>Продолжить</button> : <button type="submit">Создать аккаунт</button>}
+                        </>
+                      )}
                     </>
                   )}
                   {registerStep === 2 && form.role === "provider" && (
                     <>
                       <p className="muted small auth-provider-disclaimer">
-                        Платформа «Вместе» предоставляет только ПО для записи и не оказывает конечные услуги
-                        клиентам. Лицензии и разрешения — ответственность организации.
+                        {needsOnboarding
+                          ? "Аккаунт создан. Выберите сферу и заполните данные организации — без этого кабинет не откроется."
+                          : "Платформа «Вместе» предоставляет только ПО для записи и не оказывает конечные услуги клиентам. Лицензии и разрешения — ответственность организации."}
                       </p>
+                      {needsOnboarding ? (
+                        <>
+                          <input placeholder="Фамилия" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required />
+                          <input placeholder="Имя" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required />
+                          <input placeholder="Отчество (при наличии)" value={form.patronymic} onChange={(e) => setForm({ ...form, patronymic: e.target.value })} />
+                          <input
+                            placeholder="Телефон"
+                            {...phoneFieldProps(form.phone, (phone) => setForm({ ...form, phone }))}
+                          />
+                        </>
+                      ) : null}
                       <select value={form.provider_sphere} onChange={(e) => setForm({ ...form, provider_sphere: e.target.value })} required>
                         <option value="">Выбери сферу услуг</option>
                         {sphereOptions.map((s) => <option key={s.key} value={s.key}>{s.value}</option>)}
                       </select>
                       <input placeholder="Название организации" value={form.organization_name} onChange={(e) => setForm({ ...form, organization_name: e.target.value })} required />
                       <input
-                        placeholder="Адрес"
+                        placeholder={form.provider_sphere === "marketplaces" ? "Адрес (необязательно)" : "Адрес"}
                         value={form.organization_address}
                         onChange={(e) => onAddressInput(e.target.value)}
                         onBlur={(e) => geocodeAddress(e.target.value)}
-                        required
+                        required={form.provider_sphere !== "marketplaces"}
                       />
                       {detectedCity && <p className="hint">Город поиска: {detectedCity}</p>}
                       {addressSuggestions.length > 0 && (
@@ -11945,18 +12120,22 @@ export default function App() {
                           ))}
                         </div>
                       )}
-                      <div id="reg-map" className="map-box" />
+                      {form.provider_sphere === "marketplaces" ? null : <div id="reg-map" className="map-box" />}
+                      {form.provider_sphere === "marketplaces" ? null : (
                       <div className="address-details-grid">
                         <input placeholder="Подъезд" value={form.entrance} onChange={(e) => setForm({ ...form, entrance: e.target.value })} />
                         <input placeholder="Этаж" value={form.floor} onChange={(e) => setForm({ ...form, floor: e.target.value })} />
                         <input placeholder="Квартира/офис" value={form.apartment} onChange={(e) => setForm({ ...form, apartment: e.target.value })} />
                         <input placeholder="Домофон" value={form.intercom} onChange={(e) => setForm({ ...form, intercom: e.target.value })} />
                       </div>
+                      )}
+                      {form.provider_sphere === "marketplaces" ? null : (
                       <input
                         placeholder="Доп. ориентир (необязательно)"
                         value={form.organization_address_details}
                         onChange={(e) => setForm({ ...form, organization_address_details: e.target.value })}
                       />
+                      )}
                       <input
                         placeholder="Номер лицензии (если есть)"
                         value={form.provider_license_number}
@@ -11967,13 +12146,16 @@ export default function App() {
                           type="checkbox"
                           checked={Boolean(form.confirm_provider_authority)}
                           onChange={(e) => setForm({ ...form, confirm_provider_authority: e.target.checked })}
-                          required
+                          required={!me?.provider_authority_confirmed}
                         />
                         <span>
                           Подтверждаю, что организация вправе оказывать размещаемые услуги и имеет необходимые
                           лицензии/разрешения, если они требуются законом
                         </span>
                       </label>
+                      {needsOnboarding ? (
+                        <button type="button" className="ghost-btn" onClick={logout}>Выйти</button>
+                      ) : (
                       <button
                         type="button"
                         className="ghost-btn"
@@ -11984,12 +12166,13 @@ export default function App() {
                       >
                         Назад
                       </button>
-                      <button type="submit">Завершить регистрацию</button>
+                      )}
+                      <button type="submit">{needsOnboarding ? "Сохранить и войти" : "Завершить регистрацию"}</button>
                     </>
                   )}
                 </form>
               )}
-              {(authMode === "login" || (authMode === "register" && form.role !== "staff")) && registerStep === 1 && (
+              {(authMode === "login" || (authMode === "register" && form.role !== "staff")) && registerStep === 1 && !needsOnboarding && (
                 <div className="auth-social">
                   <p className="auth-social-label">
                     {authMode === "register" ? "Зарегистрироваться через" : "Войти через"}
@@ -12022,7 +12205,7 @@ export default function App() {
                   </p>
                 </div>
               )}
-              {authMode === "login" || authMode === "register" ? (
+              {needsOnboarding ? null : authMode === "login" || authMode === "register" ? (
                 <>
                   <p className="auth-switch-text">{authMode === "login" ? "Нет аккаунта?" : "Уже есть аккаунт?"}</p>
                   <button className="ghost-btn" type="button" onClick={() => setAuthMode((prev) => (prev === "login" ? "register" : "login"))}>

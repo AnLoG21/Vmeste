@@ -141,6 +141,24 @@ class User(AbstractUser):
         help_text="ID VK ID (вход через VK, ОК или Mail).",
     )
 
+    def profile_is_complete(self) -> bool:
+        if getattr(self, "is_demo", False):
+            return True
+        if self.role == self.Role.STAFF:
+            return True
+        if not (self.first_name or "").strip() or not (self.last_name or "").strip():
+            return False
+        if self.role != self.Role.PROVIDER:
+            return True
+        if not (self.provider_sphere or "").strip():
+            return False
+        if not (self.organization_name or "").strip():
+            return False
+        if self.provider_sphere != self.ProviderSphere.MARKETPLACES:
+            if not (self.organization_address or "").strip():
+                return False
+        return bool(self.provider_authority_confirmed_at)
+
 
 class ProviderGalleryPhoto(models.Model):
     provider = models.ForeignKey(

@@ -23,6 +23,9 @@ def _client_ua(request):
 
 class UserSerializer(serializers.ModelSerializer):
     has_usable_password = serializers.SerializerMethodField()
+    profile_complete = serializers.SerializerMethodField()
+    provider_authority_confirmed = serializers.SerializerMethodField()
+    confirm_provider_authority = serializers.BooleanField(write_only=True, required=False)
 
     class Meta:
         model = User
@@ -61,21 +64,64 @@ class UserSerializer(serializers.ModelSerializer):
             "notify_booking_status",
             "telegram_chat_id",
             "has_usable_password",
+            "profile_complete",
+            "provider_authority_confirmed",
+            "confirm_provider_authority",
         ]
         read_only_fields = [
             "id",
             "username",
-            "email",
             "role",
             "email_verified",
             "organization_slug",
             "is_demo",
             "telegram_chat_id",
             "has_usable_password",
+            "profile_complete",
+            "provider_authority_confirmed",
         ]
 
     def get_has_usable_password(self, obj):
         return obj.has_usable_password()
+
+    def get_profile_complete(self, obj):
+        return obj.profile_is_complete()
+
+    def get_provider_authority_confirmed(self, obj):
+        return bool(obj.provider_authority_confirmed_at)
+
+    def validate_email(self, value):
+        email = (value or "").strip().lower()
+        if not self.instance:
+            return email
+        current = (self.instance.email or "").strip().lower()
+        if current and email != current:
+            raise serializers.ValidationError("Чтобы сменить email, используйте настройки профиля.")
+        if email and User.objects.filter(email__iexact=email).exclude(pk=self.instance.pk).exists():
+            raise serializers.ValidationError("Пользователь с таким email уже зарегистрирован.")
+        return email
+
+    def update(self, instance, validated_data):
+        from django.utils import timezone
+
+        confirm = validated_data.pop("confirm_provider_authority", False)
+        instance = super().update(instance, validated_data)
+        if confirm and instance.role == User.Role.PROVIDER:
+            name = (instance.organization_name or "").strip()
+            sphere = (instance.provider_sphere or "").strip()
+            addr = (instance.organization_address or "").strip()
+            if name and sphere and (sphere == User.ProviderSphere.MARKETPLACES or addr):
+                instance.provider_authority_confirmed_at = timezone.now()
+                instance.save(update_fields=["provider_authority_confirmed_at"])
+        if instance.role == User.Role.PROVIDER and instance.profile_is_complete():
+            from subscriptions.access import ensure_free_subscription
+
+            from .slug_utils import ensure_organization_slug
+
+            ensure_organization_slug(instance)
+            ensure_free_subscription(instance)
+        return instance
+
 
 class ProviderGalleryPhotoSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()

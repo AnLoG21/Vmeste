@@ -169,8 +169,7 @@ def _find_or_create_oauth_user(
         changed = [id_field]
         if intended_role == User.Role.PROVIDER and user.role == User.Role.CLIENT:
             user.role = User.Role.PROVIDER
-            user.provider_authority_confirmed_at = timezone.now()
-            changed.extend(["role", "provider_authority_confirmed_at"])
+            changed.append("role")
         if email and not (user.email or "").strip():
             user.email = email
             user.email_verified = True
@@ -195,7 +194,7 @@ def _find_or_create_oauth_user(
     user = User(
         username=_unique_username(username_hint or f"user_{oauth_id}"),
         email=email,
-        first_name=first_name or "Пользователь",
+        first_name=first_name,
         last_name=last_name,
         phone=phone,
         role=intended_role,
@@ -208,8 +207,6 @@ def _find_or_create_oauth_user(
         consent_ip=_client_ip(request),
         consent_user_agent=_client_ua(request),
     )
-    if intended_role == User.Role.PROVIDER:
-        user.provider_authority_confirmed_at = now
     setattr(user, id_field, oauth_id)
     user.set_unusable_password()
     user.save()
