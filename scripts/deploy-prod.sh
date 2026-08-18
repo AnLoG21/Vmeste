@@ -4,6 +4,8 @@ set -euo pipefail
 
 ROOT="${DEPLOY_ROOT:-/opt/vmeste}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
+# Selectel/RU VPS often times out on Docker Hub IPv6; Timeweb mirror is IPv4.
+HUB_MIRROR="${DOCKER_HUB_MIRROR:-dockerhub.timeweb.cloud}"
 
 cd "$ROOT"
 
@@ -25,10 +27,25 @@ git fetch --prune origin
 git checkout main
 git reset --hard origin/main
 
+ensure_base_image() {
+  local image="$1"
+  if docker image inspect "$image" >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "[deploy] pulling $image via ${HUB_MIRROR}..."
+  docker pull "${HUB_MIRROR}/library/${image}"
+  docker tag "${HUB_MIRROR}/library/${image}" "$image"
+}
+
 echo "[deploy] building images sequentially (low RAM)..."
 export COMPOSE_PARALLEL_LIMIT=1
+# Bake talks to registry-1.docker.io for FROM metadata even when layers exist.
+export COMPOSE_BAKE=false
+export DOCKER_BUILDKIT=0
+ensure_base_image python:3.12-slim-bookworm
+ensure_base_image node:20-alpine
+ensure_base_image nginx:1.27-alpine
 docker compose -f "$COMPOSE_FILE" stop celery_worker celery_beat || true
-docker builder prune -f >/dev/null 2>&1 || true
 docker compose -f "$COMPOSE_FILE" build web
 docker compose -f "$COMPOSE_FILE" build frontend
 docker compose -f "$COMPOSE_FILE" up -d --remove-orphans web frontend caddy celery_worker celery_beat
