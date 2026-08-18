@@ -12,16 +12,20 @@ from .models import User
 from .email_service import (
     _can_send,
     load_password_change_token,
+    load_password_reset_token,
     make_password_change_token,
+    make_password_reset_token,
     send_automation_request_email,
     send_email_change_email,
     send_password_change_email,
+    send_password_reset_email,
     send_verification_email,
 )
 from .serializers import (
     AutomationRequestSerializer,
     ChangeEmailSerializer,
     ChangePasswordSerializer,
+    PasswordResetConfirmSerializer,
     UserRegisterSerializer,
     UserSerializer,
 )
@@ -317,6 +321,86 @@ class ConfirmPasswordChangeView(APIView):
         user.set_password(new_password)
         user.save(update_fields=["password"])
         return Response({"detail": "Пароль успешно изменён. Можно войти с новым паролем."})
+
+
+RESET_SENT_DETAIL = "Если аккаунт с этой почтой есть, мы отправили ссылку для сброса пароля."
+
+
+class RequestPasswordResetView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        user = None
+        if request.user and request.user.is_authenticated:
+            if getattr(request.user, "is_demo", False):
+                return Response(
+                    {"detail": "В демо-режиме пароль сбрасывать нельзя."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            user = request.user
+        else:
+            email = str((request.data or {}).get("email") or "").strip().lower()
+            if email:
+                user = User.objects.filter(email__iexact=email, is_active=True).exclude(is_demo=True).first()
+
+        if user and (user.email or "").strip():
+            if not _can_send() and not settings.SKIP_EMAIL_VERIFICATION:
+                return Response(
+                    {"detail": "Почта не настроена. Сброс пароля временно недоступен."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            if _can_send():
+                token = make_password_reset_token(user)
+                try:
+                    sent = send_password_reset_email(user, token)
+                except Exception:
+                    if request.user and request.user.is_authenticated:
+                        return Response(
+                            {"detail": "Не удалось отправить письмо. Попробуйте позже."},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        )
+                    sent = False
+                if not sent and request.user and request.user.is_authenticated:
+                    return Response(
+                        {"detail": "Не удалось отправить письмо. Попробуйте позже."},
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    )
+            elif settings.SKIP_EMAIL_VERIFICATION and request.user and request.user.is_authenticated:
+                return Response(
+                    {"detail": "На сервере отключена почта. Задайте новый пароль формой выше, указав текущий."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+        if request.user and request.user.is_authenticated:
+            if not (request.user.email or "").strip():
+                return Response({"detail": "У аккаунта нет почты — сброс недоступен."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Мы отправили ссылку для сброса пароля на вашу почту. Перейдите по ней в течение 24 часов."}
+            )
+        return Response({"detail": RESET_SENT_DETAIL})
+
+
+class ConfirmPasswordResetView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        ser = PasswordResetConfirmSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        token = ser.validated_data["token"]
+        try:
+            payload = load_password_reset_token(token)
+        except signing.BadSignature:
+            return Response({"detail": "Ссылка недействительна или устарела."}, status=status.HTTP_400_BAD_REQUEST)
+        except signing.SignatureExpired:
+            return Response({"detail": "Ссылка устарела. Запросите сброс пароля снова."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({"detail": "Ссылка недействительна или устарела."}, status=status.HTTP_400_BAD_REQUEST)
+        user = User.objects.filter(pk=payload.get("uid"), is_active=True).first()
+        if not user or getattr(user, "is_demo", False):
+            return Response({"detail": "Ссылка недействительна."}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(ser.validated_data["new_password"])
+        user.save(update_fields=["password"])
+        return Response({"detail": "Пароль обновлён. Войдите с новым паролем."})
 
 
 class ChangeEmailView(APIView):

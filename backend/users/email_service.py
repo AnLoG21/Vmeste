@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 SITE_BRAND = "Вместе"
 PASSWORD_CHANGE_SALT = "vmeste-password-change"
+PASSWORD_RESET_SALT = "vmeste-password-reset"
 EMAIL_CHANGE_SALT = "vmeste-email-change"
 
 
@@ -160,6 +161,39 @@ def send_password_change_email(user, token: str) -> bool:
         ],
         button_url=link,
         button_label="Подтвердить смену пароля",
+    )
+    return _send_branded(to=user.email, subject=subject, text_body=text, html_body=html)
+
+
+def make_password_reset_token(user) -> str:
+    return signing.dumps({"uid": user.id}, salt=PASSWORD_RESET_SALT, compress=True)
+
+
+def load_password_reset_token(token: str, max_age: int = 60 * 60 * 24):
+    return signing.loads(token, salt=PASSWORD_RESET_SALT, max_age=max_age)
+
+
+def send_password_reset_email(user, token: str) -> bool:
+    link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
+    name = user.first_name or user.username
+    subject = f"Сброс пароля — {SITE_BRAND}"
+    text = (
+        f"Здравствуйте, {name}!\n\n"
+        f"Вы запросили сброс пароля в сервисе «{SITE_BRAND}».\n"
+        f"Чтобы задать новый пароль, перейдите по ссылке (действует 24 часа):\n{link}\n\n"
+        f"Если вы не запрашивали сброс, проигнорируйте письмо — пароль не изменится.\n\n"
+        f"— Команда {SITE_BRAND}"
+    )
+    html = _wrap_html(
+        title="Сброс пароля",
+        greeting=f"Здравствуйте, {name}!",
+        paragraphs=[
+            f"Вы запросили сброс пароля в сервисе «{SITE_BRAND}».",
+            "Нажмите кнопку ниже и задайте новый пароль. Ссылка действует 24 часа.",
+            "Если это были не вы — просто удалите письмо, пароль не изменится.",
+        ],
+        button_url=link,
+        button_label="Задать новый пароль",
     )
     return _send_branded(to=user.email, subject=subject, text_body=text, html_body=html)
 

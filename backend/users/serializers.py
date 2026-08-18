@@ -237,6 +237,18 @@ class ChangePasswordSerializer(serializers.Serializer):
         return attrs
 
 
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    token = serializers.CharField()
+    new_password = serializers.CharField(min_length=8)
+    new_password_confirm = serializers.CharField()
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["new_password_confirm"]:
+            raise serializers.ValidationError({"new_password_confirm": "Пароли не совпадают."})
+        validate_password(attrs["new_password"])
+        return attrs
+
+
 class ChangeEmailSerializer(serializers.Serializer):
     new_email = serializers.EmailField()
 

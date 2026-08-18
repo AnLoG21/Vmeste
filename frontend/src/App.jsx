@@ -2567,7 +2567,10 @@ export default function App() {
 
   const [accessToken, setAccessToken] = useState(oauthBoot.access || localStorage.getItem("vmeste_access") || "");
   const [refreshToken, setRefreshToken] = useState(oauthBoot.refresh || localStorage.getItem("vmeste_refresh") || "");
-  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [loginForm, setLoginForm] = useState({ username: "", password: "", email: "" });
+  const [passwordResetToken, setPasswordResetToken] = useState("");
+  const [resetForm, setResetForm] = useState({ new_password: "", new_password_confirm: "" });
+  const [passwordResetBusy, setPasswordResetBusy] = useState(false);
   const [me, setMe] = useState(null);
 
   const [roles, setRoles] = useState([]);
@@ -3153,6 +3156,7 @@ export default function App() {
   useEffect(() => {
     handleVerifyEmailFromUrl();
     handleConfirmPasswordChangeFromUrl();
+    handlePasswordResetFromUrl();
     const params = new URLSearchParams(window.location.search);
     if (oauthBoot.error) {
       setAuthStatus(oauthBoot.error);
@@ -3249,6 +3253,10 @@ export default function App() {
     setShowAuthModal(false);
     setVerifyEmailNotice(null);
     setResendStatus("");
+    if (authMode === "reset") {
+      setPasswordResetToken("");
+      setResetForm({ new_password: "", new_password_confirm: "" });
+    }
   }
 
   async function resendVerificationForEmail(email) {
@@ -4215,6 +4223,16 @@ export default function App() {
       window.history.replaceState({}, document.title, "/");
     }
     openAuth("login");
+  }
+
+  function handlePasswordResetFromUrl() {
+    if (!window.location.pathname.includes("/reset-password")) return;
+    const token = new URLSearchParams(window.location.search).get("token");
+    if (!token) return;
+    setPasswordResetToken(token);
+    setResetForm({ new_password: "", new_password_confirm: "" });
+    setAuthStatus("Задайте новый пароль.");
+    openAuth("reset");
   }
 
   async function refreshAccessToken() {
@@ -7566,6 +7584,72 @@ export default function App() {
     setPasswordForm({ old_password: "", new_password: "", new_password_confirm: "" });
   }
 
+  async function requestPasswordResetFromSettings() {
+    if (me?.is_demo) {
+      setStatus("В демо-режиме пароль сбрасывать нельзя.");
+      return;
+    }
+    setPasswordResetBusy(true);
+    const response = await authFetch(`${API_URL}/users/request-password-reset/`, { method: "POST", body: "{}" });
+    const data = await response.json().catch(() => ({}));
+    const detail = data.detail || (response.ok ? "Проверьте почту — мы отправили ссылку для сброса." : "Не удалось отправить ссылку.");
+    setPasswordResetBusy(false);
+    if (!response.ok) return setStatus(detail);
+    showToast(detail, { tone: "success", ms: 14000 });
+    setStatus(detail);
+  }
+
+  async function requestPasswordResetFromLogin(event) {
+    event.preventDefault();
+    const email = (loginForm.email || "").trim();
+    if (!email) {
+      setAuthStatus("Укажите email аккаунта.");
+      return;
+    }
+    setPasswordResetBusy(true);
+    const response = await fetch(`${API_URL}/users/request-password-reset/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setPasswordResetBusy(false);
+    setAuthStatus(data.detail || (response.ok ? "Если аккаунт есть, мы отправили ссылку на почту." : "Не удалось отправить ссылку."));
+  }
+
+  async function confirmPasswordReset(event) {
+    event.preventDefault();
+    if (!passwordResetToken) {
+      setAuthStatus("Ссылка недействительна. Запросите сброс ещё раз.");
+      return;
+    }
+    setPasswordResetBusy(true);
+    const response = await fetch(`${API_URL}/users/confirm-password-reset/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: passwordResetToken,
+        new_password: resetForm.new_password,
+        new_password_confirm: resetForm.new_password_confirm,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setPasswordResetBusy(false);
+    const detail = data.detail || formatApiError(data, response.status) || (response.ok ? "Пароль обновлён." : "Не удалось сохранить пароль.");
+    setAuthStatus(detail);
+    if (!response.ok) return setStatus(detail);
+    showToast(detail, { tone: "success", ms: 10000 });
+    setPasswordResetToken("");
+    setResetForm({ new_password: "", new_password_confirm: "" });
+    window.history.replaceState({}, document.title, "/");
+    if (accessToken) {
+      setShowAuthModal(false);
+      setStatus(detail);
+    } else {
+      openAuth("login");
+    }
+  }
+
   async function changeEmail(event) {
     event.preventDefault();
     const response = await authFetch(`${API_URL}/users/change-email/`, {
@@ -10017,6 +10101,17 @@ export default function App() {
             autoComplete="new-password"
           />
           <button type="submit">Сменить пароль</button>
+          <p className="muted small">
+            Не помните текущий пароль? Отправим ссылку на сброс{me?.email ? ` на ${me.email}` : ""}.
+          </p>
+          <button
+            type="button"
+            className="ghost-btn"
+            disabled={passwordResetBusy || me?.is_demo}
+            onClick={requestPasswordResetFromSettings}
+          >
+            {passwordResetBusy ? "Отправляем…" : "Сбросить через почту"}
+          </button>
         </form>
         <form onSubmit={changeEmail} className="form">
           <h3>Смена почты</h3>
@@ -11627,7 +11722,7 @@ export default function App() {
           />
         )}
 
-        {!accessToken && showAuthModal && createPortal(
+        {(showAuthModal && (!accessToken || authMode === "reset")) && createPortal(
           <div className="auth-modal-overlay" role="presentation">
             <div className="auth-modal" role="dialog" aria-modal="true">
               <button type="button" className="auth-modal-close" onClick={closeAuth} aria-label="Закрыть">×</button>
@@ -11660,8 +11755,47 @@ export default function App() {
                 </div>
               ) : (
                 <>
-              <h2>{authMode === "login" ? "Вход" : "Регистрация"}</h2>
-              {authMode === "login" ? (
+              <h2>{authMode === "reset" ? "Новый пароль" : authMode === "forgot" ? "Сброс пароля" : authMode === "login" ? "Вход" : "Регистрация"}</h2>
+              {authMode === "reset" ? (
+                <form onSubmit={confirmPasswordReset} className="form">
+                  <p className="muted small">Придумайте новый пароль для входа во Вместе.</p>
+                  <PasswordInput
+                    placeholder="Новый пароль"
+                    value={resetForm.new_password}
+                    onChange={(e) => setResetForm({ ...resetForm, new_password: e.target.value })}
+                    required
+                    autoComplete="new-password"
+                  />
+                  <PasswordInput
+                    placeholder="Повторите новый пароль"
+                    value={resetForm.new_password_confirm}
+                    onChange={(e) => setResetForm({ ...resetForm, new_password_confirm: e.target.value })}
+                    required
+                    autoComplete="new-password"
+                  />
+                  <button type="submit" disabled={passwordResetBusy}>
+                    {passwordResetBusy ? "Сохраняем…" : "Сохранить пароль"}
+                  </button>
+                </form>
+              ) : authMode === "forgot" ? (
+                <form onSubmit={requestPasswordResetFromLogin} className="form">
+                  <p className="muted small">Укажите почту аккаунта — пришлём ссылку для нового пароля.</p>
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    value={loginForm.email}
+                    onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
+                    required
+                    autoComplete="email"
+                  />
+                  <button type="submit" disabled={passwordResetBusy}>
+                    {passwordResetBusy ? "Отправляем…" : "Выслать ссылку"}
+                  </button>
+                  <button type="button" className="ghost-btn" onClick={() => { setAuthMode("login"); setAuthStatus(""); }}>
+                    Назад ко входу
+                  </button>
+                </form>
+              ) : authMode === "login" ? (
                 <form onSubmit={onLogin} className="form">
                   <input placeholder="Логин" value={loginForm.username} onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })} required />
                   <PasswordInput
@@ -11672,6 +11806,9 @@ export default function App() {
                     autoComplete="current-password"
                   />
                   <button type="submit">Войти</button>
+                  <button type="button" className="ghost-btn" onClick={() => { setAuthMode("forgot"); setAuthStatus(""); }}>
+                    Не помню пароль
+                  </button>
                 </form>
               ) : (
                 <form onSubmit={onSubmit} className="form">
@@ -11848,7 +11985,7 @@ export default function App() {
                   )}
                 </form>
               )}
-              {(authMode === "login" || registerStep === 1) && (
+              {(authMode === "login" || authMode === "register") && registerStep === 1 && (
                 <div className="auth-social">
                   <p className="auth-social-label">Войти через</p>
                   <div className="auth-social-row">
@@ -11879,10 +12016,14 @@ export default function App() {
                   </p>
                 </div>
               )}
-              <p className="auth-switch-text">{authMode === "login" ? "Нет аккаунта?" : "Уже есть аккаунт?"}</p>
-              <button className="ghost-btn" type="button" onClick={() => setAuthMode((prev) => (prev === "login" ? "register" : "login"))}>
-                {authMode === "login" ? "Регистрация" : "Войти"}
-              </button>
+              {authMode === "login" || authMode === "register" ? (
+                <>
+                  <p className="auth-switch-text">{authMode === "login" ? "Нет аккаунта?" : "Уже есть аккаунт?"}</p>
+                  <button className="ghost-btn" type="button" onClick={() => setAuthMode((prev) => (prev === "login" ? "register" : "login"))}>
+                    {authMode === "login" ? "Регистрация" : "Войти"}
+                  </button>
+                </>
+              ) : null}
               <p className="status">{authMode === "login" ? authStatus : authStatus || status}</p>
                 </>
               )}
