@@ -7694,17 +7694,20 @@ html.native-app .page-logged .hero.top-row {
 
 .auth-social {
   margin: 16px 0 8px;
+  text-align: center;
 }
 
 .auth-social-label {
   margin: 0 0 8px;
   font-weight: 700;
+  text-align: center;
 }
 
 .auth-social-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 8px;
 }
 
