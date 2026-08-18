@@ -7708,18 +7708,33 @@ html.native-app .page-logged .hero.top-row {
   gap: 8px;
 }
 
+.auth-social-telegram iframe {
+  display: block;
+}
+
 .auth-social-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 14px;
   border-radius: 10px;
   border: 1px solid var(--border, #ffd9bd);
   background: var(--bg-card, #fff);
   color: var(--text, #1a1208);
   font-weight: 600;
+  line-height: 1;
 }
 
 .auth-social-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.auth-social-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  display: block;
 }
 
 .auth-social-yandex {
@@ -7736,18 +7751,25 @@ html.native-app .page-logged .hero.top-row {
   border-radius: 10px;
   border: 1px solid var(--border, #ffd9bd);
   text-decoration: none;
-  min-height: 38px;
+  min-height: 40px;
 }
 
 .auth-social-vkid-mark {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   padding: 8px 10px;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.02em;
   color: #fff;
+}
+
+.auth-social-vkid-mark .auth-social-icon {
+  width: 18px;
+  height: 18px;
+  flex-basis: 18px;
 }
 
 .auth-social-vkid-vk {

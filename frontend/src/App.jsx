@@ -29,6 +29,7 @@ import {
   uniqueDiscoverOrgs,
 } from "./clientOrgFeatures.js";
 import { loadYandexMaps } from "./yandexMapsLoader.js";
+import { MailRuIcon, OkIcon, VkIcon, YandexIcon } from "./AuthSocialIcons.jsx";
 import { API_URL, AUTH_URL, BASE_URL, REFRESH_URL } from "./config.js";
 import { SITE_LEGAL } from "./legal/siteLegal.js";
 import {
@@ -11815,14 +11816,24 @@ export default function App() {
                     <div className="auth-social-telegram" ref={telegramLoginHostRef} />
                     {authProviders.yandex ? (
                       <a className="auth-social-btn auth-social-yandex" href={`${API_URL}/users/auth/yandex/`}>
+                        <YandexIcon />
                         Яндекс
                       </a>
                     ) : null}
                     {authProviders.vk ? (
                       <a className="auth-social-vkid" href={`${API_URL}/users/auth/vk/`} title="ВКонтакте, Одноклассники и Mail">
-                        <span className="auth-social-vkid-mark auth-social-vkid-vk">VK</span>
-                        <span className="auth-social-vkid-mark auth-social-vkid-ok">ОК</span>
-                        <span className="auth-social-vkid-mark auth-social-vkid-mail">Mail</span>
+                        <span className="auth-social-vkid-mark auth-social-vkid-vk">
+                          <VkIcon />
+                          VK
+                        </span>
+                        <span className="auth-social-vkid-mark auth-social-vkid-ok">
+                          <OkIcon />
+                          ОК
+                        </span>
+                        <span className="auth-social-vkid-mark auth-social-vkid-mail">
+                          <MailRuIcon />
+                          Mail
+                        </span>
                       </a>
                     ) : null}
                   </div>
