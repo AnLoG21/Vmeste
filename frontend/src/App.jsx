@@ -2514,6 +2514,30 @@ function StaffServicesAssignment({ link, categories, services, onSave }) {
   );
 }
 
+function consumeOAuthCallback() {
+  if (typeof window === "undefined") return { access: "", refresh: "", error: "" };
+  const hash = (window.location.hash || "").replace(/^#/, "");
+  const hashParams = new URLSearchParams(hash);
+  const query = new URLSearchParams(window.location.search);
+  const error = hashParams.get("oauth_error") || query.get("oauth_error") || "";
+  const access = hashParams.get("oauth_access") || "";
+  const refresh = hashParams.get("oauth_refresh") || "";
+  const touched = Boolean(access || refresh || error || hash.includes("oauth_") || query.has("oauth_error"));
+  if (touched) {
+    if (query.has("oauth_error")) query.delete("oauth_error");
+    const q = query.toString();
+    const next = `${window.location.pathname}${q ? `?${q}` : ""}`;
+    window.history.replaceState({}, document.title, next);
+    if (access && refresh) {
+      localStorage.setItem("vmeste_access", access);
+      localStorage.setItem("vmeste_refresh", refresh);
+    }
+  }
+  return { access, refresh, error };
+}
+
+const oauthBoot = consumeOAuthCallback();
+
 export default function App() {
   const [authMode, setAuthMode] = useState("login");
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -2529,8 +2553,8 @@ export default function App() {
   const [authProviders, setAuthProviders] = useState({ telegram: "" });
   const telegramLoginHostRef = useRef(null);
 
-  const [accessToken, setAccessToken] = useState(localStorage.getItem("vmeste_access") || "");
-  const [refreshToken, setRefreshToken] = useState(localStorage.getItem("vmeste_refresh") || "");
+  const [accessToken, setAccessToken] = useState(oauthBoot.access || localStorage.getItem("vmeste_access") || "");
+  const [refreshToken, setRefreshToken] = useState(oauthBoot.refresh || localStorage.getItem("vmeste_refresh") || "");
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [me, setMe] = useState(null);
 
@@ -3116,6 +3140,10 @@ export default function App() {
     handleVerifyEmailFromUrl();
     handleConfirmPasswordChangeFromUrl();
     const params = new URLSearchParams(window.location.search);
+    if (oauthBoot.error) {
+      setAuthStatus(oauthBoot.error);
+      openAuth("login");
+    }
     if (params.get("register") === "1" || params.get("auth") === "register") {
       openAuth("register");
       params.delete("register");
@@ -11785,16 +11813,23 @@ export default function App() {
                   <p className="auth-social-label">Войти через</p>
                   <div className="auth-social-row">
                     <div className="auth-social-telegram" ref={telegramLoginHostRef} />
-                    <button type="button" className="auth-social-btn" disabled title="Нужен кабинет Яндекс ID">
-                      Яндекс
-                    </button>
-                    <button type="button" className="auth-social-btn" disabled title="Нужно приложение VK ID">
-                      VK
-                    </button>
+                    {authProviders.yandex ? (
+                      <a className="auth-social-btn auth-social-yandex" href={`${API_URL}/users/auth/yandex/`}>
+                        Яндекс
+                      </a>
+                    ) : null}
+                    {authProviders.vk ? (
+                      <a className="auth-social-vkid" href={`${API_URL}/users/auth/vk/`} title="ВКонтакте, Одноклассники и Mail">
+                        <span className="auth-social-vkid-mark auth-social-vkid-vk">VK</span>
+                        <span className="auth-social-vkid-mark auth-social-vkid-ok">ОК</span>
+                        <span className="auth-social-vkid-mark auth-social-vkid-mail">Mail</span>
+                      </a>
+                    ) : null}
                   </div>
                   <p className="muted small">
-                    Сейчас работает Telegram (виджет бота). Яндекс ID и VK ID подключим, когда будут кабинеты приложений.
-                    Google в РФ без обхода ограничений недоступен как основной вход.
+                    {authProviders.yandex || authProviders.vk
+                      ? "VK ID — одна кнопка: ВКонтакте, Одноклассники и Mail. Google в РФ без обхода ограничений недоступен как основной вход."
+                      : "Сейчас работает Telegram. Яндекс ID и VK ID появятся после настройки на сервере. Google в РФ без обхода ограничений недоступен как основной вход."}
                   </p>
                 </div>
               )}

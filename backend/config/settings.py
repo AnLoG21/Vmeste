@@ -223,3 +223,8 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_API_BASE = os.environ.get("TELEGRAM_API_BASE", "https://api.telegram.org")
 TELEGRAM_HTTP_PROXY = os.environ.get("TELEGRAM_HTTP_PROXY", "")
 
+YANDEX_OAUTH_CLIENT_ID = os.environ.get("YANDEX_OAUTH_CLIENT_ID", "").strip()
+YANDEX_OAUTH_CLIENT_SECRET = os.environ.get("YANDEX_OAUTH_CLIENT_SECRET", "").strip()
+VK_OAUTH_CLIENT_ID = os.environ.get("VK_OAUTH_CLIENT_ID", "").strip()
+VK_OAUTH_CLIENT_SECRET = os.environ.get("VK_OAUTH_CLIENT_SECRET", "").strip()
+

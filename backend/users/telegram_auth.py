@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import time
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -51,8 +52,8 @@ class AuthProvidersView(APIView):
         return Response(
             {
                 "telegram": username or "",
-                "yandex": False,
-                "vk": False,
+                "yandex": bool(settings.YANDEX_OAUTH_CLIENT_ID and settings.YANDEX_OAUTH_CLIENT_SECRET),
+                "vk": bool(settings.VK_OAUTH_CLIENT_ID and settings.VK_OAUTH_CLIENT_SECRET),
                 "google": False,
             }
         )

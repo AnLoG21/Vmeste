@@ -7722,6 +7722,46 @@ html.native-app .page-logged .hero.top-row {
   cursor: not-allowed;
 }
 
+.auth-social-yandex {
+  background: #fc3f1d;
+  border-color: #fc3f1d;
+  color: #fff;
+  text-decoration: none;
+}
+
+.auth-social-vkid {
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--border, #ffd9bd);
+  text-decoration: none;
+  min-height: 38px;
+}
+
+.auth-social-vkid-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+.auth-social-vkid-vk {
+  background: #0077ff;
+}
+
+.auth-social-vkid-ok {
+  background: #ee8208;
+}
+
+.auth-social-vkid-mail {
+  background: #168de2;
+}
+
 .tg-chat-info-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

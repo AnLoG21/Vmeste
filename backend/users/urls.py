@@ -19,6 +19,7 @@ from .views import (
     UserRegisterView,
     VerifyEmailView,
 )
+from .oauth import VkOAuthCallbackView, VkOAuthStartView, YandexOAuthCallbackView, YandexOAuthStartView
 from .telegram_auth import AuthProvidersView, TelegramLoginView
 
 urlpatterns = [
@@ -27,6 +28,10 @@ urlpatterns = [
     path("register/", UserRegisterView.as_view(), name="user-register"),
     path("auth/providers/", AuthProvidersView.as_view(), name="user-auth-providers"),
     path("auth/telegram/", TelegramLoginView.as_view(), name="user-auth-telegram"),
+    path("auth/yandex/", YandexOAuthStartView.as_view(), name="user-auth-yandex"),
+    path("auth/yandex/callback/", YandexOAuthCallbackView.as_view(), name="user-auth-yandex-callback"),
+    path("auth/vk/", VkOAuthStartView.as_view(), name="user-auth-vk"),
+    path("auth/vk/callback/", VkOAuthCallbackView.as_view(), name="user-auth-vk-callback"),
     path("verify-email/", VerifyEmailView.as_view(), name="user-verify-email"),
     path("resend-verification/", ResendVerificationView.as_view(), name="user-resend-verification"),
     path("me/", MeView.as_view(), name="user-me"),

@@ -125,6 +125,20 @@ class User(AbstractUser):
         help_text="MAX user id после привязки.",
     )
     telegram_link_token = models.CharField(max_length=64, blank=True, default="")
+    yandex_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="ID аккаунта Яндекс ID.",
+    )
+    vk_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="ID VK ID (вход через VK, ОК или Mail).",
+    )
 
 
 class ProviderGalleryPhoto(models.Model):
