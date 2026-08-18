@@ -1,12 +1,9 @@
+import yandexLogo from "./assets/auth-yandex.png";
+import okLogo from "./assets/auth-ok.png";
+import mailLogo from "./assets/auth-mail.png";
+
 export function YandexIcon() {
-  return (
-    <svg className="auth-social-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M13.05 3.2c-2.85 0-4.7 1.7-4.9 4.25h2.3c.2-1.05 1-1.9 2.5-1.9 1.5 0 2.4.85 2.4 2.2v.55h-2.3c-3 0-4.8 1.45-4.8 3.8 0 2.3 1.65 3.65 3.95 3.85L9.4 20.8h2.55l2.5-5.7h.95v5.7h2.45V7.85c0-2.85-1.95-4.65-5.05-4.65zm.1 11.55c-1.4 0-2.3-.65-2.3-1.75s.95-1.75 2.6-1.75h1.95v1.7c0 1.05-.9 1.8-2.25 1.8z"
-      />
-    </svg>
-  );
+  return <img className="auth-social-logo" src={yandexLogo} alt="" width="40" height="40" />;
 }
 
 export function VkIcon() {
@@ -21,23 +18,9 @@ export function VkIcon() {
 }
 
 export function OkIcon() {
-  return (
-    <svg className="auth-social-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M12 12.05A4.15 4.15 0 1 0 12 3.75a4.15 4.15 0 0 0 0 8.3m0-6.5a2.35 2.35 0 1 1 0 4.7 2.35 2.35 0 0 1 0-4.7m5.7 8.85a.95.95 0 0 0-1.34.08 6.5 6.5 0 0 1-8.72 0 .95.95 0 1 0-1.42 1.26 8.35 8.35 0 0 0 2.78 1.82l-2.7 2.7a.95.95 0 1 0 1.34 1.34L12 17.9l4.36 4.36a.95.95 0 1 0 1.34-1.34l-2.7-2.7a8.35 8.35 0 0 0 2.78-1.82.95.95 0 0 0-.08-1.34z"
-      />
-    </svg>
-  );
+  return <img className="auth-social-logo" src={okLogo} alt="" width="40" height="40" />;
 }
 
 export function MailRuIcon() {
-  return (
-    <svg className="auth-social-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M3.8 6.4h16.4c.9 0 1.6.7 1.6 1.6v8c0 .9-.7 1.6-1.6 1.6H3.8c-.9 0-1.6-.7-1.6-1.6v-8c0-.9.7-1.6 1.6-1.6zm8.2 6.9 7.8-5.5H4.2zM3.9 16.5l6.5-5 1.6 1.2 1.6-1.2 6.5 5z"
-      />
-    </svg>
-  );
+  return <img className="auth-social-logo" src={mailLogo} alt="" width="40" height="40" />;
 }

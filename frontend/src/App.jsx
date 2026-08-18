@@ -11815,24 +11815,20 @@ export default function App() {
                   <div className="auth-social-row">
                     <div className="auth-social-telegram" ref={telegramLoginHostRef} />
                     {authProviders.yandex ? (
-                      <a className="auth-social-btn auth-social-yandex" href={`${API_URL}/users/auth/yandex/`}>
+                      <a className="auth-social-logo-btn" href={`${API_URL}/users/auth/yandex/`} title="Яндекс">
                         <YandexIcon />
-                        Яндекс
                       </a>
                     ) : null}
                     {authProviders.vk ? (
                       <a className="auth-social-vkid" href={`${API_URL}/users/auth/vk/`} title="ВКонтакте, Одноклассники и Mail">
-                        <span className="auth-social-vkid-mark auth-social-vkid-vk">
+                        <span className="auth-social-logo-btn auth-social-vkid-vk">
                           <VkIcon />
-                          VK
                         </span>
-                        <span className="auth-social-vkid-mark auth-social-vkid-ok">
+                        <span className="auth-social-logo-btn">
                           <OkIcon />
-                          ОК
                         </span>
-                        <span className="auth-social-vkid-mark auth-social-vkid-mail">
+                        <span className="auth-social-logo-btn">
                           <MailRuIcon />
-                          Mail
                         </span>
                       </a>
                     ) : null}

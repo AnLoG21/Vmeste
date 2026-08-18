@@ -7730,6 +7730,29 @@ html.native-app .page-logged .hero.top-row {
   cursor: not-allowed;
 }
 
+.auth-social-logo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 50%;
+  overflow: hidden;
+  text-decoration: none;
+  flex: 0 0 40px;
+}
+
+.auth-social-logo {
+  width: 40px;
+  height: 40px;
+  display: block;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
 .auth-social-icon {
   width: 22px;
   height: 22px;
@@ -7737,51 +7760,19 @@ html.native-app .page-logged .hero.top-row {
   display: block;
 }
 
-.auth-social-yandex {
-  background: #fc3f1d;
-  border-color: #fc3f1d;
-  color: #fff;
-  text-decoration: none;
-}
-
 .auth-social-vkid {
   display: inline-flex;
-  align-items: stretch;
-  overflow: hidden;
-  border-radius: 10px;
-  border: 1px solid var(--border, #ffd9bd);
-  text-decoration: none;
-  min-height: 40px;
-}
-
-.auth-social-vkid-mark {
-  display: flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  padding: 8px 10px;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: #fff;
-}
-
-.auth-social-vkid-mark .auth-social-icon {
-  width: 18px;
-  height: 18px;
-  flex-basis: 18px;
+  background: none;
+  border: none;
+  text-decoration: none;
+  min-height: 0;
 }
 
 .auth-social-vkid-vk {
   background: #0077ff;
-}
-
-.auth-social-vkid-ok {
-  background: #ee8208;
-}
-
-.auth-social-vkid-mail {
-  background: #168de2;
+  color: #fff;
 }
 
 .tg-chat-info-grid {
