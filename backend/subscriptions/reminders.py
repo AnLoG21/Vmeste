@@ -9,6 +9,21 @@ from users.email_service import send_subscription_reminder_email
 from .models import UserSubscription
 
 
+def _send_subscription_telegram(user, text: str) -> None:
+    chat_id = (getattr(user, "telegram_chat_id", None) or "").strip()
+    if not chat_id or not text:
+        return
+    try:
+        from notifications.channels import send_telegram
+        from notifications.telegram_bot import platform_bot_token
+
+        token = platform_bot_token()
+        if token:
+            send_telegram(bot_token=token, chat_id=chat_id, text=text)
+    except Exception:
+        pass
+
+
 def _mark_expired():
     now = timezone.now()
     UserSubscription.objects.filter(
@@ -29,6 +44,7 @@ def send_subscription_expiry_reminders() -> dict:
     qs3 = UserSubscription.objects.filter(
         status=UserSubscription.Status.ACTIVE,
         reminder_3d_sent=False,
+        period_end__isnull=False,
         period_end__gte=window_3_start,
         period_end__lt=window_3_end,
     ).select_related("user", "plan")
@@ -48,6 +64,7 @@ def send_subscription_expiry_reminders() -> dict:
         send_subscription_reminder_email(
             user, days_left=3, period_end=sub.period_end, plan_name=plan_name
         )
+        _send_subscription_telegram(user, f"{title}\n{body}")
         sub.reminder_3d_sent = True
         sub.save(update_fields=["reminder_3d_sent", "updated_at"])
         sent_3 += 1
@@ -57,6 +74,7 @@ def send_subscription_expiry_reminders() -> dict:
     qs1 = UserSubscription.objects.filter(
         status=UserSubscription.Status.ACTIVE,
         reminder_1d_sent=False,
+        period_end__isnull=False,
         period_end__gte=window_1_start,
         period_end__lt=window_1_end,
     ).select_related("user", "plan")
@@ -76,6 +94,7 @@ def send_subscription_expiry_reminders() -> dict:
         send_subscription_reminder_email(
             user, days_left=1, period_end=sub.period_end, plan_name=plan_name
         )
+        _send_subscription_telegram(user, f"{title}\n{body}")
         sub.reminder_1d_sent = True
         sub.save(update_fields=["reminder_1d_sent", "updated_at"])
         sent_1 += 1

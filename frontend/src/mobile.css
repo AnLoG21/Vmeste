@@ -536,5 +536,22 @@ html.native-app .interval-calendar .calendar-slot-compact-end {
   .inspection-photos {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
+
+  .booking-history-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .booking-history-status {
+    align-self: flex-start;
+  }
+
+  .booking-history-org {
+    max-width: calc(100% - 4px);
+  }
+
+  .booking-history-pay {
+    margin-top: 12px;
+  }
 }
 

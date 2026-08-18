@@ -1487,10 +1487,10 @@ function bookingStatusLabel(statusOrBooking) {
 function bookingPrepayHint(prepay) {
   if (!prepay?.ready) return "";
   if (prepay.mode === "full") {
-    return "Для записи нужна полная предоплата через ЮKassa. Слот держится 20 минут до оплаты.";
+    return "Для записи нужна полная предоплата через ЮKassa. Слот держится 10 минут до оплаты.";
   }
   if (prepay.mode === "percent") {
-    return `Для записи нужна предоплата ${prepay.percent}% через ЮKassa. Слот держится 20 минут до оплаты.`;
+    return `Для записи нужна предоплата ${prepay.percent}% через ЮKassa. Слот держится 10 минут до оплаты.`;
   }
   return "";
 }
@@ -1582,13 +1582,32 @@ function formatBookingDateTime(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleString("ru-RU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+    return d.toLocaleString("ru-RU", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+}
+
+function formatBookingDateTimeParts(iso) {
+  if (!iso) return { date: "—", time: "" };
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { date: String(iso), time: "" };
+  return {
+    date: d.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" }),
+    time: d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
+  };
+}
+
+const BOOKING_PAY_TTL_MS = 10 * 60 * 1000;
+
+function bookingPayStillOpen(booking) {
+  if (!booking || booking.payment_status !== "pending" || booking.status === "cancelled") return false;
+  const t = new Date(booking.created_at).getTime();
+  if (Number.isNaN(t)) return false;
+  return Date.now() - t < BOOKING_PAY_TTL_MS;
 }
 
 function StarRating({ value, onChange }) {
@@ -2506,6 +2525,9 @@ export default function App() {
     navigateView(view);
   }, []);
   const [cafeWorkspaceTab, setCafeWorkspaceTab] = useState("floor");
+  const [historyTab, setHistoryTab] = useState("bookings");
+  const [authProviders, setAuthProviders] = useState({ telegram: "" });
+  const telegramLoginHostRef = useRef(null);
 
   const [accessToken, setAccessToken] = useState(localStorage.getItem("vmeste_access") || "");
   const [refreshToken, setRefreshToken] = useState(localStorage.getItem("vmeste_refresh") || "");
@@ -3011,7 +3033,7 @@ export default function App() {
   }, [accessToken, me?.role, currentView]);
 
   useEffect(() => {
-    if (!me || me.role !== "client") return;
+    if (!me || (me.role !== "client" && me.role !== "staff")) return;
     setClientNotifyForm({
       notify_booking_reminders: me.notify_booking_reminders !== false,
       notify_booking_status: me.notify_booking_status !== false,
@@ -3172,6 +3194,12 @@ export default function App() {
       setVerifyEmailNotice(null);
       setResendStatus("");
     }
+    fetch(`${API_URL}/users/auth/providers/`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) setAuthProviders(data);
+      })
+      .catch(() => {});
   }
 
   function closeAuth() {
@@ -3218,7 +3246,7 @@ export default function App() {
       setPageMeta({
         title: "Вместе — онлайн-запись клиентов и автоматизация бизнеса",
         description:
-          "Вместе — платформа для онлайн-записи клиентов, каталога услуг и чатов. Старт — 7 дней бесплатно, Бизнес — 990 ₽/мес.",
+          "Вместе — платформа для онлайн-записи клиентов, каталога услуг и чатов. Записи бесплатно, Бизнес — 990 ₽/мес.",
         path: "/",
       });
       return;
@@ -4189,6 +4217,59 @@ export default function App() {
     if (response.ok) setMe(await response.json());
   }
 
+  function applyAuthTokens(data) {
+    if (!data?.access || !data?.refresh) return false;
+    setAccessToken(data.access);
+    setRefreshToken(data.refresh);
+    localStorage.setItem("vmeste_access", data.access);
+    localStorage.setItem("vmeste_refresh", data.refresh);
+    setAuthStatus("Вход выполнен.");
+    setShowAuthModal(false);
+    return true;
+  }
+
+  useEffect(() => {
+    window.__vmesteOnTelegramAuth = async (user) => {
+      setAuthStatus("Входим через Telegram...");
+      const response = await fetch(`${API_URL}/users/auth/telegram/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(user),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setAuthStatus(data.detail || "Не удалось войти через Telegram.");
+        return;
+      }
+      applyAuthTokens(data);
+    };
+    window.onTelegramAuth = window.__vmesteOnTelegramAuth;
+    return () => {
+      delete window.__vmesteOnTelegramAuth;
+      delete window.onTelegramAuth;
+    };
+  }, []);
+
+  useEffect(() => {
+    const host = telegramLoginHostRef.current;
+    const bot = String(authProviders.telegram || "").replace(/^@/, "");
+    if (!showAuthModal || !host || !bot) return undefined;
+    host.innerHTML = "";
+    const script = document.createElement("script");
+    script.src = "https://telegram.org/js/telegram-widget.js?22";
+    script.async = true;
+    script.setAttribute("data-telegram-login", bot);
+    script.setAttribute("data-size", "large");
+    script.setAttribute("data-userpic", "false");
+    script.setAttribute("data-radius", "10");
+    script.setAttribute("data-request-access", "write");
+    script.setAttribute("data-onauth", "onTelegramAuth(user)");
+    host.appendChild(script);
+    return () => {
+      host.innerHTML = "";
+    };
+  }, [showAuthModal, authProviders.telegram, authMode]);
+
   async function onLogin(event) {
     event.preventDefault();
     setAuthStatus("Входим...");
@@ -4204,12 +4285,7 @@ export default function App() {
       return;
     }
     const data = await response.json();
-    setAccessToken(data.access);
-    setRefreshToken(data.refresh);
-    localStorage.setItem("vmeste_access", data.access);
-    localStorage.setItem("vmeste_refresh", data.refresh);
-    setAuthStatus("Вход выполнен.");
-    setShowAuthModal(false);
+    applyAuthTokens(data);
   }
 
   function logout() {
@@ -6820,10 +6896,7 @@ export default function App() {
         if (prev.length <= 1) return prev;
         return prev.filter((x) => x !== id);
       }
-      const order = BOOKMARK_CATALOG.map((b) => b.id);
-      const next = [...prev, id];
-      next.sort((a, b) => order.indexOf(a) - order.indexOf(b));
-      return next;
+      return [...prev, id];
     });
   }
 
@@ -6878,44 +6951,80 @@ export default function App() {
   }
 
   function bookmarkMenuIcon(id) {
-    if (id === "intervals") {
-      return (
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zM7 12h5v5H7z" />
-        </svg>
-      );
-    }
-    if (id === "services") {
-      return (
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" />
-        </svg>
-      );
-    }
-    if (id === "chats") {
-      return (
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
-        </svg>
-      );
-    }
-    if (id === "reviews") {
-      return (
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-        </svg>
-      );
-    }
-    if (id === "bookings" || id === "client_map") {
-      return (
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z" />
-        </svg>
-      );
-    }
+    const icons = {
+      client_map: {
+        color: "#2e7d32",
+        d: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z",
+      },
+      bookings: {
+        color: "#1565c0",
+        d: "M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z",
+      },
+      my_bookings: {
+        color: "#ef6c00",
+        d: "M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z",
+      },
+      analytics: {
+        color: "#6a1b9a",
+        d: "M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z",
+      },
+      intervals: {
+        color: "#00838f",
+        d: "M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zM7 12h5v5H7z",
+      },
+      services: {
+        color: "#c2185b",
+        d: "M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z",
+      },
+      chats: {
+        color: "#0277bd",
+        d: "M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z",
+      },
+      reviews: {
+        color: "#f9a825",
+        d: "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z",
+      },
+      settings: {
+        color: "#546e7a",
+        d: "M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z",
+      },
+      profile: {
+        color: "#5d4037",
+        d: "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z",
+      },
+      booking_history: {
+        color: "#455a64",
+        d: "M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z",
+      },
+      subscriptions: {
+        color: "#2e7d32",
+        d: "M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z",
+      },
+      staff: {
+        color: "#1565c0",
+        d: "M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z",
+      },
+      organization: {
+        color: "#6d4c41",
+        d: "M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z",
+      },
+      cafe: {
+        color: "#e65100",
+        d: "M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.9 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM4 19h16v2H4z",
+      },
+      cafe_orders: {
+        color: "#ad1457",
+        d: "M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.11 0 2-.9 2-2V5c0-1.1-.89-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z",
+      },
+      inspections: {
+        color: "#00897b",
+        d: "M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l7.59-7.59L21 8l-9 9z",
+      },
+    };
+    const icon = icons[id] || icons.bookings;
     return (
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+      <svg viewBox="0 0 24 24" width="20" height="20" fill={icon.color} aria-hidden="true">
+        <path d={icon.d} />
       </svg>
     );
   }
@@ -8667,7 +8776,7 @@ export default function App() {
             Услуга оказана
           </button>
         )}
-        {isClient && !cancelled && it.payment_status === "pending" && (
+        {isClient && !cancelled && bookingPayStillOpen(it) && (
           <button
             type="button"
             className="ghost-btn small"
@@ -8894,22 +9003,45 @@ export default function App() {
 
   function renderBookingHistory() {
     const isClient = me?.role === "client";
+    const showDiagnosticsTab = isClient;
     const sorted = [...bookings].sort(
       (a, b) => new Date(b.slot_starts_at || 0) - new Date(a.slot_starts_at || 0),
     );
     return (
       <section className="card full-width booking-history-card">
         <h2>История записей</h2>
-        {isClient ? (
-          <p className="muted small" style={{ marginTop: 0 }}>
-            Согласования диагностики и приёмки —{" "}
-            <button type="button" className="booking-history-link" onClick={() => setCurrentView("inspections")}>
-              открыть список
+        {showDiagnosticsTab ? (
+          <div className="history-switch" role="tablist" aria-label="Раздел истории">
+            <button
+              type="button"
+              role="tab"
+              className={["history-switch-btn", historyTab === "bookings" && "is-active"].filter(Boolean).join(" ")}
+              aria-selected={historyTab === "bookings"}
+              onClick={() => setHistoryTab("bookings")}
+            >
+              Записи
             </button>
-            .
-          </p>
+            <button
+              type="button"
+              role="tab"
+              className={["history-switch-btn", historyTab === "inspections" && "is-active"].filter(Boolean).join(" ")}
+              aria-selected={historyTab === "inspections"}
+              onClick={() => setHistoryTab("inspections")}
+            >
+              Диагностики
+            </button>
+          </div>
         ) : null}
-        {sorted.length === 0 ? (
+        {showDiagnosticsTab && historyTab === "inspections" ? (
+          <ClientInspectionsPanel
+            embedded
+            authFetch={authFetch}
+            API_URL={API_URL}
+            initialReportId={pendingInspectionId}
+            onConsumedInitialReportId={() => setPendingInspectionId(null)}
+            onOpenPhotos={openOrgPhotoLightbox}
+          />
+        ) : sorted.length === 0 ? (
           <p className="muted">Записей пока нет.</p>
         ) : (
           <ul className="booking-history-list">
@@ -8921,11 +9053,16 @@ export default function App() {
               const counterpartyLabel = isClient
                 ? (b.organization_name || "Организация")
                 : bookingClientLabel(b);
+              const when = formatBookingDateTimeParts(b.slot_starts_at);
+              const orgAvatar = (b.organization_avatar || "").trim();
               return (
                 <li key={b.id} className={["booking-history-item", bookingSlotStatusModifier(b)].filter(Boolean).join(" ")}>
                   <div className="booking-history-top">
                     <div className="booking-history-main">
-                      <p className="booking-history-datetime">{formatBookingDateTime(b.slot_starts_at)}</p>
+                      <p className="booking-history-datetime">
+                        <span className="booking-history-date">{when.date}</span>
+                        {when.time ? <span className="booking-history-time">{when.time}</span> : null}
+                      </p>
                       <p className="booking-history-service muted small">
                         {(b.service_name || "Услуга").trim()}
                         {staffLine ? ` · ${staffLine}` : ""}
@@ -8935,10 +9072,17 @@ export default function App() {
                         {isClient ? (
                           <button
                             type="button"
-                            className="booking-history-link"
+                            className="booking-history-org"
                             onClick={() => openOrgCardFromHistory(b)}
                           >
-                            {counterpartyLabel}
+                            {orgAvatar ? (
+                              <img src={orgAvatar} alt="" className="booking-history-org-avatar" />
+                            ) : (
+                              <span className="booking-history-org-avatar booking-history-org-avatar--fallback" aria-hidden>
+                                {(counterpartyLabel || "О").slice(0, 1).toUpperCase()}
+                              </span>
+                            )}
+                            <span>{counterpartyLabel}</span>
                           </button>
                         ) : (
                           isManualHold || !b.client ? (
@@ -8973,8 +9117,8 @@ export default function App() {
                       {bookingStatusLabel(b)}
                     </span>
                   </div>
-                  {isClient && b.payment_status === "pending" && b.status !== "cancelled" ? (
-                    <button type="button" className="ghost-btn small" onClick={(e) => resumeBookingPayment(b.id, e)}>
+                  {isClient && bookingPayStillOpen(b) ? (
+                    <button type="button" className="ghost-btn small booking-history-pay" onClick={(e) => resumeBookingPayment(b.id, e)}>
                       Оплатить {b.prepay_amount ? formatBookingPrice(b.prepay_amount) : ""}
                     </button>
                   ) : null}
@@ -9734,19 +9878,56 @@ export default function App() {
         <div className="form">
           <h3>Закладки главного меню</h3>
           <p className="muted">
-            Отмеченные пункты показываются сверху в виде кнопок. Снятые переносятся в меню (под «Личный кабинет»).
+            Отмеченные пункты показываются сверху. Удерживайте строку и перетащите, чтобы изменить порядок.
           </p>
           <div className="bookmark-settings-list">
-            {bookmarkOptions.map((b) => (
-              <label key={b.id} className="checkbox bookmark-settings-item">
+            {[
+              ...subnavBookmarks
+                .map((id) => bookmarkOptions.find((b) => b.id === id))
+                .filter(Boolean),
+              ...bookmarkOptions.filter((b) => !subnavBookmarks.includes(b.id)),
+            ].map((b) => {
+              const checked = subnavBookmarks.includes(b.id);
+              return (
+              <label
+                key={b.id}
+                className={["checkbox bookmark-settings-item", checked && "bookmark-settings-item--on"].filter(Boolean).join(" ")}
+                draggable={checked}
+                onDragStart={(e) => {
+                  if (!checked) return;
+                  e.dataTransfer.setData("text/plain", b.id);
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragOver={(e) => {
+                  if (!checked) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const fromId = e.dataTransfer.getData("text/plain");
+                  if (!fromId || fromId === b.id || !subnavBookmarks.includes(b.id)) return;
+                  setSubnavBookmarks((prev) => {
+                    const next = [...prev];
+                    const from = next.indexOf(fromId);
+                    const to = next.indexOf(b.id);
+                    if (from < 0 || to < 0) return prev;
+                    next.splice(from, 1);
+                    next.splice(to, 0, fromId);
+                    return next;
+                  });
+                }}
+              >
+                {checked ? <span className="bookmark-drag-handle" aria-hidden="true">⋮⋮</span> : null}
                 <input
                   type="checkbox"
-                  checked={subnavBookmarks.includes(b.id)}
+                  checked={checked}
                   onChange={() => toggleSubnavBookmark(b.id)}
                 />
                 <span>{bookmarkLabel(b.id, role, me?.provider_sphere)}</span>
               </label>
-            ))}
+            );
+            })}
           </div>
           <button
             type="button"
@@ -9790,10 +9971,14 @@ export default function App() {
             <p className="status">{resendStatus}</p>
           </>
         )}
-        {me?.role === "client" ? (
+        {me?.role === "client" || me?.role === "staff" ? (
           <form onSubmit={saveClientNotifyPrefs} className="form">
             <h3>Уведомления о записях</h3>
-            <p className="muted small">Push всегда; SMS и мессенджеры — если организация включила каналы и указала ключи.</p>
+            <p className="muted small">
+              {me?.role === "staff"
+                ? "Push всегда; Telegram — если привяжете чат. Напоминания приходят по записям, где вы мастер, когда организация включила канал."
+                : "Push всегда; SMS и мессенджеры — если организация включила каналы и указала ключи."}
+            </p>
             <label className="checkbox">
               <input
                 type="checkbox"
@@ -9920,7 +10105,7 @@ export default function App() {
             <h3>Предоплата при записи</h3>
             <p className="muted small">
               Чтобы снизить неприходы, включите частичную или полную предоплату. Деньги идут в магазин выбранного
-              эквайера организации, не на счёт платформы. Неоплаченная запись снимается через 20 минут.
+              эквайера организации, не на счёт платформы. Неоплаченная запись снимается через 10 минут.
             </p>
             <form onSubmit={saveOrgAcquiring} className="form">
               <label className="field-label" htmlFor="org-pay-provider">Эквайер</label>
@@ -11594,6 +11779,24 @@ export default function App() {
                     </>
                   )}
                 </form>
+              )}
+              {(authMode === "login" || registerStep === 1) && (
+                <div className="auth-social">
+                  <p className="auth-social-label">Войти через</p>
+                  <div className="auth-social-row">
+                    <div className="auth-social-telegram" ref={telegramLoginHostRef} />
+                    <button type="button" className="auth-social-btn" disabled title="Нужен кабинет Яндекс ID">
+                      Яндекс
+                    </button>
+                    <button type="button" className="auth-social-btn" disabled title="Нужно приложение VK ID">
+                      VK
+                    </button>
+                  </div>
+                  <p className="muted small">
+                    Сейчас работает Telegram (виджет бота). Яндекс ID и VK ID подключим, когда будут кабинеты приложений.
+                    Google в РФ без обхода ограничений недоступен как основной вход.
+                  </p>
+                </div>
               )}
               <p className="auth-switch-text">{authMode === "login" ? "Нет аккаунта?" : "Уже есть аккаунт?"}</p>
               <button className="ghost-btn" type="button" onClick={() => setAuthMode((prev) => (prev === "login" ? "register" : "login"))}>

@@ -185,6 +185,15 @@ class ProviderStaffViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         if request.user.role != "provider":
             return Response(status=status.HTTP_403_FORBIDDEN)
+        from subscriptions.access import provider_can_manage_staff
+
+        if not provider_can_manage_staff(request.user):
+            return Response(
+                {
+                    "detail": "Добавление сотрудников доступно на тарифе «Бизнес». Записи остаются бесплатными."
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         identifier = (request.data.get("invite_identifier") or "").strip()
         if identifier:
             if "@" in identifier:
@@ -418,10 +427,13 @@ class BookingViewSet(viewsets.ModelViewSet):
             queryset=Review.objects.select_related("reply").prefetch_related("photos").order_by("-created_at"),
         )
         return qs.select_related("client", "provider", "service", "slot", "staff").prefetch_related(
-            review_prefetch
+            review_prefetch, "provider__gallery_photos"
         )
 
     def get_queryset(self):
+        from .acquiring import expire_unpaid_bookings
+
+        expire_unpaid_bookings()
         user = self.request.user
         as_client = (self.request.query_params.get("as_client") or "").strip() in ("1", "true", "yes")
         if user.role == "provider" and as_client:

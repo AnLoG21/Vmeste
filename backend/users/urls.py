@@ -19,11 +19,14 @@ from .views import (
     UserRegisterView,
     VerifyEmailView,
 )
+from .telegram_auth import AuthProvidersView, TelegramLoginView
 
 urlpatterns = [
     path("roles/", RolesView.as_view(), name="user-roles"),
     path("spheres/", SpheresView.as_view(), name="user-spheres"),
     path("register/", UserRegisterView.as_view(), name="user-register"),
+    path("auth/providers/", AuthProvidersView.as_view(), name="user-auth-providers"),
+    path("auth/telegram/", TelegramLoginView.as_view(), name="user-auth-telegram"),
     path("verify-email/", VerifyEmailView.as_view(), name="user-verify-email"),
     path("resend-verification/", ResendVerificationView.as_view(), name="user-resend-verification"),
     path("me/", MeView.as_view(), name="user-me"),

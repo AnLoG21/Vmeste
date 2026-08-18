@@ -14,6 +14,7 @@ export default function ClientInspectionsPanel({
   onConsumedInitialReportId,
   onBackToChats,
   onOpenPhotos,
+  embedded = false,
 }) {
   const [list, setList] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -70,13 +71,15 @@ export default function ClientInspectionsPanel({
   }
 
   return (
-    <section className="card full-width">
+      <section className={embedded ? "booking-history-inspections" : "card full-width"}>
       <div className="inspection-workspace-head">
+        {embedded ? null : (
         <div>
           <h2>Согласование диагностики</h2>
           <p className="muted small">Отчёты сервисных центров: отметьте работы и утвердите ремонт.</p>
         </div>
-        {onBackToChats ? (
+        )}
+        {onBackToChats && !embedded ? (
           <button type="button" className="ghost-btn" onClick={onBackToChats}>
             ← В чаты
           </button>

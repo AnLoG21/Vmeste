@@ -13,7 +13,7 @@ from payments.gateway import create_org_payment, provider_ready, sync_payment_st
 
 from .models import Booking, ProviderAcquiring
 
-UNPAID_TTL_MINUTES = 20
+UNPAID_TTL_MINUTES = 10
 
 
 def booking_service_total(booking) -> Decimal:

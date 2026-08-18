@@ -73,6 +73,31 @@ def _telegram_bot_token(msg) -> str:
     return msg.resolved_telegram_bot_token()
 
 
+def _fanout_user_channels(msg, user, text: str) -> None:
+    if not user or not getattr(user, "pk", None):
+        return
+    tg_token = _telegram_bot_token(msg)
+    if msg.enable_telegram and tg_token and (getattr(user, "telegram_chat_id", None) or "").strip():
+        send_telegram(bot_token=tg_token, chat_id=user.telegram_chat_id, text=text)
+    if msg.enable_max and (getattr(user, "max_user_id", None) or "").strip() and (msg.max_bot_token or "").strip():
+        send_max(bot_token=msg.max_bot_token, chat_id=user.max_user_id, text=text)
+    if msg.enable_whatsapp and msg.has_whatsapp():
+        phone = (getattr(user, "phone", None) or "").strip()
+        if phone:
+            send_whatsapp_greenapi(
+                api_url=msg.wa_api_url,
+                id_instance=msg.wa_id_instance,
+                api_token=msg.wa_api_token,
+                phone=phone,
+                text=text,
+            )
+    if msg.enable_sms:
+        api_id = _sms_api_id(msg)
+        phone = (getattr(user, "phone", None) or "").strip()
+        if api_id and phone:
+            _send_sms(user, phone, text, api_id)
+
+
 def _fanout_org_channels(msg, provider, text: str) -> None:
     tg_token = _telegram_bot_token(msg)
     if msg.enable_telegram and tg_token and (msg.telegram_notify_chat_id or "").strip():
@@ -184,6 +209,13 @@ def deliver_booking_event(
         logger.exception("org push failed")
 
     _fanout_org_channels(msg, booking.provider, body)
+    staff = getattr(booking, "staff", None)
+    if staff and staff.pk and staff.pk != booking.provider_id:
+        allow_staff = True
+        if is_reminder:
+            allow_staff = bool(getattr(staff, "notify_booking_reminders", True))
+        if allow_staff:
+            _fanout_user_channels(msg, staff, body)
 
 
 def _booking_template_vars(booking) -> dict:

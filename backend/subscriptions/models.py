@@ -5,6 +5,7 @@ from django.utils import timezone
 
 class SubscriptionPlan(models.Model):
     class PlanType(models.TextChoices):
+        FREE = "free", "Бесплатный"
         TRIAL = "trial", "Пробный период"
         PAID = "paid", "Платный"
         CUSTOM = "custom", "Индивидуальный"

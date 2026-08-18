@@ -15,7 +15,8 @@ import { phoneFieldProps } from "./phone.js";
 import LandingDemo from "./LandingDemo.jsx";
 
 function formatPlanPrice(plan) {
-  if (plan?.plan_type === "trial" || plan?.slug === "starter") return "7 дней бесплатно";
+  if (plan?.plan_type === "free" || plan?.slug === "starter") return "Бесплатно";
+  if (plan?.plan_type === "trial") return "Бесплатно";
   const value = Number(plan?.price_monthly ?? plan);
   if (!value) return "По заявке";
   return `${value.toLocaleString("ru-RU")} ₽ / месяц`;
@@ -131,7 +132,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
     setPageMeta({
       title: "Вместе — онлайн-запись клиентов и автоматизация бизнеса",
       description:
-        "Вместе — платформа для онлайн-записи клиентов, каталога услуг и чатов. Старт — 7 дней бесплатно, Бизнес — 990 ₽/мес.",
+        "Вместе — платформа для онлайн-записи клиентов, каталога услуг и чатов. Записи бесплатно, Бизнес — 990 ₽/мес.",
       path: "/",
     });
   }, []);
@@ -524,15 +525,14 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
         <section className="landing-section landing-pricing" ref={pricingRef} id="pricing">
           <h2>Тарифы и цены</h2>
           <p className="landing-section-lead">
-            <strong>Старт</strong> — бесплатная неделя полного доступа (только один раз, потом
-            пропадает). <strong>Бизнес</strong> — 990 ₽/мес за весь основной функционал. Перед
-            оплатой можно ввести промокод или сразу перейти к ЮKassa.
+            <strong>Бесплатный</strong> — онлайн-запись без срока. <strong>Бизнес</strong> — 990 ₽/мес:
+            сотрудники и приоритетная поддержка. Перед оплатой можно ввести промокод.
           </p>
           <div className="subscriptions-plans landing-pricing-grid">
             {plans.map((plan) => (
               <article key={plan.id} className="subscriptions-plan-card">
                 <h3>
-                  {(plan.plan_type === "trial" || plan.slug === "starter") && "🎁 "}
+                  {(plan.plan_type === "trial" || plan.plan_type === "free" || plan.slug === "starter") && "🎁 "}
                   {plan.slug === "business" && "💼 "}
                   {plan.plan_type === "custom" && "🛠️ "}
                   {plan.name}
@@ -546,7 +546,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
                     ))}
                   </ul>
                 )}
-                {plan.plan_type === "trial" || plan.slug === "starter" ? (
+            {plan.plan_type === "trial" || plan.slug === "starter" || plan.plan_type === "free" ? (
                   <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
                     Попробовать бесплатно
                   </button>
@@ -734,7 +734,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
         <section className="landing-section landing-cta" id="start">
           <h2>Готовы начать?</h2>
           <p>
-            Попробуйте бесплатно 7 дней или сначала откройте демо — без обязательств и без скролла
+            Записи бесплатны. Сотрудники и приоритетная поддержка — в тарифе Бизнес. Можно сначала открыть демо.
             обратно наверх.
           </p>
           <div className="landing-hero-actions">

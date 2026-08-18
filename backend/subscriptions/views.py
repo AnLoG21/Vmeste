@@ -15,14 +15,22 @@ from .yookassa_client import create_payment, create_refund, get_payment
 
 def _activate_subscription(subscription: UserSubscription, *, days: int | None = None):
     now = timezone.now()
+    plan = subscription.plan
+    unlimited = (
+        plan.plan_type == SubscriptionPlan.PlanType.FREE
+        or plan.slug == "starter"
+        or (plan.price_monthly <= 0 and plan.plan_type not in (SubscriptionPlan.PlanType.CUSTOM, SubscriptionPlan.PlanType.PAID))
+    )
     if days is None:
-        if subscription.source == UserSubscription.Source.TRIAL:
+        if unlimited:
+            days = 0
+        elif subscription.source == UserSubscription.Source.TRIAL:
             days = subscription.plan.trial_days or 7
         else:
             days = 30
     subscription.status = UserSubscription.Status.ACTIVE
     subscription.period_start = now
-    subscription.period_end = now + timedelta(days=int(days))
+    subscription.period_end = None if unlimited or int(days) <= 0 else now + timedelta(days=int(days))
     subscription.reminder_3d_sent = False
     subscription.reminder_1d_sent = False
     subscription.save(
@@ -48,8 +56,8 @@ def _user_has_promo(user, code: str) -> bool:
 
 
 def _create_payment_for_plan(user, plan):
-    if plan.plan_type == SubscriptionPlan.PlanType.TRIAL:
-        return None, {"detail": "Пробный период активируется отдельно, без оплаты."}
+    if plan.plan_type in (SubscriptionPlan.PlanType.TRIAL, SubscriptionPlan.PlanType.FREE) or plan.slug == "starter":
+        return None, {"detail": "Бесплатный тариф активируется без оплаты."}
     if plan.plan_type == SubscriptionPlan.PlanType.CUSTOM or plan.price_monthly <= 0:
         return None, {"detail": "Для этого тарифа оставьте заявку на индивидуальную автоматизацию."}
 
@@ -171,8 +179,6 @@ class PlansListView(APIView):
             item = SubscriptionPlanSerializer(plan).data
             if plan.plan_type == SubscriptionPlan.PlanType.TRIAL or plan.slug == "starter":
                 item["trial_available"] = not trial_used
-                if trial_used and request.user and request.user.is_authenticated:
-                    continue
             out.append(item)
         return Response(out)
 
@@ -207,23 +213,27 @@ class ActivateTrialView(APIView):
     def post(self, request):
         if _user_has_trial(request.user):
             return Response(
-                {"detail": "Пробный период «Старт» можно активировать только один раз."},
+                {"detail": "Бесплатный тариф уже подключен."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         plan = SubscriptionPlan.objects.filter(
             slug="starter", is_active=True
         ).first() or SubscriptionPlan.objects.filter(
+            plan_type=SubscriptionPlan.PlanType.FREE, is_active=True
+        ).first() or SubscriptionPlan.objects.filter(
             plan_type=SubscriptionPlan.PlanType.TRIAL, is_active=True
         ).first()
         if not plan:
-            return Response({"detail": "Пробный тариф не найден."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Бесплатный тариф не найден."}, status=status.HTTP_404_NOT_FOUND)
+
+        from django.db.models import Q
 
         active = UserSubscription.objects.filter(
             user=request.user, status=UserSubscription.Status.ACTIVE
-        ).filter(period_end__gt=timezone.now()).exists()
+        ).filter(Q(period_end__isnull=True) | Q(period_end__gt=timezone.now())).exists()
         if active:
             return Response(
-                {"detail": "У вас уже есть активная подписка. Пробный период можно включить, когда она закончится."},
+                {"detail": "У вас уже есть активная подписка."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -235,11 +245,11 @@ class ActivateTrialView(APIView):
                 source=UserSubscription.Source.TRIAL,
                 auto_renew=False,
             )
-            _activate_subscription(sub, days=plan.trial_days or 7)
+            _activate_subscription(sub)
 
         return Response(
             {
-                "detail": f"Пробный период «{plan.name}» активирован на {plan.trial_days or 7} дн.",
+                "detail": f"Тариф «{plan.name}» подключён. Записи доступны бесплатно.",
                 "subscription": UserSubscriptionSerializer(sub).data,
             }
         )

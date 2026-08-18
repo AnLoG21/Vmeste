@@ -211,6 +211,7 @@ class BookingSerializer(serializers.ModelSerializer):
         source="service.price", max_digits=10, decimal_places=2, read_only=True
     )
     organization_name = serializers.SerializerMethodField()
+    organization_avatar = serializers.SerializerMethodField()
     client_username = serializers.CharField(source="client.username", read_only=True)
     client_display_name = serializers.SerializerMethodField()
     staff_display_name = serializers.SerializerMethodField()
@@ -235,6 +236,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "service_name",
             "service_price",
             "organization_name",
+            "organization_avatar",
             "client_username",
             "client_display_name",
             "staff_display_name",
@@ -254,6 +256,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "service_name",
             "service_price",
             "organization_name",
+            "organization_avatar",
             "client_username",
             "client_display_name",
             "staff_display_name",
@@ -273,6 +276,22 @@ class BookingSerializer(serializers.ModelSerializer):
             return ""
         name = (getattr(prov, "organization_name", None) or "").strip()
         return name or (prov.username or "")
+
+    def get_organization_avatar(self, obj):
+        prov = getattr(obj, "provider", None)
+        if not prov:
+            return ""
+        photos = getattr(prov, "gallery_photos", None)
+        if photos is None:
+            return ""
+        row = photos.all().order_by("sort_order", "id").first()
+        if not row or not row.image:
+            return ""
+        url = row.image.url
+        request = self.context.get("request")
+        if request:
+            return request.build_absolute_uri(url)
+        return url
 
     def get_review(self, obj):
         from reviews.models import Review

@@ -218,8 +218,10 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         user.save()
         if user.role == User.Role.PROVIDER:
             from .slug_utils import ensure_organization_slug
+            from subscriptions.access import ensure_free_subscription
 
             ensure_organization_slug(user)
+            ensure_free_subscription(user)
         return user
 
 

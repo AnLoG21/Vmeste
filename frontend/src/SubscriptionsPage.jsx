@@ -7,6 +7,13 @@ const STATUS_LABELS = {
   cancelled: "Отменена",
 };
 
+const PAYMENT_STATUS_LABELS = {
+  pending: "Ожидает",
+  succeeded: "Успешно",
+  cancelled: "Отменён",
+  refunded: "Возврат",
+};
+
 const SOURCE_LABELS = {
   paid: "Оплата",
   trial: "Пробный период",
@@ -78,7 +85,7 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
   }
 
   async function activateTrial(plan) {
-    setStatus("Активируем пробный период...");
+    setStatus("Подключаем бесплатный тариф...");
     const response = await authFetch(`${apiUrl}/subscriptions/trial/`, {
       method: "POST",
       body: JSON.stringify({ plan_id: plan.id }),
@@ -88,17 +95,17 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
       setStatus(data.detail || "Не удалось активировать.");
       return;
     }
-    setStatus(data.detail || "Пробный период активирован.");
+    setStatus(data.detail || "Бесплатный тариф подключён.");
     loadAll();
   }
 
   function openPayFlow(plan) {
-    if (Number(plan.price_monthly) <= 0 || plan.plan_type === "custom") {
-      setShowRequestForm(true);
+    if (plan.plan_type === "trial" || plan.plan_type === "free" || plan.slug === "starter") {
+      activateTrial(plan);
       return;
     }
-    if (plan.plan_type === "trial" || plan.slug === "starter") {
-      activateTrial(plan);
+    if (Number(plan.price_monthly) <= 0 || plan.plan_type === "custom") {
+      setShowRequestForm(true);
       return;
     }
     setPromoCode("");
@@ -218,7 +225,7 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
   }
 
   function planActionLabel(plan) {
-    if (plan.plan_type === "trial" || plan.slug === "starter") return "Активировать бесплатно";
+    if (plan.plan_type === "trial" || plan.plan_type === "free" || plan.slug === "starter") return "Подключить бесплатно";
     if (Number(plan.price_monthly) <= 0 || plan.plan_type === "custom") return "Оставить заявку";
     return "Оплатить";
   }
@@ -353,8 +360,8 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
               {plan.name}
             </h4>
             <p className="subscriptions-plan-desc">{plan.description}</p>
-            {plan.plan_type === "trial" || plan.slug === "starter" ? (
-              <p className="subscriptions-plan-price">7 дней бесплатно</p>
+            {plan.plan_type === "trial" || plan.plan_type === "free" || plan.slug === "starter" ? (
+              <p className="subscriptions-plan-price">Бесплатно</p>
             ) : Number(plan.price_monthly) > 0 ? (
               <p className="subscriptions-plan-price">
                 {Number(plan.price_monthly).toLocaleString("ru-RU")} ₽ / мес
@@ -400,7 +407,7 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
           <ul className="subscriptions-history">
             {payments.map((p) => (
               <li key={p.id}>
-                {p.plan_name}: {Number(p.amount).toLocaleString("ru-RU")} ₽ — {p.status}
+                {p.plan_name}: {Number(p.amount).toLocaleString("ru-RU")} ₽ — {p.status_label || PAYMENT_STATUS_LABELS[p.status] || p.status}
                 {p.paid_at && ` · ${formatDate(p.paid_at)}`}
                 {p.refunded_at && ` · возврат ${formatDate(p.refunded_at)}`}
               </li>

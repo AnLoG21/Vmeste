@@ -42,6 +42,7 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
 
 class PaymentSerializer(serializers.ModelSerializer):
     plan_name = serializers.CharField(source="plan.name", read_only=True)
+    status_label = serializers.SerializerMethodField()
 
     class Meta:
         model = Payment
@@ -50,8 +51,12 @@ class PaymentSerializer(serializers.ModelSerializer):
             "plan_name",
             "amount",
             "status",
+            "status_label",
             "confirmation_url",
             "created_at",
             "paid_at",
             "refunded_at",
         ]
+
+    def get_status_label(self, obj):
+        return obj.get_status_display()
