@@ -208,7 +208,8 @@ class DeleteAccountView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         if not password or not user.check_password(password):
-            return Response({"password": ["Неверный пароль."]}, status=status.HTTP_400_BAD_REQUEST)
+            if user.has_usable_password():
+                return Response({"password": ["Неверный пароль."]}, status=status.HTTP_400_BAD_REQUEST)
         if user.role == User.Role.PROVIDER:
             # Не даём удалить организацию с активной подпиской без явного предупреждения —
             # данные обезличиваются, доступ закрывается.
@@ -236,6 +237,11 @@ class DeleteAccountView(APIView):
         user.organization_working_hours = {}
         user.provider_license_number = ""
         user.email_verification_token = ""
+        user.telegram_chat_id = ""
+        user.telegram_link_token = ""
+        user.max_user_id = ""
+        user.yandex_id = ""
+        user.vk_id = ""
         user.is_active = False
         user.account_deleted_at = now
         user.set_unusable_password()

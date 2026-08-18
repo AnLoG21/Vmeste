@@ -7,7 +7,6 @@ import hmac
 import time
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -15,7 +14,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from notifications.telegram_bot import platform_bot_token, platform_bot_username
 
-User = get_user_model()
+from .oauth import _find_or_create_oauth_user
 
 
 def _verify_telegram_auth(payload: dict, bot_token: str) -> bool:
@@ -79,27 +78,25 @@ class TelegramLoginView(APIView):
         tg_id = str(payload.get("id") or "").strip()
         if not tg_id:
             return Response({"detail": "Нет Chat ID."}, status=status.HTTP_400_BAD_REQUEST)
-        user = User.objects.filter(telegram_chat_id=tg_id).first()
-        if not user:
-            login = (payload.get("username") or "").strip() or f"tg_{tg_id}"
-            base = login[:40]
-            username = base
-            n = 1
-            while User.objects.filter(username__iexact=username).exists():
-                n += 1
-                username = f"{base[:36]}_{n}"
-            first = (payload.get("first_name") or "").strip()[:150] or "Telegram"
-            last = (payload.get("last_name") or "").strip()[:150]
-            user = User(
-                username=username,
-                first_name=first,
-                last_name=last,
-                role=User.Role.CLIENT,
-                email_verified=True,
-                telegram_chat_id=tg_id,
+        login = (payload.get("username") or "").strip() or f"tg_{tg_id}"
+        first = (payload.get("first_name") or "").strip()[:150] or "Telegram"
+        last = (payload.get("last_name") or "").strip()[:150]
+        user = _find_or_create_oauth_user(
+            request=request,
+            id_field="telegram_chat_id",
+            oauth_id=tg_id,
+            email="",
+            first_name=first,
+            last_name=last,
+            phone="",
+            username_hint=login,
+            role=data.get("role") or "",
+        )
+        if not user.is_active or user.account_deleted_at:
+            return Response(
+                {"detail": "Этот аккаунт удалён. Зарегистрируйтесь заново."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-            user.set_unusable_password()
-            user.save()
         refresh = RefreshToken.for_user(user)
         return Response(
             {

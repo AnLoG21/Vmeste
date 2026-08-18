@@ -22,6 +22,8 @@ def _client_ua(request):
 
 
 class UserSerializer(serializers.ModelSerializer):
+    has_usable_password = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
@@ -58,6 +60,7 @@ class UserSerializer(serializers.ModelSerializer):
             "notify_booking_reminders",
             "notify_booking_status",
             "telegram_chat_id",
+            "has_usable_password",
         ]
         read_only_fields = [
             "id",
@@ -68,7 +71,11 @@ class UserSerializer(serializers.ModelSerializer):
             "organization_slug",
             "is_demo",
             "telegram_chat_id",
+            "has_usable_password",
         ]
+
+    def get_has_usable_password(self, obj):
+        return obj.has_usable_password()
 
 class ProviderGalleryPhotoSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()

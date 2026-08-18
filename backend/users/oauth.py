@@ -116,10 +116,26 @@ def _unique_username(prefix: str) -> str:
 def _issue_tokens(user) -> HttpResponseRedirect:
     from rest_framework_simplejwt.tokens import RefreshToken
 
+    if not getattr(user, "is_active", False) or getattr(user, "account_deleted_at", None):
+        return _redirect_home(error="Этот аккаунт удалён. Зарегистрируйтесь заново.")
     refresh = RefreshToken.for_user(user)
     response = _redirect_home(access=str(refresh.access_token), refresh=str(refresh))
     _clear_oauth_cookie(response)
     return response
+
+
+def _intended_role(raw) -> str:
+    role = str(raw or "").strip().lower()
+    if role == User.Role.PROVIDER:
+        return User.Role.PROVIDER
+    return User.Role.CLIENT
+
+
+def _detach_stale_oauth_ids(id_field: str, oauth_id: str) -> None:
+    """Снять VK/Яндекс с удалённых и выключенных аккаунтов, чтобы можно было зарегистрироваться заново."""
+    User.objects.filter(**{id_field: oauth_id}).exclude(is_active=True, account_deleted_at__isnull=True).update(
+        **{id_field: ""}
+    )
 
 
 def _find_or_create_oauth_user(
@@ -132,21 +148,29 @@ def _find_or_create_oauth_user(
     last_name: str,
     phone: str,
     username_hint: str,
+    role: str = "",
 ) -> User:
     oauth_id = str(oauth_id or "").strip()
     email = (email or "").strip().lower()
     first_name = (first_name or "").strip()[:150]
     last_name = (last_name or "").strip()[:150]
     phone = re.sub(r"[^\d+]", "", phone or "")[:30]
+    intended_role = _intended_role(role)
 
-    user = User.objects.filter(**{id_field: oauth_id, "account_deleted_at__isnull": True}).first()
+    _detach_stale_oauth_ids(id_field, oauth_id)
+    live = {"is_active": True, "account_deleted_at__isnull": True}
+    user = User.objects.filter(**{id_field: oauth_id}, **live).first()
     if not user and email:
-        user = User.objects.filter(email__iexact=email, account_deleted_at__isnull=True).first()
+        user = User.objects.filter(email__iexact=email, **live).first()
         if user:
             setattr(user, id_field, oauth_id)
 
     if user:
         changed = [id_field]
+        if intended_role == User.Role.PROVIDER and user.role == User.Role.CLIENT:
+            user.role = User.Role.PROVIDER
+            user.provider_authority_confirmed_at = timezone.now()
+            changed.extend(["role", "provider_authority_confirmed_at"])
         if email and not (user.email or "").strip():
             user.email = email
             user.email_verified = True
@@ -174,7 +198,7 @@ def _find_or_create_oauth_user(
         first_name=first_name or "Пользователь",
         last_name=last_name,
         phone=phone,
-        role=User.Role.CLIENT,
+        role=intended_role,
         email_verified=bool(email),
         consent_privacy_at=now,
         consent_offer_at=now,
@@ -184,6 +208,8 @@ def _find_or_create_oauth_user(
         consent_ip=_client_ip(request),
         consent_user_agent=_client_ua(request),
     )
+    if intended_role == User.Role.PROVIDER:
+        user.provider_authority_confirmed_at = now
     setattr(user, id_field, oauth_id)
     user.set_unusable_password()
     user.save()
@@ -207,7 +233,10 @@ class YandexOAuthStartView(APIView):
             "force_confirm": "yes",
         }
         response = HttpResponseRedirect(f"{YANDEX_AUTHORIZE}?{urlencode(params)}")
-        _set_oauth_cookie(response, {"p": "yandex", "s": state, "r": redirect_uri})
+        _set_oauth_cookie(
+            response,
+            {"p": "yandex", "s": state, "r": redirect_uri, "role": _intended_role(request.query_params.get("role"))},
+        )
         return response
 
 
@@ -264,6 +293,7 @@ class YandexOAuthCallbackView(APIView):
             last_name=(info.get("last_name") or "").strip(),
             phone=str(phone_obj.get("number") or ""),
             username_hint=(info.get("login") or f"ya_{yandex_id}"),
+            role=bag.get("role") or "",
         )
         return _issue_tokens(user)
 
@@ -309,7 +339,13 @@ class VkOAuthStartView(APIView):
         response = HttpResponseRedirect(f"{VK_AUTHORIZE}?{urlencode(params)}")
         _set_oauth_cookie(
             response,
-            {"p": "vk", "s": state, "v": verifier, "r": redirect_uri},
+            {
+                "p": "vk",
+                "s": state,
+                "v": verifier,
+                "r": redirect_uri,
+                "role": _intended_role(request.query_params.get("role")),
+            },
         )
         return response
 
@@ -370,5 +406,6 @@ class VkOAuthCallbackView(APIView):
             last_name=(info.get("last_name") or "").strip(),
             phone=str(info.get("phone") or ""),
             username_hint=f"vk_{vk_id}",
+            role=bag.get("role") or "",
         )
         return _issue_tokens(user)

@@ -4298,10 +4298,14 @@ export default function App() {
   useEffect(() => {
     window.__vmesteOnTelegramAuth = async (user) => {
       setAuthStatus("Входим через Telegram...");
+      const role =
+        authMode === "register" && (form.role === "client" || form.role === "provider")
+          ? form.role
+          : "";
       const response = await fetch(`${API_URL}/users/auth/telegram/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(user),
+        body: JSON.stringify(role ? { ...user, role } : user),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -4315,7 +4319,7 @@ export default function App() {
       delete window.__vmesteOnTelegramAuth;
       delete window.onTelegramAuth;
     };
-  }, []);
+  }, [authMode, form.role]);
 
   useEffect(() => {
     const host = telegramLoginHostRef.current;
@@ -4407,7 +4411,7 @@ export default function App() {
       setDeleteAccountStatus("Для подтверждения введите слово «удалить».");
       return;
     }
-    if (!deleteAccountForm.password) {
+    if (!deleteAccountForm.password && me?.has_usable_password !== false) {
       setDeleteAccountStatus("Укажите пароль.");
       return;
     }
@@ -11985,18 +11989,20 @@ export default function App() {
                   )}
                 </form>
               )}
-              {(authMode === "login" || authMode === "register") && registerStep === 1 && (
+              {(authMode === "login" || (authMode === "register" && form.role !== "staff")) && registerStep === 1 && (
                 <div className="auth-social">
-                  <p className="auth-social-label">Войти через</p>
+                  <p className="auth-social-label">
+                    {authMode === "register" ? "Зарегистрироваться через" : "Войти через"}
+                  </p>
                   <div className="auth-social-row">
                     <div className="auth-social-telegram" ref={telegramLoginHostRef} />
                     {authProviders.yandex ? (
-                      <a className="auth-social-logo-btn" href={`${API_URL}/users/auth/yandex/`} title="Яндекс">
+                      <a className="auth-social-logo-btn" href={`${API_URL}/users/auth/yandex/${authMode === "register" && (form.role === "client" || form.role === "provider") ? `?role=${encodeURIComponent(form.role)}` : ""}`} title="Яндекс">
                         <YandexIcon />
                       </a>
                     ) : null}
                     {authProviders.vk ? (
-                      <a className="auth-social-vkid" href={`${API_URL}/users/auth/vk/`} title="ВКонтакте, Одноклассники и Mail">
+                      <a className="auth-social-vkid" href={`${API_URL}/users/auth/vk/${authMode === "register" && (form.role === "client" || form.role === "provider") ? `?role=${encodeURIComponent(form.role)}` : ""}`} title="ВКонтакте, Одноклассники и Mail">
                         <span className="auth-social-logo-btn auth-social-vkid-vk">
                           <VkIcon />
                         </span>
@@ -12122,9 +12128,10 @@ export default function App() {
               <h3>Удаление аккаунта</h3>
               <p className="muted small">
                 Аккаунт будет деактивирован, персональные данные обезличены. Для подтверждения введите
-                пароль и слово «удалить».
+                {me?.has_usable_password === false ? " слово «удалить»." : " пароль и слово «удалить»."}
               </p>
               <form onSubmit={deleteMyAccount} className="form">
+                {me?.has_usable_password !== false ? (
                 <PasswordInput
                   placeholder="Текущий пароль"
                   value={deleteAccountForm.password}
@@ -12132,6 +12139,7 @@ export default function App() {
                   autoComplete="current-password"
                   required
                 />
+                ) : null}
                 <input
                   placeholder='Введите «удалить»'
                   value={deleteAccountForm.confirm}
