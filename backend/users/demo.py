@@ -78,6 +78,25 @@ DEMO_SPHERES = {
             {"username": "demo_cafe_client_1", "first_name": "Екатерина", "last_name": "Ильина"},
         ],
     },
+    "marketplaces": {
+        "username": "demo_market",
+        "email": "demo.market@vsevmeste.space",
+        "first_name": "Алексей",
+        "last_name": "Петров",
+        "organization_name": "Селлер «Полка»",
+        "organization_slug": "demo-market",
+        "address": "Москва, Холодильный пер., 3",
+        "lat": Decimal("55.710410"),
+        "lng": Decimal("37.626880"),
+        "phone": "+7 495 000-44-55",
+        "label": "Маркетплейсы",
+        "staff": [
+            {"username": "demo_market_staff_1", "first_name": "Кира", "last_name": "Фролова", "job_title": "Контент-менеджер"},
+        ],
+        "clients": [
+            {"username": "demo_market_client_1", "first_name": "Роман", "last_name": "Егоров"},
+        ],
+    },
 }
 
 
@@ -146,6 +165,7 @@ def _wipe_visitor_data(provider, cfg: dict):
     from locations.models import ProviderLocation
     from reviews.models import Review
     from inspections.models import InspectionReport
+    from marketplaces.models import MarketplaceApiLog, MarketplaceProductHistory, MarketplaceTemplate
 
     InspectionReport.objects.filter(provider=provider).delete()
     Booking.objects.filter(provider=provider).delete()
@@ -169,6 +189,9 @@ def _wipe_visitor_data(provider, cfg: dict):
     if conv_ids:
         Conversation.objects.filter(id__in=conv_ids).delete()
     Conversation.objects.filter(organization=provider).delete()
+    MarketplaceProductHistory.objects.filter(provider=provider).delete()
+    MarketplaceTemplate.objects.filter(provider=provider).delete()
+    MarketplaceApiLog.objects.filter(provider=provider).delete()
 
 
 def _restore_profile(provider, cfg: dict):
@@ -455,6 +478,45 @@ def _seed_cafe(provider):
     CafeMenuItem.objects.create(category=food, name="Паста карбонара", price=Decimal("640"), weight_grams=320, calories=610, is_new=True)
 
 
+def _seed_marketplaces(provider):
+    from marketplaces.models import MarketplaceProductHistory, MarketplaceSettings, MarketplaceTemplate
+
+    settings_obj, _ = MarketplaceSettings.objects.get_or_create(provider=provider)
+    settings_obj.environment = "sandbox"
+    settings_obj.ozon_client_id = "demo-ozon"
+    settings_obj.ozon_api_key = "demo"
+    settings_obj.wb_api_key = "demo"
+    settings_obj.save()
+    MarketplaceTemplate.objects.get_or_create(
+        provider=provider,
+        name="Базовый шаблон",
+        defaults={
+            "marketplace": "ozon",
+            "brand": "Вместе",
+            "description_text": "Демо-шаблон карточки товара.",
+            "price": Decimal("1290"),
+            "stock": 10,
+        },
+    )
+    samples = [
+        ("SKU-DEMO-1", "Термокружка 450 мл", "1290", 24, "ozon"),
+        ("SKU-DEMO-2", "Органайзер для стола", "890", 15, "ozon"),
+        ("SKU-DEMO-3", "Набор стикеров", "290", 80, "ozon"),
+        ("WB-DEMO-1", "Чехол для ноутбука", "1590", 12, "wildberries"),
+    ]
+    for sku, name, price, stock, marketplace in samples:
+        MarketplaceProductHistory.objects.get_or_create(
+            provider=provider,
+            marketplace=marketplace,
+            offer_id=sku,
+            defaults={
+                "product_data": {"offer_id": sku, "name": name, "price": price, "stock": stock, "brand": "Вместе"},
+                "status": "sandbox",
+                "response": {"status": "sandbox", "message": "Демо-карточка, API не вызывался."},
+            },
+        )
+
+
 def seed_sphere(sphere: str, *, reset: bool = True) -> User:
     cfg = DEMO_SPHERES[sphere]
     with transaction.atomic():
@@ -481,9 +543,12 @@ def seed_sphere(sphere: str, *, reset: bool = True) -> User:
         services = _activate_catalog(provider)
         staff_links = _ensure_staff(provider, cfg)
         clients = _ensure_clients(cfg)
-        _seed_location(provider, cfg)
+        if sphere != User.ProviderSphere.MARKETPLACES:
+            _seed_location(provider, cfg)
         if sphere == User.ProviderSphere.CAFE_RESTAURANT:
             _seed_cafe(provider)
+        elif sphere == User.ProviderSphere.MARKETPLACES:
+            _seed_marketplaces(provider)
         else:
             _seed_slots_and_bookings(provider, staff_links, clients, services)
             _seed_reviews(provider, clients, staff_links)

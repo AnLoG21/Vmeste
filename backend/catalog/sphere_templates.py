@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .cafe_catalog import CAFE_RESTAURANT_CATALOG
+from .marketplaces_catalog import MARKETPLACES_CATALOG
 from .service_center_catalog import SERVICE_CENTER_CATALOG
 
 # slug, name, subcategories: [{slug, name, services: [{slug, name, duration_minutes?, price?}]}]
@@ -376,6 +377,7 @@ SPHERE_CATALOGS: dict[str, dict[str, Any]] = {
     "hair_salon": HAIR_SALON_CATALOG,
     "service_center": SERVICE_CENTER_CATALOG,
     "cafe_restaurant": CAFE_RESTAURANT_CATALOG,
+    "marketplaces": MARKETPLACES_CATALOG,
 }
 
 

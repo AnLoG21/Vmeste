@@ -107,6 +107,7 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
         )
         if not getattr(request.user, "is_demo", False):
             qs = qs.filter(provider__is_demo=False)
+        qs = qs.exclude(provider__provider_sphere=User.ProviderSphere.MARKETPLACES)
 
         search = (request.query_params.get("search") or "").strip()
         if search:
@@ -221,6 +222,7 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
         ).exclude(id__in=seen_providers)
         if not getattr(request.user, "is_demo", False):
             providers_qs = providers_qs.filter(is_demo=False)
+        providers_qs = providers_qs.exclude(provider_sphere=User.ProviderSphere.MARKETPLACES)
 
         search = (request.query_params.get("search") or "").strip()
         if search:

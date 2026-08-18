@@ -20,6 +20,7 @@ urlpatterns = [
     path("api/subscriptions/", include("subscriptions.urls")),
     path("api/cafe/", include("cafe.urls")),
     path("api/inspections/", include("inspections.urls")),
+    path("api/marketplaces/", include("marketplaces.urls")),
 ]
 
 # Media must be reachable in production too (Caddy proxies /media/* here as fallback).

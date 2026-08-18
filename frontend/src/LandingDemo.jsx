@@ -19,6 +19,12 @@ const SPHERES = [
     title: "Кафе",
     text: "Зал со столами, PIN, меню и заказы — кабинет ресторана.",
   },
+  {
+    id: "marketplaces",
+    emoji: "📦",
+    title: "Маркетплейсы",
+    text: "Кабинет продавца Ozon и Wildberries: товары, заказы, аналитика и отзывы.",
+  },
 ];
 
 export default function LandingDemo({ open, onClose, onRegister, onStartDemo }) {

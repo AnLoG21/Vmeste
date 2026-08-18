@@ -80,6 +80,8 @@ def _schema_type(sphere: str) -> str:
         return "Restaurant"
     if sphere == "hair_salon":
         return "BeautySalon"
+    if sphere == "marketplaces":
+        return "OnlineStore"
     return "LocalBusiness"
 
 

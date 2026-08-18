@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     "subscriptions",
     "cafe",
     "inspections",
+    "marketplaces",
 ]
 
 MIDDLEWARE = [
@@ -227,4 +228,7 @@ YANDEX_OAUTH_CLIENT_ID = os.environ.get("YANDEX_OAUTH_CLIENT_ID", "").strip()
 YANDEX_OAUTH_CLIENT_SECRET = os.environ.get("YANDEX_OAUTH_CLIENT_SECRET", "").strip()
 VK_OAUTH_CLIENT_ID = os.environ.get("VK_OAUTH_CLIENT_ID", "").strip()
 VK_OAUTH_CLIENT_SECRET = os.environ.get("VK_OAUTH_CLIENT_SECRET", "").strip()
+
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
+MARKETPLACE_VIDEO_ENABLED = os.environ.get("MARKETPLACE_VIDEO_ENABLED", "0") in ("1", "true", "True", "yes")
 

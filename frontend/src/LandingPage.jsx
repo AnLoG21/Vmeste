@@ -47,6 +47,12 @@ const CASES = [
     role: "кафе",
     text: "Гости заказывают с телефона по QR: меню с фото, статусы столов и оплата без очереди к официанту на кассе.",
   },
+  {
+    initials: "АП",
+    name: "Алексей",
+    role: "селлер",
+    text: "Веду Ozon и Wildberries в одном кабинете: карточки, остатки и заказы без прыжков между площадками.",
+  },
 ];
 
 const INTEGRATIONS = [
@@ -323,14 +329,20 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               <span>Зал, PIN столов, меню и заказы</span>
               <em>Открыть кабинет</em>
             </button>
+            <button type="button" className="landing-demo-sphere" onClick={() => startFromPage("marketplaces")}>
+              <span className="landing-demo-sphere-emoji" aria-hidden="true">📦</span>
+              <strong>Маркетплейсы</strong>
+              <span>Ozon и Wildberries: товары, заказы, аналитика</span>
+              <em>Открыть кабинет</em>
+            </button>
           </div>
         </section>
 
         <section className="landing-section">
           <h2>Что такое Вместе?</h2>
           <p className="landing-section-lead">
-            Вместе — современная экосистема для сервисного бизнеса: салонов красоты, сервисных
-            центров, студий и любых организаций, где важны запись, коммуникация и прозрачность.
+            Вместе — современная экосистема для сервисного бизнеса и селлеров: салонов красоты,
+            сервисных центров, кафе и кабинетов Ozon/Wildberries.
           </p>
           <div className="landing-features">
             <article className="landing-feature">
@@ -417,6 +429,14 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </span>
               <strong>Кафе и рестораны</strong>
               <span>Зал, QR, меню, оплата</span>
+              <span className="landing-biz-link">Подробнее →</span>
+            </a>
+            <a className="landing-biz-card" href="/businesses#marketplaces">
+              <span className="landing-biz-emoji" aria-hidden="true">
+                📦
+              </span>
+              <strong>Маркетплейсы</strong>
+              <span>Ozon и Wildberries</span>
               <span className="landing-biz-link">Подробнее →</span>
             </a>
             <a className="landing-biz-card landing-biz-card--more" href="/#automation-request">
@@ -679,7 +699,8 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
                 <li>Регистрация и вход с подтверждением email</li>
                 <li>Роли: клиент, исполнитель (организация), сотрудник</li>
                 <li>Онлайн-запись и календарь интервалов</li>
-                <li>Каталог услуг с шаблонами: салон красоты, сервисный центр, кафе/рестораны</li>
+                <li>Каталог услуг с шаблонами: салон красоты, сервисный центр, кафе/рестораны, маркетплейсы</li>
+                <li>Кабинет селлера: ключи Ozon/WB, выгрузка товаров, заказы, склады, аналитика и отзывы</li>
                 <li>
                   Кафе: план зала, QR и PIN столов, меню (новинки, фото, кБЖУ), самовывоз/доставка,
                   оплата

@@ -268,10 +268,26 @@ function plateStickerSvg() {
 </svg>`;
 }
 
+function boxStickerSvg() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 52 52">
+  <defs>
+    <filter id="vmBx" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#0d47a1" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <g filter="url(#vmBx)">
+    <rect x="4" y="3" width="44" height="44" rx="13" fill="#1565c0"/>
+    <rect x="4" y="3" width="44" height="44" rx="13" fill="none" stroke="#fff" stroke-width="2.5"/>
+  </g>
+  <text x="26" y="33" text-anchor="middle" font-size="26" dominant-baseline="middle">📦</text>
+</svg>`;
+}
+
 export function sphereMapIconHref(sphere) {
   if (sphere === "hair_salon") return svgDataUrl(scissorsStickerSvg());
   if (sphere === "service_center") return svgDataUrl(wheelStickerSvg());
   if (sphere === "cafe_restaurant") return svgDataUrl(plateStickerSvg());
+  if (sphere === "marketplaces") return svgDataUrl(boxStickerSvg());
   return svgDataUrl(defaultStickerSvg());
 }
 

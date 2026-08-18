@@ -1,0 +1,175 @@
+.mp-workspace .mp-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.mp-workspace .mp-head h2 {
+  margin: 0 0 6px;
+}
+
+.mp-workspace .cafe-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+  align-items: start;
+}
+
+.mp-workspace .cafe-form-grid label,
+.mp-workspace .field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.92rem;
+  min-width: 0;
+}
+
+.mp-workspace .cafe-form-grid input,
+.mp-workspace .cafe-form-grid textarea,
+.mp-workspace .cafe-form-grid select,
+.mp-workspace .field-label input,
+.mp-workspace .field-label textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e0c2a8;
+  font: inherit;
+  background: #fff;
+}
+
+.mp-workspace .cafe-form-span2 {
+  grid-column: 1 / -1;
+}
+
+.mp-workspace .cafe-form-panel {
+  margin: 0 0 8px;
+  padding: 14px;
+  border: 1px solid #ffd9bd;
+  border-radius: 14px;
+  background: #fffaf5;
+}
+
+.mp-switch {
+  display: flex;
+  gap: 8px;
+}
+
+.mp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.mp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+  align-items: center;
+}
+
+.mp-actions input {
+  min-width: 180px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e0c2a8;
+  font: inherit;
+}
+
+.mp-file {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.mp-batch-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 0.7fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.mp-batch-row input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e0c2a8;
+  font: inherit;
+}
+
+.mp-templates,
+.mp-tpl-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.mp-tpl-row {
+  justify-content: space-between;
+  border-top: 1px solid #ffd9bd;
+  padding-top: 8px;
+}
+
+.mp-table-wrap {
+  overflow-x: auto;
+}
+
+.mp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.mp-table th,
+.mp-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid #ffd9bd;
+  vertical-align: middle;
+}
+
+.mp-json {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fffaf5;
+  border: 1px solid #ffd9bd;
+  overflow: auto;
+  max-height: 420px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+body.theme-dark .mp-workspace .cafe-form-panel,
+body.theme-dark .mp-actions input,
+body.theme-dark .mp-batch-row input,
+body.theme-dark .mp-json,
+body.theme-dark .mp-workspace .cafe-form-grid input,
+body.theme-dark .mp-workspace .cafe-form-grid textarea,
+body.theme-dark .mp-workspace .cafe-form-grid select,
+body.theme-dark .mp-workspace .field-label input,
+body.theme-dark .mp-workspace .field-label textarea {
+  background: #2a241f;
+  border-color: #5a4638;
+  color: inherit;
+}
+
+body.theme-dark .mp-table th,
+body.theme-dark .mp-table td,
+body.theme-dark .mp-tpl-row {
+  border-color: #5a4638;
+}
+
+@media (max-width: 900px) {
+  .mp-grid,
+  .mp-batch-row {
+    grid-template-columns: 1fr;
+  }
+}

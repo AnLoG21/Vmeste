@@ -8,6 +8,7 @@ import SubscriptionsPage from "./SubscriptionsPage.jsx";
 import AnalyticsPage from "./AnalyticsPage.jsx";
 import CafeOrdersPage from "./CafeOrdersPage.jsx";
 import CafeProviderWorkspace from "./CafeProviderWorkspace.jsx";
+import MarketplaceWorkspace from "./MarketplaceWorkspace.jsx";
 import InspectionWorkspace from "./InspectionWorkspace.jsx";
 import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
@@ -241,6 +242,7 @@ const BOOKMARK_CATALOG = [
   { id: "cafe", label: "Зал и меню", roles: ["provider"] },
   { id: "cafe_orders", label: "Заказы", roles: ["provider"] },
   { id: "inspections", label: "Приёмка", roles: ["provider", "staff"] },
+  { id: "marketplaces", label: "Маркетплейсы", roles: ["provider"], menuIcon: "market" },
   { id: "analytics", label: "Аналитика", roles: ["provider", "staff"], menuIcon: "analytics" },
 ];
 
@@ -250,6 +252,7 @@ const DEFAULT_SUBNAV_BOOKMARKS = {
   staff: ["bookings", "reviews", "chats"],
   provider_cafe: ["cafe_orders", "cafe", "client_map", "my_bookings", "chats"],
   provider_service: ["bookings", "client_map", "my_bookings", "chats", "inspections"],
+  provider_marketplaces: ["marketplaces", "chats"],
 };
 
 function defaultSubnavBookmarks(role, sphere) {
@@ -258,6 +261,9 @@ function defaultSubnavBookmarks(role, sphere) {
   }
   if (role === "provider" && sphere === "service_center") {
     return [...DEFAULT_SUBNAV_BOOKMARKS.provider_service];
+  }
+  if (role === "provider" && sphere === "marketplaces") {
+    return [...DEFAULT_SUBNAV_BOOKMARKS.provider_marketplaces];
   }
   if (role === "client") {
     return [...DEFAULT_SUBNAV_BOOKMARKS.client];
@@ -292,6 +298,11 @@ function loadSubnavBookmarks(role, sphere) {
       }
       if (!next.includes("client_map")) next = [...next, "client_map"];
       if (!next.includes("my_bookings")) next = [...next, "my_bookings"];
+    }
+    if (role === "provider" && sphere === "marketplaces") {
+      next = next.filter((id) => id !== "bookings" && id !== "intervals" && id !== "services" && id !== "my_bookings");
+      if (!next.includes("marketplaces")) next = ["marketplaces", ...next];
+      else next = ["marketplaces", ...next.filter((id) => id !== "marketplaces")];
     }
     return next.length ? next : [...fallback];
   } catch {
@@ -3135,6 +3146,8 @@ export default function App() {
     : [
         { key: "hair_salon", value: "Салон красоты" },
         { key: "service_center", value: "Сервисный центр" },
+        { key: "cafe_restaurant", value: "Кафе и рестораны" },
+        { key: "marketplaces", value: "Маркетплейсы" },
       ];
 
   useEffect(() => {
@@ -3267,6 +3280,13 @@ export default function App() {
       currentView === "bookings"
     ) {
       setCurrentView("cafe_orders");
+    }
+    if (
+      me?.role === "provider" &&
+      me?.provider_sphere === "marketplaces" &&
+      currentView === "bookings"
+    ) {
+      setCurrentView("marketplaces");
     }
   }, [me?.role, me?.provider_sphere, currentView, setCurrentView]);
 
@@ -4358,7 +4378,7 @@ export default function App() {
     localStorage.setItem("vmeste_refresh", data.refresh);
     localStorage.setItem("vmeste_demo", "1");
     setShowAuthModal(false);
-    setCurrentView(sphere === "cafe_restaurant" ? "cafe" : "bookings");
+    setCurrentView(sphere === "cafe_restaurant" ? "cafe" : sphere === "marketplaces" ? "marketplaces" : "bookings");
     setAuthStatus("");
   }
 
@@ -6899,6 +6919,12 @@ export default function App() {
     } else if (id === "cafe" || id === "cafe_orders") {
       return false;
     }
+    if (me?.provider_sphere === "marketplaces") {
+      if (id === "intervals" || id === "bookings" || id === "services" || id === "my_bookings") return false;
+      if (id === "marketplaces" && role !== "provider") return false;
+    } else if (id === "marketplaces") {
+      return false;
+    }
     if (id === "inspections") {
       if (role === "client") return false;
       if (role === "provider") return me?.provider_sphere === "service_center";
@@ -7049,6 +7075,10 @@ export default function App() {
         color: "#00897b",
         d: "M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l7.59-7.59L21 8l-9 9z",
       },
+      marketplaces: {
+        color: "#1565c0",
+        d: "M19 6h-2c0-2.76-2.24-5-5-5S7 3.24 7 6H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-7-3c1.66 0 3 1.34 3 3H9c0-1.66 1.34-3 3-3zm0 10c-2.76 0-5-2.24-5-5h2c0 1.66 1.34 3 3 3s3-1.34 3-3h2c0 2.76-2.24 5-5 5z",
+      },
     };
     const icon = icons[id] || icons.bookings;
     return (
@@ -7062,7 +7092,7 @@ export default function App() {
     const role = me?.role;
     if (!role) return [];
     const inSubnav = new Set(subnavBookmarks);
-    const preferred = ["cafe", "cafe_orders", "client_map", "my_bookings", "intervals", "services", "analytics", "bookings", "reviews", "chats"];
+    const preferred = ["marketplaces", "cafe", "cafe_orders", "client_map", "my_bookings", "intervals", "services", "analytics", "bookings", "reviews", "chats"];
     return preferred.filter((id) => !inSubnav.has(id) && isBookmarkAvailable(id));
   }
 
@@ -11298,7 +11328,7 @@ export default function App() {
       : { backgroundColor: activeChatWallpaper }
     : undefined;
   const tgMainDark = activeChatWallpaper === "#1e2a24";
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "inspections"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "inspections", "marketplaces"].includes(currentView);
 
   return (
     <div className={`page${accessToken ? " page-logged" : " page--guest"}`}>
@@ -11308,7 +11338,10 @@ export default function App() {
           className="brand-link brand-btn"
           onClick={() => {
             if (!accessToken) window.scrollTo({ top: 0, behavior: "smooth" });
-            else setCurrentView(me?.role === "client" ? "client_map" : "bookings");
+            else if (me?.role === "client") setCurrentView("client_map");
+            else if (me?.provider_sphere === "marketplaces") setCurrentView("marketplaces");
+            else if (me?.provider_sphere === "cafe_restaurant") setCurrentView("cafe_orders");
+            else setCurrentView("bookings");
           }}
         >
           <img
@@ -11527,6 +11560,12 @@ export default function App() {
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("cafe_orders"); setMenuOpen(false); }}>
                     <span className="menu-item-icon" aria-hidden="true">🧾</span>
                     <span className="menu-item-label">Заказы</span>
+                  </button>
+                )}
+                {canManageOrgSettings && me?.provider_sphere === "marketplaces" && !subnavBookmarks.includes("marketplaces") && (
+                  <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("marketplaces"); setMenuOpen(false); }}>
+                    <span className="menu-item-icon" aria-hidden="true">📦</span>
+                    <span className="menu-item-label">Маркетплейсы</span>
                   </button>
                 )}
                 {isBookmarkAvailable("inspections") && !subnavBookmarks.includes("inspections") && (
@@ -12093,6 +12132,9 @@ export default function App() {
         )}
         {accessToken && currentView === "cafe_orders" && me?.role === "provider" && me?.provider_sphere === "cafe_restaurant" && (
           <CafeOrdersPage authFetch={authFetch} API_URL={API_URL} />
+        )}
+        {accessToken && currentView === "marketplaces" && me?.role === "provider" && me?.provider_sphere === "marketplaces" && (
+          <MarketplaceWorkspace authFetch={authFetch} API_URL={API_URL} />
         )}
         {accessToken && currentView === "inspections" && (me?.role === "provider" || me?.role === "staff") && (
           <InspectionWorkspace
@@ -14084,7 +14126,7 @@ export default function App() {
                     </span>
                     <span>Любая</span>
                   </button>
-                  {sphereOptions.map((s) => (
+                  {sphereOptions.filter((s) => s.key !== "marketplaces").map((s) => (
                     <button
                       key={s.key}
                       type="button"

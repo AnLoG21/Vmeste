@@ -118,6 +118,7 @@ class PublicOrganizationSitemapView(APIView):
         qs = (
             User.objects.filter(role=User.Role.PROVIDER, is_active=True, is_demo=False)
             .exclude(organization_name="")
+            .exclude(provider_sphere=User.ProviderSphere.MARKETPLACES)
             .order_by("id")[:500]
         )
         items = []
@@ -158,6 +159,7 @@ class SitemapXmlView(APIView):
             User.objects.filter(role=User.Role.PROVIDER, is_active=True, is_demo=False)
             .exclude(organization_name="")
             .exclude(organization_slug="")
+            .exclude(provider_sphere=User.ProviderSphere.MARKETPLACES)
             .order_by("id")[:1000]
         )
         for u in qs:

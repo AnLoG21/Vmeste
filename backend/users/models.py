@@ -13,6 +13,7 @@ class User(AbstractUser):
         HAIR_SALON = "hair_salon", "Салон красоты"
         SERVICE_CENTER = "service_center", "Сервисный центр"
         CAFE_RESTAURANT = "cafe_restaurant", "Кафе и рестораны"
+        MARKETPLACES = "marketplaces", "Маркетплейсы"
 
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.CLIENT)
     phone = models.CharField(max_length=30, blank=True)

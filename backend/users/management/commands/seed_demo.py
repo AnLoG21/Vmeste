@@ -4,7 +4,7 @@ from users.demo import DEMO_SPHERES, ensure_demo_world
 
 
 class Command(BaseCommand):
-    help = "Создаёт общие демо-кабинеты (салон, автосервис, кафе) с тестовыми данными."
+    help = "Создаёт общие демо-кабинеты (салон, автосервис, кафе, маркетплейсы) с тестовыми данными."
 
     def add_arguments(self, parser):
         parser.add_argument(
