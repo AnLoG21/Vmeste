@@ -11,4 +11,6 @@ urlpatterns = [
     path("call/", views.MarketplaceCallView.as_view()),
     path("media/", views.MarketplaceMediaView.as_view()),
     path("generate-description/", views.MarketplaceDescribeView.as_view()),
+    path("yandex-disk/start/", views.YandexDiskStartView.as_view()),
+    path("yandex-disk/callback/", views.YandexDiskCallbackView.as_view()),
 ]

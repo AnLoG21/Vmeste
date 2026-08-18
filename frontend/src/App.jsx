@@ -4610,16 +4610,27 @@ export default function App() {
     if (me.role === "provider") {
       payload.provider_sphere = form.provider_sphere;
       payload.organization_name = String(form.organization_name || "").trim();
-      payload.organization_address =
-        simplifyCommaAddressLine(String(form.organization_address || "").trim()) ||
-        String(form.organization_address || "").trim();
-      payload.organization_latitude = form.organization_latitude;
-      payload.organization_longitude = form.organization_longitude;
-      payload.organization_entrance = form.entrance || "";
-      payload.organization_floor = form.floor || "";
-      payload.organization_apartment = form.apartment || "";
-      payload.organization_intercom = form.intercom || "";
-      payload.organization_address_extra = form.organization_address_details || "";
+      if (form.provider_sphere === "marketplaces") {
+        payload.organization_address = "";
+        payload.organization_latitude = null;
+        payload.organization_longitude = null;
+        payload.organization_entrance = "";
+        payload.organization_floor = "";
+        payload.organization_apartment = "";
+        payload.organization_intercom = "";
+        payload.organization_address_extra = "";
+      } else {
+        payload.organization_address =
+          simplifyCommaAddressLine(String(form.organization_address || "").trim()) ||
+          String(form.organization_address || "").trim();
+        payload.organization_latitude = form.organization_latitude;
+        payload.organization_longitude = form.organization_longitude;
+        payload.organization_entrance = form.entrance || "";
+        payload.organization_floor = form.floor || "";
+        payload.organization_apartment = form.apartment || "";
+        payload.organization_intercom = form.intercom || "";
+        payload.organization_address_extra = form.organization_address_details || "";
+      }
       payload.provider_license_number = String(form.provider_license_number || "").trim();
       payload.confirm_provider_authority = Boolean(form.confirm_provider_authority);
     }
@@ -12097,12 +12108,16 @@ export default function App() {
                         {sphereOptions.map((s) => <option key={s.key} value={s.key}>{s.value}</option>)}
                       </select>
                       <input placeholder="Название организации" value={form.organization_name} onChange={(e) => setForm({ ...form, organization_name: e.target.value })} required />
+                      {form.provider_sphere === "marketplaces" ? (
+                        <p className="muted small">Для маркетплейсов адрес и карта не нужны.</p>
+                      ) : (
+                        <>
                       <input
-                        placeholder={form.provider_sphere === "marketplaces" ? "Адрес (необязательно)" : "Адрес"}
+                        placeholder="Адрес"
                         value={form.organization_address}
                         onChange={(e) => onAddressInput(e.target.value)}
                         onBlur={(e) => geocodeAddress(e.target.value)}
-                        required={form.provider_sphere !== "marketplaces"}
+                        required
                       />
                       {detectedCity && <p className="hint">Город поиска: {detectedCity}</p>}
                       {addressSuggestions.length > 0 && (
@@ -12120,21 +12135,19 @@ export default function App() {
                           ))}
                         </div>
                       )}
-                      {form.provider_sphere === "marketplaces" ? null : <div id="reg-map" className="map-box" />}
-                      {form.provider_sphere === "marketplaces" ? null : (
+                      <div id="reg-map" className="map-box" />
                       <div className="address-details-grid">
                         <input placeholder="Подъезд" value={form.entrance} onChange={(e) => setForm({ ...form, entrance: e.target.value })} />
                         <input placeholder="Этаж" value={form.floor} onChange={(e) => setForm({ ...form, floor: e.target.value })} />
                         <input placeholder="Квартира/офис" value={form.apartment} onChange={(e) => setForm({ ...form, apartment: e.target.value })} />
                         <input placeholder="Домофон" value={form.intercom} onChange={(e) => setForm({ ...form, intercom: e.target.value })} />
                       </div>
-                      )}
-                      {form.provider_sphere === "marketplaces" ? null : (
                       <input
                         placeholder="Доп. ориентир (необязательно)"
                         value={form.organization_address_details}
                         onChange={(e) => setForm({ ...form, organization_address_details: e.target.value })}
                       />
+                        </>
                       )}
                       <input
                         placeholder="Номер лицензии (если есть)"

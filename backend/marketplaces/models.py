@@ -16,6 +16,12 @@ class MarketplaceSettings(models.Model):
     ozon_client_id = models.CharField(max_length=128, blank=True, default="")
     ozon_api_key = models.CharField(max_length=256, blank=True, default="")
     wb_api_key = models.CharField(max_length=512, blank=True, default="")
+    yandex_disk_token = models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        help_text="OAuth-токен Яндекс Диска для загрузки фото карточек.",
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     def has_ozon(self) -> bool:

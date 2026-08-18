@@ -5,6 +5,7 @@ import logging
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -47,6 +48,44 @@ def _settings(provider) -> MarketplaceSettings:
     return obj
 
 
+def _upload_to_yandex_disk(token: str, filename: str, upload) -> str | None:
+    import requests
+
+    token = (token or "").strip()
+    if not token:
+        return None
+    safe = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in (filename or "file"))[:80] or "file"
+    path = f"app:/Vmeste/{safe}"
+    headers = {"Authorization": f"OAuth {token}"}
+    href_res = requests.get(
+        "https://cloud-api.yandex.net/v1/disk/resources/upload",
+        params={"path": path, "overwrite": "true"},
+        headers=headers,
+        timeout=20,
+    )
+    href = (href_res.json() if href_res.content else {}).get("href") or ""
+    if not href:
+        return None
+    upload.seek(0)
+    put_res = requests.put(href, data=upload, timeout=90)
+    if not put_res.ok:
+        return None
+    requests.put(
+        "https://cloud-api.yandex.net/v1/disk/resources/publish",
+        params={"path": path},
+        headers=headers,
+        timeout=20,
+    )
+    meta = requests.get(
+        "https://cloud-api.yandex.net/v1/disk/resources",
+        params={"path": path, "fields": "public_url,file"},
+        headers=headers,
+        timeout=20,
+    )
+    body = meta.json() if meta.content else {}
+    return (body.get("file") or body.get("public_url") or "").strip() or None
+
+
 class MarketplaceSettingsView(APIView):
     def get(self, request):
         provider, err = _require_provider(request)
@@ -59,8 +98,11 @@ class MarketplaceSettingsView(APIView):
                 "ozon_client_id": s.ozon_client_id,
                 "has_ozon_api_key": s.has_ozon(),
                 "has_wb_api_key": s.has_wb(),
-                "video_enabled": bool(getattr(settings, "MARKETPLACE_VIDEO_ENABLED", False)),
+                "has_yandex_disk": bool((s.yandex_disk_token or "").strip()),
+                "yandex_disk_oauth": bool(settings.YANDEX_OAUTH_CLIENT_ID and settings.YANDEX_OAUTH_CLIENT_SECRET),
+                "video_enabled": True,
                 "ai_enabled": bool((getattr(settings, "OPENROUTER_API_KEY", "") or "").strip()),
+                "ai_model": getattr(settings, "OPENROUTER_MODEL", "") or "",
             }
         )
 
@@ -81,6 +123,12 @@ class MarketplaceSettingsView(APIView):
         wb = str(data.get("wb_api_key") or "").strip()
         if wb and not wb.startswith("•"):
             s.wb_api_key = wb
+        if "yandex_disk_token" in data:
+            disk = str(data.get("yandex_disk_token") or "").strip()
+            if disk == "":
+                s.yandex_disk_token = ""
+            elif not disk.startswith("•"):
+                s.yandex_disk_token = disk
         s.save()
         return self.get(request)
 
@@ -254,13 +302,7 @@ class MarketplaceCallView(APIView):
         url = resolve_url(url_tmpl, extra)
         try:
             if s.environment != "prod":
-                return Response(
-                    {
-                        "sandbox": True,
-                        "message": "Песочница: запрос к Ozon/WB не отправлялся.",
-                        "would_call": {"method": method, "url": url, "action": action, "payload": payload, "params": extra},
-                    }
-                )
+                return Response({"sandbox": True, "message": "Песочница: запрос к площадке не отправлялся. Включите боевой режим в меню «Управление»."})
             headers = ozon_headers(s) if marketplace == "ozon" else wb_headers(s)
             result = request_json(
                 provider=provider,
@@ -287,10 +329,19 @@ class MarketplaceMediaView(APIView):
         if not upload:
             return Response({"detail": "Файл не передан."}, status=400)
         from django.core.files.storage import default_storage
+        from io import BytesIO
 
+        raw = upload.read()
+        upload.seek(0)
         name = default_storage.save(f"marketplace/{provider.id}/{upload.name}", upload)
         url = request.build_absolute_uri(default_storage.url(name))
-        return Response({"url": url, "name": name})
+        s = _settings(provider)
+        disk_url = None
+        try:
+            disk_url = _upload_to_yandex_disk(s.yandex_disk_token, upload.name, BytesIO(raw))
+        except Exception:
+            logger.exception("yandex disk upload failed")
+        return Response({"url": disk_url or url, "name": upload.name, "stored": "yandex_disk" if disk_url else "local"})
 
 
 class MarketplaceDescribeView(APIView):
@@ -321,16 +372,128 @@ class MarketplaceDescribeView(APIView):
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
                 json={
-                    "model": "mistralai/mistral-7b-instruct:free",
+                    "model": getattr(settings, "OPENROUTER_MODEL", "") or "nvidia/nemotron-3-ultra-550b-a55b:free",
                     "messages": [{"role": "user", "content": prompt}],
                 },
-                timeout=40,
+                timeout=90,
             )
             body = resp.json() if resp.content else {}
             text = (((body.get("choices") or [{}])[0].get("message") or {}).get("content")) or ""
             if not text:
-                return Response({"detail": body.get("error") or "Пустой ответ модели."}, status=502)
+                err = body.get("error")
+                if isinstance(err, dict):
+                    err = err.get("message") or err.get("code") or str(err)
+                return Response({"detail": err or "Пустой ответ модели."}, status=502)
             return Response({"description": text.strip()})
         except Exception as exc:
             logger.exception("openrouter failed")
             return Response({"detail": str(exc)}, status=502)
+
+
+DISK_COOKIE = "vmeste_disk_oauth"
+YANDEX_AUTHORIZE = "https://oauth.yandex.ru/authorize"
+YANDEX_TOKEN = "https://oauth.yandex.ru/token"
+
+
+def _disk_origin() -> str:
+    return (getattr(settings, "FRONTEND_URL", None) or "https://vsevmeste.space").rstrip("/")
+
+
+def _disk_callback_url() -> str:
+    return f"{_disk_origin()}/api/marketplaces/yandex-disk/callback/"
+
+
+def _disk_signer():
+    from django.core.signing import TimestampSigner
+
+    return TimestampSigner(salt="vmeste-yandex-disk")
+
+
+class YandexDiskStartView(APIView):
+    def post(self, request):
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        if not (settings.YANDEX_OAUTH_CLIENT_ID and settings.YANDEX_OAUTH_CLIENT_SECRET):
+            return Response({"detail": "Яндекс OAuth на сервере не настроен."}, status=503)
+        import json
+        import secrets
+        from urllib.parse import urlencode
+
+        state = secrets.token_urlsafe(24)
+        redirect_uri = _disk_callback_url()
+        params = {
+            "response_type": "code",
+            "client_id": settings.YANDEX_OAUTH_CLIENT_ID,
+            "redirect_uri": redirect_uri,
+            "state": state,
+            "force_confirm": "yes",
+            "scope": "cloud_api:disk.app_folder",
+        }
+        url = f"{YANDEX_AUTHORIZE}?{urlencode(params)}"
+        payload = json.dumps({"uid": provider.id, "s": state, "r": redirect_uri}, separators=(",", ":"))
+        response = Response({"authorize_url": url})
+        response.set_cookie(
+            DISK_COOKIE,
+            _disk_signer().sign(payload),
+            max_age=600,
+            httponly=True,
+            secure=not settings.DEBUG,
+            samesite="Lax",
+            path="/",
+        )
+        return response
+
+
+class YandexDiskCallbackView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        import json
+        from urllib.parse import urlencode
+
+        import requests
+        from django.core.signing import BadSignature, SignatureExpired
+        from django.http import HttpResponseRedirect
+
+        origin = _disk_origin()
+        fail = f"{origin}/marketplaces?{urlencode({'disk': 'error'})}"
+        code = (request.GET.get("code") or "").strip()
+        state = (request.GET.get("state") or "").strip()
+        raw = request.COOKIES.get(DISK_COOKIE) or ""
+        if not code or not raw:
+            return HttpResponseRedirect(fail)
+        try:
+            bag = json.loads(_disk_signer().unsign(raw, max_age=600))
+        except (BadSignature, SignatureExpired, json.JSONDecodeError, TypeError, ValueError):
+            return HttpResponseRedirect(fail)
+        if bag.get("s") != state:
+            return HttpResponseRedirect(fail)
+        try:
+            token_res = requests.post(
+                YANDEX_TOKEN,
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "client_id": settings.YANDEX_OAUTH_CLIENT_ID,
+                    "client_secret": settings.YANDEX_OAUTH_CLIENT_SECRET,
+                },
+                timeout=20,
+            )
+            token_data = token_res.json() if token_res.content else {}
+            access = (token_data.get("access_token") or "").strip()
+        except Exception:
+            logger.exception("yandex disk token failed")
+            return HttpResponseRedirect(fail)
+        if not access:
+            return HttpResponseRedirect(fail)
+        user = User.objects.filter(pk=bag.get("uid"), role=User.Role.PROVIDER).first()
+        if not user:
+            return HttpResponseRedirect(fail)
+        s = _settings(user)
+        s.yandex_disk_token = access
+        s.save(update_fields=["yandex_disk_token"])
+        response = HttpResponseRedirect(f"{origin}/marketplaces?{urlencode({'disk': 'ok'})}")
+        response.delete_cookie(DISK_COOKIE, path="/")
+        return response

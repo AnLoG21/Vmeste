@@ -230,5 +230,6 @@ VK_OAUTH_CLIENT_ID = os.environ.get("VK_OAUTH_CLIENT_ID", "").strip()
 VK_OAUTH_CLIENT_SECRET = os.environ.get("VK_OAUTH_CLIENT_SECRET", "").strip()
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
-MARKETPLACE_VIDEO_ENABLED = os.environ.get("MARKETPLACE_VIDEO_ENABLED", "0") in ("1", "true", "True", "yes")
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free").strip()
+MARKETPLACE_VIDEO_ENABLED = os.environ.get("MARKETPLACE_VIDEO_ENABLED", "1") in ("1", "true", "True", "yes")
 

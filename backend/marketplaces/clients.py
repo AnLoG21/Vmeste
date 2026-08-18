@@ -14,7 +14,8 @@ TIMEOUT = 30
 
 OZON_BASE = "https://api-seller.ozon.ru"
 WB_CONTENT = "https://content-api.wildberries.ru"
-WB_SUPPLIERS = "https://suppliers-api.wildberries.ru"
+WB_MARKETPLACE = "https://marketplace-api.wildberries.ru"
+WB_PRICES = "https://discounts-prices-api.wildberries.ru"
 WB_STATS = "https://statistics-api.wildberries.ru"
 WB_FEEDBACKS = "https://feedbacks-api.wildberries.ru"
 
@@ -147,13 +148,13 @@ OZON_ACTIONS = {
     "categories.attributes": ("POST", f"{OZON_BASE}/v1/description-category/attribute"),
     "barcode.add": ("POST", f"{OZON_BASE}/v1/barcode/add"),
     "barcode.generate": ("POST", f"{OZON_BASE}/v1/barcode/generate"),
-    "products.import": ("POST", f"{OZON_BASE}/v2/product/import"),
-    "products.list": ("POST", f"{OZON_BASE}/v2/product/info/list"),
-    "products.info": ("POST", f"{OZON_BASE}/v2/product/info"),
-    "products.delete": ("POST", f"{OZON_BASE}/v1/product/delete"),
+    "products.import": ("POST", f"{OZON_BASE}/v3/product/import"),
+    "products.list": ("POST", f"{OZON_BASE}/v3/product/list"),
+    "products.info": ("POST", f"{OZON_BASE}/v3/product/info/list"),
+    "products.delete": ("POST", f"{OZON_BASE}/v1/product/archive"),
     "products.prices": ("POST", f"{OZON_BASE}/v1/product/import/prices"),
-    "products.stocks": ("POST", f"{OZON_BASE}/v1/product/import/stocks"),
-    "products.stocks_info": ("POST", f"{OZON_BASE}/v1/product/info/stocks"),
+    "products.stocks": ("POST", f"{OZON_BASE}/v2/products/stocks"),
+    "products.stocks_info": ("POST", f"{OZON_BASE}/v4/product/info/stocks"),
     "orders.list": ("POST", f"{OZON_BASE}/v3/posting/fbs/list"),
     "orders.info": ("POST", f"{OZON_BASE}/v3/posting/fbs/get"),
     "orders.cancel": ("POST", f"{OZON_BASE}/v3/posting/fbs/cancel"),
@@ -176,22 +177,22 @@ WB_ACTIONS = {
     "products.list": ("POST", f"{WB_CONTENT}/content/v2/get/cards/list"),
     "products.filter": ("POST", f"{WB_CONTENT}/content/v2/get/cards/list"),
     "products.delete": ("POST", f"{WB_CONTENT}/content/v2/cards/delete/trash"),
-    "products.prices": ("POST", f"{WB_SUPPLIERS}/public/api/v1/prices"),
-    "products.stocks": ("PUT", f"{WB_SUPPLIERS}/api/v3/stocks/{{warehouseId}}"),
-    "orders.list": ("GET", f"{WB_SUPPLIERS}/api/v3/orders/new"),
-    "orders.info": ("GET", f"{WB_SUPPLIERS}/api/marketplace/v3/orders/{{id}}"),
-    "orders.cancel": ("PATCH", f"{WB_SUPPLIERS}/api/v3/orders/{{id}}/cancel"),
+    "products.prices": ("POST", f"{WB_PRICES}/api/v2/upload/task"),
+    "products.stocks": ("PUT", f"{WB_MARKETPLACE}/api/v3/stocks/{{warehouseId}}"),
+    "orders.list": ("GET", f"{WB_MARKETPLACE}/api/v3/orders/new"),
+    "orders.info": ("GET", f"{WB_MARKETPLACE}/api/v3/orders/{{id}}"),
+    "orders.cancel": ("PATCH", f"{WB_MARKETPLACE}/api/v3/orders/{{id}}/cancel"),
     "analytics.sales": ("GET", f"{WB_STATS}/api/v1/supplier/reportDetailByPeriod"),
     "analytics.stocks": ("GET", f"{WB_STATS}/api/v1/supplier/stocks"),
     "analytics.payments": ("GET", f"{WB_STATS}/api/v1/supplier/sales"),
-    "warehouses.list": ("GET", f"{WB_SUPPLIERS}/api/v3/warehouses"),
+    "warehouses.list": ("GET", f"{WB_MARKETPLACE}/api/v3/warehouses"),
     "questions.list": ("GET", f"{WB_FEEDBACKS}/api/v1/questions"),
     "questions.answer": ("PATCH", f"{WB_FEEDBACKS}/api/v1/questions"),
     "feedbacks.list": ("GET", f"{WB_FEEDBACKS}/api/v1/feedbacks"),
     "feedbacks.answer": ("PATCH", f"{WB_FEEDBACKS}/api/v1/feedbacks"),
-    "supplies.list": ("GET", f"{WB_SUPPLIERS}/api/v3/supplies"),
-    "supplies.create": ("POST", f"{WB_SUPPLIERS}/api/v3/supplies"),
-    "supplies.close": ("PATCH", f"{WB_SUPPLIERS}/api/v3/supplies/{{id}}/close"),
+    "supplies.list": ("GET", f"{WB_MARKETPLACE}/api/v3/supplies"),
+    "supplies.create": ("POST", f"{WB_MARKETPLACE}/api/v3/supplies"),
+    "supplies.close": ("PATCH", f"{WB_MARKETPLACE}/api/v3/supplies/{{id}}/close"),
 }
 
 

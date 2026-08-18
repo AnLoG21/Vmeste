@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./marketplaceWorkspace.css";
+import { renderProductCardVideo } from "./productCardVideo.js";
 
 const TABS = [
   ["create", "Создать товар"],
@@ -20,8 +21,16 @@ const emptyProduct = () => ({
   barcode: "",
   category: "",
   type: "",
-  images: "",
+  images: [],
 });
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 function daysAgoIso(days) {
   const d = new Date();
@@ -55,19 +64,59 @@ function parseCsv(text) {
   });
 }
 
-function previewJson(value) {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value || "");
+function extractRecords(data) {
+  if (!data || data.sandbox) return [];
+  const queue = [data];
+  const seen = new Set();
+  while (queue.length) {
+    const cur = queue.shift();
+    if (!cur || typeof cur !== "object") continue;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    if (Array.isArray(cur)) {
+      if (cur.length && cur.every((x) => x && typeof x === "object" && !Array.isArray(x))) return cur;
+      cur.forEach((x) => queue.push(x));
+      continue;
+    }
+    Object.values(cur).forEach((v) => queue.push(v));
   }
+  return [];
+}
+
+function recordTitle(row) {
+  if (!row || typeof row !== "object") return String(row ?? "—");
+  return (
+    row.name ||
+    row.title ||
+    row.offer_id ||
+    row.vendorCode ||
+    row.posting_number ||
+    row.text ||
+    row.nmID ||
+    row.id ||
+    row.sku ||
+    "Запись"
+  );
+}
+
+function recordHint(row) {
+  if (!row || typeof row !== "object") return "";
+  const bits = [row.offer_id, row.vendorCode, row.status, row.price, row.date, row.createdDate].filter(Boolean);
+  return bits.slice(0, 3).join(" · ");
 }
 
 export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [tab, setTab] = useState("create");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [mp, setMp] = useState("ozon");
   const [settings, setSettings] = useState(null);
-  const [keysForm, setKeysForm] = useState({ ozon_client_id: "", ozon_api_key: "", wb_api_key: "", environment: "sandbox" });
+  const [keysForm, setKeysForm] = useState({
+    ozon_client_id: "",
+    ozon_api_key: "",
+    wb_api_key: "",
+    yandex_disk_token: "",
+    environment: "sandbox",
+  });
   const [history, setHistory] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [status, setStatus] = useState("");
@@ -83,6 +132,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [aiFeatures, setAiFeatures] = useState("");
 
   const base = `${API_URL}/marketplaces`;
+  const liveRows = useMemo(() => extractRecords(live), [live]);
 
   const loadSettings = useCallback(async () => {
     const res = await authFetch(`${base}/settings/`);
@@ -95,6 +145,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       environment: data.environment || "sandbox",
       ozon_api_key: data.has_ozon_api_key ? "••••••••" : "",
       wb_api_key: data.has_wb_api_key ? "••••••••" : "",
+      yandex_disk_token: data.has_yandex_disk ? "••••••••" : "",
     }));
   }, [authFetch, base]);
 
@@ -124,6 +175,17 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     loadHistory().catch(() => {});
   }, [loadHistory]);
 
+  useEffect(() => {
+    const disk = new URLSearchParams(window.location.search).get("disk");
+    if (!disk) return;
+    if (disk === "ok") setStatus("Яндекс Диск подключён.");
+    if (disk === "error") setStatus("Не удалось подключить Яндекс Диск. В кабинете Яндекса OAuth добавьте Redirect URI и право Disk.");
+    const next = new URL(window.location.href);
+    next.searchParams.delete("disk");
+    window.history.replaceState({}, document.title, `${next.pathname}${next.search}${next.hash}`);
+    loadSettings().catch(() => {});
+  }, [loadSettings]);
+
   async function readError(res) {
     const data = await res.json().catch(() => ({}));
     return data.detail || data.error || `Ошибка ${res.status}`;
@@ -137,6 +199,15 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || "Ошибка площадки");
     return data;
+  }
+
+  function showLive(data) {
+    if (!data || data.sandbox) {
+      setLive(null);
+      if (data?.sandbox) setStatus(data.message || "Песочница: запрос к площадке не отправлялся.");
+      return;
+    }
+    setLive(data);
   }
 
   async function withBusy(key, fn) {
@@ -160,6 +231,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       };
       if (keysForm.ozon_api_key && !keysForm.ozon_api_key.startsWith("•")) body.ozon_api_key = keysForm.ozon_api_key;
       if (keysForm.wb_api_key && !keysForm.wb_api_key.startsWith("•")) body.wb_api_key = keysForm.wb_api_key;
+      if (keysForm.yandex_disk_token && !keysForm.yandex_disk_token.startsWith("•")) {
+        body.yandex_disk_token = keysForm.yandex_disk_token;
+      }
       const res = await authFetch(`${base}/settings/`, { method: "PATCH", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await readError(res));
       await loadSettings();
@@ -168,9 +242,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   }
 
   function productPayload(row) {
-    const images = String(row.images || "")
-      .split(/[\s,]+/)
-      .map((u) => u.trim())
+    const images = (Array.isArray(row.images) ? row.images : [])
+      .filter((x) => (typeof x === "string" ? true : x?.kind !== "video"))
+      .map((x) => (typeof x === "string" ? x : x?.url))
       .filter(Boolean);
     return {
       offer_id: row.offer_id,
@@ -233,9 +307,16 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       const res = await authFetch(`${base}/media/`, { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Не удалось загрузить файл.");
-      setProduct((p) => ({ ...p, images: [p.images, data.url].filter(Boolean).join("\n") }));
-      setStatus(`Файл сохранён: ${data.url}`);
+      setProduct((p) => ({
+        ...p,
+        images: [...(Array.isArray(p.images) ? p.images : []), { url: data.url, name: file.name || data.name || "файл" }],
+      }));
+      setStatus(data.stored === "yandex_disk" ? "Файл загружен на Яндекс Диск." : "Файл сохранён.");
     });
+  }
+
+  function removeImage(url) {
+    setProduct((p) => ({ ...p, images: (p.images || []).filter((x) => (x.url || x) !== url) }));
   }
 
   async function generateDescription() {
@@ -257,13 +338,59 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     });
   }
 
+  async function generateVideo() {
+    await withBusy("video", async () => {
+      if (!product.name) throw new Error("Сначала укажите название товара.");
+      const blob = await renderProductCardVideo({
+        name: product.name,
+        brand: product.brand,
+        price: product.price,
+        images: product.images,
+        marketplace: mp,
+      });
+      const file = new File([blob], "card-video.webm", { type: "video/webm" });
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await authFetch(`${base}/media/`, { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Не удалось сохранить видео.");
+      setProduct((p) => ({
+        ...p,
+        images: [...(Array.isArray(p.images) ? p.images : []), { url: data.url, name: "Видео карточки", kind: "video" }],
+      }));
+      setStatus("Видео карточки готово.");
+    });
+  }
+
+  async function connectYandexDisk() {
+    await withBusy("disk", async () => {
+      const res = await authFetch(`${base}/yandex-disk/start/`, { method: "POST", credentials: "include" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Не удалось начать подключение Диска.");
+      if (!data.authorize_url) throw new Error("Яндекс не вернул ссылку авторизации.");
+      window.location.href = data.authorize_url;
+    });
+  }
+
+  async function disconnectYandexDisk() {
+    await withBusy("disk", async () => {
+      const res = await authFetch(`${base}/settings/`, {
+        method: "PATCH",
+        body: JSON.stringify({ yandex_disk_token: "" }),
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      await loadSettings();
+      setStatus("Яндекс Диск отключён.");
+    });
+  }
+
   async function applyPricesStocks() {
     await withBusy("prices", async () => {
       if (!priceStock.offer_id) throw new Error("Укажите артикул.");
       if (priceStock.price) {
         const payload =
           mp === "wildberries"
-            ? { data: [{ nmId: Number(priceStock.offer_id) || priceStock.offer_id, price: Number(priceStock.price) }] }
+            ? { data: [{ nmID: Number(priceStock.offer_id) || priceStock.offer_id, price: Number(priceStock.price), discount: 0 }] }
             : {
                 prices: [
                   {
@@ -275,7 +402,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                   },
                 ],
               };
-        setLive(await mpCall("products.prices", payload));
+        showLive(await mpCall("products.prices", payload));
       }
       if (priceStock.stock !== "") {
         const payload =
@@ -291,7 +418,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 ],
               };
         const params = mp === "wildberries" ? { warehouseId: warehouseId || "0" } : {};
-        setLive(await mpCall("products.stocks", payload, params));
+        showLive(await mpCall("products.stocks", payload, params));
       }
       setStatus("Цены и остатки отправлены.");
     });
@@ -303,20 +430,19 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       const payload =
         mp === "wildberries"
           ? { nmIDs: [Number(offerId) || offerId] }
-          : { products: [{ offer_id: offerId }] };
-      setLive(await mpCall("products.delete", payload));
+          : { product_id: [Number(offerId) || offerId] };
+      showLive(await mpCall("products.delete", payload));
       setStatus("Запрос на удаление отправлен.");
     });
   }
 
   async function loadLiveProducts() {
     await withBusy("live-products", async () => {
-      const ids = history.map((h) => h.offer_id).filter(Boolean).slice(0, 50);
       const payload =
         mp === "wildberries"
           ? { settings: { cursor: { limit: 100 }, filter: { withPhoto: -1 } } }
-          : { offer_id: ids, product_id: [], sku: [] };
-      setLive(await mpCall("products.list", payload));
+          : { filter: { visibility: "ALL" }, last_id: "", limit: 100 };
+      showLive(await mpCall("products.list", payload));
     });
   }
 
@@ -332,20 +458,20 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               offset: 0,
               with: { analytics_data: true, financial_data: true },
             };
-      setLive(await mpCall("orders.list", payload));
+      showLive(await mpCall("orders.list", payload));
     });
   }
 
   async function loadWarehouses() {
     await withBusy("wh", async () => {
-      setLive(await mpCall("warehouses.list", mp === "wildberries" ? {} : {}));
+      showLive(await mpCall("warehouses.list", {}));
     });
   }
 
   async function loadSupplies() {
     await withBusy("supplies", async () => {
       if (mp !== "wildberries") throw new Error("Поставки доступны для Wildberries.");
-      setLive(await mpCall("supplies.list"));
+      showLive(await mpCall("supplies.list"));
     });
   }
 
@@ -353,9 +479,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     await withBusy("analytics", async () => {
       if (mp === "wildberries") {
         const payload = { dateFrom: daysAgoIso(30).slice(0, 10), dateTo: new Date().toISOString().slice(0, 10) };
-        setLive(await mpCall("analytics.sales", payload, payload));
+        showLive(await mpCall("analytics.sales", payload, payload));
       } else {
-        setLive(
+        showLive(
           await mpCall("analytics.data", {
             date_from: daysAgoIso(30).slice(0, 10),
             date_to: new Date().toISOString().slice(0, 10),
@@ -372,9 +498,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   async function loadReviews() {
     await withBusy("reviews", async () => {
       if (mp === "wildberries") {
-        setLive(await mpCall("feedbacks.list", { isAnswered: false, take: 50, skip: 0 }, { isAnswered: false, take: 50, skip: 0 }));
+        showLive(await mpCall("feedbacks.list", { isAnswered: false, take: 50, skip: 0 }, { isAnswered: false, take: 50, skip: 0 }));
       } else {
-        setLive(await mpCall("reviews.list", { filter: {}, limit: 50, sort_dir: "DESC", last_id: 0 }));
+        showLive(await mpCall("reviews.list", { filter: {}, limit: 50, sort_dir: "DESC", last_id: 0 }));
       }
     });
   }
@@ -382,14 +508,14 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   async function loadQuestions() {
     await withBusy("questions", async () => {
       if (mp !== "wildberries") throw new Error("Вопросы покупателей — для Wildberries.");
-      setLive(await mpCall("questions.list", { isAnswered: false, take: 50, skip: 0 }, { isAnswered: false, take: 50, skip: 0 }));
+      showLive(await mpCall("questions.list", { isAnswered: false, take: 50, skip: 0 }, { isAnswered: false, take: 50, skip: 0 }));
     });
   }
 
   async function loadCategories() {
     await withBusy("cats", async () => {
-      if (mp === "wildberries") setLive(await mpCall("categories.parents"));
-      else setLive(await mpCall("categories.tree", { language: "DEFAULT" }));
+      if (mp === "wildberries") showLive(await mpCall("categories.parents"));
+      else showLive(await mpCall("categories.tree", { language: "DEFAULT" }));
     });
   }
 
@@ -426,46 +552,67 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       stock: String(t.stock ?? p.stock),
     }));
     setTab("create");
+    setMenuOpen(false);
     setStatus(`Подставлен шаблон «${t.name}».`);
   }
 
   const envLabel = settings?.environment === "prod" ? "Боевой режим" : "Песочница";
   const filteredHistory = useMemo(
-    () => history.filter((h) => !search || String(h.offer_id || "").toLowerCase().includes(search.toLowerCase()) || String(h.product?.name || "").toLowerCase().includes(search.toLowerCase())),
+    () =>
+      history.filter(
+        (h) =>
+          !search ||
+          String(h.offer_id || "").toLowerCase().includes(search.toLowerCase()) ||
+          String(h.product?.name || "").toLowerCase().includes(search.toLowerCase()),
+      ),
     [history, search],
   );
+  const tabLabel = TABS.find(([id]) => id === tab)?.[1] || "";
 
   return (
-    <section className="card full-width cafe-provider mp-workspace">
+    <section className={`card full-width cafe-provider mp-workspace ${mp === "wildberries" ? "mp-wb" : "mp-ozon"}`}>
       <div className="mp-head">
-        <div>
+        <div className="mp-head-title">
           <h2>Маркетплейсы</h2>
-          <p className="muted">
-            Кабинет продавца Ozon и Wildberries. Ключи хранятся у организации. Сейчас: {envLabel}.
-          </p>
+          <p className="muted">{envLabel}</p>
         </div>
-        <div className="mp-switch" role="group" aria-label="Площадка">
-          <button type="button" className={`ghost-btn${mp === "ozon" ? " is-active" : ""}`} onClick={() => setMp("ozon")}>
+        <div className="mp-toggle" role="group" aria-label="Площадка">
+          <button type="button" className={mp === "ozon" ? "is-active" : ""} onClick={() => setMp("ozon")}>
             Ozon
           </button>
-          <button type="button" className={`ghost-btn${mp === "wildberries" ? " is-active" : ""}`} onClick={() => setMp("wildberries")}>
-            Wildberries
+          <button type="button" className={mp === "wildberries" ? "is-active" : ""} onClick={() => setMp("wildberries")}>
+            WB
           </button>
+        </div>
+        <div className="mp-menu">
+          <button type="button" className="mp-menu-btn" onClick={() => setMenuOpen((v) => !v)} aria-expanded={menuOpen}>
+            Меню
+          </button>
+          {menuOpen ? (
+            <div className="mp-menu-drop">
+              {TABS.map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={tab === id ? "is-active" : ""}
+                  onClick={() => {
+                    setTab(id);
+                    setMenuOpen(false);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
 
       {status ? <p className="status">{status}</p> : null}
-
-      <div className="cafe-provider-tabs">
-        {TABS.map(([id, label]) => (
-          <button key={id} type="button" className={`ghost-btn${tab === id ? " is-active" : ""}`} onClick={() => setTab(id)}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <p className="mp-section-title">{tabLabel}</p>
 
       {tab === "create" && (
-        <div className="mp-grid">
+        <div className="mp-stack">
           <form className="cafe-form-panel" onSubmit={submitOne}>
             <h3>Карточка товара</h3>
             <div className="cafe-form-grid">
@@ -505,29 +652,50 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 Описание
                 <textarea rows={4} value={product.description} onChange={(e) => setProduct((p) => ({ ...p, description: e.target.value }))} />
               </label>
-              <label className="cafe-form-span2">
-                Ссылки на фото (по одной в строке)
-                <textarea rows={3} value={product.images} onChange={(e) => setProduct((p) => ({ ...p, images: e.target.value }))} />
-              </label>
+              <div className="cafe-form-span2 mp-media">
+                <div className="mp-media-head">
+                  <span>Медиа</span>
+                  <label className="mp-plus-btn" title="Загрузить фото">
+                    <PlusIcon />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={(e) => {
+                        uploadMedia(e.target.files?.[0]);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+                {(product.images || []).length ? (
+                  <ul className="mp-media-list">
+                    {(product.images || []).map((item) => {
+                      const url = item.url || item;
+                      const name = item.name || url;
+                      const isVideo = item.kind === "video" || /\.webm($|\?)/i.test(url);
+                      return (
+                        <li key={url}>
+                          {isVideo ? <video src={url} muted playsInline /> : <img src={url} alt="" />}
+                          <span title={name}>{name}</span>
+                          <button type="button" className="ghost-btn" onClick={() => removeImage(url)}>
+                            Убрать
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="muted small">Файлы ещё не загружены. Нажмите плюс, чтобы добавить фото.</p>
+                )}
+              </div>
             </div>
             <div className="mp-actions">
-              <label className="ghost-btn mp-file">
-                Загрузить медиа
-                <input
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(e) => {
-                    uploadMedia(e.target.files?.[0]);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
               <button type="button" className="ghost-btn" disabled={!settings?.ai_enabled || busy === "ai"} onClick={generateDescription}>
                 {settings?.ai_enabled ? (busy === "ai" ? "Генерация…" : "ИИ-описание") : "ИИ выключен"}
               </button>
-              <button type="button" className="ghost-btn" disabled title={settings?.video_enabled ? "" : "Генерация видео на сервере отключена"}>
-                Видео карточки
+              <button type="button" className="ghost-btn" disabled={busy === "video"} onClick={generateVideo}>
+                {busy === "video" ? "Сборка видео…" : "Видео карточки"}
               </button>
               <button type="submit" disabled={busy === "create"}>
                 {busy === "create" ? "Выгрузка…" : "Выгрузить"}
@@ -542,7 +710,12 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
           </form>
 
           <div className="cafe-form-panel">
-            <h3>Пакет и CSV</h3>
+            <div className="mp-media-head">
+              <h3>Пакет и CSV</h3>
+              <button type="button" className="mp-plus-btn" title="Добавить строку" onClick={() => setBatch((rows) => [...rows, emptyProduct()])}>
+                <PlusIcon />
+              </button>
+            </div>
             {batch.map((row, i) => (
               <div key={i} className="mp-batch-row">
                 <input placeholder="Артикул" value={row.offer_id} onChange={(e) => setBatch((rows) => rows.map((r, idx) => (idx === i ? { ...r, offer_id: e.target.value } : r)))} />
@@ -551,9 +724,6 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               </div>
             ))}
             <div className="mp-actions">
-              <button type="button" className="ghost-btn" onClick={() => setBatch((rows) => [...rows, emptyProduct()])}>
-                Ещё товар
-              </button>
               <button type="button" disabled={busy === "batch"} onClick={submitBatch}>
                 Выгрузить пакет
               </button>
@@ -619,13 +789,30 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 ))}
               </tbody>
             </table>
-            {!filteredHistory.length ? <p className="muted">Пока нет выгрузок. Создайте карточку на вкладке «Создать товар».</p> : null}
+            {!filteredHistory.length ? <p className="muted">Пока нет выгрузок. Создайте карточку в меню «Создать товар».</p> : null}
           </div>
         </div>
       )}
 
       {tab === "manage" && (
-        <div className="mp-grid">
+        <div className="mp-stack">
+          <div className="cafe-form-panel">
+            <h3>Что нужно для функций</h3>
+            <ul className="mp-need-list">
+              <li>
+                <strong>Ozon / WB:</strong> ключи ниже. Боевые запросы идут только в режиме «Боевой».
+              </li>
+              <li>
+                <strong>ИИ-описание:</strong> {settings?.ai_enabled ? `включено (${settings.ai_model || "OpenRouter"}).` : "выключено. На сервере задайте OPENROUTER_API_KEY."}
+              </li>
+              <li>
+                <strong>Яндекс Диск:</strong> {settings?.has_yandex_disk ? "подключён, фото уходят на Диск." : settings?.yandex_disk_oauth ? "нажмите «Подключить Яндекс Диск»." : "на сервере не заданы YANDEX_OAUTH_CLIENT_ID/SECRET."}
+              </li>
+              <li>
+                <strong>Видео карточки:</strong> собирается в браузере из названия, цены и загруженных фото.
+              </li>
+            </ul>
+          </div>
           <form className="cafe-form-panel" onSubmit={saveKeys}>
             <h3>Ключи площадок</h3>
             <p className="muted small">Не хранятся в платформенном .env — только у этой организации.</p>
@@ -649,6 +836,20 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 Wildberries API Key
                 <input type="password" autoComplete="off" value={keysForm.wb_api_key} onChange={(e) => setKeysForm((p) => ({ ...p, wb_api_key: e.target.value }))} />
               </label>
+              <div className="cafe-form-span2 mp-disk-row">
+                <span>Яндекс Диск</span>
+                <div className="mp-actions">
+                  {settings?.has_yandex_disk ? (
+                    <button type="button" className="ghost-btn" disabled={busy === "disk"} onClick={disconnectYandexDisk}>
+                      Отключить Диск
+                    </button>
+                  ) : (
+                    <button type="button" disabled={busy === "disk" || !settings?.yandex_disk_oauth} onClick={connectYandexDisk}>
+                      {busy === "disk" ? "Подключение…" : "Подключить Яндекс Диск"}
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
             <button type="submit" disabled={busy === "keys"}>
               Сохранить ключи
@@ -746,7 +947,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               </button>
             ) : null}
           </div>
-          <p className="muted small">В песочнице изменяющие операции не уходят на площадку. Чтение заказов и складов выполняется, если указаны ключи.</p>
+          <p className="muted small">В песочнице запросы на площадку не уходят. Для реальных заказов включите боевой режим и ключи.</p>
         </div>
       )}
 
@@ -775,10 +976,15 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         </div>
       )}
 
-      {live ? (
-        <pre className="mp-json" aria-label="Ответ площадки">
-          {previewJson(live)}
-        </pre>
+      {liveRows.length ? (
+        <ul className="mp-live-list">
+          {liveRows.slice(0, 80).map((row, i) => (
+            <li key={row.id || row.offer_id || row.posting_number || i}>
+              <strong>{recordTitle(row)}</strong>
+              {recordHint(row) ? <span className="muted small">{recordHint(row)}</span> : null}
+            </li>
+          ))}
+        </ul>
       ) : null}
     </section>
   );
