@@ -162,6 +162,19 @@ function cleanAiDescription(text) {
     .trim();
 }
 
+function publicUrlFor(item) {
+  if (!item) return "";
+  if (typeof item === "string") return item;
+  return item.public_url || item.disk_url || item.url || "";
+}
+
+function importStatusLabel(row) {
+  if (!row) return "—";
+  if (row.import_status) return row.import_status;
+  if (row.import_task_id) return "pending";
+  return row.status || "—";
+}
+
 export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [tab, setTab] = useState("create");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -193,6 +206,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [attributeFields, setAttributeFields] = useState([]);
   const [categoryQuery, setCategoryQuery] = useState("");
   const [attributesHint, setAttributesHint] = useState("");
+  const [editingHistoryId, setEditingHistoryId] = useState(null);
 
   useEffect(() => {
     setCategoryOptions([]);
@@ -325,7 +339,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   function productPayload(row) {
     const images = (Array.isArray(row.images) ? row.images : [])
       .filter((x) => (typeof x === "string" ? true : x?.kind !== "video"))
-      .map((x) => (typeof x === "string" ? x : x?.url))
+      .map((x) => publicUrlFor(x))
       .filter(Boolean);
     return {
       offer_id: row.offer_id,
@@ -344,6 +358,40 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     };
   }
 
+  async function refreshImportStatus(row) {
+    const body = row?.id ? { history_id: row.id } : { task_id: row.import_task_id };
+    const res = await authFetch(`${base}/products/import-status/`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || "Не удалось получить статус импорта.");
+    await loadHistory();
+    return data;
+  }
+
+  async function pollImportStatus(historyId, taskId, attempts = 8) {
+    for (let i = 0; i < attempts; i += 1) {
+      await new Promise((r) => setTimeout(r, i === 0 ? 1500 : 2500));
+      try {
+        const data = await refreshImportStatus({ id: historyId, import_task_id: taskId });
+        const status = data.import_status || "pending";
+        if (status === "success") {
+          setStatus(`Ozon: карточка импортирована (task ${taskId}).`);
+          return;
+        }
+        if (status === "failed") {
+          const err = (data.items || []).map((x) => x.errors).filter(Boolean).join("; ");
+          setStatus(err ? `Ozon: ошибка импорта — ${err}` : "Ozon: ошибка импорта.");
+          return;
+        }
+      } catch {
+        /* keep polling */
+      }
+    }
+    setStatus(`Ozon: импорт ещё обрабатывается (task ${taskId}). Нажмите «Статус импорта» позже.`);
+  }
+
   async function importProducts(products) {
     const res = await authFetch(`${base}/products/import/`, {
       method: "POST",
@@ -359,6 +407,11 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       setStatus(`Выгружено: ${data.ok} из ${data.total}.`);
     }
     await loadHistory();
+    if (mp === "ozon") {
+      for (const row of data.results || []) {
+        if (row.ok && row.task_id) pollImportStatus(row.id, row.task_id);
+      }
+    }
     return data;
   }
 
@@ -368,6 +421,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       if (!product.offer_id || !product.name) throw new Error("Нужны артикул и название.");
       await importProducts([productPayload(product)]);
       setProduct(emptyProduct());
+      setEditingHistoryId(null);
+      setAttributeFields([]);
+      setAttributesHint("");
     });
   }
 
@@ -476,7 +532,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     }
     return {
       url: data.url,
+      public_url: data.public_url || data.disk_url || data.url,
       thumb_url: data.thumb_url || data.url,
+      disk_url: data.disk_url || "",
       previewUrl,
       name: file.name || data.name || "файл",
       kind: isVideoFile(file) ? "video" : "image",
@@ -543,6 +601,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
           if (item.stored === "yandex_disk") diskCount += 1;
           added.push({
             url: item.url,
+            public_url: item.public_url,
+            disk_url: item.disk_url,
             previewUrl: item.previewUrl,
             name: item.name,
             kind: item.kind,
@@ -641,7 +701,13 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         URL.revokeObjectURL(localPreview);
         throw new Error(data.detail || "Не удалось сохранить видео.");
       }
-      const videoItem = { url: data.url, previewUrl: localPreview, name: "Видео карточки", kind: "video" };
+      const videoItem = {
+        url: data.url,
+        public_url: data.public_url || data.disk_url || data.url,
+        previewUrl: localPreview,
+        name: "Видео карточки",
+        kind: "video",
+      };
       setProduct((p) => ({
         ...p,
         images: [...(Array.isArray(p.images) ? p.images : []), videoItem],
@@ -721,6 +787,74 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
           : { product_id: [Number(offerId) || offerId] };
       showLive(await mpCall("products.delete", payload));
       setStatus("Запрос на удаление отправлен.");
+    });
+  }
+
+  function productFromHistory(row) {
+    const p = row?.product || {};
+    const images = (Array.isArray(p.images) ? p.images : []).map((img) => {
+      if (typeof img === "string") {
+        return { url: img, public_url: img };
+      }
+      return {
+        ...img,
+        public_url: img.public_url || img.disk_url || img.url || "",
+        url: img.url || img.public_url || "",
+      };
+    });
+    return {
+      offer_id: p.offer_id || row.offer_id || "",
+      name: p.name || "",
+      brand: p.brand || "",
+      price: p.price != null ? String(p.price) : "",
+      stock: p.stock != null ? String(p.stock) : "0",
+      description: p.description || "",
+      barcode: p.barcode || "",
+      category: p.category != null ? String(p.category) : "",
+      type: p.type != null ? String(p.type) : "",
+      characteristics: p.characteristics || {},
+      images,
+    };
+  }
+
+  function openEditorFromHistory(row) {
+    setProduct(productFromHistory(row));
+    setEditingHistoryId(row.id);
+    setTab("create");
+    setStatus(`Редактирование ${row.offer_id}. Измените поля и нажмите «Сохранить на площадке».`);
+    if (row.product?.category) {
+      loadAttributesForCategory(String(row.product.category), String(row.product.type || "")).catch(() => {});
+    }
+  }
+
+  async function fetchProductForEdit(offerId) {
+    await withBusy("fetch-product", async () => {
+      if (!offerId) throw new Error("Укажите артикул.");
+      const res = await authFetch(`${base}/products/fetch/`, {
+        method: "POST",
+        body: JSON.stringify({ marketplace: mp, offer_id: offerId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Не удалось загрузить товар.");
+      setProduct({ ...emptyProduct(), ...data.product });
+      setEditingHistoryId(null);
+      setTab("create");
+      setStatus(`Загружено с ${mp === "wildberries" ? "Wildberries" : "Ozon"}: ${offerId}`);
+      if (data.product?.category) {
+        loadAttributesForCategory(String(data.product.category), String(data.product.type || "")).catch(() => {});
+      }
+    });
+  }
+
+  async function checkImportStatus(row) {
+    await withBusy("import-status", async () => {
+      const data = await refreshImportStatus(row);
+      const err = (data.items || []).map((x) => x.errors).filter(Boolean).join("; ");
+      setStatus(
+        err
+          ? `Статус импорта: ${data.import_status}. ${err}`
+          : `Статус импорта Ozon: ${data.import_status || "pending"}`,
+      );
     });
   }
 
@@ -914,7 +1048,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       {tab === "create" && (
         <div className="mp-stack">
           <form className="cafe-form-panel" onSubmit={submitOne}>
-            <h3>Карточка товара</h3>
+            <h3>{editingHistoryId ? `Редактирование · ${product.offer_id || "—"}` : "Карточка товара"}</h3>
             <div className="cafe-form-grid">
               <label>
                 Артикул
@@ -1083,8 +1217,22 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 {busy === "video" ? `Сгенерировать видео карточки${dots}` : "Сгенерировать видео карточки"}
               </button>
               <button type="submit" disabled={busy === "create"}>
-                {busy === "create" ? "Выгрузка…" : "Выгрузить"}
+                {busy === "create" ? "Выгрузка…" : editingHistoryId ? "Сохранить на площадке" : "Выгрузить"}
               </button>
+              {editingHistoryId ? (
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={() => {
+                    setProduct(emptyProduct());
+                    setEditingHistoryId(null);
+                    setAttributeFields([]);
+                    setAttributesHint("");
+                  }}
+                >
+                  Отмена
+                </button>
+              ) : null}
             </div>
             {settings?.ai_enabled ? (
               <label className="field-label">
@@ -1144,6 +1292,14 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             <button type="button" className="ghost-btn" disabled={busy === "live-products"} onClick={loadLiveProducts}>
               С площадки
             </button>
+            <button
+              type="button"
+              className="ghost-btn"
+              disabled={busy === "fetch-product" || !search.trim()}
+              onClick={() => fetchProductForEdit(search.trim())}
+            >
+              Загрузить для редактирования
+            </button>
           </div>
           <div className="mp-table-wrap">
             <table className="mp-table">
@@ -1154,6 +1310,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                   <th>Цена</th>
                   <th>Остаток</th>
                   <th>Статус</th>
+                  {mp === "ozon" ? <th>Импорт Ozon</th> : null}
                   <th />
                 </tr>
               </thead>
@@ -1165,7 +1322,26 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                     <td>{row.product?.price || "—"}</td>
                     <td>{row.product?.stock ?? "—"}</td>
                     <td>{row.status}</td>
-                    <td>
+                    {mp === "ozon" ? (
+                      <td>
+                        {importStatusLabel(row)}
+                        {row.import_errors ? (
+                          <span className="muted small" title={row.import_errors}>
+                            {" "}
+                            ⚠
+                          </span>
+                        ) : null}
+                      </td>
+                    ) : null}
+                    <td className="mp-row-actions">
+                      <button type="button" className="ghost-btn" onClick={() => openEditorFromHistory(row)}>
+                        Редактировать
+                      </button>
+                      {mp === "ozon" && row.import_task_id ? (
+                        <button type="button" className="ghost-btn" disabled={busy === "import-status"} onClick={() => checkImportStatus(row)}>
+                          Статус импорта
+                        </button>
+                      ) : null}
                       <button type="button" className="ghost-btn" onClick={() => deleteProduct(row.offer_id)}>
                         Удалить
                       </button>
@@ -1191,7 +1367,12 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 <strong>ИИ-описание:</strong> {settings?.ai_enabled ? `включено (${settings.ai_model || "OpenRouter"}).` : "выключено. На сервере задайте OPENROUTER_API_KEY."}
               </li>
               <li>
-                <strong>Яндекс Диск:</strong> {settings?.has_yandex_disk ? "подключён, фото уходят на Диск." : settings?.yandex_disk_oauth ? "нажмите «Подключить Яндекс Диск»." : "на сервере не заданы YANDEX_OAUTH_CLIENT_ID/SECRET."}
+                <strong>Яндекс Диск:</strong>{" "}
+                {settings?.has_yandex_disk
+                  ? "подключён — в карточку уходят публичные URL с Диска."
+                  : settings?.yandex_disk_oauth
+                    ? "нажмите «Подключить Яндекс Диск»."
+                    : "на сервере не заданы YANDEX_OAUTH_CLIENT_ID/SECRET."}
               </li>
               <li>
                 <strong>Видео карточки:</strong> собирается в браузере из названия, цены и загруженных фото.

@@ -322,6 +322,13 @@
   vertical-align: middle;
 }
 
+.mp-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
 .mp-live-list {
   list-style: none;
   margin: 16px 0 0;

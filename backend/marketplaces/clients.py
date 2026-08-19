@@ -95,8 +95,26 @@ def request_json(
     return data
 
 
+def normalize_marketplace_images(product: dict) -> list[str]:
+    """Absolute public URLs for Ozon/WB (prefer disk/public_url over local preview paths)."""
+    urls: list[str] = []
+    seen: set[str] = set()
+    for raw in list(product.get("images") or []) + list(product.get("wb_images") or []):
+        if isinstance(raw, dict):
+            u = str(raw.get("public_url") or raw.get("disk_url") or raw.get("url") or "").strip()
+        else:
+            u = str(raw or "").strip()
+        if not u or u in seen:
+            continue
+        if not (u.startswith("http://") or u.startswith("https://")):
+            continue
+        urls.append(u)
+        seen.add(u)
+    return urls
+
+
 def build_ozon_item(product: dict) -> dict:
-    images = [u for u in (product.get("images") or []) if u]
+    images = normalize_marketplace_images(product)
     item = {
         "offer_id": str(product.get("offer_id") or "").strip(),
         "name": str(product.get("name") or "").strip(),
@@ -131,7 +149,7 @@ def build_wb_card(product: dict) -> dict:
         "brand": product.get("brand") or "",
         "sizes": [{"price": price_kop, "skus": [str(product.get("barcode") or product.get("offer_id") or "")]}],
     }
-    images = product.get("wb_images") or product.get("images") or []
+    images = normalize_marketplace_images(product)
     if images:
         variant["mediaFiles"] = list(images)
     chars = product.get("characteristics") or {}
@@ -143,12 +161,100 @@ def build_wb_card(product: dict) -> dict:
     return card
 
 
+def parse_ozon_product_item(item: dict) -> dict:
+    """Map Ozon product info item to cabinet product form."""
+    if not isinstance(item, dict):
+        return {}
+    attrs: dict[str, str] = {}
+    for row in item.get("attributes") or []:
+        if not isinstance(row, dict):
+            continue
+        aid = row.get("id") or row.get("attribute_id")
+        values = row.get("values") or []
+        if not aid or not values:
+            continue
+        first = values[0]
+        val = first.get("value") if isinstance(first, dict) else first
+        if val not in (None, ""):
+            attrs[str(aid)] = str(val)
+
+    image_urls: list[str] = []
+    for raw in item.get("images") or []:
+        if isinstance(raw, str) and raw.strip():
+            image_urls.append(raw.strip())
+        elif isinstance(raw, dict) and raw.get("url"):
+            image_urls.append(str(raw["url"]))
+    primary = item.get("primary_image")
+    if isinstance(primary, str) and primary.strip() and primary not in image_urls:
+        image_urls.insert(0, primary.strip())
+
+    images = [{"url": u, "public_url": u} for u in image_urls]
+    price = item.get("price") or item.get("marketing_price") or item.get("min_price") or ""
+    stock = 0
+    stocks = item.get("stocks") or {}
+    if isinstance(stocks, dict):
+        for row in stocks.get("stocks") or []:
+            if isinstance(row, dict):
+                stock = max(stock, int(row.get("present") or row.get("stock") or 0))
+
+    return {
+        "offer_id": str(item.get("offer_id") or "").strip(),
+        "name": str(item.get("name") or "").strip(),
+        "brand": str(item.get("brand") or item.get("brand_name") or "").strip(),
+        "price": str(price or ""),
+        "stock": stock,
+        "description": str(item.get("description") or item.get("description_html") or "").strip(),
+        "barcode": str(item.get("barcode") or "").strip(),
+        "category": str(item.get("description_category_id") or item.get("category_id") or ""),
+        "type": str(item.get("type_id") or ""),
+        "characteristics": attrs,
+        "images": images,
+        "product_id": item.get("product_id") or item.get("id"),
+    }
+
+
+def summarize_ozon_import_status(data: dict) -> dict:
+    """Human-readable Ozon import task status."""
+    result = data.get("result") if isinstance(data, dict) else {}
+    if not isinstance(result, dict):
+        result = data if isinstance(data, dict) else {}
+    items = result.get("items") or []
+    rows = []
+    overall = "pending"
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("status") or "unknown").lower()
+        errors = item.get("errors") or []
+        err_text = ""
+        if errors:
+            err_text = "; ".join(
+                str(e.get("message") or e.get("code") or e) if isinstance(e, dict) else str(e) for e in errors[:3]
+            )
+        rows.append(
+            {
+                "offer_id": item.get("offer_id") or "",
+                "product_id": item.get("product_id"),
+                "status": status,
+                "errors": err_text,
+            }
+        )
+        if status in ("failed", "error"):
+            overall = "failed"
+        elif status in ("imported", "success", "done") and overall != "failed":
+            overall = "success"
+    if not rows:
+        overall = str(result.get("status") or "pending").lower()
+    return {"status": overall, "items": rows, "raw": data}
+
+
 OZON_ACTIONS = {
     "categories.tree": ("POST", f"{OZON_BASE}/v1/description-category/tree"),
     "categories.attributes": ("POST", f"{OZON_BASE}/v1/description-category/attribute"),
     "barcode.add": ("POST", f"{OZON_BASE}/v1/barcode/add"),
     "barcode.generate": ("POST", f"{OZON_BASE}/v1/barcode/generate"),
     "products.import": ("POST", f"{OZON_BASE}/v3/product/import"),
+    "products.import_info": ("POST", f"{OZON_BASE}/v1/product/import/info"),
     "products.list": ("POST", f"{OZON_BASE}/v3/product/list"),
     "products.info": ("POST", f"{OZON_BASE}/v3/product/info/list"),
     "products.delete": ("POST", f"{OZON_BASE}/v1/product/archive"),

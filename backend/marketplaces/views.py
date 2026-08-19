@@ -15,9 +15,12 @@ from .clients import (
     WB_ACTIONS,
     build_ozon_item,
     build_wb_card,
+    normalize_marketplace_images,
     ozon_headers,
+    parse_ozon_product_item,
     request_json,
     resolve_url,
+    summarize_ozon_import_status,
     wb_headers,
 )
 from .models import MarketplaceProductHistory, MarketplaceSettings, MarketplaceTemplate
@@ -114,6 +117,48 @@ def _is_video_upload(upload) -> bool:
     return content_type.startswith("video/") or name.endswith((".webm", ".mp4", ".mov", ".m4v"))
 
 
+def _history_item(row: MarketplaceProductHistory) -> dict:
+    resp = row.response if isinstance(row.response, dict) else {}
+    return {
+        "id": row.id,
+        "marketplace": row.marketplace,
+        "offer_id": row.offer_id,
+        "product": row.product_data,
+        "status": row.status,
+        "response": row.response,
+        "import_task_id": resp.get("task_id"),
+        "import_status": resp.get("import_status"),
+        "import_errors": resp.get("import_errors") or "",
+        "updated_at": row.updated_at.isoformat(),
+    }
+
+
+def _extract_ozon_task_id(resp: dict) -> int | None:
+    if not isinstance(resp, dict):
+        return None
+    result = resp.get("result")
+    if isinstance(result, dict) and result.get("task_id") is not None:
+        try:
+            return int(result["task_id"])
+        except (TypeError, ValueError):
+            return None
+    if resp.get("task_id") is not None:
+        try:
+            return int(resp["task_id"])
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _prepare_product_for_marketplace(product: dict) -> dict:
+    """Ensure image lists contain public HTTPS URLs before Ozon/WB payload build."""
+    prepared = dict(product)
+    public_images = normalize_marketplace_images(product)
+    prepared["images"] = public_images
+    prepared["wb_images"] = public_images
+    return prepared
+
+
 def _openrouter_proxies() -> dict | None:
     proxy = (getattr(settings, "OPENROUTER_HTTP_PROXY", None) or "").strip()
     if not proxy:
@@ -190,17 +235,7 @@ class MarketplaceHistoryView(APIView):
             qs = qs.filter(offer_id__icontains=q)
         items = []
         for row in qs[:200]:
-            items.append(
-                {
-                    "id": row.id,
-                    "marketplace": row.marketplace,
-                    "offer_id": row.offer_id,
-                    "product": row.product_data,
-                    "status": row.status,
-                    "response": row.response,
-                    "updated_at": row.updated_at.isoformat(),
-                }
-            )
+            items.append(_history_item(row))
         return Response({"results": items})
 
 
@@ -292,6 +327,7 @@ class MarketplaceImportView(APIView):
                 results.append({"offer_id": offer_id, "ok": True, "sandbox": True, "id": hist.id})
                 continue
             try:
+                product = _prepare_product_for_marketplace(product)
                 if marketplace == "wildberries":
                     payload = {"cards": [build_wb_card(product)]}
                     resp = request_json(
@@ -302,6 +338,10 @@ class MarketplaceImportView(APIView):
                         headers=wb_headers(s),
                         json_body=payload,
                     )
+                    hist.status = "success"
+                    hist.response = resp
+                    hist.save(update_fields=["status", "response"])
+                    results.append({"offer_id": offer_id, "ok": True, "id": hist.id, "response": resp})
                 else:
                     payload = {"items": [build_ozon_item(product)]}
                     resp = request_json(
@@ -312,10 +352,23 @@ class MarketplaceImportView(APIView):
                         headers=ozon_headers(s),
                         json_body=payload,
                     )
-                hist.status = "success"
-                hist.response = resp
-                hist.save(update_fields=["status", "response"])
-                results.append({"offer_id": offer_id, "ok": True, "id": hist.id, "response": resp})
+                    task_id = _extract_ozon_task_id(resp)
+                    response_payload = dict(resp)
+                    if task_id is not None:
+                        response_payload["task_id"] = task_id
+                        response_payload["import_status"] = "pending"
+                    hist.status = "pending" if task_id is not None else "success"
+                    hist.response = response_payload
+                    hist.save(update_fields=["status", "response"])
+                    results.append(
+                        {
+                            "offer_id": offer_id,
+                            "ok": True,
+                            "id": hist.id,
+                            "task_id": task_id,
+                            "response": resp,
+                        }
+                    )
             except MarketplaceError as exc:
                 hist.status = "failed"
                 hist.response = {"error": str(exc)}
@@ -386,15 +439,146 @@ class MarketplaceMediaView(APIView):
                 disk_url = _upload_to_yandex_disk(s.yandex_disk_token, upload.name, BytesIO(raw))
             except Exception:
                 logger.exception("yandex disk upload failed")
+        public_url = (disk_url or url).strip()
         return Response(
             {
                 "url": url,
+                "public_url": public_url,
                 "thumb_url": thumb_url,
                 "disk_url": disk_url,
                 "name": upload.name,
                 "stored": "yandex_disk" if disk_url else "local",
             }
         )
+
+
+class MarketplaceImportStatusView(APIView):
+    """Ozon import task status (POST {task_id} or {history_id})."""
+
+    def post(self, request):
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        data = request.data if isinstance(request.data, dict) else {}
+        history_id = data.get("history_id")
+        task_id = data.get("task_id")
+        hist = None
+        if history_id:
+            hist = MarketplaceProductHistory.objects.filter(provider=provider, id=history_id).first()
+            if not hist:
+                return Response({"detail": "Запись истории не найдена."}, status=404)
+            task_id = task_id or (hist.response or {}).get("task_id")
+        if not task_id:
+            return Response({"detail": "Укажите task_id или history_id с задачей Ozon."}, status=400)
+        s = _settings(provider)
+        if s.environment != "prod":
+            return Response({"sandbox": True, "message": "Статус импорта доступен в боевом режиме."})
+        try:
+            resp = request_json(
+                provider=provider,
+                marketplace="ozon",
+                method="POST",
+                url=OZON_ACTIONS["products.import_info"][1],
+                headers=ozon_headers(s),
+                json_body={"task_id": int(task_id)},
+            )
+        except MarketplaceError as exc:
+            return Response({"detail": str(exc)}, status=min(exc.status_code, 599) if exc.status_code >= 400 else 400)
+        summary = summarize_ozon_import_status(resp)
+        if hist:
+            merged = dict(hist.response or {})
+            merged["task_id"] = int(task_id)
+            merged["import_status"] = summary["status"]
+            merged["import_items"] = summary["items"]
+            err_bits = [r.get("errors") for r in summary["items"] if r.get("errors")]
+            merged["import_errors"] = "; ".join(err_bits[:3])
+            merged["import_info"] = resp
+            hist.response = merged
+            if summary["status"] == "success":
+                hist.status = "success"
+            elif summary["status"] == "failed":
+                hist.status = "failed"
+            else:
+                hist.status = "pending"
+            hist.save(update_fields=["status", "response"])
+        return Response(
+            {
+                "task_id": int(task_id),
+                "history_id": hist.id if hist else None,
+                "import_status": summary["status"],
+                "items": summary["items"],
+                "raw": resp,
+            }
+        )
+
+
+class MarketplaceProductFetchView(APIView):
+    """Load product card from marketplace for editing (POST {marketplace, offer_id})."""
+
+    def post(self, request):
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        data = request.data if isinstance(request.data, dict) else {}
+        marketplace = (data.get("marketplace") or "ozon").strip()
+        offer_id = str(data.get("offer_id") or "").strip()
+        if not offer_id:
+            return Response({"detail": "Укажите артикул (offer_id)."}, status=400)
+        s = _settings(provider)
+        if s.environment != "prod":
+            return Response({"detail": "Загрузка с площадки доступна в боевом режиме."}, status=400)
+        try:
+            if marketplace == "wildberries":
+                resp = request_json(
+                    provider=provider,
+                    marketplace="wb",
+                    method="POST",
+                    url=WB_ACTIONS["products.list"][1],
+                    headers=wb_headers(s),
+                    json_body={
+                        "settings": {
+                            "cursor": {"limit": 1},
+                            "filter": {"textSearch": offer_id, "withPhoto": -1},
+                        }
+                    },
+                )
+                cards = resp.get("cards") or resp.get("data", {}).get("cards") or []
+                card = cards[0] if cards else None
+                if not card:
+                    return Response({"detail": "Товар не найден на Wildberries."}, status=404)
+                variant = (card.get("variants") or [{}])[0]
+                media = variant.get("mediaFiles") or variant.get("photos") or []
+                images = [{"url": u, "public_url": u} for u in media if isinstance(u, str) and u.startswith("http")]
+                product = {
+                    "offer_id": variant.get("vendorCode") or offer_id,
+                    "name": variant.get("title") or card.get("title") or "",
+                    "brand": variant.get("brand") or card.get("brand") or "",
+                    "price": str((variant.get("sizes") or [{}])[0].get("price") or ""),
+                    "stock": 0,
+                    "description": variant.get("description") or "",
+                    "barcode": str((variant.get("sizes") or [{}])[0].get("skus") or [""])[0] or "",
+                    "category": str(card.get("subjectID") or card.get("subjectId") or ""),
+                    "type": "",
+                    "characteristics": {},
+                    "images": images,
+                    "nm_id": card.get("nmID") or card.get("nmId"),
+                }
+            else:
+                resp = request_json(
+                    provider=provider,
+                    marketplace="ozon",
+                    method="POST",
+                    url=OZON_ACTIONS["products.info"][1],
+                    headers=ozon_headers(s),
+                    json_body={"offer_id": [offer_id], "product_id": [], "sku": []},
+                )
+                items = resp.get("items") or (resp.get("result") or {}).get("items") or []
+                if not items:
+                    return Response({"detail": "Товар не найден на Ozon."}, status=404)
+                product = parse_ozon_product_item(items[0])
+            return Response({"product": product, "source": "marketplace"})
+        except MarketplaceError as exc:
+            return Response({"detail": str(exc)}, status=min(exc.status_code, 599) if exc.status_code >= 400 else 400)
 
 
 class MarketplaceDescribeView(APIView):

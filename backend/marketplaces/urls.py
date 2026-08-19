@@ -8,6 +8,8 @@ urlpatterns = [
     path("templates/", views.MarketplaceTemplateView.as_view()),
     path("templates/<int:pk>/", views.MarketplaceTemplateView.as_view()),
     path("products/import/", views.MarketplaceImportView.as_view()),
+    path("products/import-status/", views.MarketplaceImportStatusView.as_view()),
+    path("products/fetch/", views.MarketplaceProductFetchView.as_view()),
     path("call/", views.MarketplaceCallView.as_view()),
     path("media/", views.MarketplaceMediaView.as_view()),
     path("generate-description/", views.MarketplaceDescribeView.as_view()),
