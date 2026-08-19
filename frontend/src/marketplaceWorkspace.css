@@ -212,6 +212,42 @@
   align-items: center;
 }
 
+.mp-trash-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.06);
+  color: #8a2be2;
+  cursor: pointer;
+}
+
+.mp-trash-btn:hover {
+  background: rgba(138, 43, 226, 0.12);
+}
+
+.mp-category-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mp-attrs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.mp-attrs-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.92rem;
+}
+
 .mp-media-list img,
 .mp-media-list video {
   width: 48px;

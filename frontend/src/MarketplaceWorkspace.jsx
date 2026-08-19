@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./marketplaceWorkspace.css";
 import { renderProductCardVideo } from "./productCardVideo.js";
+import {
+  flattenOzonCategoryOptions,
+  flattenWbSubjects,
+  normalizeOzonAttributes,
+  normalizeWbCharacteristics,
+} from "./marketplaceCategoryHelpers.js";
 
 const TABS = [
   ["create", "Создать товар"],
@@ -21,8 +27,20 @@ const emptyProduct = () => ({
   barcode: "",
   category: "",
   type: "",
+  characteristics: {},
   images: [],
 });
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path
+        d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
 
 function PlusIcon() {
   return (
@@ -141,6 +159,17 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [aiFeatures, setAiFeatures] = useState("");
   const [viewer, setViewer] = useState(null);
   const [dotsTick, setDotsTick] = useState(0);
+  const [categoryOptions, setCategoryOptions] = useState([]);
+  const [attributeFields, setAttributeFields] = useState([]);
+  const [categoryQuery, setCategoryQuery] = useState("");
+  const [attributesHint, setAttributesHint] = useState("");
+
+  useEffect(() => {
+    setCategoryOptions([]);
+    setAttributeFields([]);
+    setCategoryQuery("");
+    setAttributesHint("");
+  }, [mp]);
 
   useEffect(() => {
     if (busy === "ai" || busy === "video") {
@@ -278,6 +307,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       barcode: row.barcode,
       category: row.category,
       type: row.type,
+      characteristics: row.characteristics || {},
       images,
       wb_sku: row.offer_id,
       wb_images: images,
@@ -325,6 +355,83 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       if (!products.length) throw new Error("В CSV нет строк с артикулом и названием.");
       await importProducts(products);
     });
+  }
+
+  async function loadCategoryOptions() {
+    await withBusy("cats", async () => {
+      if (settings?.environment !== "prod") {
+        throw new Error("Категории с площадки доступны в боевом режиме (Меню → Управление).");
+      }
+      if (mp === "wildberries") {
+        const data = await mpCall("categories.subjects", {}, { limit: 1000, offset: 0 });
+        if (data?.sandbox) throw new Error(data.message || "Песочница.");
+        const options = flattenWbSubjects(data);
+        if (!options.length) throw new Error("Wildberries не вернул список предметов.");
+        setCategoryOptions(options);
+        setStatus(`Загружено предметов WB: ${options.length}.`);
+        return;
+      }
+      const data = await mpCall("categories.tree", { language: "DEFAULT" });
+      if (data?.sandbox) throw new Error(data.message || "Песочница.");
+      const options = flattenOzonCategoryOptions(data);
+      if (!options.length) throw new Error("Ozon не вернул дерево категорий.");
+      setCategoryOptions(options);
+      setStatus(`Загружено категорий Ozon: ${options.length}.`);
+    });
+  }
+
+  async function loadAttributesForCategory(categoryId, typeId = "") {
+    if (!categoryId) {
+      setAttributeFields([]);
+      setAttributesHint("");
+      return;
+    }
+    await withBusy("attrs", async () => {
+      if (settings?.environment !== "prod") {
+        setAttributesHint("Характеристики подгружаются в боевом режиме с ключами площадки.");
+        return;
+      }
+      if (mp === "wildberries") {
+        const data = await mpCall("categories.charcs", {}, { subject_id: categoryId });
+        if (data?.sandbox) throw new Error(data.message || "Песочница.");
+        const fields = normalizeWbCharacteristics(data);
+        setAttributeFields(fields);
+        setAttributesHint(fields.length ? `Характеристик WB: ${fields.length}` : "Для предмета нет характеристик.");
+        return;
+      }
+      if (!typeId) {
+        setAttributeFields([]);
+        setAttributesHint("Для Ozon выберите категорию с типом товара.");
+        return;
+      }
+      const data = await mpCall("categories.attributes", {
+        description_category_id: Number(categoryId),
+        type_id: Number(typeId),
+        language: "DEFAULT",
+      });
+      if (data?.sandbox) throw new Error(data.message || "Песочница.");
+      const fields = normalizeOzonAttributes(data);
+      setAttributeFields(fields);
+      setAttributesHint(fields.length ? `Характеристик Ozon: ${fields.length}` : "Для категории нет характеристик.");
+    });
+  }
+
+  function onOzonCategoryPick(value) {
+    const [categoryId, typeId] = String(value || "").split(":");
+    setProduct((p) => ({ ...p, category: categoryId || "", type: typeId || "", characteristics: {} }));
+    loadAttributesForCategory(categoryId, typeId).catch(() => {});
+  }
+
+  function onWbCategoryPick(value) {
+    setProduct((p) => ({ ...p, category: value || "", type: "", characteristics: {} }));
+    loadAttributesForCategory(value).catch(() => {});
+  }
+
+  function setCharacteristic(id, value) {
+    setProduct((p) => ({
+      ...p,
+      characteristics: { ...(p.characteristics || {}), [id]: value },
+    }));
   }
 
   async function uploadMedia(file) {
@@ -404,13 +511,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         return x?.kind !== "video";
       });
       if (!photos.length) throw new Error("Загрузите хотя бы одно фото для генерации видео карточки.");
-      const blob = await renderProductCardVideo({
-        name: product.name,
-        brand: product.brand,
-        price: product.price,
-        images: product.images,
-        marketplace: mp,
-      });
+      const blob = await renderProductCardVideo({ images: product.images });
       const localPreview = URL.createObjectURL(blob);
       const file = new File([blob], "card-video.webm", { type: blob.type || "video/webm" });
       const fd = new FormData();
@@ -426,7 +527,6 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         ...p,
         images: [...(Array.isArray(p.images) ? p.images : []), videoItem],
       }));
-      setViewer({ url: localPreview, name: "Видео карточки", isVideo: true });
       setStatus("Видео карточки готово.");
     });
   }
@@ -637,6 +737,16 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     [history, search],
   );
   const tabLabel = TABS.find(([id]) => id === tab)?.[1] || "";
+  const ozonCategoryValue = product.category && product.type ? `${product.category}:${product.type}` : "";
+  const filteredCategoryOptions = useMemo(() => {
+    const q = categoryQuery.trim().toLowerCase();
+    if (!q) return categoryOptions;
+    return categoryOptions.filter((item) => {
+      const label = (item.label || item.name || "").toLowerCase();
+      return label.includes(q) || String(item.id || item.categoryId || "").includes(q);
+    });
+  }, [categoryOptions, categoryQuery]);
+  const requiredAttributeCount = attributeFields.filter((f) => f.required).length;
 
   return (
     <section className={`card full-width cafe-provider mp-workspace ${mp === "wildberries" ? "mp-wb" : "mp-ozon"}`}>
@@ -709,14 +819,85 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 Штрихкод
                 <input value={product.barcode} onChange={(e) => setProduct((p) => ({ ...p, barcode: e.target.value }))} />
               </label>
-              <label>
-                Категория (id)
-                <input value={product.category} onChange={(e) => setProduct((p) => ({ ...p, category: e.target.value }))} />
-              </label>
-              <label>
-                Тип (id)
-                <input value={product.type} onChange={(e) => setProduct((p) => ({ ...p, type: e.target.value }))} />
-              </label>
+              <div className="cafe-form-span2 mp-category-block">
+                <div className="mp-media-head">
+                  <h3>Категория и характеристики</h3>
+                  <button type="button" className="ghost-btn" disabled={busy === "cats"} onClick={loadCategoryOptions}>
+                    {busy === "cats" ? "Загрузка…" : "Загрузить с площадки"}
+                  </button>
+                </div>
+                <label className="field-label">
+                  Поиск категории
+                  <input
+                    value={categoryQuery}
+                    onChange={(e) => setCategoryQuery(e.target.value)}
+                    placeholder={mp === "wildberries" ? "Предмет WB" : "Категория Ozon"}
+                  />
+                </label>
+                {mp === "wildberries" ? (
+                  <label>
+                    Предмет (subjectID)
+                    <select value={product.category} onChange={(e) => onWbCategoryPick(e.target.value)}>
+                      <option value="">Выберите предмет</option>
+                      {filteredCategoryOptions.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                          {item.parent ? ` · ${item.parent}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <label>
+                    Категория и тип
+                    <select value={ozonCategoryValue} onChange={(e) => onOzonCategoryPick(e.target.value)}>
+                      <option value="">Выберите категорию</option>
+                      {filteredCategoryOptions.map((item) => (
+                        <option key={`${item.categoryId}:${item.typeId}`} value={`${item.categoryId}:${item.typeId}`}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {!categoryOptions.length ? (
+                  <p className="muted small">
+                    Нажмите «Загрузить с площадки» в боевом режиме — подтянутся категории и обязательные характеристики, как в кабинете Ozon/WB.
+                  </p>
+                ) : null}
+                {attributesHint ? <p className="muted small">{attributesHint}</p> : null}
+                {attributeFields.length ? (
+                  <div className="mp-attrs-grid">
+                    {attributeFields.map((field) => (
+                      <label key={field.id}>
+                        {field.name}
+                        {field.required ? " *" : ""}
+                        {field.unit ? ` (${field.unit})` : ""}
+                        <input
+                          value={product.characteristics?.[field.id] || ""}
+                          onChange={(e) => setCharacteristic(field.id, e.target.value)}
+                          placeholder={field.required ? "Обязательно" : "Необязательно"}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
+                {requiredAttributeCount ? (
+                  <p className="muted small">Обязательных характеристик: {requiredAttributeCount}</p>
+                ) : null}
+                <div className="cafe-form-grid">
+                  <label>
+                    Категория (id вручную)
+                    <input value={product.category} onChange={(e) => setProduct((p) => ({ ...p, category: e.target.value }))} />
+                  </label>
+                  {mp === "ozon" ? (
+                    <label>
+                      Тип (id вручную)
+                      <input value={product.type} onChange={(e) => setProduct((p) => ({ ...p, type: e.target.value }))} />
+                    </label>
+                  ) : null}
+                </div>
+              </div>
               <label className="cafe-form-span2">
                 Описание
                 <textarea rows={4} value={product.description} onChange={(e) => setProduct((p) => ({ ...p, description: e.target.value }))} />
@@ -752,8 +933,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                             <img src={src} alt="" onClick={() => setViewer({ url: src, name, isVideo: false })} />
                           )}
                           <span title={name}>{name}</span>
-                          <button type="button" className="ghost-btn" onClick={() => removeImage(url)}>
-                            Убрать
+                          <button type="button" className="mp-trash-btn" title="Убрать" aria-label="Убрать" onClick={() => removeImage(url)}>
+                            <TrashIcon />
                           </button>
                         </li>
                       );
