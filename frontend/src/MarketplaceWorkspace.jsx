@@ -476,6 +476,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     }
     return {
       url: data.url,
+      thumb_url: data.thumb_url || data.url,
       previewUrl,
       name: file.name || data.name || "файл",
       kind: isVideoFile(file) ? "video" : "image",
@@ -578,7 +579,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   function mediaSrc(item) {
     if (!item) return "";
     if (typeof item === "string") return item;
-    return item.previewUrl || item.url || "";
+    return item.previewUrl || item.thumb_url || item.url || "";
   }
 
   function removeImage(url) {

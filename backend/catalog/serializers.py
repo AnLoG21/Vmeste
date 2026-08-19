@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from common.media_urls import photo_urls
 from reviews.models import ReviewPhoto
 
 from .models import Service, ServiceCategory, ServiceOption, ServicePhoto, ServiceSubcategory
@@ -7,17 +8,21 @@ from .models import Service, ServiceCategory, ServiceOption, ServicePhoto, Servi
 
 class ServicePhotoSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
+    thumb_url = serializers.SerializerMethodField()
 
     class Meta:
         model = ServicePhoto
-        fields = ["id", "image", "sort_order"]
+        fields = ["id", "image", "thumb_url", "sort_order"]
+
+    def _urls(self, obj):
+        request = self.context.get("request")
+        return photo_urls(request, obj.image)
 
     def get_image(self, obj):
-        request = self.context.get("request")
-        url = obj.image.url if obj.image else ""
-        if request and url and not url.startswith("http"):
-            return request.build_absolute_uri(url)
-        return url
+        return self._urls(obj)["url"]
+
+    def get_thumb_url(self, obj):
+        return self._urls(obj)["thumb_url"]
 
 
 class ServiceOptionSerializer(serializers.ModelSerializer):
@@ -90,11 +95,16 @@ class ServiceSerializer(serializers.ModelSerializer):
         )
         out = []
         for ph in qs:
-            url = ph.image.url if ph.image else ""
-            if request and url and not url.startswith("http"):
-                url = request.build_absolute_uri(url)
-            if url:
-                out.append({"id": f"review-{ph.id}", "image": url, "source": "review"})
+            urls = photo_urls(request, ph.image)
+            if urls["url"]:
+                out.append(
+                    {
+                        "id": f"review-{ph.id}",
+                        "image": urls["url"],
+                        "thumb_url": urls["thumb_url"],
+                        "source": "review",
+                    }
+                )
         return out
 
     def get_gallery(self, obj):
@@ -102,11 +112,16 @@ class ServiceSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         items = []
         for ph in obj.photos.all()[:16]:
-            url = ph.image.url if ph.image else ""
-            if request and url and not url.startswith("http"):
-                url = request.build_absolute_uri(url)
-            if url:
-                items.append({"id": ph.id, "image": url, "source": "service"})
+            urls = photo_urls(request, ph.image)
+            if urls["url"]:
+                items.append(
+                    {
+                        "id": ph.id,
+                        "image": urls["url"],
+                        "thumb_url": urls["thumb_url"],
+                        "source": "service",
+                    }
+                )
         for rp in self.get_review_photos(obj):
             items.append(rp)
         return items

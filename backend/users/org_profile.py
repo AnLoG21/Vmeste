@@ -7,6 +7,8 @@ from rest_framework.views import APIView
 from booking.booking_actions import client_display_name
 from reviews.models import Review, ReviewPhoto
 
+from common.media_urls import photo_urls
+
 from .models import ProviderGalleryPhoto, User
 from .serializers import ProviderGalleryPhotoSerializer, UserSerializer
 from .slug_utils import ensure_organization_slug
@@ -52,10 +54,12 @@ class OrganizationClientProfileView(APIView):
         gallery = []
         for row in provider.gallery_photos.all():
             if row.image:
+                urls = photo_urls(request, row.image)
                 gallery.append(
                     {
                         "id": row.id,
-                        "url": request.build_absolute_uri(row.image.url),
+                        "url": urls["url"],
+                        "thumb_url": urls["thumb_url"],
                         "source": "org",
                     }
                 )
@@ -70,10 +74,12 @@ class OrganizationClientProfileView(APIView):
             if not row.image:
                 continue
             rev = row.review
+            urls = photo_urls(request, row.image)
             review_photos.append(
                 {
                     "id": row.id,
-                    "url": request.build_absolute_uri(row.image.url),
+                    "url": urls["url"],
+                    "thumb_url": urls["thumb_url"],
                     "source": "review",
                     "review_id": rev.id,
                     "client_name": client_display_name(rev.client),

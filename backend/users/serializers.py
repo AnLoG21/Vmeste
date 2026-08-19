@@ -2,6 +2,8 @@ from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
+from common.media_urls import photo_urls
+
 from .legal_versions import OFFER_VERSION, PRIVACY_VERSION
 from .models import ProviderGalleryPhoto, User
 
@@ -125,19 +127,22 @@ class UserSerializer(serializers.ModelSerializer):
 
 class ProviderGalleryPhotoSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
+    thumb_url = serializers.SerializerMethodField()
 
     class Meta:
         model = ProviderGalleryPhoto
-        fields = ["id", "url", "sort_order", "created_at"]
-        read_only_fields = ["id", "url", "created_at"]
+        fields = ["id", "url", "thumb_url", "sort_order", "created_at"]
+        read_only_fields = ["id", "url", "thumb_url", "created_at"]
+
+    def _urls(self, obj):
+        request = self.context.get("request")
+        return photo_urls(request, obj.image)
 
     def get_url(self, obj):
-        request = self.context.get("request")
-        if obj.image and request:
-            return request.build_absolute_uri(obj.image.url)
-        if obj.image:
-            return obj.image.url
-        return ""
+        return self._urls(obj)["url"]
+
+    def get_thumb_url(self, obj):
+        return self._urls(obj)["thumb_url"]
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):

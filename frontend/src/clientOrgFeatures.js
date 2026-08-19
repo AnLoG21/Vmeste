@@ -188,11 +188,13 @@ export function buildOrgCarouselItems(profile) {
   const org = (profile.gallery_photos || []).map((p) => ({
     id: `org-${p.id}`,
     url: p.url,
+    thumb_url: p.thumb_url || p.url,
     source: "org",
   }));
   const rev = (profile.review_photos || []).map((p) => ({
     id: `rev-${p.id}`,
     url: p.url,
+    thumb_url: p.thumb_url || p.url,
     source: "review",
     review_id: p.review_id,
     client_name: p.client_name,

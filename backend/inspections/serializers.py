@@ -3,26 +3,29 @@ from decimal import Decimal
 from rest_framework import serializers
 
 from booking.booking_actions import client_display_name
+from common.media_urls import photo_urls
 
 from .models import InspectionItem, InspectionItemMedia, InspectionReport
 
 
 class InspectionItemMediaSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
+    thumb_url = serializers.SerializerMethodField()
 
     class Meta:
         model = InspectionItemMedia
-        fields = ["id", "url", "created_at"]
+        fields = ["id", "url", "thumb_url", "created_at"]
         read_only_fields = fields
 
-    def get_url(self, obj):
-        if not obj.image:
-            return ""
+    def _urls(self, obj):
         request = self.context.get("request")
-        url = obj.image.url
-        if request:
-            return request.build_absolute_uri(url)
-        return url
+        return photo_urls(request, obj.image)
+
+    def get_url(self, obj):
+        return self._urls(obj)["url"]
+
+    def get_thumb_url(self, obj):
+        return self._urls(obj)["thumb_url"]
 
 
 class InspectionItemSerializer(serializers.ModelSerializer):

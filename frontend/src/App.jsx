@@ -32,6 +32,7 @@ import {
 import { loadYandexMaps } from "./yandexMapsLoader.js";
 import { MailRuIcon, OkIcon, VkIcon, YandexIcon } from "./AuthSocialIcons.jsx";
 import { API_URL, AUTH_URL, BASE_URL, REFRESH_URL } from "./config.js";
+import { mediaFullUrl, mediaThumbUrl } from "./mediaUrls.js";
 import { SITE_LEGAL } from "./legal/siteLegal.js";
 import {
   blobToFile,
@@ -1275,8 +1276,11 @@ function normalizeReviewsList(data) {
   return [];
 }
 
-function reviewImageUrl(path) {
+function reviewImageUrl(path, variant = "full") {
   if (!path) return "";
+  if (typeof path === "object") {
+    return variant === "thumb" ? mediaThumbUrl(path) : mediaFullUrl(path);
+  }
   if (String(path).startsWith("http")) return path;
   const base = BASE_URL.replace(/\/$/, "");
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
@@ -1361,7 +1365,7 @@ function renderChatMessageBody(m, opts = {}) {
                   )
                 }
               >
-                <img src={reviewImageUrl(src)} alt="" />
+                <img src={reviewImageUrl(src, "thumb")} alt="" loading="lazy" decoding="async" />
               </button>
             ))}
           </div>
@@ -1376,6 +1380,7 @@ function renderChatMessageBody(m, opts = {}) {
   const url = resolveAttachmentUrl(m, BASE_URL);
   const kind = m.kind || "text";
   if (kind === "image" && url) {
+    const thumbUrl = m.attachment_thumb_url ? mediaUrl(m.attachment_thumb_url, BASE_URL) : url;
     return (
       <div className="tg-msg-media">
         <button
@@ -1383,7 +1388,7 @@ function renderChatMessageBody(m, opts = {}) {
           className="tg-msg-image-btn"
           onClick={() => opts.onOpenPhotos?.([{ id: m.id, url, source: "chat" }], 0)}
         >
-          <img src={url} alt={m.text || "Фото"} className="tg-msg-image" loading="lazy" />
+          <img src={thumbUrl} alt={m.text || "Фото"} className="tg-msg-image" loading="lazy" decoding="async" />
         </button>
         {m.text ? <div className="tg-msg-text">{m.text}</div> : null}
       </div>
@@ -8666,7 +8671,7 @@ export default function App() {
       for (const p of r.photos || []) {
         items.push({
           id: `review-${r.id}-${p.id}`,
-          url: reviewImageUrl(p.image),
+          url: reviewImageUrl(p, "full"),
           source: "review",
           review_id: r.id,
           client_name: r.client_name,
@@ -8731,7 +8736,7 @@ export default function App() {
                 className="review-photo-btn"
                 onClick={() => openReviewPhotoLightbox(r, photoIdx, galleryReviews)}
               >
-                <img src={reviewImageUrl(p.image)} alt="" />
+                <img src={reviewImageUrl(p, "thumb")} alt="" loading="lazy" decoding="async" />
               </button>
             ))}
           </div>
@@ -9269,8 +9274,8 @@ export default function App() {
         {photos.length > 0 && (
           <div className="booking-history-review-photos">
             {photos.map((ph) => (
-              <a key={ph.id} href={reviewImageUrl(ph.url || ph.image)} target="_blank" rel="noreferrer">
-                <img src={reviewImageUrl(ph.url || ph.image)} alt="" />
+              <a key={ph.id} href={reviewImageUrl(ph, "full")} target="_blank" rel="noreferrer">
+                <img src={reviewImageUrl(ph, "thumb")} alt="" loading="lazy" decoding="async" />
               </a>
             ))}
           </div>
@@ -11082,7 +11087,7 @@ export default function App() {
 
                     <div key={ph.id} className="org-gallery-item">
 
-                      <img src={ph.url} alt="" />
+                      <img src={ph.thumb_url || ph.url} alt="" loading="lazy" decoding="async" />
 
                       <button type="button" className="ghost-btn" onClick={() => deleteOrgGalleryPhoto(ph.id)}>
 
@@ -11644,7 +11649,7 @@ export default function App() {
                         >
                           <span className="client-org-search-thumb">
                             {loc.provider_cover_url ? (
-                              <img src={loc.provider_cover_url} alt="" />
+                              <img src={loc.provider_cover_url} alt="" loading="lazy" decoding="async" />
                             ) : (
                               <img
                                 src={sphereMapIconHref(loc.provider_sphere)}
@@ -12372,7 +12377,7 @@ export default function App() {
                   </>
                 );
               }
-              const avatarUrl = myLink.avatar_image ? reviewImageUrl(myLink.avatar_image) : "";
+              const avatarUrl = myLink.avatar_thumb_url || (myLink.avatar_image ? reviewImageUrl(myLink.avatar_image) : "");
               const portfolio = myLink.portfolio_photos || [];
               return (
                 <div className="staff-self-card">
@@ -12438,7 +12443,7 @@ export default function App() {
                               title="Удалить фото"
                               onClick={() => void deleteStaffPortfolioPhoto(myLink.id, ph.id)}
                             >
-                              <img src={reviewImageUrl(ph.image)} alt="" />
+                              <img src={reviewImageUrl(ph, "thumb")} alt="" loading="lazy" decoding="async" />
                               <span aria-hidden>×</span>
                             </button>
                           ))}
@@ -13724,7 +13729,7 @@ export default function App() {
                                   );
                                 }}
                               >
-                                <img src={m.url} alt="" />
+                                <img src={m.thumb_url || m.url} alt="" loading="lazy" decoding="async" />
                               </button>
                               <div className="tg-chat-info-thumb-more">
                                 <button
@@ -14031,9 +14036,12 @@ export default function App() {
                         }}
                       >
                         <img
-                          src={buildOrgCarouselItems(mapOrgProfile)[mapOrgCarouselIndex]?.url}
+                          src={buildOrgCarouselItems(mapOrgProfile)[mapOrgCarouselIndex]?.thumb_url
+                            || buildOrgCarouselItems(mapOrgProfile)[mapOrgCarouselIndex]?.url}
                           alt=""
                           draggable={false}
+                          loading="lazy"
+                          decoding="async"
                         />
                       </button>
                       {buildOrgCarouselItems(mapOrgProfile).length > 1 && (
@@ -14045,7 +14053,7 @@ export default function App() {
                               className={["map-org-carousel-thumb", idx === mapOrgCarouselIndex && "map-org-carousel-thumb--active"].filter(Boolean).join(" ")}
                               onClick={() => setMapOrgCarouselIndex(idx)}
                             >
-                              <img src={ph.url} alt="" />
+                              <img src={ph.thumb_url || ph.url} alt="" loading="lazy" decoding="async" />
                             </button>
                           ))}
                         </div>
@@ -14108,7 +14116,7 @@ export default function App() {
                       <div className="map-org-staff-cards">
                         {mapOrgStaff.slice(0, 3).map((st) => {
                           const staffName = formatStaffFullName(st.staff_user) || st.display_name || "Сотрудник";
-                          const avatarUrl = st.avatar_image ? reviewImageUrl(st.avatar_image) : "";
+                          const avatarUrl = st.avatar_thumb_url || (st.avatar_image ? reviewImageUrl(st.avatar_image) : "");
                           const portfolioItems = (st.portfolio_photos || []).map((p) => ({
                             id: p.id,
                             image: p.image,
@@ -14270,7 +14278,7 @@ export default function App() {
                                               openOrgPhotoLightbox(items, start >= 0 ? start : photoIdx);
                                             }}
                                           >
-                                            <img src={reviewImageUrl(p.image)} alt="" />
+                                            <img src={reviewImageUrl(p, "thumb")} alt="" loading="lazy" decoding="async" />
                                           </button>
                                         ))}
                                       </div>
@@ -14755,20 +14763,26 @@ export default function App() {
                 stepOrgPhotoLightbox(dx > 0 ? -1 : 1);
               }}
             >
-              {orgPhotoLightbox.items.map((item, i) => (
+              {orgPhotoLightbox.items.map((item, i) => {
+                const active = i === orgPhotoLightbox.index;
+                const nearby = Math.abs(i - orgPhotoLightbox.index) <= 1;
+                return (
                 <img
                   key={item.id || item.url}
-                  src={item.url}
+                  src={nearby ? item.url : undefined}
                   alt=""
                   draggable={false}
+                  loading={active ? "eager" : "lazy"}
+                  decoding="async"
                   className={[
                     "photo-lightbox-slide",
-                    i === orgPhotoLightbox.index && "photo-lightbox-slide--active",
+                    active && "photo-lightbox-slide--active",
                   ]
                     .filter(Boolean)
                     .join(" ")}
                 />
-              ))}
+                );
+              })}
             </div>
             {orgPhotoLightbox.items[orgPhotoLightbox.index]?.source === "review" && (
               <PhotoLightboxReviewCaption
@@ -15278,7 +15292,7 @@ function ServiceEditor({ service, draft, dirty, onDraftChange, onUploadPhotos, o
                   title="Удалить фото"
                   onClick={() => void onDeletePhoto?.(service.id, ph.id)}
                 >
-                  <img src={ph.image} alt="" />
+                  <img src={ph.thumb_url || ph.image} alt="" loading="lazy" decoding="async" />
                   <span aria-hidden="true">×</span>
                 </button>
               ))}

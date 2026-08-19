@@ -8,6 +8,8 @@ from rest_framework.views import APIView
 from booking.booking_actions import client_display_name
 from reviews.models import Review, ReviewPhoto
 
+from common.media_urls import photo_urls
+
 from .models import User
 from .org_profile import default_working_hours
 from .slug_utils import ensure_organization_slug
@@ -29,10 +31,12 @@ def build_public_org_payload(provider, request):
     gallery = []
     for row in provider.gallery_photos.all():
         if row.image:
+            urls = photo_urls(request, row.image)
             gallery.append(
                 {
                     "id": row.id,
-                    "url": request.build_absolute_uri(row.image.url),
+                    "url": urls["url"],
+                    "thumb_url": urls["thumb_url"],
                     "source": "org",
                 }
             )
@@ -47,10 +51,12 @@ def build_public_org_payload(provider, request):
         if not row.image:
             continue
         rev = row.review
+        urls = photo_urls(request, row.image)
         review_photos.append(
             {
                 "id": row.id,
-                "url": request.build_absolute_uri(row.image.url),
+                "url": urls["url"],
+                "thumb_url": urls["thumb_url"],
                 "source": "review",
                 "review_id": rev.id,
                 "client_name": client_display_name(rev.client),

@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from common.media_urls import photo_urls
+
 from .models import (
     CafeFloorPlan,
     CafeMenuCategory,
@@ -21,6 +23,7 @@ class CafeSettingsSerializer(serializers.ModelSerializer):
     has_robokassa = serializers.SerializerMethodField()
     has_payment_keys = serializers.SerializerMethodField()
     logo_url = serializers.SerializerMethodField()
+    logo_thumb_url = serializers.SerializerMethodField()
 
     class Meta:
         model = CafeSettings
@@ -52,6 +55,7 @@ class CafeSettingsSerializer(serializers.ModelSerializer):
             "robokassa_password2",
             "logo",
             "logo_url",
+            "logo_thumb_url",
             "has_yookassa",
             "has_tbank",
             "has_cloudpayments",
@@ -67,6 +71,7 @@ class CafeSettingsSerializer(serializers.ModelSerializer):
             "has_robokassa",
             "has_payment_keys",
             "logo_url",
+            "logo_thumb_url",
         ]
         extra_kwargs = {
             "yookassa_secret_key": {"write_only": True},
@@ -100,8 +105,14 @@ class CafeSettingsSerializer(serializers.ModelSerializer):
         if not obj.logo:
             return ""
         request = self.context.get("request")
-        url = obj.logo.url
-        return request.build_absolute_uri(url) if request else url
+        return photo_urls(request, obj.logo)["url"]
+
+    def get_logo_thumb_url(self, obj):
+        if not obj.logo:
+            return ""
+        request = self.context.get("request")
+        return photo_urls(request, obj.logo)["thumb_url"]
+
 
 class CafeTableSerializer(serializers.ModelSerializer):
     qr_path = serializers.SerializerMethodField()
@@ -143,17 +154,22 @@ class CafeFloorPlanSerializer(serializers.ModelSerializer):
 
 class CafeMenuItemPhotoSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
+    thumb_url = serializers.SerializerMethodField()
 
     class Meta:
         model = CafeMenuItemPhoto
-        fields = ["id", "url", "sort_order", "created_at"]
-        read_only_fields = ["id", "url", "created_at"]
+        fields = ["id", "url", "thumb_url", "sort_order", "created_at"]
+        read_only_fields = ["id", "url", "thumb_url", "created_at"]
+
+    def _urls(self, obj):
+        request = self.context.get("request")
+        return photo_urls(request, obj.image)
 
     def get_url(self, obj):
-        request = self.context.get("request")
-        if obj.image and request:
-            return request.build_absolute_uri(obj.image.url)
-        return obj.image.url if obj.image else ""
+        return self._urls(obj)["url"]
+
+    def get_thumb_url(self, obj):
+        return self._urls(obj)["thumb_url"]
 
 
 class CafeMenuItemRemovableIngredientSerializer(serializers.ModelSerializer):

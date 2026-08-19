@@ -13,6 +13,7 @@ from catalog.models import Service
 from reviews.models import Review
 
 from users.models import ProviderGalleryPhoto, User
+from common.media_urls import photo_urls
 
 from .models import ProviderLocation
 from .serializers import ProviderLocationClientSerializer, ProviderLocationSerializer
@@ -259,7 +260,7 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
                 "provider_id", "sort_order", "id"
             ):
                 if row.provider_id not in cover_by_provider and row.image:
-                    cover_by_provider[row.provider_id] = request.build_absolute_uri(row.image.url)
+                    cover_by_provider[row.provider_id] = photo_urls(request, row.image)["thumb_url"]
 
         for prov in extra_providers:
             min_p, max_p = self._provider_price_range(prov.id)

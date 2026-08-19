@@ -621,7 +621,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                             })
                           }
                         >
-                          <img src={item.photos[0].url} alt={item.name || "Блюдо"} loading="lazy" width={96} height={96} />
+                          <img src={item.photos[0].thumb_url || item.photos[0].url} alt={item.name || "Блюдо"} loading="lazy" decoding="async" width={96} height={96} />
                         </button>
                       ) : (
                         <div className="cafe-menu-ph" />
@@ -667,7 +667,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                   {cartLines.map((i) => (
                     <li key={i.key} className="cafe-cart-line">
                       {i.photos?.[0]?.url ? (
-                        <img className="cafe-cart-line-photo" src={i.photos[0].url} alt="" />
+                        <img className="cafe-cart-line-photo" src={i.photos[0].thumb_url || i.photos[0].url} alt="" loading="lazy" decoding="async" />
                       ) : (
                         <div className="cafe-cart-line-photo cafe-menu-ph" />
                       )}

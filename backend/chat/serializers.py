@@ -167,6 +167,7 @@ class MessageSerializer(serializers.ModelSerializer):
     viewed_by_peer = serializers.SerializerMethodField()
     display_text = serializers.SerializerMethodField()
     attachment_url = serializers.SerializerMethodField()
+    attachment_thumb_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -180,6 +181,7 @@ class MessageSerializer(serializers.ModelSerializer):
             "display_text",
             "attachment",
             "attachment_url",
+            "attachment_thumb_url",
             "created_at",
             "sender_username",
             "sender_first_name",
@@ -192,6 +194,7 @@ class MessageSerializer(serializers.ModelSerializer):
             "sender",
             "display_text",
             "attachment_url",
+            "attachment_thumb_url",
             "created_at",
             "sender_username",
             "sender_first_name",
@@ -218,6 +221,13 @@ class MessageSerializer(serializers.ModelSerializer):
         # Relative /media/... so the browser uses the public domain (Caddy),
         # not the Docker-internal host from build_absolute_uri().
         return obj.attachment.url
+
+    def get_attachment_thumb_url(self, obj):
+        if not obj.attachment or obj.kind != Message.Kind.IMAGE:
+            return None
+        from common.media_urls import photo_urls
+
+        return photo_urls(None, obj.attachment, relative=True)["thumb_url"] or obj.attachment.url
 
     def get_viewed_by_peer(self, obj):
         request = self.context.get("request")

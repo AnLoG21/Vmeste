@@ -534,7 +534,7 @@ export default function InspectionWorkspace({
                             className="inspection-photo-btn"
                             onClick={() => openItemPhotos(it.photos, idx)}
                           >
-                            <img src={ph.url} alt="" />
+                            <img src={ph.thumb_url || ph.url} alt="" loading="lazy" decoding="async" />
                           </button>
                         ))}
                       </div>

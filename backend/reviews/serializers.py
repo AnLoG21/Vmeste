@@ -3,14 +3,28 @@ from rest_framework import serializers
 
 from booking.booking_actions import client_display_name
 from booking.models import Booking, ProviderStaff
+from common.media_urls import photo_urls
 
 from .models import Review, ReviewLike, ReviewPhoto, ReviewReply
 
 
 class ReviewPhotoSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+    thumb_url = serializers.SerializerMethodField()
+
     class Meta:
         model = ReviewPhoto
-        fields = ["id", "image"]
+        fields = ["id", "image", "thumb_url"]
+
+    def _urls(self, obj):
+        request = self.context.get("request")
+        return photo_urls(request, obj.image)
+
+    def get_image(self, obj):
+        return self._urls(obj)["url"]
+
+    def get_thumb_url(self, obj):
+        return self._urls(obj)["thumb_url"]
 
 
 class ReviewReplySerializer(serializers.ModelSerializer):

@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from booking.models import Booking, ProviderStaff
+from common.media_urls import photo_urls
 from users.models import User
 
 from .models import Review, ReviewLike, ReviewPhoto, ReviewReply
@@ -238,14 +239,15 @@ class ProviderReviewSummaryView(APIView):
             .order_by("-id")[:12]
             .select_related("review")
         )
-        photo_urls = []
+        photo_urls_out = []
         for row in photo_rows:
             if row.image:
-                photo_urls.append(request.build_absolute_uri(row.image.url))
+                urls = photo_urls(request, row.image)
+                photo_urls_out.append(urls["thumb_url"] or urls["url"])
         data = {
             "provider": int(provider_id),
             "average_rating": round(agg["avg"], 2) if agg["avg"] is not None else None,
             "reviews_count": agg["cnt"] or 0,
-            "photo_urls": photo_urls,
+            "photo_urls": photo_urls_out,
         }
         return Response(ProviderReviewSummarySerializer(data).data)

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { mediaFullUrl, mediaThumbUrl } from "./mediaUrls.js";
 
 /** Compact photo carousel for a service gallery (service + review photos). */
 export default function ServicePhotoCarousel({ items, className = "", onOpen }) {
@@ -8,7 +9,8 @@ export default function ServicePhotoCarousel({ items, className = "", onOpen }) 
       (Array.isArray(items) ? items : [])
         .map((it) => ({
           id: it.id,
-          url: it.image || it.url || "",
+          url: mediaFullUrl(it),
+          thumb_url: mediaThumbUrl(it),
           source: it.source || "service",
         }))
         .filter((it) => it.url),
@@ -27,7 +29,7 @@ export default function ServicePhotoCarousel({ items, className = "", onOpen }) 
         onClick={() => onOpen?.(list, safeIndex)}
         aria-label="Фото услуги"
       >
-        <img src={current.url} alt="" />
+        <img src={current.thumb_url || current.url} alt="" loading="lazy" decoding="async" />
         {current.source === "review" ? <span className="service-photo-carousel-badge">Из отзыва</span> : null}
       </button>
       {list.length > 1 && (
@@ -61,7 +63,7 @@ export default function ServicePhotoCarousel({ items, className = "", onOpen }) 
                 .join(" ")}
               onClick={() => setIndex(idx)}
             >
-              <img src={ph.url} alt="" />
+              <img src={ph.thumb_url || ph.url} alt="" loading="lazy" decoding="async" />
             </button>
           ))}
         </div>

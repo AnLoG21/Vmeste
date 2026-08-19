@@ -3,6 +3,7 @@ from django.db.models import Avg, Q
 from rest_framework import serializers
 
 from catalog.models import Service, ServiceCategory
+from common.media_urls import photo_urls
 
 from .booking_actions import client_display_name
 from .models import AvailabilitySlot, Booking, ProviderStaff
@@ -37,6 +38,7 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
         child=serializers.IntegerField(), required=False, allow_empty=True
     )
     portfolio_photos = serializers.SerializerMethodField(read_only=True)
+    avatar_thumb_url = serializers.SerializerMethodField(read_only=True)
     average_rating = serializers.SerializerMethodField(read_only=True)
     reviews_count = serializers.SerializerMethodField(read_only=True)
 
@@ -52,6 +54,7 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
             "job_title",
             "bio",
             "avatar_image",
+            "avatar_thumb_url",
             "is_active",
             "invitation_status",
             "permissions",
@@ -73,6 +76,12 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
             "average_rating",
             "reviews_count",
         ]
+
+    def get_avatar_thumb_url(self, obj):
+        if not obj.avatar_image:
+            return ""
+        request = self.context.get("request")
+        return photo_urls(request, obj.avatar_image)["thumb_url"]
 
     def get_provider_user(self, obj):
         p = obj.provider
@@ -104,10 +113,8 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
         for row in rows:
             if not row.image:
                 continue
-            url = row.image.url
-            if request:
-                url = request.build_absolute_uri(url)
-            out.append({"id": row.id, "image": url})
+            urls = photo_urls(request, row.image)
+            out.append({"id": row.id, "image": urls["url"], "thumb_url": urls["thumb_url"]})
         return out
 
     def get_average_rating(self, obj):
@@ -287,11 +294,8 @@ class BookingSerializer(serializers.ModelSerializer):
         row = photos.all().order_by("sort_order", "id").first()
         if not row or not row.image:
             return ""
-        url = row.image.url
         request = self.context.get("request")
-        if request:
-            return request.build_absolute_uri(url)
-        return url
+        return photo_urls(request, row.image)["thumb_url"]
 
     def get_review(self, obj):
         from reviews.models import Review
@@ -314,10 +318,8 @@ class BookingSerializer(serializers.ModelSerializer):
         for row in review.photos.all():
             if not row.image:
                 continue
-            url = row.image.url
-            if request:
-                url = request.build_absolute_uri(url)
-            photos.append({"id": row.id, "url": url})
+            urls = photo_urls(request, row.image)
+            photos.append({"id": row.id, "url": urls["url"], "thumb_url": urls["thumb_url"]})
         reply = getattr(review, "reply", None)
         reply_data = None
         if reply:

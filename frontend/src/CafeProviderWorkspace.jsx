@@ -999,7 +999,7 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
                     <div className="cafe-photo-thumbs">
                       {(item.photos || []).map((ph) => (
                         <div key={ph.id} className="cafe-photo-thumb">
-                          <img src={ph.url} alt="" />
+                          <img src={ph.thumb_url || ph.url} alt="" loading="lazy" decoding="async" />
                           <button
                             type="button"
                             className="cafe-photo-thumb-x"

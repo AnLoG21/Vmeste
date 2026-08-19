@@ -366,7 +366,7 @@ export default function InspectionApproveView({
                             className="inspection-photo-btn"
                             onClick={() => openPhotos(it.photos, idx)}
                           >
-                            <img src={ph.url} alt="" />
+                            <img src={ph.thumb_url || ph.url} alt="" loading="lazy" decoding="async" />
                           </button>
                         ))}
                       </div>

@@ -378,6 +378,13 @@ class MarketplaceMediaView(APIView):
         upload.seek(0)
         name = default_storage.save(f"marketplace/{provider.id}/{upload.name}", upload)
         url = _media_public_url(request, name)
+        thumb_url = url
+        if not _is_video_upload(upload):
+            from common.image_processing import process_image_file
+
+            thumb_name = process_image_file(name)
+            if thumb_name:
+                thumb_url = _media_public_url(request, thumb_name)
         s = _settings(provider)
         disk_url = None
         if not _is_video_upload(upload):
@@ -385,7 +392,15 @@ class MarketplaceMediaView(APIView):
                 disk_url = _upload_to_yandex_disk(s.yandex_disk_token, upload.name, BytesIO(raw))
             except Exception:
                 logger.exception("yandex disk upload failed")
-        return Response({"url": disk_url or url, "name": upload.name, "stored": "yandex_disk" if disk_url else "local"})
+        return Response(
+            {
+                "url": url,
+                "thumb_url": thumb_url,
+                "disk_url": disk_url,
+                "name": upload.name,
+                "stored": "yandex_disk" if disk_url else "local",
+            }
+        )
 
 
 class MarketplaceDescribeView(APIView):

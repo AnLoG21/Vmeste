@@ -65,8 +65,11 @@ export function groupChatMedia(messages, baseUrl) {
   for (const m of messages || []) {
     const url = resolveAttachmentUrl(m, baseUrl);
     const kind = m.kind || "text";
-    if (kind === "image" && url) photos.push({ ...m, url });
-    else if ((kind === "video" || kind === "video_note") && url) videos.push({ ...m, url });
+    if (kind === "image" && url) {
+      const thumbRaw = m.attachment_thumb_url || "";
+      const thumbUrl = thumbRaw ? mediaUrl(thumbRaw, baseUrl) : url;
+      photos.push({ ...m, url, thumb_url: thumbUrl });
+    } else if ((kind === "video" || kind === "video_note") && url) videos.push({ ...m, url });
     else if (kind === "voice" && url) voice.push({ ...m, url });
     else if (kind === "file" && url) {
       const name = (m.payload && m.payload.name) || m.text || "Файл";

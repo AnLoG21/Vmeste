@@ -17,6 +17,7 @@ www.{$DOMAIN} {
 	# Uploaded media from shared Docker volume (fast path)
 	handle_path /media/* {
 		root * /srv/media
+		header Cache-Control "public, max-age=2592000"
 		file_server
 	}
 
