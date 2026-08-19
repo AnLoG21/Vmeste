@@ -187,7 +187,7 @@
 .mp-media-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   margin-bottom: 8px;
 }
@@ -219,6 +219,7 @@
   object-fit: cover;
   border-radius: 8px;
   background: #eee;
+  cursor: pointer;
 }
 
 .mp-disk-row {
@@ -331,6 +332,67 @@ body.theme-dark .mp-table th,
 body.theme-dark .mp-table td,
 body.theme-dark .mp-tpl-row {
   border-color: #5a4638;
+}
+
+.mp-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 12, 4, 0.7);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.mp-lightbox {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #ffd9bd;
+  padding: 16px;
+  max-width: 980px;
+  width: 100%;
+  position: relative;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.22);
+}
+
+body.theme-dark .mp-lightbox {
+  background: rgba(42, 36, 31, 0.95);
+  border-color: #5a4638;
+}
+
+.mp-lightbox-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid #ffd9bd;
+  background: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  font: inherit;
+}
+
+body.theme-dark .mp-lightbox-close {
+  background: rgba(42, 36, 31, 0.8);
+  border-color: #5a4638;
+}
+
+.mp-lightbox-media {
+  width: 100%;
+  max-height: 82vh;
+  border-radius: 12px;
+  object-fit: contain;
+  background: #000;
+}
+
+.mp-lightbox-caption {
+  margin-top: 10px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 900px) {

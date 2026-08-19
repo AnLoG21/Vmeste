@@ -231,5 +231,8 @@ VK_OAUTH_CLIENT_SECRET = os.environ.get("VK_OAUTH_CLIENT_SECRET", "").strip()
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free").strip()
+OPENROUTER_HTTP_PROXY = os.environ.get("OPENROUTER_HTTP_PROXY", "").strip()
+OLLAMA_API_URL = os.environ.get("OLLAMA_API_URL", "http://localhost:11434").strip()
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "").strip()
 MARKETPLACE_VIDEO_ENABLED = os.environ.get("MARKETPLACE_VIDEO_ENABLED", "1") in ("1", "true", "True", "yes")
 

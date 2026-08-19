@@ -130,6 +130,19 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [priceStock, setPriceStock] = useState({ offer_id: "", price: "", stock: "" });
   const [templateForm, setTemplateForm] = useState({ name: "", brand: "", description_text: "", price: "", stock: "0" });
   const [aiFeatures, setAiFeatures] = useState("");
+  const [viewer, setViewer] = useState(null);
+  const [dotsTick, setDotsTick] = useState(0);
+
+  useEffect(() => {
+    if (busy === "ai" || busy === "video") {
+      const id = setInterval(() => setDotsTick((t) => t + 1), 450);
+      return () => clearInterval(id);
+    }
+    setDotsTick(0);
+    return undefined;
+  }, [busy]);
+
+  const dots = busy === "ai" || busy === "video" ? ".".repeat((dotsTick % 3) + 1) : "";
 
   const base = `${API_URL}/marketplaces`;
   const liveRows = useMemo(() => extractRecords(live), [live]);
@@ -269,7 +282,13 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || "Не удалось выгрузить товары.");
-    setStatus(`Выгружено: ${data.ok} из ${data.total}.`);
+    const failed = (data.results || []).filter((r) => !r.ok);
+    if (failed.length) {
+      const msg = failed[0]?.error || failed[0]?.detail || "Ошибка выгрузки.";
+      setStatus(`Не удалось выгрузить: ${msg}`);
+    } else {
+      setStatus(`Выгружено: ${data.ok} из ${data.total}.`);
+    }
     await loadHistory();
     return data;
   }
@@ -321,6 +340,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
 
   async function generateDescription() {
     await withBusy("ai", async () => {
+      if (!settings?.ai_enabled) throw new Error("ИИ-описание выключено. Включите OPENROUTER/OLLAMA на сервере.");
+      if (!String(product?.name || "").trim()) throw new Error("Укажите название товара для генерации описания.");
       const res = await authFetch(`${base}/generate-description/`, {
         method: "POST",
         body: JSON.stringify({
@@ -340,7 +361,13 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
 
   async function generateVideo() {
     await withBusy("video", async () => {
-      if (!product.name) throw new Error("Сначала укажите название товара.");
+      if (typeof MediaRecorder === "undefined") throw new Error("Ваш браузер не поддерживает генерацию видео.");
+      if (!String(product?.name || "").trim()) throw new Error("Укажите название товара для генерации видео карточки.");
+      const photos = (Array.isArray(product?.images) ? product.images : []).filter((x) => {
+        if (typeof x === "string") return true;
+        return x?.kind !== "video";
+      });
+      if (!photos.length) throw new Error("Загрузите хотя бы одно фото для генерации видео карточки.");
       const blob = await renderProductCardVideo({
         name: product.name,
         brand: product.brand,
@@ -654,7 +681,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               </label>
               <div className="cafe-form-span2 mp-media">
                 <div className="mp-media-head">
-                  <span>Медиа</span>
+                  <h3>Медиа</h3>
                   <label className="mp-plus-btn" title="Загрузить фото">
                     <PlusIcon />
                     <input
@@ -676,7 +703,11 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                       const isVideo = item.kind === "video" || /\.webm($|\?)/i.test(url);
                       return (
                         <li key={url}>
-                          {isVideo ? <video src={url} muted playsInline /> : <img src={url} alt="" />}
+                          {isVideo ? (
+                            <video src={url} muted playsInline onClick={() => setViewer({ url, name, isVideo: true })} />
+                          ) : (
+                            <img src={url} alt="" onClick={() => setViewer({ url, name, isVideo: false })} />
+                          )}
                           <span title={name}>{name}</span>
                           <button type="button" className="ghost-btn" onClick={() => removeImage(url)}>
                             Убрать
@@ -692,10 +723,14 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             </div>
             <div className="mp-actions">
               <button type="button" className="ghost-btn" disabled={!settings?.ai_enabled || busy === "ai"} onClick={generateDescription}>
-                {settings?.ai_enabled ? (busy === "ai" ? "Генерация…" : "ИИ-описание") : "ИИ выключен"}
+                {settings?.ai_enabled
+                  ? busy === "ai"
+                    ? `Сгенерировать ИИ описание${dots}`
+                    : "Сгенерировать ИИ описание"
+                  : "ИИ выключен"}
               </button>
               <button type="button" className="ghost-btn" disabled={busy === "video"} onClick={generateVideo}>
-                {busy === "video" ? "Сборка видео…" : "Видео карточки"}
+                {busy === "video" ? `Сгенерировать видео карточки${dots}` : "Сгенерировать видео карточки"}
               </button>
               <button type="submit" disabled={busy === "create"}>
                 {busy === "create" ? "Выгрузка…" : "Выгрузить"}
@@ -985,6 +1020,22 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {viewer ? (
+        <div className="mp-lightbox-overlay" role="presentation" onClick={() => setViewer(null)}>
+          <div className="mp-lightbox" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="mp-lightbox-close" aria-label="Закрыть" onClick={() => setViewer(null)}>
+              ×
+            </button>
+            {viewer.isVideo ? (
+              <video src={viewer.url} controls autoPlay className="mp-lightbox-media" />
+            ) : (
+              <img src={viewer.url} alt="" className="mp-lightbox-media" />
+            )}
+            {viewer.name ? <p className="muted small mp-lightbox-caption">{viewer.name}</p> : null}
+          </div>
+        </div>
       ) : null}
     </section>
   );

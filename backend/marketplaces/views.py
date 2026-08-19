@@ -86,6 +86,13 @@ def _upload_to_yandex_disk(token: str, filename: str, upload) -> str | None:
     return (body.get("file") or body.get("public_url") or "").strip() or None
 
 
+def _openrouter_proxies() -> dict | None:
+    proxy = (getattr(settings, "OPENROUTER_HTTP_PROXY", None) or "").strip()
+    if not proxy:
+        return None
+    return {"http": proxy, "https": proxy}
+
+
 class MarketplaceSettingsView(APIView):
     def get(self, request):
         provider, err = _require_provider(request)
@@ -101,8 +108,16 @@ class MarketplaceSettingsView(APIView):
                 "has_yandex_disk": bool((s.yandex_disk_token or "").strip()),
                 "yandex_disk_oauth": bool(settings.YANDEX_OAUTH_CLIENT_ID and settings.YANDEX_OAUTH_CLIENT_SECRET),
                 "video_enabled": True,
-                "ai_enabled": bool((getattr(settings, "OPENROUTER_API_KEY", "") or "").strip()),
-                "ai_model": getattr(settings, "OPENROUTER_MODEL", "") or "",
+                "ai_enabled": bool((getattr(settings, "OPENROUTER_API_KEY", "") or "").strip())
+                or bool(
+                    (getattr(settings, "OLLAMA_MODEL", "") or "").strip()
+                    and (getattr(settings, "OLLAMA_API_URL", "") or "").strip()
+                ),
+                "ai_model": (
+                    getattr(settings, "OPENROUTER_MODEL", "") or ""
+                    if bool((getattr(settings, "OPENROUTER_API_KEY", "") or "").strip())
+                    else (getattr(settings, "OLLAMA_MODEL", "") or "")
+                ),
             }
         )
 
@@ -349,9 +364,14 @@ class MarketplaceDescribeView(APIView):
         provider, err = _require_provider(request)
         if err:
             return err
-        key = (getattr(settings, "OPENROUTER_API_KEY", "") or "").strip()
-        if not key:
-            return Response({"detail": "ИИ-описания на сервере не настроены."}, status=503)
+        open_key = (getattr(settings, "OPENROUTER_API_KEY", "") or "").strip()
+        ollama_url = (getattr(settings, "OLLAMA_API_URL", "") or "").strip()
+        ollama_model = (getattr(settings, "OLLAMA_MODEL", "") or "").strip()
+        if not open_key and not (ollama_url and ollama_model):
+            return Response(
+                {"detail": "ИИ-описания на сервере не настроены. Укажите OPENROUTER_API_KEY или OLLAMA_MODEL/OLLAMA_API_URL."},
+                status=503,
+            )
         data = request.data if isinstance(request.data, dict) else {}
         name = str(data.get("product_name") or data.get("name") or "").strip()
         if not name:
@@ -365,29 +385,52 @@ class MarketplaceDescribeView(APIView):
             f"Товар: {name}. Бренд: {brand or 'не указан'}. Категория: {category or 'не указана'}. "
             f"Особенности: {', '.join(str(x) for x in features) if features else 'нет'}."
         )
-        try:
-            import requests
+        errors: list[str] = []
+        if open_key:
+            try:
+                import requests
 
-            resp = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                json={
-                    "model": getattr(settings, "OPENROUTER_MODEL", "") or "nvidia/nemotron-3-ultra-550b-a55b:free",
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-                timeout=90,
-            )
-            body = resp.json() if resp.content else {}
-            text = (((body.get("choices") or [{}])[0].get("message") or {}).get("content")) or ""
-            if not text:
+                resp = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {open_key}", "Content-Type": "application/json"},
+                    json={
+                        "model": getattr(settings, "OPENROUTER_MODEL", "") or "nvidia/nemotron-3-ultra-550b-a55b:free",
+                        "messages": [{"role": "user", "content": prompt}],
+                    },
+                    timeout=90,
+                    proxies=_openrouter_proxies(),
+                )
+                body = resp.json() if resp.content else {}
+                text = (((body.get("choices") or [{}])[0].get("message") or {}).get("content")) or ""
+                if text:
+                    return Response({"description": text.strip()})
                 err = body.get("error")
                 if isinstance(err, dict):
                     err = err.get("message") or err.get("code") or str(err)
-                return Response({"detail": err or "Пустой ответ модели."}, status=502)
-            return Response({"description": text.strip()})
-        except Exception as exc:
-            logger.exception("openrouter failed")
-            return Response({"detail": str(exc)}, status=502)
+                errors.append(str(err or "Пустой ответ модели."))
+            except Exception as exc:
+                logger.exception("openrouter failed")
+                errors.append(str(exc))
+
+        if ollama_url and ollama_model:
+            try:
+                import requests
+
+                resp = requests.post(
+                    f"{ollama_url.rstrip('/')}/api/generate",
+                    json={"model": ollama_model, "prompt": prompt, "stream": False},
+                    timeout=120,
+                )
+                body = resp.json() if resp.content else {}
+                text = (body.get("response") or body.get("message") or body.get("content") or "").strip()
+                if text:
+                    return Response({"description": text})
+                errors.append(str(body.get("error") or body.get("errors") or "Пустой ответ Ollama."))
+            except Exception as exc:
+                logger.exception("ollama failed")
+                errors.append(str(exc))
+
+        return Response({"detail": errors[0] if errors else "Не удалось сгенерировать описание."}, status=502)
 
 
 DISK_COOKIE = "vmeste_disk_oauth"
