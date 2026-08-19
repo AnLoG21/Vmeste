@@ -16,6 +16,48 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Deploy over SSH
+        id: deploy
+        uses: appleboy/ssh-action@v1.2.0
+        continue-on-error: true
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script_stop: true
+          command_timeout: 40m
+          script: |
+            set -euo pipefail
+            cd /opt/vmeste
+            git fetch --prune origin
+            git checkout main
+            git reset --hard origin/main
+            chmod +x scripts/deploy-prod.sh
+            ./scripts/deploy-prod.sh
+
+      - name: Deploy over SSH (retry 1)
+        id: deploy_retry1
+        if: steps.deploy.outcome == 'failure'
+        uses: appleboy/ssh-action@v1.2.0
+        continue-on-error: true
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script_stop: true
+          command_timeout: 40m
+          script: |
+            set -euo pipefail
+            cd /opt/vmeste
+            git fetch --prune origin
+            git checkout main
+            git reset --hard origin/main
+            chmod +x scripts/deploy-prod.sh
+            ./scripts/deploy-prod.sh
+
+      - name: Deploy over SSH (retry 2)
+        if: steps.deploy.outcome == 'failure' && steps.deploy_retry1.outcome == 'failure'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
