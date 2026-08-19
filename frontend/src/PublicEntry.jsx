@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { Component, lazy, Suspense } from "react";
 import CookieConsentBanner from "./CookieConsentBanner.jsx";
 import CafeGuestPage from "./CafeGuestPage.jsx";
 import { InspectionPublicPage } from "./InspectionApproveView.jsx";
@@ -13,7 +13,54 @@ import HomeFallback from "./HomeFallback.jsx";
 import { shouldLoadApp } from "./viewRoutes.js";
 import "./landing.css";
 
-const App = lazy(() => import("./App.jsx"));
+function lazyAppImport() {
+  return import("./App.jsx").catch((err) => {
+    console.error("App chunk load failed", err);
+    return {
+      default: function AppLoadError() {
+        return (
+          <main className="landing page page--guest" style={{ padding: "2rem 1.25rem" }}>
+            <h1>Не удалось загрузить приложение</h1>
+            <p className="landing-hero-lead">
+              Обновите страницу (Ctrl+F5). Если ошибка повторяется — подождите минуту после деплоя.
+            </p>
+            <button type="button" className="primary-btn" onClick={() => window.location.reload()}>
+              Обновить
+            </button>
+          </main>
+        );
+      },
+    };
+  });
+}
+
+const App = lazy(lazyAppImport);
+
+class AppChunkErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <main className="landing page page--guest" style={{ padding: "2rem 1.25rem" }}>
+          <h1>Ошибка интерфейса</h1>
+          <p className="landing-hero-lead">Попробуйте обновить страницу.</p>
+          <button type="button" className="primary-btn" onClick={() => window.location.reload()}>
+            Обновить
+          </button>
+        </main>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const LEGAL_ROUTES = {
   "/offer": OfferPage,
@@ -28,9 +75,11 @@ function normalizePath(pathname) {
 
 function LazyApp() {
   return (
-    <Suspense fallback={<HomeFallback />}>
-      <App />
-    </Suspense>
+    <AppChunkErrorBoundary>
+      <Suspense fallback={<HomeFallback />}>
+        <App />
+      </Suspense>
+    </AppChunkErrorBoundary>
   );
 }
 

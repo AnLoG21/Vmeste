@@ -379,12 +379,6 @@ class MarketplaceMediaView(APIView):
         name = default_storage.save(f"marketplace/{provider.id}/{upload.name}", upload)
         url = _media_public_url(request, name)
         thumb_url = url
-        if not _is_video_upload(upload):
-            from common.image_processing import process_image_file
-
-            thumb_name = process_image_file(name)
-            if thumb_name:
-                thumb_url = _media_public_url(request, thumb_name)
         s = _settings(provider)
         disk_url = None
         if not _is_video_upload(upload):

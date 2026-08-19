@@ -47,8 +47,14 @@ ensure_base_image node:20-alpine
 ensure_base_image nginx:1.27-alpine
 docker compose -f "$COMPOSE_FILE" stop celery_worker celery_beat || true
 docker compose -f "$COMPOSE_FILE" build web
-docker compose -f "$COMPOSE_FILE" build frontend
-docker compose -f "$COMPOSE_FILE" up -d --remove-orphans web frontend caddy celery_worker celery_beat
+docker compose -f "$COMPOSE_FILE" build --no-cache frontend
+docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans web frontend caddy celery_worker celery_beat
+
+echo "[deploy] verify frontend assets..."
+FE_HTML="$(docker compose -f "$COMPOSE_FILE" exec -T frontend cat /usr/share/nginx/html/index.html)"
+JS_COUNT="$(docker compose -f "$COMPOSE_FILE" exec -T frontend sh -c 'ls -1 /usr/share/nginx/html/assets/*.js 2>/dev/null | wc -l' | tr -d '[:space:]')"
+echo "$FE_HTML" | grep -q '/assets/index-' || { echo "[deploy] ERROR: index.html has no /assets/index-*.js"; exit 1; }
+test "${JS_COUNT:-0}" -ge 2 || { echo "[deploy] ERROR: expected JS assets in /assets, found ${JS_COUNT}"; exit 1; }
 
 echo "[deploy] pruning dangling images (safe)..."
 docker image prune -f >/dev/null 2>&1 || true
