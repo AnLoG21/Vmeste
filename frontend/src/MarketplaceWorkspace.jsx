@@ -17,6 +17,36 @@ const TABS = [
   ["reviews", "Отзывы"],
 ];
 
+const MEDIA_LIMITS = {
+  ozon: { photos: 15, videos: 1 },
+  wildberries: { photos: 30, videos: 1 },
+};
+
+function mediaLimitsFor(marketplace) {
+  return marketplace === "wildberries" ? MEDIA_LIMITS.wildberries : MEDIA_LIMITS.ozon;
+}
+
+function isVideoMediaItem(item) {
+  if (!item) return false;
+  if (typeof item === "string") return /\.webm($|\?)/i.test(item);
+  return item.kind === "video" || /\.webm($|\?)/i.test(item.url || item.previewUrl || "");
+}
+
+function countMediaItems(images) {
+  const list = Array.isArray(images) ? images : [];
+  let photos = 0;
+  let videos = 0;
+  for (const item of list) {
+    if (isVideoMediaItem(item)) videos += 1;
+    else photos += 1;
+  }
+  return { photos, videos };
+}
+
+function isVideoFile(file) {
+  return (file?.type || "").startsWith("video/") || /\.(webm|mp4|mov)$/i.test(file?.name || "");
+}
+
 const emptyProduct = () => ({
   offer_id: "",
   name: "",
@@ -434,32 +464,114 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     }));
   }
 
-  async function uploadMedia(file) {
-    if (!file) return;
+  async function uploadSingleMediaFile(file) {
+    const previewUrl = URL.createObjectURL(file);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await authFetch(`${base}/media/`, { method: "POST", body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      URL.revokeObjectURL(previewUrl);
+      throw new Error(data.detail || `Не удалось загрузить «${file.name}».`);
+    }
+    return {
+      url: data.url,
+      previewUrl,
+      name: file.name || data.name || "файл",
+      kind: isVideoFile(file) ? "video" : "image",
+      stored: data.stored,
+    };
+  }
+
+  async function uploadMedia(input) {
+    const files = Array.from(
+      input instanceof FileList ? input : input instanceof File ? [input] : Array.isArray(input) ? input : [],
+    ).filter(Boolean);
+    if (!files.length) return;
+
     await withBusy("media", async () => {
-      const previewUrl = URL.createObjectURL(file);
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await authFetch(`${base}/media/`, { method: "POST", body: fd });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        URL.revokeObjectURL(previewUrl);
-        throw new Error(data.detail || "Не удалось загрузить файл.");
+      const limits = mediaLimitsFor(mp);
+      const mpLabel = mp === "wildberries" ? "Wildberries" : "Ozon";
+      const counts = countMediaItems(product.images);
+
+      const photoFiles = [];
+      const videoFiles = [];
+      for (const file of files) {
+        (isVideoFile(file) ? videoFiles : photoFiles).push(file);
       }
-      const isVideo = (file.type || "").startsWith("video/") || /\.(webm|mp4|mov)$/i.test(file.name || "");
+
+      let photoRoom = limits.photos - counts.photos;
+      let videoRoom = limits.videos - counts.videos;
+      const skipped = [];
+      const queue = [];
+
+      for (const file of photoFiles) {
+        if (photoRoom <= 0) {
+          skipped.push(file.name);
+          continue;
+        }
+        queue.push(file);
+        photoRoom -= 1;
+      }
+      for (const file of videoFiles) {
+        if (videoRoom <= 0) {
+          skipped.push(file.name);
+          continue;
+        }
+        queue.push(file);
+        videoRoom -= 1;
+      }
+
+      if (!queue.length) {
+        const parts = [];
+        if (photoFiles.length && counts.photos >= limits.photos) {
+          parts.push(`лимит фото для ${mpLabel}: ${limits.photos}`);
+        }
+        if (videoFiles.length && counts.videos >= limits.videos) {
+          parts.push(`лимит видео: ${limits.videos}`);
+        }
+        throw new Error(parts.length ? `Достигнут ${parts.join("; ")}.` : "Нет файлов для загрузки.");
+      }
+
+      const added = [];
+      const failures = [];
+      let diskCount = 0;
+      for (const file of queue) {
+        try {
+          const item = await uploadSingleMediaFile(file);
+          if (item.stored === "yandex_disk") diskCount += 1;
+          added.push({
+            url: item.url,
+            previewUrl: item.previewUrl,
+            name: item.name,
+            kind: item.kind,
+          });
+        } catch (err) {
+          failures.push(err?.message || file.name);
+        }
+      }
+
+      if (!added.length) {
+        throw new Error(failures[0] || "Не удалось загрузить файлы.");
+      }
+
       setProduct((p) => ({
         ...p,
-        images: [
-          ...(Array.isArray(p.images) ? p.images : []),
-          {
-            url: data.url,
-            previewUrl,
-            name: file.name || data.name || "файл",
-            kind: isVideo ? "video" : "image",
-          },
-        ],
+        images: [...(Array.isArray(p.images) ? p.images : []), ...added],
       }));
-      setStatus(data.stored === "yandex_disk" ? "Файл загружен на Яндекс Диск." : "Файл сохранён.");
+
+      let msg = `Загружено: ${added.length}.`;
+      if (skipped.length) {
+        msg += ` Не загружено ${skipped.length} — лимит ${mpLabel}: ${limits.photos} фото, ${limits.videos} видео.`;
+      }
+      if (failures.length) {
+        msg += ` Ошибки: ${failures.slice(0, 2).join("; ")}`;
+      }
+      if (diskCount === added.length) {
+        msg = `Загружено на Яндекс Диск: ${added.length}.`;
+        if (skipped.length) msg += ` Пропущено из‑за лимита: ${skipped.length}.`;
+      }
+      setStatus(msg);
     });
   }
 
@@ -506,6 +618,12 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     await withBusy("video", async () => {
       if (typeof MediaRecorder === "undefined") throw new Error("Ваш браузер не поддерживает генерацию видео.");
       if (!String(product?.name || "").trim()) throw new Error("Укажите название товара для генерации видео карточки.");
+      const limits = mediaLimitsFor(mp);
+      const counts = countMediaItems(product.images);
+      if (counts.videos >= limits.videos) {
+        const mpLabel = mp === "wildberries" ? "Wildberries" : "Ozon";
+        throw new Error(`Лимит видео для ${mpLabel}: ${limits.videos}. Удалите текущее видео перед генерацией нового.`);
+      }
       const photos = (Array.isArray(product?.images) ? product.images : []).filter((x) => {
         if (typeof x === "string") return true;
         return x?.kind !== "video";
@@ -747,6 +865,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     });
   }, [categoryOptions, categoryQuery]);
   const requiredAttributeCount = attributeFields.filter((f) => f.required).length;
+  const mediaLimits = mediaLimitsFor(mp);
+  const mediaCounts = countMediaItems(product.images);
 
   return (
     <section className={`card full-width cafe-provider mp-workspace ${mp === "wildberries" ? "mp-wb" : "mp-ozon"}`}>
@@ -905,26 +1025,31 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               <div className="cafe-form-span2 mp-media">
                 <div className="mp-media-head">
                   <h3>Медиа</h3>
-                  <label className="mp-plus-btn" title="Загрузить фото">
+                  <label className="mp-plus-btn" title="Загрузить фото (можно несколько)">
                     <PlusIcon />
                     <input
                       type="file"
                       accept="image/*"
+                      multiple
                       hidden
                       onChange={(e) => {
-                        uploadMedia(e.target.files?.[0]);
+                        uploadMedia(e.target.files);
                         e.target.value = "";
                       }}
                     />
                   </label>
                 </div>
+                <p className="muted small">
+                  Фото: {mediaCounts.photos} / {mediaLimits.photos}
+                  {mediaLimits.videos ? ` · Видео: ${mediaCounts.videos} / ${mediaLimits.videos}` : ""}
+                </p>
                 {(product.images || []).length ? (
                   <ul className="mp-media-list">
                     {(product.images || []).map((item) => {
                       const url = item.url || item;
                       const src = mediaSrc(item);
                       const name = item.name || url;
-                      const isVideo = item.kind === "video" || /\.webm($|\?)/i.test(src);
+                      const isVideo = isVideoMediaItem(item) || /\.webm($|\?)/i.test(src);
                       return (
                         <li key={url}>
                           {isVideo ? (
