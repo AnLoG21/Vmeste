@@ -105,6 +105,15 @@ function recordHint(row) {
   return bits.slice(0, 3).join(" · ");
 }
 
+function cleanAiDescription(text) {
+  return String(text || "")
+    .replace(/\r/g, "")
+    .replace(/[*_`#]+/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [tab, setTab] = useState("create");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -354,7 +363,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "ИИ-описание недоступно.");
-      setProduct((p) => ({ ...p, description: data.description || p.description }));
+      setProduct((p) => ({ ...p, description: cleanAiDescription(data.description || p.description) }));
       setStatus("Описание сгенерировано.");
     });
   }

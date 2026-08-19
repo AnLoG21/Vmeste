@@ -26,6 +26,16 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
+def _clean_ai_description(text: str) -> str:
+    import re
+
+    value = str(text or "").replace("\r", "")
+    value = re.sub(r"[*_`#]+", "", value)
+    value = re.sub(r"[ \t]+\n", "\n", value)
+    value = re.sub(r"\n{3,}", "\n\n", value)
+    return value.strip()
+
+
 def _provider(user):
     if not user or not user.is_authenticated:
         return None
@@ -403,7 +413,7 @@ class MarketplaceDescribeView(APIView):
                 body = resp.json() if resp.content else {}
                 text = (((body.get("choices") or [{}])[0].get("message") or {}).get("content")) or ""
                 if text:
-                    return Response({"description": text.strip()})
+                    return Response({"description": _clean_ai_description(text)})
                 err = body.get("error")
                 if isinstance(err, dict):
                     err = err.get("message") or err.get("code") or str(err)
@@ -424,7 +434,7 @@ class MarketplaceDescribeView(APIView):
                 body = resp.json() if resp.content else {}
                 text = (body.get("response") or body.get("message") or body.get("content") or "").strip()
                 if text:
-                    return Response({"description": text})
+                    return Response({"description": _clean_ai_description(text)})
                 errors.append(str(body.get("error") or body.get("errors") or "Пустой ответ Ollama."))
             except Exception as exc:
                 logger.exception("ollama failed")
