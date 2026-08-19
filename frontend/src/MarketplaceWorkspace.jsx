@@ -330,21 +330,48 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   async function uploadMedia(file) {
     if (!file) return;
     await withBusy("media", async () => {
+      const previewUrl = URL.createObjectURL(file);
       const fd = new FormData();
       fd.append("file", file);
       const res = await authFetch(`${base}/media/`, { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Не удалось загрузить файл.");
+      if (!res.ok) {
+        URL.revokeObjectURL(previewUrl);
+        throw new Error(data.detail || "Не удалось загрузить файл.");
+      }
+      const isVideo = (file.type || "").startsWith("video/") || /\.(webm|mp4|mov)$/i.test(file.name || "");
       setProduct((p) => ({
         ...p,
-        images: [...(Array.isArray(p.images) ? p.images : []), { url: data.url, name: file.name || data.name || "файл" }],
+        images: [
+          ...(Array.isArray(p.images) ? p.images : []),
+          {
+            url: data.url,
+            previewUrl,
+            name: file.name || data.name || "файл",
+            kind: isVideo ? "video" : "image",
+          },
+        ],
       }));
       setStatus(data.stored === "yandex_disk" ? "Файл загружен на Яндекс Диск." : "Файл сохранён.");
     });
   }
 
+  function mediaSrc(item) {
+    if (!item) return "";
+    if (typeof item === "string") return item;
+    return item.previewUrl || item.url || "";
+  }
+
   function removeImage(url) {
-    setProduct((p) => ({ ...p, images: (p.images || []).filter((x) => (x.url || x) !== url) }));
+    setProduct((p) => ({
+      ...p,
+      images: (p.images || []).filter((x) => {
+        const itemUrl = x?.url || x;
+        if (itemUrl !== url) return true;
+        if (x?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(x.previewUrl);
+        return false;
+      }),
+    }));
   }
 
   async function generateDescription() {
@@ -384,16 +411,22 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         images: product.images,
         marketplace: mp,
       });
-      const file = new File([blob], "card-video.webm", { type: "video/webm" });
+      const localPreview = URL.createObjectURL(blob);
+      const file = new File([blob], "card-video.webm", { type: blob.type || "video/webm" });
       const fd = new FormData();
       fd.append("file", file);
       const res = await authFetch(`${base}/media/`, { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Не удалось сохранить видео.");
+      if (!res.ok) {
+        URL.revokeObjectURL(localPreview);
+        throw new Error(data.detail || "Не удалось сохранить видео.");
+      }
+      const videoItem = { url: data.url, previewUrl: localPreview, name: "Видео карточки", kind: "video" };
       setProduct((p) => ({
         ...p,
-        images: [...(Array.isArray(p.images) ? p.images : []), { url: data.url, name: "Видео карточки", kind: "video" }],
+        images: [...(Array.isArray(p.images) ? p.images : []), videoItem],
       }));
+      setViewer({ url: localPreview, name: "Видео карточки", isVideo: true });
       setStatus("Видео карточки готово.");
     });
   }
@@ -708,14 +741,15 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                   <ul className="mp-media-list">
                     {(product.images || []).map((item) => {
                       const url = item.url || item;
+                      const src = mediaSrc(item);
                       const name = item.name || url;
-                      const isVideo = item.kind === "video" || /\.webm($|\?)/i.test(url);
+                      const isVideo = item.kind === "video" || /\.webm($|\?)/i.test(src);
                       return (
                         <li key={url}>
                           {isVideo ? (
-                            <video src={url} muted playsInline onClick={() => setViewer({ url, name, isVideo: true })} />
+                            <video src={src} muted playsInline preload="metadata" onClick={() => setViewer({ url: src, name, isVideo: true })} />
                           ) : (
-                            <img src={url} alt="" onClick={() => setViewer({ url, name, isVideo: false })} />
+                            <img src={src} alt="" onClick={() => setViewer({ url: src, name, isVideo: false })} />
                           )}
                           <span title={name}>{name}</span>
                           <button type="button" className="ghost-btn" onClick={() => removeImage(url)}>

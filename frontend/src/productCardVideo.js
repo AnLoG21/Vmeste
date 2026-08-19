@@ -7,11 +7,27 @@ function loadImage(url) {
       return;
     }
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    const local = url.startsWith("blob:") || url.startsWith("data:");
+    if (!local) {
+      try {
+        const abs = new URL(url, window.location.href);
+        if (abs.origin !== window.location.origin) img.crossOrigin = "anonymous";
+      } catch {
+        img.crossOrigin = "anonymous";
+      }
+    }
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
     img.src = url;
   });
+}
+
+function pickRecorderMime() {
+  const candidates = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+  for (const type of candidates) {
+    if (MediaRecorder.isTypeSupported(type)) return type;
+  }
+  return "";
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -58,19 +74,67 @@ export async function renderProductCardVideo({
   if (!ctx) throw new Error("Нет canvas.");
 
   const urls = (images || [])
-    .map((item) => (typeof item === "string" ? item : item?.kind === "video" ? "" : item?.url || ""))
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (item?.kind === "video") return "";
+      return item?.previewUrl || item?.url || "";
+    })
     .filter(Boolean)
     .slice(0, 6);
   const photos = (await Promise.all(urls.map(loadImage))).filter(Boolean);
 
+  const drawFrame = (t) => {
+    const g = ctx.createLinearGradient(0, 0, w, h);
+    g.addColorStop(0, `rgb(${c0.join(",")})`);
+    g.addColorStop(1, `rgb(${c1.join(",")})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = "rgba(255,255,255,0.14)";
+    roundRect(ctx, 60, 80, w - 120, 820, 36);
+    ctx.fill();
+
+    if (photos.length) {
+      const idx = Math.min(photos.length - 1, Math.floor(t * photos.length));
+      const img = photos[idx];
+      const box = { x: 90, y: 110, w: w - 180, h: 760 };
+      const scale = Math.min(box.w / img.width, box.h / img.height);
+      const dw = img.width * scale;
+      const dh = img.height * scale;
+      ctx.save();
+      roundRect(ctx, box.x, box.y, box.w, box.h, 28);
+      ctx.clip();
+      ctx.drawImage(img, box.x + (box.w - dw) / 2, box.y + (box.h - dh) / 2, dw, dh);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.font = "700 72px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(ozon ? "Ozon" : "Wildberries", w / 2, 480);
+    }
+
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "left";
+    ctx.font = "700 54px system-ui, sans-serif";
+    const titleLines = wrapText(ctx, name || "Товар", w - 160);
+    titleLines.forEach((line, i) => ctx.fillText(line, 80, 980 + i * 64));
+    ctx.font = "600 36px system-ui, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    const sub = [brand, price ? `${price} ₽` : ""].filter(Boolean).join("  ·  ");
+    if (sub) ctx.fillText(sub, 80, 980 + titleLines.length * 64 + 28);
+  };
+
+  const ozon = marketplace !== "wildberries";
+  const c0 = ozon ? [25, 118, 210] : [156, 39, 176];
+  const c1 = ozon ? [77, 208, 225] : [233, 30, 99];
+  drawFrame(0);
+
   const stream = canvas.captureStream(30);
-  const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-    ? "video/webm;codecs=vp9"
-    : MediaRecorder.isTypeSupported("video/webm;codecs=vp8")
-      ? "video/webm;codecs=vp8"
-      : "video/webm";
+  const mime = pickRecorderMime();
   if (typeof MediaRecorder === "undefined") throw new Error("Браузер не умеет записывать видео.");
-  const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 3_000_000 });
+  const recorder = mime
+    ? new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2_500_000 })
+    : new MediaRecorder(stream, { videoBitsPerSecond: 2_500_000 });
   const chunks = [];
   recorder.ondataavailable = (e) => {
     if (e.data && e.data.size) chunks.push(e.data);
@@ -79,63 +143,22 @@ export async function renderProductCardVideo({
     recorder.onstop = () => resolve(new Blob(chunks, { type: "video/webm" }));
     recorder.onerror = () => reject(new Error("Не удалось записать видео."));
   });
-  recorder.start();
+  recorder.start(200);
 
   const duration = 6500;
   const start = performance.now();
-  const ozon = marketplace !== "wildberries";
-  const c0 = ozon ? [25, 118, 210] : [156, 39, 176];
-  const c1 = ozon ? [77, 208, 225] : [233, 30, 99];
 
   await new Promise((resolve) => {
     const draw = (now) => {
       const t = Math.min(1, (now - start) / duration);
-      const g = ctx.createLinearGradient(0, 0, w, h);
-      g.addColorStop(0, `rgb(${c0.join(",")})`);
-      g.addColorStop(1, `rgb(${c1.join(",")})`);
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-
-      ctx.fillStyle = "rgba(255,255,255,0.14)";
-      roundRect(ctx, 60, 80, w - 120, 820, 36);
-      ctx.fill();
-
-      if (photos.length) {
-        const idx = Math.min(photos.length - 1, Math.floor(t * photos.length));
-        const img = photos[idx];
-        const box = { x: 90, y: 110, w: w - 180, h: 760 };
-        const scale = Math.min(box.w / img.width, box.h / img.height);
-        const dw = img.width * scale;
-        const dh = img.height * scale;
-        ctx.save();
-        roundRect(ctx, box.x, box.y, box.w, box.h, 28);
-        ctx.clip();
-        ctx.drawImage(img, box.x + (box.w - dw) / 2, box.y + (box.h - dh) / 2, dw, dh);
-        ctx.restore();
-      } else {
-        ctx.fillStyle = "rgba(255,255,255,0.9)";
-        ctx.font = "700 72px system-ui, sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(ozon ? "Ozon" : "Wildberries", w / 2, 480);
-      }
-
-      ctx.fillStyle = "#fff";
-      ctx.textAlign = "left";
-      ctx.font = "700 54px system-ui, sans-serif";
-      const titleLines = wrapText(ctx, name || "Товар", w - 160);
-      titleLines.forEach((line, i) => ctx.fillText(line, 80, 980 + i * 64));
-      ctx.font = "600 36px system-ui, sans-serif";
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
-      const sub = [brand, price ? `${price} ₽` : ""].filter(Boolean).join("  ·  ");
-      if (sub) ctx.fillText(sub, 80, 980 + titleLines.length * 64 + 28);
-
+      drawFrame(t);
       if (t < 1) requestAnimationFrame(draw);
       else resolve();
     };
     requestAnimationFrame(draw);
   });
 
-  await new Promise((r) => setTimeout(r, 120));
+  await new Promise((r) => setTimeout(r, 400));
   if (recorder.state !== "inactive") recorder.stop();
   const blob = await finished;
   if (!blob.size) throw new Error("Видео получилось пустым.");

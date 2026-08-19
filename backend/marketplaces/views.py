@@ -96,6 +96,24 @@ def _upload_to_yandex_disk(token: str, filename: str, upload) -> str | None:
     return (body.get("file") or body.get("public_url") or "").strip() or None
 
 
+def _media_public_url(request, storage_name: str) -> str:
+    from django.core.files.storage import default_storage
+
+    rel = default_storage.url(storage_name)
+    if str(rel).startswith("http"):
+        return rel
+    origin = (getattr(settings, "FRONTEND_URL", "") or "").strip().rstrip("/")
+    if origin.startswith("http"):
+        return f"{origin}{rel}"
+    return request.build_absolute_uri(rel)
+
+
+def _is_video_upload(upload) -> bool:
+    content_type = (getattr(upload, "content_type", "") or "").lower()
+    name = (getattr(upload, "name", "") or "").lower()
+    return content_type.startswith("video/") or name.endswith((".webm", ".mp4", ".mov", ".m4v"))
+
+
 def _openrouter_proxies() -> dict | None:
     proxy = (getattr(settings, "OPENROUTER_HTTP_PROXY", None) or "").strip()
     if not proxy:
@@ -359,13 +377,14 @@ class MarketplaceMediaView(APIView):
         raw = upload.read()
         upload.seek(0)
         name = default_storage.save(f"marketplace/{provider.id}/{upload.name}", upload)
-        url = request.build_absolute_uri(default_storage.url(name))
+        url = _media_public_url(request, name)
         s = _settings(provider)
         disk_url = None
-        try:
-            disk_url = _upload_to_yandex_disk(s.yandex_disk_token, upload.name, BytesIO(raw))
-        except Exception:
-            logger.exception("yandex disk upload failed")
+        if not _is_video_upload(upload):
+            try:
+                disk_url = _upload_to_yandex_disk(s.yandex_disk_token, upload.name, BytesIO(raw))
+            except Exception:
+                logger.exception("yandex disk upload failed")
         return Response({"url": disk_url or url, "name": upload.name, "stored": "yandex_disk" if disk_url else "local"})
 
 
