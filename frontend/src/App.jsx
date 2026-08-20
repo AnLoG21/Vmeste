@@ -301,7 +301,15 @@ function loadSubnavBookmarks(role, sphere) {
       if (!next.includes("my_bookings")) next = [...next, "my_bookings"];
     }
     if (role === "provider" && sphere === "marketplaces") {
-      next = next.filter((id) => id !== "bookings" && id !== "intervals" && id !== "services" && id !== "my_bookings");
+      next = next.filter(
+        (id) =>
+          id !== "bookings" &&
+          id !== "intervals" &&
+          id !== "services" &&
+          id !== "my_bookings" &&
+          id !== "analytics" &&
+          id !== "reviews",
+      );
       if (!next.includes("marketplaces")) next = ["marketplaces", ...next];
       else next = ["marketplaces", ...next.filter((id) => id !== "marketplaces")];
     }
@@ -3330,7 +3338,7 @@ export default function App() {
     if (
       me?.role === "provider" &&
       me?.provider_sphere === "marketplaces" &&
-      currentView === "bookings"
+      (currentView === "bookings" || currentView === "analytics" || currentView === "reviews")
     ) {
       setCurrentView("marketplaces");
     }
@@ -7084,6 +7092,7 @@ export default function App() {
     }
     if (me?.provider_sphere === "marketplaces") {
       if (id === "intervals" || id === "bookings" || id === "services" || id === "my_bookings") return false;
+      if (id === "analytics" || id === "reviews") return false;
       if (id === "marketplaces" && role !== "provider") return false;
     } else if (id === "marketplaces") {
       return false;
@@ -7811,27 +7820,42 @@ export default function App() {
 
   async function saveProviderOrganization(event) {
     event.preventDefault();
+    const isMp = me?.provider_sphere === "marketplaces";
     const response = await authFetch(`${API_URL}/users/me/`, {
       method: "PATCH",
-      body: JSON.stringify({
-        organization_name: orgAddressForm.organization_name,
-        organization_address:
-          simplifyCommaAddressLine((orgAddressForm.organization_address || "").trim()) ||
-          (orgAddressForm.organization_address || "").trim(),
-        organization_entrance: (orgAddressForm.entrance || "").trim(),
-        organization_floor: (orgAddressForm.floor || "").trim(),
-        organization_apartment: (orgAddressForm.apartment || "").trim(),
-        organization_intercom: (orgAddressForm.intercom || "").trim(),
-        organization_address_extra: (orgAddressForm.organization_address_details || "").trim(),
-        organization_latitude: orgAddressForm.organization_latitude,
-        organization_longitude: orgAddressForm.organization_longitude,
-      }),
+      body: JSON.stringify(
+        isMp
+          ? {
+              organization_name: orgAddressForm.organization_name,
+              organization_address: "",
+              organization_entrance: "",
+              organization_floor: "",
+              organization_apartment: "",
+              organization_intercom: "",
+              organization_address_extra: "",
+              organization_latitude: null,
+              organization_longitude: null,
+            }
+          : {
+              organization_name: orgAddressForm.organization_name,
+              organization_address:
+                simplifyCommaAddressLine((orgAddressForm.organization_address || "").trim()) ||
+                (orgAddressForm.organization_address || "").trim(),
+              organization_entrance: (orgAddressForm.entrance || "").trim(),
+              organization_floor: (orgAddressForm.floor || "").trim(),
+              organization_apartment: (orgAddressForm.apartment || "").trim(),
+              organization_intercom: (orgAddressForm.intercom || "").trim(),
+              organization_address_extra: (orgAddressForm.organization_address_details || "").trim(),
+              organization_latitude: orgAddressForm.organization_latitude,
+              organization_longitude: orgAddressForm.organization_longitude,
+            },
+      ),
     });
     if (!response.ok) {
-      setProfileOrgStatus("Не удалось сохранить адрес организации.");
+      setProfileOrgStatus(isMp ? "Не удалось сохранить название." : "Не удалось сохранить адрес организации.");
       return;
     }
-    setProfileOrgStatus("Адрес организации обновлён.");
+    setProfileOrgStatus(isMp ? "Название организации обновлено." : "Адрес организации обновлён.");
     setOrgMainEditOpen(false);
     loadMe();
     loadSellerData();
@@ -10346,9 +10370,36 @@ export default function App() {
       <section className="card profile-card">
         <h2>Организация</h2>
         {me?.role === "staff" && staffEffectivePerms.can_delegate_permissions && (
-          <p className="muted">Адрес организации и филиалы настраивает руководитель. Команду, должности и права — в разделе «Сотрудники».</p>
+          <p className="muted">
+            {me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces"
+              ? "Название организации настраивает руководитель. Команду и права — в разделе «Сотрудники»."
+              : "Адрес организации и филиалы настраивает руководитель. Команду, должности и права — в разделе «Сотрудники»."}
+          </p>
         )}
-        {me?.role === "provider" && (
+        {me?.role === "provider" && me?.provider_sphere === "marketplaces" && (
+          <>
+            <p className="muted">
+              Ключи площадок, товары и заказы — в разделе «Маркетплейсы». Здесь только название организации.
+            </p>
+            <form
+              onSubmit={saveProviderOrganization}
+              className="form"
+            >
+              <label className="field-label">
+                Название организации
+                <input
+                  placeholder="Название организации"
+                  value={orgAddressForm.organization_name}
+                  onChange={(e) => setOrgAddressForm({ ...orgAddressForm, organization_name: e.target.value })}
+                  required
+                />
+              </label>
+              <button type="submit">Сохранить</button>
+              <p className="status">{profileOrgStatus}</p>
+            </form>
+          </>
+        )}
+        {me?.role === "provider" && me?.provider_sphere !== "marketplaces" && (
           <>
             <h3 id="org-booking-messages">Сообщения при работе с записями</h3>
             <form
@@ -11393,7 +11444,12 @@ export default function App() {
               ["manage_client_chats", "Чаты с клиентами"],
               ["manage_staff", "Добавление сотрудников"],
               ["can_delegate_permissions", "Может настраивать права других"],
-            ];
+            ].filter(([key]) => {
+              if (me?.provider_sphere === "marketplaces") {
+                return !["manage_bookings", "manage_intervals", "manage_services"].includes(key);
+              }
+              return true;
+            });
             const rowName = formatStaffClientName(link.staff_user);
             const permsOpen = staffPermsOpenId === link.id;
             return (
