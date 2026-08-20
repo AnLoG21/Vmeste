@@ -2,13 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./marketplaceWorkspace.css";
 import { renderProductCardVideo } from "./productCardVideo.js";
 import {
+  applyAttributeMirrors,
   flattenOzonCategoryOptions,
   flattenWbSubjects,
   normalizeOzonAttributes,
   normalizeOzonDictionaryValues,
   normalizeWbCharacteristics,
+  splitCardAttributes,
   wbCharcInputType,
 } from "./marketplaceCategoryHelpers.js";
+import SearchableSelect from "./marketplaceSearchableSelect.jsx";
 
 const TABS = [
   ["create", "Создать товар"],
@@ -246,8 +249,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [dotsTick, setDotsTick] = useState(0);
   const [categoryOptions, setCategoryOptions] = useState([]);
   const [attributeFields, setAttributeFields] = useState([]);
+  const [attributeMirrors, setAttributeMirrors] = useState([]);
   const [attributeDictOptions, setAttributeDictOptions] = useState({});
-  const [categoryQuery, setCategoryQuery] = useState("");
   const [attributesHint, setAttributesHint] = useState("");
   const [editingHistoryId, setEditingHistoryId] = useState(null);
   const keysFormDirtyRef = useRef(false);
@@ -255,8 +258,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   useEffect(() => {
     setCategoryOptions([]);
     setAttributeFields([]);
+    setAttributeMirrors([]);
     setAttributeDictOptions({});
-    setCategoryQuery("");
     setAttributesHint("");
   }, [mp]);
 
@@ -401,11 +404,17 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       .filter((x) => (typeof x === "string" ? true : x?.kind !== "video"))
       .map((x) => publicUrlFor(x))
       .filter(Boolean);
+    const characteristics = applyAttributeMirrors(row.characteristics || {}, attributeMirrors, row);
     const requiredIds = attributeFields.filter((f) => f.required).map((f) => f.id);
     const requiredNames = {};
     const characteristicsMeta = {};
     for (const field of attributeFields) {
       if (field.required) requiredNames[field.id] = field.name;
+      if (field.dictionaryId || field.dictionary) {
+        characteristicsMeta[field.id] = { dictionary: true };
+      }
+    }
+    for (const field of attributeMirrors) {
       if (field.dictionaryId || field.dictionary) {
         characteristicsMeta[field.id] = { dictionary: true };
       }
@@ -421,7 +430,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       barcode: row.barcode,
       category: row.category,
       type: row.type,
-      characteristics: row.characteristics || {},
+      characteristics,
       required_attributes: requiredIds,
       required_attribute_names: requiredNames,
       characteristics_meta: characteristicsMeta,
@@ -501,6 +510,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       setProduct(emptyProduct());
       setEditingHistoryId(null);
       setAttributeFields([]);
+      setAttributeMirrors([]);
       setAttributeDictOptions({});
       setAttributesHint("");
     });
@@ -573,6 +583,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   async function loadAttributesForCategory(categoryId, typeId = "") {
     if (!categoryId) {
       setAttributeFields([]);
+      setAttributeMirrors([]);
       setAttributeDictOptions({});
       setAttributesHint("");
       return;
@@ -585,14 +596,17 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       if (mp === "wildberries") {
         const data = await mpCall("categories.charcs", {}, { subject_id: categoryId });
         if (data?.sandbox) throw new Error(data.message || "Песочница.");
-        const fields = normalizeWbCharacteristics(data);
-        setAttributeFields(fields);
+        const { visible, mirrors } = splitCardAttributes(normalizeWbCharacteristics(data));
+        setAttributeFields(visible);
+        setAttributeMirrors(mirrors);
         setAttributeDictOptions({});
-        setAttributesHint(fields.length ? `Характеристик WB: ${fields.length}` : "Для предмета нет характеристик.");
+        const hidden = mirrors.length ? ` (скрыто дублей карточки: ${mirrors.length})` : "";
+        setAttributesHint(visible.length ? `Характеристик WB: ${visible.length}${hidden}` : `Для предмета нет доп. характеристик.${hidden}`);
         return;
       }
       if (!typeId) {
         setAttributeFields([]);
+        setAttributeMirrors([]);
         setAttributeDictOptions({});
         setAttributesHint("Для Ozon выберите категорию с типом товара.");
         return;
@@ -603,10 +617,12 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         language: "DEFAULT",
       });
       if (data?.sandbox) throw new Error(data.message || "Песочница.");
-      const fields = normalizeOzonAttributes(data);
-      setAttributeFields(fields);
-      setAttributesHint(fields.length ? `Характеристик Ozon: ${fields.length}` : "Для категории нет характеристик.");
-      await loadOzonDictionaryOptions(categoryId, typeId, fields);
+      const { visible, mirrors } = splitCardAttributes(normalizeOzonAttributes(data));
+      setAttributeFields(visible);
+      setAttributeMirrors(mirrors);
+      const hidden = mirrors.length ? ` (скрыто дублей карточки: ${mirrors.length})` : "";
+      setAttributesHint(visible.length ? `Характеристик Ozon: ${visible.length}${hidden}` : `Для категории нет доп. характеристик.${hidden}`);
+      await loadOzonDictionaryOptions(categoryId, typeId, visible);
     });
   }
 
@@ -1133,14 +1149,18 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   );
   const tabLabel = TABS.find(([id]) => id === tab)?.[1] || "";
   const ozonCategoryValue = product.category && product.type ? `${product.category}:${product.type}` : "";
-  const filteredCategoryOptions = useMemo(() => {
-    const q = categoryQuery.trim().toLowerCase();
-    if (!q) return categoryOptions;
-    return categoryOptions.filter((item) => {
-      const label = (item.label || item.name || "").toLowerCase();
-      return label.includes(q) || String(item.id || item.categoryId || "").includes(q);
-    });
-  }, [categoryOptions, categoryQuery]);
+  const categorySelectOptions = useMemo(() => {
+    if (mp === "wildberries") {
+      return categoryOptions.map((item) => ({
+        value: item.id,
+        label: item.parent ? `${item.name} · ${item.parent}` : item.name,
+      }));
+    }
+    return categoryOptions.map((item) => ({
+      value: `${item.categoryId}:${item.typeId}`,
+      label: item.label,
+    }));
+  }, [categoryOptions, mp]);
   const requiredAttributeCount = attributeFields.filter((f) => f.required).length;
   const mediaLimits = mediaLimitsFor(mp);
   const mediaCounts = countMediaItems(product.images);
@@ -1223,38 +1243,29 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                     {busy === "cats" ? "Загрузка…" : "Загрузить с площадки"}
                   </button>
                 </div>
-                <label className="field-label">
-                  Поиск категории
-                  <input
-                    value={categoryQuery}
-                    onChange={(e) => setCategoryQuery(e.target.value)}
-                    placeholder={mp === "wildberries" ? "Предмет WB" : "Категория Ozon"}
-                  />
-                </label>
                 {mp === "wildberries" ? (
                   <label>
                     Предмет (subjectID)
-                    <select value={product.category} onChange={(e) => onWbCategoryPick(e.target.value)}>
-                      <option value="">Выберите предмет</option>
-                      {filteredCategoryOptions.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                          {item.parent ? ` · ${item.parent}` : ""}
-                        </option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={product.category}
+                      options={categorySelectOptions}
+                      onChange={onWbCategoryPick}
+                      placeholder="Выберите предмет"
+                      searchPlaceholder="Поиск предмета…"
+                      disabled={!categoryOptions.length}
+                    />
                   </label>
                 ) : (
                   <label>
                     Категория и тип
-                    <select value={ozonCategoryValue} onChange={(e) => onOzonCategoryPick(e.target.value)}>
-                      <option value="">Выберите категорию</option>
-                      {filteredCategoryOptions.map((item) => (
-                        <option key={`${item.categoryId}:${item.typeId}`} value={`${item.categoryId}:${item.typeId}`}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={ozonCategoryValue}
+                      options={categorySelectOptions}
+                      onChange={onOzonCategoryPick}
+                      placeholder="Выберите категорию"
+                      searchPlaceholder="Поиск категории или типа…"
+                      disabled={!categoryOptions.length}
+                    />
                   </label>
                 )}
                 {!categoryOptions.length ? (
@@ -1275,14 +1286,13 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                           {field.required ? " *" : ""}
                           {field.unit ? ` (${field.unit})` : ""}
                           {field.dictionaryId && dictOptions.length ? (
-                            <select value={value} onChange={(e) => setCharacteristic(field.id, e.target.value)}>
-                              <option value="">{field.required ? "Выберите значение" : "Необязательно"}</option>
-                              {dictOptions.map((opt) => (
-                                <option key={opt.id} value={opt.id}>
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
+                            <SearchableSelect
+                              value={value}
+                              options={dictOptions.map((opt) => ({ value: opt.id, label: opt.label }))}
+                              onChange={(next) => setCharacteristic(field.id, next)}
+                              placeholder={field.required ? "Выберите значение" : "Необязательно"}
+                              searchPlaceholder={`Поиск: ${field.name}`}
+                            />
                           ) : (
                             <input
                               type={inputType}
@@ -1386,6 +1396,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                     setProduct(emptyProduct());
                     setEditingHistoryId(null);
                     setAttributeFields([]);
+                    setAttributeMirrors([]);
                     setAttributeDictOptions({});
                     setAttributesHint("");
                   }}

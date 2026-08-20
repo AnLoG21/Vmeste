@@ -248,6 +248,107 @@
   font-size: 0.92rem;
 }
 
+.mp-sselect {
+  position: relative;
+  width: 100%;
+}
+
+.mp-sselect-trigger {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e0c2a8;
+  font: inherit;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.mp-sselect-trigger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mp-sselect-placeholder {
+  color: #8a7464;
+}
+
+.mp-sselect-chevron {
+  flex: 0 0 auto;
+  opacity: 0.55;
+  font-size: 0.85rem;
+}
+
+.mp-sselect-panel {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  display: flex;
+  flex-direction: column;
+  max-height: min(320px, 55vh);
+  border-radius: 12px;
+  border: 1px solid #e0c2a8;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(60, 40, 20, 0.16);
+  overflow: hidden;
+}
+
+.mp-sselect-search {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid #eedccc;
+  font: inherit;
+  background: #fffaf6;
+  outline: none;
+}
+
+.mp-sselect-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  overflow: auto;
+  flex: 1 1 auto;
+}
+
+.mp-sselect-list button {
+  width: 100%;
+  display: block;
+  text-align: left;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  padding: 8px 10px;
+  cursor: pointer;
+  color: inherit;
+}
+
+.mp-sselect-list button.is-active,
+.mp-sselect-list button:hover {
+  background: rgba(224, 148, 88, 0.14);
+}
+
+.mp-sselect-list button.is-selected {
+  font-weight: 600;
+}
+
+.mp-sselect-empty {
+  padding: 10px 12px;
+  color: #8a7464;
+  font-size: 0.9rem;
+}
+
 .mp-media-list img,
 .mp-media-list video {
   width: 48px;
@@ -365,10 +466,23 @@ body.theme-dark .mp-workspace .field-label input,
 body.theme-dark .mp-workspace .field-label textarea,
 body.theme-dark .mp-menu-drop,
 body.theme-dark .mp-table,
-body.theme-dark .mp-live-list li {
+body.theme-dark .mp-live-list li,
+body.theme-dark .mp-sselect-trigger,
+body.theme-dark .mp-sselect-panel,
+body.theme-dark .mp-sselect-search {
   background: rgba(42, 36, 31, 0.92);
   border-color: #5a4638;
   color: inherit;
+}
+
+body.theme-dark .mp-sselect-search {
+  background: rgba(32, 28, 24, 0.95);
+  border-bottom-color: #5a4638;
+}
+
+body.theme-dark .mp-sselect-list button.is-active,
+body.theme-dark .mp-sselect-list button:hover {
+  background: rgba(224, 148, 88, 0.18);
 }
 
 body.theme-dark .mp-table th,
