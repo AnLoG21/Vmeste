@@ -15,4 +15,9 @@ urlpatterns = [
     path("generate-description/", views.MarketplaceDescribeView.as_view()),
     path("yandex-disk/start/", views.YandexDiskStartView.as_view()),
     path("yandex-disk/callback/", views.YandexDiskCallbackView.as_view()),
+    path("logs/", views.MarketplaceLogsView.as_view()),
+    path("export/", views.MarketplaceExportView.as_view()),
+    path("barcodes/generate/", views.MarketplaceBarcodeView.as_view()),
+    path("sync/", views.MarketplaceSyncView.as_view()),
+    path("webhook/", views.MarketplaceWebhookView.as_view()),
 ]

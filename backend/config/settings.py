@@ -213,6 +213,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "notifications.poll_telegram",
         "schedule": 8.0,
     },
+    "marketplaces-sync-pending-every-15-min": {
+        "task": "marketplaces.sync_pending_imports",
+        "schedule": 900.0,
+    },
 }
 
 # SMS.ru platform key (org can override via ProviderMessagingSettings.sms_api_id)

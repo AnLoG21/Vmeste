@@ -25,6 +25,7 @@ def _client_ua(request):
 
 class UserSerializer(serializers.ModelSerializer):
     has_usable_password = serializers.SerializerMethodField()
+    needs_credentials_setup = serializers.SerializerMethodField()
     profile_complete = serializers.SerializerMethodField()
     provider_authority_confirmed = serializers.SerializerMethodField()
     confirm_provider_authority = serializers.BooleanField(write_only=True, required=False)
@@ -66,6 +67,7 @@ class UserSerializer(serializers.ModelSerializer):
             "notify_booking_status",
             "telegram_chat_id",
             "has_usable_password",
+            "needs_credentials_setup",
             "profile_complete",
             "provider_authority_confirmed",
             "confirm_provider_authority",
@@ -79,12 +81,16 @@ class UserSerializer(serializers.ModelSerializer):
             "is_demo",
             "telegram_chat_id",
             "has_usable_password",
+            "needs_credentials_setup",
             "profile_complete",
             "provider_authority_confirmed",
         ]
 
     def get_has_usable_password(self, obj):
         return obj.has_usable_password()
+
+    def get_needs_credentials_setup(self, obj):
+        return obj.needs_credentials_setup()
 
     def get_profile_complete(self, obj):
         return obj.profile_is_complete()
@@ -284,7 +290,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
 
 class ChangePasswordSerializer(serializers.Serializer):
-    old_password = serializers.CharField()
+    old_password = serializers.CharField(required=False, allow_blank=True, default="")
     new_password = serializers.CharField(min_length=8)
     new_password_confirm = serializers.CharField()
 
@@ -292,6 +298,39 @@ class ChangePasswordSerializer(serializers.Serializer):
         if attrs["new_password"] != attrs["new_password_confirm"]:
             raise serializers.ValidationError({"new_password_confirm": "Пароли не совпадают."})
         validate_password(attrs["new_password"])
+        return attrs
+
+
+class SetupCredentialsSerializer(serializers.Serializer):
+    """Логин + пароль после входа через VK / Яндекс / Telegram."""
+
+    username = serializers.CharField(max_length=150)
+    password = serializers.CharField(min_length=8, write_only=True)
+    password_confirm = serializers.CharField(write_only=True)
+
+    def validate_username(self, value):
+        import re
+
+        from django.contrib.auth.validators import UnicodeUsernameValidator
+
+        username = (value or "").strip()
+        if len(username) < 3:
+            raise serializers.ValidationError("Логин должен быть не короче 3 символов.")
+        UnicodeUsernameValidator()(username)
+        if re.match(r"^(vk|ya|tg|user)_\d+$", username, re.IGNORECASE):
+            raise serializers.ValidationError("Выберите свой логин, не служебный идентификатор.")
+        user = self.context.get("user")
+        qs = User.objects.filter(username__iexact=username)
+        if user is not None:
+            qs = qs.exclude(pk=user.pk)
+        if qs.exists():
+            raise serializers.ValidationError("Пользователь с таким логином уже существует.")
+        return username
+
+    def validate(self, attrs):
+        if attrs["password"] != attrs.pop("password_confirm", None):
+            raise serializers.ValidationError({"password_confirm": "Пароли не совпадают."})
+        validate_password(attrs["password"], user=self.context.get("user"))
         return attrs
 
 

@@ -21,7 +21,9 @@ const TABS = [
   ["manage", "Управление"],
   ["orders", "Заказы"],
   ["analytics", "Аналитика"],
+  ["finance", "Финансы"],
   ["reviews", "Отзывы"],
+  ["logs", "Логи"],
 ];
 
 const MEDIA_LIMITS = {
@@ -321,6 +323,10 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [live, setLive] = useState(null);
   const [orderRows, setOrderRows] = useState([]);
   const [reviewRows, setReviewRows] = useState([]);
+  const [logRows, setLogRows] = useState([]);
+  const [financeRows, setFinanceRows] = useState([]);
+  const [actionRows, setActionRows] = useState([]);
+  const [webhookSecretOnce, setWebhookSecretOnce] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [priceStock, setPriceStock] = useState({ offer_id: "", nm_id: "", price: "", stock: "" });
   const [templateForm, setTemplateForm] = useState({ name: "", brand: "", description_text: "", price: "", stock: "0" });
@@ -350,6 +356,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     setAttributesHint("");
     setOrderRows([]);
     setReviewRows([]);
+    setLogRows([]);
+    setFinanceRows([]);
+    setActionRows([]);
     setLive(null);
   }, [mp]);
 
@@ -1273,6 +1282,98 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     setStatus(`Экспортировано в CSV: ${rows.length}`);
   }
 
+  async function exportHistoryServer(format = "csv") {
+    await withBusy("export", async () => {
+      const res = await authFetch(
+        `${base}/export/?export=${encodeURIComponent(format)}&marketplace=${mp === "wildberries" ? "wildberries" : "ozon"}`,
+      );
+      if (!res.ok) throw new Error(await readError(res));
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = format === "xlsx" ? "marketplace-history.xlsx" : "marketplace-history.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus(format === "xlsx" ? "Excel скачан." : "CSV с сервера скачан.");
+    });
+  }
+
+  async function generateBarcode() {
+    await withBusy("barcode", async () => {
+      const res = await authFetch(`${base}/barcodes/generate/`, {
+        method: "POST",
+        body: JSON.stringify({ marketplace: mp, count: 1 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Не удалось сгенерировать штрихкод.");
+      if (data.sandbox) throw new Error(data.message || "Песочница.");
+      const code = (data.barcodes || [])[0];
+      if (!code) throw new Error("Площадка не вернула штрихкод.");
+      setProduct((p) => ({ ...p, barcode: String(code) }));
+      setStatus(`Штрихкод: ${code}`);
+    });
+  }
+
+  async function loadApiLogs() {
+    await withBusy("logs", async () => {
+      const res = await authFetch(`${base}/logs/?limit=100&marketplace=${mp === "wildberries" ? "wb" : "ozon"}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Не удалось загрузить логи.");
+      setLogRows(data.results || []);
+      setStatus(`Логов: ${(data.results || []).length}`);
+    });
+  }
+
+  async function loadFinance() {
+    await withBusy("finance", async () => {
+      if (mp !== "ozon") throw new Error("Финансы и акции — для Ozon.");
+      const from = daysAgoIso(30).slice(0, 10);
+      const to = new Date().toISOString().slice(0, 10);
+      const fin = await mpCall("finance.list", {
+        filter: { date: { from, to }, operation_type: [] },
+        page: 1,
+        page_size: 50,
+      });
+      if (fin?.sandbox) {
+        setFinanceRows([]);
+        setStatus(fin.message || "Песочница.");
+        return;
+      }
+      const ops = fin?.result?.operations || fin?.operations || extractRecords(fin);
+      setFinanceRows(Array.isArray(ops) ? ops.slice(0, 80) : []);
+      const acts = await mpCall("actions.list");
+      const list = acts?.result || acts?.actions || extractRecords(acts);
+      setActionRows(Array.isArray(list) ? list.slice(0, 80) : []);
+      setStatus(`Финансы: ${(Array.isArray(ops) ? ops : []).length}, акций: ${(Array.isArray(list) ? list : []).length}`);
+    });
+  }
+
+  async function runSync() {
+    await withBusy("sync", async () => {
+      const res = await authFetch(`${base}/sync/`, { method: "POST", body: "{}" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Синхронизация не запущена.");
+      await loadSettings({ syncForm: false });
+      await loadHistory();
+      setStatus(data.eager ? `Синк выполнен: ${JSON.stringify(data.result || {})}` : `Синк поставлен в очередь (${data.task_id || "ok"}).`);
+    });
+  }
+
+  async function rotateWebhookSecret() {
+    await withBusy("webhook", async () => {
+      const res = await authFetch(`${base}/settings/`, {
+        method: "PATCH",
+        body: JSON.stringify({ rotate_webhook_secret: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Не удалось создать secret.");
+      setSettings(data);
+      setWebhookSecretOnce(data.webhook_secret || "");
+      setStatus("Webhook secret создан — скопируйте сейчас, повторно не показывается.");
+    });
+  }
+
   function exportOrdersCsv() {
     downloadCsv(
       `marketplace-orders-${mp}-${new Date().toISOString().slice(0, 10)}.csv`,
@@ -1468,7 +1569,12 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               </label>
               <label>
                 Штрихкод
-                <input value={product.barcode} onChange={(e) => setProduct((p) => ({ ...p, barcode: e.target.value }))} />
+                <div className="mp-inline-field">
+                  <input value={product.barcode} onChange={(e) => setProduct((p) => ({ ...p, barcode: e.target.value }))} />
+                  <button type="button" className="ghost-btn" disabled={busy === "barcode"} onClick={generateBarcode}>
+                    {busy === "barcode" ? "…" : "Сгенерировать"}
+                  </button>
+                </div>
               </label>
               <div className="cafe-form-span2 mp-category-block">
                 <div className="mp-media-head">
@@ -1719,6 +1825,12 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             <button type="button" className="ghost-btn" disabled={!filteredHistory.length} onClick={exportHistoryCsv}>
               Экспорт CSV
             </button>
+            <button type="button" className="ghost-btn" disabled={busy === "export"} onClick={() => exportHistoryServer("csv")}>
+              CSV (сервер)
+            </button>
+            <button type="button" className="ghost-btn" disabled={busy === "export"} onClick={() => exportHistoryServer("xlsx")}>
+              Excel
+            </button>
             <button type="button" className="ghost-btn" disabled={busy === "live-products"} onClick={loadLiveProducts}>
               С площадки
             </button>
@@ -1861,6 +1973,32 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               Сохранить ключи
             </button>
           </form>
+
+          <div className="cafe-form-panel">
+            <h3>Синхронизация и webhook</h3>
+            <p className="muted small">
+              Фоновый опрос pending-импортов Ozon (Celery каждые 15 мин) или ручной запуск / внешний webhook.
+              {settings?.last_sync_at ? ` Последний синк: ${String(settings.last_sync_at).slice(0, 19).replace("T", " ")}.` : ""}
+            </p>
+            <div className="mp-actions">
+              <button type="button" disabled={busy === "sync"} onClick={runSync}>
+                {busy === "sync" ? "Синк…" : "Синхронизировать сейчас"}
+              </button>
+              <button type="button" className="ghost-btn" disabled={busy === "webhook"} onClick={rotateWebhookSecret}>
+                {settings?.has_webhook_secret ? "Обновить webhook secret" : "Создать webhook secret"}
+              </button>
+            </div>
+            {settings?.webhook_url ? (
+              <p className="muted small">
+                URL: <code>{settings.webhook_url}</code>
+              </p>
+            ) : null}
+            {webhookSecretOnce ? (
+              <p className="status">
+                Secret (скопируйте): <code>{webhookSecretOnce}</code>
+              </p>
+            ) : null}
+          </div>
 
           <div className="cafe-form-panel">
             <h3>Цены, остатки, склады</h3>
@@ -2010,6 +2148,108 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             <button type="button" disabled={busy === "analytics"} onClick={loadAnalytics}>
               Отчёт за 30 дней
             </button>
+          </div>
+        </div>
+      )}
+
+      {tab === "finance" && (
+        <div>
+          <div className="mp-actions">
+            <button type="button" disabled={busy === "finance" || mp !== "ozon"} onClick={loadFinance}>
+              {mp === "ozon" ? "Финансы и акции Ozon" : "Только для Ozon"}
+            </button>
+          </div>
+          {financeRows.length ? (
+            <div className="mp-table-wrap">
+              <h4>Операции</h4>
+              <table className="mp-table">
+                <thead>
+                  <tr>
+                    <th>Дата</th>
+                    <th>Тип</th>
+                    <th>Сумма</th>
+                    <th>Описание</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {financeRows.map((row, i) => (
+                    <tr key={row.operation_id || row.id || i}>
+                      <td>{String(row.operation_date || row.date || "—").slice(0, 19)}</td>
+                      <td>{row.operation_type || row.type || "—"}</td>
+                      <td>{row.amount ?? row.accruals_for_sale ?? "—"}</td>
+                      <td>{row.operation_type_name || row.name || row.posting?.posting_number || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+          {actionRows.length ? (
+            <div className="mp-table-wrap">
+              <h4>Акции</h4>
+              <table className="mp-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Название</th>
+                    <th>Даты</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {actionRows.map((row, i) => (
+                    <tr key={row.id || i}>
+                      <td>{row.id || "—"}</td>
+                      <td>{row.title || row.name || "—"}</td>
+                      <td>
+                        {row.date_start || row.action_start || "—"} — {row.date_end || row.action_end || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+          {!financeRows.length && !actionRows.length ? <p className="muted">Нажмите кнопку загрузки (боевой режим + ключи Ozon).</p> : null}
+        </div>
+      )}
+
+      {tab === "logs" && (
+        <div>
+          <div className="mp-actions">
+            <button type="button" disabled={busy === "logs"} onClick={loadApiLogs}>
+              Обновить логи
+            </button>
+          </div>
+          <div className="mp-table-wrap">
+            <table className="mp-table">
+              <thead>
+                <tr>
+                  <th>Время</th>
+                  <th>MP</th>
+                  <th>Метод</th>
+                  <th>Код</th>
+                  <th>Endpoint</th>
+                  <th>Ошибка</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>{String(row.created_at || "").slice(0, 19).replace("T", " ")}</td>
+                    <td>{row.marketplace || "—"}</td>
+                    <td>{row.method}</td>
+                    <td>{row.status_code ?? "—"}</td>
+                    <td className="mp-review-text" title={row.endpoint}>
+                      {row.endpoint}
+                    </td>
+                    <td className="mp-review-text" title={row.error_message}>
+                      {row.error_message || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!logRows.length ? <p className="muted">Логов пока нет — выполните запрос к площадке.</p> : null}
           </div>
         </div>
       )}

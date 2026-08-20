@@ -2581,6 +2581,8 @@ export default function App() {
   const [accessToken, setAccessToken] = useState(oauthBoot.access || localStorage.getItem("vmeste_access") || "");
   const [refreshToken, setRefreshToken] = useState(oauthBoot.refresh || localStorage.getItem("vmeste_refresh") || "");
   const [loginForm, setLoginForm] = useState({ username: "", password: "", email: "" });
+  const [credentialsForm, setCredentialsForm] = useState({ username: "", password: "", password_confirm: "" });
+  const [credentialsBusy, setCredentialsBusy] = useState(false);
   const [passwordResetToken, setPasswordResetToken] = useState("");
   const [resetForm, setResetForm] = useState({ new_password: "", new_password_confirm: "" });
   const [passwordResetBusy, setPasswordResetBusy] = useState(false);
@@ -3165,8 +3167,24 @@ export default function App() {
         { key: "cafe_restaurant", value: "Кафе и рестораны" },
         { key: "marketplaces", value: "Маркетплейсы" },
       ];
-  const needsOnboarding = Boolean(accessToken && me && me.profile_complete === false);
+  const needsCredentialsSetup = Boolean(accessToken && me && me.needs_credentials_setup);
+  const needsOnboarding = Boolean(accessToken && me && !needsCredentialsSetup && me.profile_complete === false);
   const onboardingPrefillIdRef = useRef(null);
+  const credentialsPrefillIdRef = useRef(null);
+
+  useEffect(() => {
+    if (!needsCredentialsSetup || !me?.id) return;
+    if (credentialsPrefillIdRef.current === me.id) return;
+    credentialsPrefillIdRef.current = me.id;
+    const provisional = /^(vk|ya|tg|user)_\d+$/i.test(String(me.username || "").trim());
+    setCredentialsForm({
+      username: provisional ? "" : String(me.username || ""),
+      password: "",
+      password_confirm: "",
+    });
+    setShowAuthModal(true);
+    setAuthStatus("");
+  }, [needsCredentialsSetup, me]);
 
   useEffect(() => {
     if (!needsOnboarding || !me?.id) return;
@@ -4424,6 +4442,7 @@ export default function App() {
     setAuthStatus("Вы вышли.");
     resetPushRegistration();
     onboardingPrefillIdRef.current = null;
+    credentialsPrefillIdRef.current = null;
     setShowAuthModal(false);
     setRegisterStep(1);
   }
@@ -4581,6 +4600,52 @@ export default function App() {
     }
     setAuthStatus("");
     setRegisterStep(2);
+  }
+
+  async function completeCredentialsSetup(event) {
+    event.preventDefault();
+    setAuthStatus("");
+    const username = String(credentialsForm.username || "").trim();
+    const password = String(credentialsForm.password || "");
+    const passwordConfirm = String(credentialsForm.password_confirm || "");
+    if (username.length < 3) {
+      setAuthStatus("Логин должен быть не короче 3 символов.");
+      return;
+    }
+    if (password.length < 8) {
+      setAuthStatus("Пароль должен быть не короче 8 символов.");
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setAuthStatus("Пароли не совпадают.");
+      return;
+    }
+    setCredentialsBusy(true);
+    const response = await authFetch(`${API_URL}/users/me/setup-credentials/`, {
+      method: "POST",
+      body: JSON.stringify({
+        username,
+        password,
+        password_confirm: passwordConfirm,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setCredentialsBusy(false);
+    if (!response.ok) {
+      setAuthStatus(
+        data.detail ||
+          data.username?.[0] ||
+          data.password?.[0] ||
+          data.password_confirm?.[0] ||
+          formatApiError(data, response.status) ||
+          "Не удалось сохранить логин и пароль."
+      );
+      return;
+    }
+    setMe(data);
+    setCredentialsForm({ username: "", password: "", password_confirm: "" });
+    setAuthStatus(data.detail || "Логин и пароль сохранены.");
+    setLoginForm((p) => ({ ...p, username }));
   }
 
   async function completeOnboarding(event) {
@@ -10250,13 +10315,15 @@ export default function App() {
           </button>
         </div>
         <form onSubmit={changePassword} className="form">
-          <h3>Смена пароля</h3>
-          <PasswordInput
-            value={passwordForm.old_password}
-            onChange={(e) => setPasswordForm({ ...passwordForm, old_password: e.target.value })}
-            placeholder="Старый пароль"
-            autoComplete="current-password"
-          />
+          <h3>{me?.has_usable_password === false ? "Задать пароль" : "Смена пароля"}</h3>
+          {me?.has_usable_password !== false ? (
+            <PasswordInput
+              value={passwordForm.old_password}
+              onChange={(e) => setPasswordForm({ ...passwordForm, old_password: e.target.value })}
+              placeholder="Старый пароль"
+              autoComplete="current-password"
+            />
+          ) : null}
           <PasswordInput
             value={passwordForm.new_password}
             onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
@@ -10269,7 +10336,7 @@ export default function App() {
             placeholder="Повтори новый пароль"
             autoComplete="new-password"
           />
-          <button type="submit">Сменить пароль</button>
+          <button type="submit">{me?.has_usable_password === false ? "Сохранить пароль" : "Сменить пароль"}</button>
           <p className="muted small">
             Не помните текущий пароль? Отправим ссылку на сброс{me?.email ? ` на ${me.email}` : ""}.
           </p>
@@ -11923,10 +11990,10 @@ export default function App() {
           />
         )}
 
-        {(showAuthModal && (!accessToken || authMode === "reset" || needsOnboarding)) && createPortal(
+        {(showAuthModal && (!accessToken || authMode === "reset" || needsOnboarding || needsCredentialsSetup)) && createPortal(
           <div className="auth-modal-overlay" role="presentation">
             <div className="auth-modal" role="dialog" aria-modal="true">
-              {needsOnboarding ? null : (
+              {needsOnboarding || needsCredentialsSetup ? null : (
               <button type="button" className="auth-modal-close" onClick={closeAuth} aria-label="Закрыть">×</button>
               )}
               {verifyEmailNotice ? (
@@ -11956,6 +12023,43 @@ export default function App() {
                   </div>
                   {resendStatus ? <p className="status">{resendStatus}</p> : null}
                 </div>
+              ) : needsCredentialsSetup ? (
+                <>
+                  <h2>Логин и пароль</h2>
+                  <form onSubmit={completeCredentialsSetup} className="form">
+                    <p className="muted small">
+                      После входа через соцсеть задайте свой логин и пароль — ими можно будет входить
+                      рядом с VK, Яндекс или Telegram.
+                    </p>
+                    <input
+                      placeholder="Логин"
+                      value={credentialsForm.username}
+                      onChange={(e) => setCredentialsForm({ ...credentialsForm, username: e.target.value })}
+                      required
+                      minLength={3}
+                      autoComplete="username"
+                      autoFocus
+                    />
+                    <PasswordInput
+                      placeholder="Пароль"
+                      value={credentialsForm.password}
+                      onChange={(e) => setCredentialsForm({ ...credentialsForm, password: e.target.value })}
+                      required
+                      autoComplete="new-password"
+                    />
+                    <PasswordInput
+                      placeholder="Повторите пароль"
+                      value={credentialsForm.password_confirm}
+                      onChange={(e) => setCredentialsForm({ ...credentialsForm, password_confirm: e.target.value })}
+                      required
+                      autoComplete="new-password"
+                    />
+                    <button type="submit" disabled={credentialsBusy}>
+                      {credentialsBusy ? "Сохраняем…" : "Сохранить и продолжить"}
+                    </button>
+                    {authStatus ? <p className="status">{authStatus}</p> : null}
+                  </form>
+                </>
               ) : (
                 <>
               <h2>

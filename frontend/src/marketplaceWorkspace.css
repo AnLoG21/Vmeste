@@ -459,6 +459,17 @@
   vertical-align: middle;
 }
 
+.mp-inline-field {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.mp-inline-field input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .mp-review-text {
   max-width: 280px;
   white-space: normal;

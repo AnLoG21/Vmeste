@@ -22,6 +22,13 @@ class MarketplaceSettings(models.Model):
         default="",
         help_text="OAuth-токен Яндекс Диска для загрузки фото карточек.",
     )
+    webhook_secret = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Секрет для входящего webhook синхронизации.",
+    )
+    last_sync_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def has_ozon(self) -> bool:

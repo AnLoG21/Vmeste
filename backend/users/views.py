@@ -26,6 +26,7 @@ from .serializers import (
     ChangeEmailSerializer,
     ChangePasswordSerializer,
     PasswordResetConfirmSerializer,
+    SetupCredentialsSerializer,
     UserRegisterSerializer,
     UserSerializer,
 )
@@ -188,6 +189,37 @@ class MeView(APIView):
         return self.get(request)
 
 
+class SetupCredentialsView(APIView):
+    """После VK/Яндекс/Telegram: задать свой логин и пароль (далее вход логин+пароль или снова через соцсеть)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if getattr(user, "is_demo", False):
+            return Response(
+                {"detail": "В демо-режиме логин и пароль задавать нельзя."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not user.needs_credentials_setup():
+            return Response(
+                {"detail": "Логин и пароль уже заданы."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ser = SetupCredentialsSerializer(data=request.data, context={"user": user})
+        ser.is_valid(raise_exception=True)
+        user.username = ser.validated_data["username"]
+        user.set_password(ser.validated_data["password"])
+        user.save(update_fields=["username", "password"])
+        full_name = " ".join(
+            p for p in (user.last_name, user.first_name, getattr(user, "patronymic", "") or "") if p
+        ).strip()
+        data = UserSerializer(user).data
+        data["full_name"] = full_name or user.username
+        data["detail"] = "Логин и пароль сохранены. Можно входить логином или через соцсеть."
+        return Response(data)
+
+
 class DeleteAccountView(APIView):
     """Обезличить и деактивировать аккаунт по запросу пользователя (152-ФЗ)."""
 
@@ -273,8 +305,10 @@ class ChangePasswordView(APIView):
                 {"detail": "В демо-режиме пароль менять нельзя."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if not u.check_password(ser.validated_data["old_password"]):
-            return Response({"old_password": ["Неверный пароль."]}, status=status.HTTP_400_BAD_REQUEST)
+        if u.has_usable_password():
+            if not u.check_password(ser.validated_data["old_password"]):
+                return Response({"old_password": ["Неверный пароль."]}, status=status.HTTP_400_BAD_REQUEST)
+        # OAuth без пароля: старый пароль не требуется — сразу задаём новый.
         if settings.SKIP_EMAIL_VERIFICATION:
             u.set_password(ser.validated_data["new_password"])
             u.save(update_fields=["password"])

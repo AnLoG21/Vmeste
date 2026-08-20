@@ -141,6 +141,21 @@ class User(AbstractUser):
         help_text="ID VK ID (вход через VK, ОК или Mail).",
     )
 
+    def username_is_provisional(self) -> bool:
+        """Служебный логин после OAuth (vk_123, ya_…, tg_…) — нужно заменить своим."""
+        import re
+
+        name = (self.username or "").strip()
+        return bool(re.match(r"^(vk|ya|tg|user)_\d+$", name, re.IGNORECASE))
+
+    def needs_credentials_setup(self) -> bool:
+        """После соцвхода нужно задать свой логин и/или пароль для входа логин+пароль."""
+        if getattr(self, "is_demo", False):
+            return False
+        if not self.has_usable_password():
+            return True
+        return self.username_is_provisional()
+
     def profile_is_complete(self) -> bool:
         if getattr(self, "is_demo", False):
             return True

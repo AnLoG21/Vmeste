@@ -27,7 +27,7 @@ from .clients import (
     apply_import_identifiers_to_history,
     wb_headers,
 )
-from .models import MarketplaceProductHistory, MarketplaceSettings, MarketplaceTemplate
+from .models import MarketplaceApiLog, MarketplaceProductHistory, MarketplaceSettings, MarketplaceTemplate
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -199,6 +199,9 @@ class MarketplaceSettingsView(APIView):
                     if bool((getattr(settings, "OPENROUTER_API_KEY", "") or "").strip())
                     else (getattr(settings, "OLLAMA_MODEL", "") or "")
                 ),
+                "has_webhook_secret": bool((s.webhook_secret or "").strip()),
+                "webhook_url": request.build_absolute_uri("/api/marketplaces/webhook/"),
+                "last_sync_at": s.last_sync_at.isoformat() if s.last_sync_at else None,
             }
         )
 
@@ -225,6 +228,16 @@ class MarketplaceSettingsView(APIView):
                 s.yandex_disk_token = ""
             elif not disk.startswith("•"):
                 s.yandex_disk_token = disk
+        if data.get("rotate_webhook_secret"):
+            import secrets
+
+            s.webhook_secret = secrets.token_urlsafe(24)
+            s.save()
+            body = self.get(request).data
+            if hasattr(body, "copy"):
+                body = dict(body)
+            body["webhook_secret"] = s.webhook_secret
+            return Response(body)
         s.save()
         return self.get(request)
 
@@ -788,3 +801,207 @@ class YandexDiskCallbackView(APIView):
         response = HttpResponseRedirect(f"{origin}/marketplaces?{urlencode({'disk': 'ok'})}")
         response.delete_cookie(DISK_COOKIE, path="/")
         return response
+
+
+class MarketplaceLogsView(APIView):
+    """Recent API call logs for the current marketplace provider."""
+
+    def get(self, request):
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        qs = MarketplaceApiLog.objects.filter(provider=provider)
+        mp = (request.query_params.get("marketplace") or "").strip()
+        if mp:
+            qs = qs.filter(marketplace__icontains=mp)
+        limit = min(int(request.query_params.get("limit") or 100), 300)
+        rows = [
+            {
+                "id": row.id,
+                "marketplace": row.marketplace,
+                "endpoint": row.endpoint,
+                "method": row.method,
+                "status_code": row.status_code,
+                "error_message": (row.error_message or "")[:400],
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in qs[:limit]
+        ]
+        return Response({"results": rows, "total": len(rows)})
+
+
+class MarketplaceExportView(APIView):
+    """Export product history as CSV or Excel (xlsx)."""
+
+    def get(self, request):
+        from django.http import HttpResponse
+
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        # Prefer `export=` — DRF reserves `?format=` for content negotiation (404 if unknown).
+        fmt = (
+            request.query_params.get("export")
+            or request.query_params.get("file")
+            or request.query_params.get("fmt")
+            or "csv"
+        ).strip().lower()
+        mp = (request.query_params.get("marketplace") or "").strip()
+        qs = MarketplaceProductHistory.objects.filter(provider=provider)
+        if mp:
+            qs = qs.filter(marketplace=mp)
+        headers = [
+            "id",
+            "marketplace",
+            "offer_id",
+            "vendor_code",
+            "nm_id",
+            "product_id",
+            "name",
+            "brand",
+            "price",
+            "stock",
+            "status",
+            "updated_at",
+        ]
+        rows = []
+        for row in qs[:2000]:
+            item = _history_item(row)
+            product = item.get("product") or {}
+            rows.append(
+                [
+                    item.get("id"),
+                    item.get("marketplace"),
+                    item.get("offer_id"),
+                    item.get("vendor_code"),
+                    item.get("nm_id"),
+                    item.get("product_id"),
+                    product.get("name"),
+                    product.get("brand"),
+                    product.get("price"),
+                    product.get("stock"),
+                    item.get("status"),
+                    item.get("updated_at"),
+                ]
+            )
+        if fmt in ("xlsx", "excel"):
+            try:
+                from openpyxl import Workbook
+            except ImportError:
+                fmt = "csv"
+            else:
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "history"
+                ws.append(headers)
+                for r in rows:
+                    ws.append(list(r))
+                from io import BytesIO
+
+                buf = BytesIO()
+                wb.save(buf)
+                resp = HttpResponse(
+                    buf.getvalue(),
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+                resp["Content-Disposition"] = 'attachment; filename="marketplace-history.xlsx"'
+                return resp
+        import csv
+        from io import StringIO
+
+        buf = StringIO()
+        buf.write("\ufeff")
+        writer = csv.writer(buf, delimiter=";")
+        writer.writerow(headers)
+        for r in rows:
+            writer.writerow(["" if v is None else v for v in r])
+        resp = HttpResponse(buf.getvalue(), content_type="text/csv; charset=utf-8")
+        resp["Content-Disposition"] = 'attachment; filename="marketplace-history.csv"'
+        return resp
+
+
+class MarketplaceBarcodeView(APIView):
+    """Generate barcodes via Ozon or Wildberries."""
+
+    def post(self, request):
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        data = request.data if isinstance(request.data, dict) else {}
+        marketplace = (data.get("marketplace") or "ozon").strip()
+        count = max(1, min(int(data.get("count") or 1), 20))
+        s = _settings(provider)
+        if s.environment != "prod":
+            return Response({"sandbox": True, "message": "Генерация штрихкодов доступна в боевом режиме.", "barcodes": []})
+        try:
+            if marketplace == "wildberries":
+                resp = request_json(
+                    provider=provider,
+                    marketplace="wb",
+                    method="POST",
+                    url=WB_ACTIONS["barcode.generate"][1],
+                    headers=wb_headers(s),
+                    json_body={"count": count},
+                )
+                barcodes = resp.get("data") or resp.get("barcodes") or []
+                if isinstance(barcodes, dict):
+                    barcodes = barcodes.get("barcodes") or []
+            else:
+                resp = request_json(
+                    provider=provider,
+                    marketplace="ozon",
+                    method="POST",
+                    url=OZON_ACTIONS["barcode.generate"][1],
+                    headers=ozon_headers(s),
+                    json_body={"count": count},
+                )
+                result = resp.get("result") if isinstance(resp, dict) else {}
+                barcodes = (result or {}).get("barcodes") or resp.get("barcodes") or []
+            if not isinstance(barcodes, list):
+                barcodes = []
+            barcodes = [str(b) for b in barcodes if b]
+            return Response({"barcodes": barcodes, "raw": resp})
+        except MarketplaceError as exc:
+            return Response({"detail": str(exc)}, status=min(exc.status_code, 599) if exc.status_code >= 400 else 400)
+
+
+class MarketplaceSyncView(APIView):
+    """Trigger background sync of pending Ozon imports for current provider."""
+
+    def post(self, request):
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        from .tasks import sync_provider_task
+
+        async_result = sync_provider_task.delay(provider.id)
+        if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
+            return Response({"ok": True, "eager": True, "result": async_result.result})
+        return Response({"ok": True, "task_id": async_result.id})
+
+
+class MarketplaceWebhookView(APIView):
+    """
+    Inbound webhook to trigger sync.
+    Auth: Authorization: Bearer <webhook_secret> or ?secret= / JSON {secret}.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from .tasks import sync_provider_task
+
+        data = request.data if isinstance(request.data, dict) else {}
+        auth = request.headers.get("Authorization") or ""
+        secret = ""
+        if auth.lower().startswith("bearer "):
+            secret = auth[7:].strip()
+        secret = secret or str(request.query_params.get("secret") or data.get("secret") or "").strip()
+        if not secret:
+            return Response({"detail": "Укажите webhook secret."}, status=401)
+        s = MarketplaceSettings.objects.filter(webhook_secret=secret).select_related("provider").first()
+        if not s or not s.provider_id:
+            return Response({"detail": "Неверный secret."}, status=403)
+        async_result = sync_provider_task.delay(s.provider_id)
+        return Response({"ok": True, "provider_id": s.provider_id, "task_id": getattr(async_result, "id", None)})
