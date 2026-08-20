@@ -3271,8 +3271,11 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
             <div className="cafe-form-panel">
               <h3>Уведомления Telegram / push</h3>
               <p className="muted small">
-                Telegram: тот же чат организации, что в настройках уведомлений бронирований
-                {settings?.telegram_ready ? " (подключён)." : " (пока не подключён — включите Telegram в организации)."} Push — на устройства с приложением.
+                Telegram: тот же чат организации, что в разделе «Организация → Уведомления и мессенджеры»
+                {settings?.telegram_ready
+                  ? " (подключён)."
+                  : " (пока не подключён — откройте Организацию, включите Telegram и привяжите чат)."}{" "}
+                Push — на устройства с приложением.
               </p>
               <div className="mp-price-control">
                 <label className="mp-switch-row">

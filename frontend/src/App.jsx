@@ -10444,6 +10444,188 @@ export default function App() {
     );
   }
 
+  function renderOrgMessengerChannels() {
+    return (
+      <>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={Boolean(orgMessagingForm.enable_telegram)}
+            onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_telegram: e.target.checked }))}
+          />
+          Telegram
+        </label>
+        {orgMessagingForm.enable_telegram ? (
+          <>
+            {orgMessagingForm.has_platform_telegram ? (
+              <p className="muted small">
+                Используется бот платформы. Достаточно указать Chat ID организации. Свой token — только если нужен
+                отдельный бот.
+              </p>
+            ) : null}
+            <label className="field-label">
+              Bot token{orgMessagingForm.has_platform_telegram ? " (свой, необязательно)" : ""}
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={orgMessagingForm.telegram_bot_token}
+                onChange={(e) => setOrgMessagingForm((p) => ({ ...p, telegram_bot_token: e.target.value }))}
+                placeholder={
+                  orgMessagingForm.has_org_telegram_token || orgMessagingForm.has_platform_telegram ? "••••••••" : ""
+                }
+              />
+            </label>
+            <label className="field-label">
+              Chat ID (чат организации)
+              <input
+                type="text"
+                value={orgMessagingForm.telegram_notify_chat_id}
+                onChange={(e) => setOrgMessagingForm((p) => ({ ...p, telegram_notify_chat_id: e.target.value }))}
+                placeholder="Привяжите через бота или вставьте вручную"
+              />
+            </label>
+            <div className="row-2">
+              <button type="button" className="ghost-btn" onClick={loadOrgTelegramLink}>
+                Привязать через бота
+              </button>
+              <button type="button" className="ghost-btn" onClick={refreshOrgTelegramLink}>
+                Проверить привязку
+              </button>
+              {orgTelegramLinkInfo?.linked || orgMessagingForm.telegram_notify_chat_id ? (
+                <button type="button" className="ghost-btn" onClick={unlinkOrgTelegram}>
+                  Отвязать
+                </button>
+              ) : null}
+            </div>
+            {orgTelegramLinkInfo ? (
+              <div>
+                <p
+                  className={`telegram-bind-status ${
+                    orgTelegramLinkInfo.linked || orgMessagingForm.telegram_notify_chat_id
+                      ? "telegram-bind-status--ok"
+                      : "telegram-bind-status--bad"
+                  }`}
+                >
+                  <span className="telegram-bind-mark" aria-hidden="true">
+                    {orgTelegramLinkInfo.linked || orgMessagingForm.telegram_notify_chat_id ? "✓" : "✕"}
+                  </span>
+                  <span>
+                    {orgTelegramLinkInfo.linked || orgMessagingForm.telegram_notify_chat_id
+                      ? `Привязан. Chat ID: ${orgMessagingForm.telegram_notify_chat_id || orgTelegramLinkInfo.telegram_notify_chat_id}${
+                          orgTelegramLinkInfo.bot_username ? ` @${orgTelegramLinkInfo.bot_username}` : ""
+                        }`
+                      : "Не привязан."}
+                  </span>
+                </p>
+                {orgTelegramLinkInfo.deep_link ? (
+                  <a href={orgTelegramLinkInfo.deep_link} target="_blank" rel="noreferrer">
+                    Открыть бота и нажать Start
+                  </a>
+                ) : (
+                  <p className="muted small">{orgTelegramLinkInfo.hint}</p>
+                )}
+                <p className="muted small">
+                  Или напишите боту /start или /chatid — он пришлёт Chat ID для ручного ввода выше. Если бот молчит (VPS
+                  может не видеть Telegram), нажмите «Проверить привязку» после Start.
+                </p>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={Boolean(orgMessagingForm.enable_max)}
+            onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_max: e.target.checked }))}
+          />
+          MAX
+        </label>
+        {orgMessagingForm.enable_max ? (
+          <>
+            <label className="field-label">
+              Bot token
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={orgMessagingForm.max_bot_token}
+                onChange={(e) => setOrgMessagingForm((p) => ({ ...p, max_bot_token: e.target.value }))}
+                placeholder={orgMessagingForm.has_max ? "••••••••" : ""}
+              />
+            </label>
+            <label className="field-label">
+              Chat ID
+              <input
+                type="text"
+                value={orgMessagingForm.max_notify_chat_id}
+                onChange={(e) => setOrgMessagingForm((p) => ({ ...p, max_notify_chat_id: e.target.value }))}
+              />
+            </label>
+          </>
+        ) : null}
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={Boolean(orgMessagingForm.enable_whatsapp)}
+            onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_whatsapp: e.target.checked }))}
+          />
+          WhatsApp (Green-API)
+        </label>
+        {orgMessagingForm.enable_whatsapp ? (
+          <>
+            <label className="field-label">
+              API URL
+              <input
+                type="text"
+                value={orgMessagingForm.wa_api_url}
+                onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_api_url: e.target.value }))}
+              />
+            </label>
+            <label className="field-label">
+              idInstance
+              <input
+                type="text"
+                value={orgMessagingForm.wa_id_instance}
+                onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_id_instance: e.target.value }))}
+              />
+            </label>
+            <label className="field-label">
+              apiTokenInstance
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={orgMessagingForm.wa_api_token}
+                onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_api_token: e.target.value }))}
+                placeholder={orgMessagingForm.has_whatsapp ? "••••••••" : ""}
+              />
+            </label>
+          </>
+        ) : null}
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={Boolean(orgMessagingForm.enable_sms)}
+            onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_sms: e.target.checked }))}
+          />
+          SMS (SMS.ru)
+        </label>
+        {orgMessagingForm.enable_sms ? (
+          <label className="field-label">
+            api_id организации (если пусто — ключ платформы)
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={orgMessagingForm.sms_api_id}
+              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, sms_api_id: e.target.value }))}
+              placeholder={orgMessagingForm.has_sms_org ? "••••••••" : ""}
+            />
+          </label>
+        ) : null}
+        <button type="submit">Сохранить каналы</button>
+        <p className="status">{orgMessagingSaveStatus}</p>
+      </>
+    );
+  }
+
   function renderOrganizationSettings() {
     if (!canManageOrgSettings) return null;
     return (
@@ -10459,12 +10641,10 @@ export default function App() {
         {me?.role === "provider" && me?.provider_sphere === "marketplaces" && (
           <>
             <p className="muted">
-              Ключи площадок, товары и заказы — в разделе «Маркетплейсы». Здесь только название организации.
+              Ключи площадок, товары и заказы — в разделе «Маркетплейсы». Здесь — название организации и каналы
+              уведомлений (Telegram и др.), куда уходят алерты о заказах и ошибках синка.
             </p>
-            <form
-              onSubmit={saveProviderOrganization}
-              className="form"
-            >
+            <form onSubmit={saveProviderOrganization} className="form">
               <label className="field-label">
                 Название организации
                 <input
@@ -10476,6 +10656,15 @@ export default function App() {
               </label>
               <button type="submit">Сохранить</button>
               <p className="status">{profileOrgStatus}</p>
+            </form>
+
+            <h3>Уведомления и мессенджеры</h3>
+            <p className="muted small">
+              Подключите Telegram (рекомендуется): в «Маркетплейсы → Управление» включите «Telegram» и типы алертов —
+              сообщения пойдут в этот чат организации. Push приходит на устройства с приложением.
+            </p>
+            <form onSubmit={saveOrgMessaging} className="form">
+              {renderOrgMessengerChannels()}
             </form>
           </>
         )}
@@ -10768,185 +10957,7 @@ export default function App() {
                   <p className="status">{orgMessagingSaveStatus}</p>
                 </>
               ) : null}
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={Boolean(orgMessagingForm.enable_telegram)}
-                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_telegram: e.target.checked }))}
-                />
-                Telegram
-              </label>
-              {orgMessagingForm.enable_telegram ? (
-                <>
-                  {orgMessagingForm.has_platform_telegram ? (
-                    <p className="muted small">
-                      Используется бот платформы. Достаточно указать Chat ID организации. Свой token —
-                      только если нужен отдельный бот.
-                    </p>
-                  ) : null}
-                  <label className="field-label">
-                    Bot token{orgMessagingForm.has_platform_telegram ? " (свой, необязательно)" : ""}
-                    <input
-                      type="password"
-                      autoComplete="new-password"
-                      value={orgMessagingForm.telegram_bot_token}
-                      onChange={(e) => setOrgMessagingForm((p) => ({ ...p, telegram_bot_token: e.target.value }))}
-                      placeholder={
-                        orgMessagingForm.has_org_telegram_token || orgMessagingForm.has_platform_telegram
-                          ? "••••••••"
-                          : ""
-                      }
-                    />
-                  </label>
-                  <label className="field-label">
-                    Chat ID (чат организации)
-                    <input
-                      type="text"
-                      value={orgMessagingForm.telegram_notify_chat_id}
-                      onChange={(e) => setOrgMessagingForm((p) => ({ ...p, telegram_notify_chat_id: e.target.value }))}
-                      placeholder="Привяжите через бота или вставьте вручную"
-                    />
-                  </label>
-                  <div className="row-2">
-                    <button type="button" className="ghost-btn" onClick={loadOrgTelegramLink}>
-                      Привязать через бота
-                    </button>
-                    <button type="button" className="ghost-btn" onClick={refreshOrgTelegramLink}>
-                      Проверить привязку
-                    </button>
-                    {orgTelegramLinkInfo?.linked || orgMessagingForm.telegram_notify_chat_id ? (
-                      <button type="button" className="ghost-btn" onClick={unlinkOrgTelegram}>
-                        Отвязать
-                      </button>
-                    ) : null}
-                  </div>
-                  {orgTelegramLinkInfo ? (
-                    <div>
-                      <p
-                        className={`telegram-bind-status ${
-                          orgTelegramLinkInfo.linked || orgMessagingForm.telegram_notify_chat_id
-                            ? "telegram-bind-status--ok"
-                            : "telegram-bind-status--bad"
-                        }`}
-                      >
-                        <span className="telegram-bind-mark" aria-hidden="true">
-                          {orgTelegramLinkInfo.linked || orgMessagingForm.telegram_notify_chat_id ? "✓" : "✕"}
-                        </span>
-                        <span>
-                          {orgTelegramLinkInfo.linked || orgMessagingForm.telegram_notify_chat_id
-                            ? `Привязан. Chat ID: ${orgMessagingForm.telegram_notify_chat_id || orgTelegramLinkInfo.telegram_notify_chat_id}${
-                                orgTelegramLinkInfo.bot_username
-                                  ? ` @${orgTelegramLinkInfo.bot_username}`
-                                  : ""
-                              }`
-                            : "Не привязан."}
-                        </span>
-                      </p>
-                      {orgTelegramLinkInfo.deep_link ? (
-                        <a href={orgTelegramLinkInfo.deep_link} target="_blank" rel="noreferrer">
-                          Открыть бота и нажать Start
-                        </a>
-                      ) : (
-                        <p className="muted small">{orgTelegramLinkInfo.hint}</p>
-                      )}
-                      <p className="muted small">
-                        Или напишите боту /start или /chatid — он пришлёт Chat ID для ручного ввода выше.
-                        Если бот молчит (VPS может не видеть Telegram), нажмите «Проверить привязку» после Start.
-                      </p>
-                    </div>
-                  ) : null}
-                </>
-              ) : null}
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={Boolean(orgMessagingForm.enable_max)}
-                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_max: e.target.checked }))}
-                />
-                MAX
-              </label>
-              {orgMessagingForm.enable_max ? (
-                <>
-                  <label className="field-label">
-                    Bot token
-                    <input
-                      type="password"
-                      autoComplete="new-password"
-                      value={orgMessagingForm.max_bot_token}
-                      onChange={(e) => setOrgMessagingForm((p) => ({ ...p, max_bot_token: e.target.value }))}
-                      placeholder={orgMessagingForm.has_max ? "••••••••" : ""}
-                    />
-                  </label>
-                  <label className="field-label">
-                    Chat ID
-                    <input
-                      type="text"
-                      value={orgMessagingForm.max_notify_chat_id}
-                      onChange={(e) => setOrgMessagingForm((p) => ({ ...p, max_notify_chat_id: e.target.value }))}
-                    />
-                  </label>
-                </>
-              ) : null}
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={Boolean(orgMessagingForm.enable_whatsapp)}
-                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_whatsapp: e.target.checked }))}
-                />
-                WhatsApp (Green-API)
-              </label>
-              {orgMessagingForm.enable_whatsapp ? (
-                <>
-                  <label className="field-label">
-                    API URL
-                    <input
-                      type="text"
-                      value={orgMessagingForm.wa_api_url}
-                      onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_api_url: e.target.value }))}
-                    />
-                  </label>
-                  <label className="field-label">
-                    idInstance
-                    <input
-                      type="text"
-                      value={orgMessagingForm.wa_id_instance}
-                      onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_id_instance: e.target.value }))}
-                    />
-                  </label>
-                  <label className="field-label">
-                    apiTokenInstance
-                    <input
-                      type="password"
-                      autoComplete="new-password"
-                      value={orgMessagingForm.wa_api_token}
-                      onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_api_token: e.target.value }))}
-                      placeholder={orgMessagingForm.has_whatsapp ? "••••••••" : ""}
-                    />
-                  </label>
-                </>
-              ) : null}
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={Boolean(orgMessagingForm.enable_sms)}
-                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_sms: e.target.checked }))}
-                />
-                SMS (SMS.ru)
-              </label>
-              {orgMessagingForm.enable_sms ? (
-                <label className="field-label">
-                  api_id организации (если пусто — ключ платформы)
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    value={orgMessagingForm.sms_api_id}
-                    onChange={(e) => setOrgMessagingForm((p) => ({ ...p, sms_api_id: e.target.value }))}
-                    placeholder={orgMessagingForm.has_sms_org ? "••••••••" : ""}
-                  />
-                </label>
-              ) : null}
-              <button type="submit">Сохранить каналы</button>
-              <p className="status">{orgMessagingSaveStatus}</p>
+              {renderOrgMessengerChannels()}
             </form>
 
             <h3>Карточка для клиентов</h3>
