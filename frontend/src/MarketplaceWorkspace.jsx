@@ -335,6 +335,9 @@ function humanizeMarketplaceError(raw, status) {
   const text = String(raw || "").trim();
   const low = text.toLowerCase();
   const code = Number(status) || 0;
+  if (low.includes("obsolete method") || low.includes("method is deprecated")) {
+    return "Метод API устарел. Обновите кабинет — используется новая версия endpoint.";
+  }
   if (code === 429 || low.includes("rate limit") || low.includes("max rate") || low.includes("too many requests")) {
     return "Слишком частые запросы к площадке (лимит ~2/сек). Подождите пару секунд и повторите.";
   }
@@ -2135,15 +2138,17 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
 
   async function loadWarehouses() {
     await withBusy("wh", async () => {
-      const data = await mpCall("warehouses.list", {});
+      const payload = mp === "ozon" ? { limit: 100, cursor: "" } : {};
+      const data = await mpCall("warehouses.list", payload);
       if (data?.sandbox) {
         setWarehouseOptions([]);
         setStatus(data.message || "Тестовый режим: склады не загружены.");
         return;
       }
+      const result = data?.result && typeof data.result === "object" ? data.result : data;
       const rows = Array.isArray(data)
         ? data
-        : data?.result || data?.warehouses || extractRecords(data);
+        : result?.warehouses || result?.result || data?.warehouses || extractRecords(data);
       const options = (Array.isArray(rows) ? rows : [])
         .map((w) => ({
           id: String(w.warehouse_id || w.id || w.warehouseId || w.officeId || ""),

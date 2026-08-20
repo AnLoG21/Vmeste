@@ -31,6 +31,8 @@ def humanize_api_error(detail: str, status_code: int | None = None) -> str:
     text = str(detail or "").strip()
     low = text.lower()
     code = int(status_code or 0)
+    if "obsolete method" in low or "method is deprecated" in low:
+        return "Метод API устарел. Обновите кабинет — используется актуальный endpoint."
     if code == 429 or "rate limit" in low or "max rate" in low or "too many requests" in low:
         return "Слишком частые запросы к площадке (лимит ~2/сек). Подождите пару секунд и повторите."
     if (
@@ -523,7 +525,7 @@ OZON_ACTIONS = {
     "analytics.data": ("POST", f"{OZON_BASE}/v1/analytics/data"),
     "analytics.stocks": ("POST", f"{OZON_BASE}/v1/analytics/stock_on_warehouses"),
     "finance.list": ("POST", f"{OZON_BASE}/v3/finance/transaction/list"),
-    "warehouses.list": ("POST", f"{OZON_BASE}/v1/warehouse/list"),
+    "warehouses.list": ("POST", f"{OZON_BASE}/v2/warehouse/list"),
     "actions.list": ("GET", f"{OZON_BASE}/v1/actions"),
     "reviews.list": ("POST", f"{OZON_BASE}/v1/review/list"),
     "reviews.answer": ("POST", f"{OZON_BASE}/v1/review/comment/create"),
