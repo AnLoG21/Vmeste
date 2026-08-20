@@ -325,6 +325,25 @@
   flex-wrap: wrap;
 }
 
+.mp-cat-back {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e0c2a8;
+  border-radius: 10px;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.mp-cat-back:hover {
+  background: rgba(224, 148, 88, 0.14);
+}
+
 .mp-cat-hint {
   margin: 8px 10px 0;
 }
@@ -439,6 +458,11 @@
   vertical-align: middle;
 }
 
+.mp-review-text {
+  max-width: 280px;
+  white-space: normal;
+}
+
 .mp-row-actions {
   display: flex;
   flex-wrap: wrap;
@@ -499,6 +523,11 @@ body.theme-dark .mp-sselect-search {
 body.theme-dark .mp-sselect-list button.is-active,
 body.theme-dark .mp-sselect-list button:hover {
   background: rgba(224, 148, 88, 0.18);
+}
+
+body.theme-dark .mp-cat-back {
+  background: rgba(42, 36, 31, 0.92);
+  border-color: #5a4638;
 }
 
 body.theme-dark .mp-table th,

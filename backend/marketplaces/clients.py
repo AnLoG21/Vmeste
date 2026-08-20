@@ -96,14 +96,45 @@ def request_json(
 
 
 def normalize_marketplace_images(product: dict) -> list[str]:
-    """Absolute public URLs for Ozon/WB (prefer disk/public_url over local preview paths)."""
+    """Absolute public HTTPS URLs for Ozon/WB photos (skip video items)."""
     urls: list[str] = []
     seen: set[str] = set()
     for raw in list(product.get("images") or []) + list(product.get("wb_images") or []):
         if isinstance(raw, dict):
+            kind = str(raw.get("kind") or "").lower()
+            name = str(raw.get("name") or raw.get("url") or "").lower()
+            if kind == "video" or name.endswith((".webm", ".mp4", ".mov", ".m4v")):
+                continue
             u = str(raw.get("public_url") or raw.get("disk_url") or raw.get("url") or "").strip()
         else:
             u = str(raw or "").strip()
+            if u.lower().endswith((".webm", ".mp4", ".mov", ".m4v")):
+                continue
+        if not u or u in seen:
+            continue
+        if not (u.startswith("http://") or u.startswith("https://")):
+            continue
+        urls.append(u)
+        seen.add(u)
+    return urls
+
+
+def normalize_marketplace_videos(product: dict) -> list[str]:
+    """Public HTTPS video URLs from product media."""
+    urls: list[str] = []
+    seen: set[str] = set()
+    for raw in list(product.get("images") or []) + list(product.get("videos") or []):
+        if isinstance(raw, dict):
+            kind = str(raw.get("kind") or "").lower()
+            name = str(raw.get("name") or raw.get("url") or "").lower()
+            is_video = kind == "video" or any(name.endswith(ext) for ext in (".webm", ".mp4", ".mov", ".m4v"))
+            if not is_video:
+                continue
+            u = str(raw.get("public_url") or raw.get("disk_url") or raw.get("url") or "").strip()
+        else:
+            u = str(raw or "").strip()
+            if not any(u.lower().endswith(ext) for ext in (".webm", ".mp4", ".mov", ".m4v")):
+                continue
         if not u or u in seen:
             continue
         if not (u.startswith("http://") or u.startswith("https://")):
@@ -147,6 +178,25 @@ def build_ozon_item(product: dict) -> dict:
                 attrs.append({"id": int(k), "values": [{"value": str(v)}]})
         if attrs:
             item["attributes"] = attrs
+    videos = normalize_marketplace_videos(product)
+    if videos:
+        # Ozon video via complex_attributes: link 21841 + name 21837
+        item["complex_attributes"] = [
+            {
+                "attributes": [
+                    {
+                        "complex_id": 100001,
+                        "id": 21841,
+                        "values": [{"value": u} for u in videos],
+                    },
+                    {
+                        "complex_id": 100001,
+                        "id": 21837,
+                        "values": [{"value": f"video_{i + 1}"} for i, _ in enumerate(videos)],
+                    },
+                ]
+            }
+        ]
     if product.get("stock") is not None:
         item["stocks"] = {"stocks": [{"stock": int(product.get("stock") or 0)}]}
     return item

@@ -160,6 +160,82 @@ function recordHint(row) {
   return bits.slice(0, 3).join(" · ");
 }
 
+function normalizeOrders(data, marketplace) {
+  const rows = extractRecords(data);
+  return rows.map((row, i) => {
+    if (marketplace === "wildberries") {
+      return {
+        key: String(row.id || row.orderUid || i),
+        id: row.id,
+        number: String(row.id || row.orderUid || "—"),
+        status: row.supplierStatus || row.wbStatus || row.status || "new",
+        date: row.createdAt || row.created_at || "",
+        sku: row.skus?.[0] || row.article || row.nmId || "",
+        price: row.convertedPrice != null ? (Number(row.convertedPrice) / 100).toFixed(2) : row.price || "",
+        raw: row,
+      };
+    }
+    const products = row.products || [];
+    const names = products.map((p) => p.name || p.offer_id).filter(Boolean).slice(0, 2).join(", ");
+    return {
+      key: String(row.posting_number || row.order_id || i),
+      id: row.posting_number,
+      number: row.posting_number || String(row.order_id || "—"),
+      status: row.status || row.posting_status || "—",
+      date: row.in_process_at || row.created_at || "",
+      sku: products[0]?.offer_id || "",
+      price: products[0]?.price || "",
+      title: names || "—",
+      raw: row,
+    };
+  });
+}
+
+function normalizeReviews(data, marketplace) {
+  const rows = extractRecords(data);
+  return rows.map((row, i) => {
+    if (marketplace === "wildberries") {
+      return {
+        key: String(row.id || i),
+        id: row.id,
+        rating: row.productValuation ?? row.valuation ?? "—",
+        text: row.text || row.feedbackText || "",
+        product: row.productDetails?.productName || row.productName || row.nmId || "—",
+        date: row.createdDate || row.created_at || "",
+        answered: Boolean(row.answer?.text || row.wasViewed),
+        raw: row,
+      };
+    }
+    return {
+      key: String(row.id || row.uuid || i),
+      id: row.id || row.uuid,
+      rating: row.score ?? row.rating ?? "—",
+      text: row.text || row.comment || "",
+      product: row.sku || row.offer_id || row.product_id || "—",
+      date: row.published_at || row.created_at || "",
+      answered: Boolean(row.comments_amount || row.is_commented),
+      raw: row,
+    };
+  });
+}
+
+function downloadCsv(filename, headers, rows) {
+  const escape = (v) => {
+    const s = String(v ?? "");
+    if (/[;"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+  const lines = [headers.join(";")];
+  for (const row of rows) lines.push(row.map(escape).join(";"));
+  const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function cleanAiDescription(text) {
   return String(text || "")
     .replace(/\r/g, "")
@@ -243,6 +319,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [csvText, setCsvText] = useState("offer_id,name,brand,price,stock,description\nSKU-1,Товар,Бренд,1290,10,Описание");
   const [search, setSearch] = useState("");
   const [live, setLive] = useState(null);
+  const [orderRows, setOrderRows] = useState([]);
+  const [reviewRows, setReviewRows] = useState([]);
   const [warehouseId, setWarehouseId] = useState("");
   const [priceStock, setPriceStock] = useState({ offer_id: "", nm_id: "", price: "", stock: "" });
   const [templateForm, setTemplateForm] = useState({ name: "", brand: "", description_text: "", price: "", stock: "0" });
@@ -270,6 +348,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     setAttributeMirrors([]);
     setAttributeDictOptions({});
     setAttributesHint("");
+    setOrderRows([]);
+    setReviewRows([]);
+    setLive(null);
   }, [mp]);
 
   useEffect(() => {
@@ -409,8 +490,13 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   }
 
   function productPayload(row) {
-    const images = (Array.isArray(row.images) ? row.images : [])
+    const list = Array.isArray(row.images) ? row.images : [];
+    const images = list
       .filter((x) => (typeof x === "string" ? true : x?.kind !== "video"))
+      .map((x) => publicUrlFor(x))
+      .filter(Boolean);
+    const videos = list
+      .filter((x) => (typeof x === "string" ? /\.(webm|mp4|mov)($|\?)/i.test(x) : isVideoMediaItem(x)))
       .map((x) => publicUrlFor(x))
       .filter(Boolean);
     const characteristics = applyAttributeMirrors(row.characteristics || {}, attributeMirrors, row);
@@ -444,6 +530,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       required_attribute_names: requiredNames,
       characteristics_meta: characteristicsMeta,
       images,
+      videos,
       wb_sku: row.offer_id,
       wb_images: images,
       nm_id: row.nm_id,
@@ -1065,8 +1152,143 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               offset: 0,
               with: { analytics_data: true, financial_data: true },
             };
-      showLive(await mpCall("orders.list", payload));
+      const data = await mpCall("orders.list", payload);
+      if (data?.sandbox) {
+        setOrderRows([]);
+        setStatus(data.message || "Песочница: заказы не загружены.");
+        return;
+      }
+      const rows = normalizeOrders(data, mp);
+      setOrderRows(rows);
+      setLive(null);
+      setStatus(rows.length ? `Заказов: ${rows.length}` : "Заказов не найдено.");
     });
+  }
+
+  async function cancelOrder(row) {
+    const label = row.number || row.id;
+    if (!window.confirm(`Отменить заказ ${label}?`)) return;
+    await withBusy("order-cancel", async () => {
+      if (mp === "wildberries") {
+        showLive(await mpCall("orders.cancel", {}, { id: row.id }));
+      } else {
+        showLive(
+          await mpCall("orders.cancel", {
+            posting_number: row.number,
+            cancel_reason_id: 352, // Прочее
+          }),
+        );
+      }
+      setStatus(`Запрос на отмену ${label} отправлен.`);
+      await loadOrders();
+    });
+  }
+
+  async function shipOrder(row) {
+    if (mp !== "ozon") {
+      setStatus("Отгрузка из кабинета пока для Ozon FBS.");
+      return;
+    }
+    if (!window.confirm(`Отгрузить отправление ${row.number}?`)) return;
+    await withBusy("order-ship", async () => {
+      const products = (row.raw?.products || []).map((p) => ({
+        product_id: p.sku || p.product_id,
+        quantity: p.quantity || 1,
+      }));
+      showLive(
+        await mpCall("orders.ship", {
+          posting_number: row.number,
+          packages: [{ products: products.length ? products : [{ product_id: 0, quantity: 1 }] }],
+        }),
+      );
+      setStatus(`Запрос на отгрузку ${row.number} отправлен.`);
+      await loadOrders();
+    });
+  }
+
+  async function loadReviews() {
+    await withBusy("reviews", async () => {
+      let data;
+      if (mp === "wildberries") {
+        data = await mpCall("feedbacks.list", { isAnswered: false, take: 50, skip: 0 }, { isAnswered: false, take: 50, skip: 0 });
+      } else {
+        data = await mpCall("reviews.list", { filter: {}, limit: 50, sort_dir: "DESC", last_id: 0 });
+      }
+      if (data?.sandbox) {
+        setReviewRows([]);
+        setStatus(data.message || "Песочница: отзывы не загружены.");
+        return;
+      }
+      const rows = normalizeReviews(data, mp);
+      setReviewRows(rows);
+      setLive(null);
+      setStatus(rows.length ? `Отзывов: ${rows.length}` : "Отзывов не найдено.");
+    });
+  }
+
+  async function answerReview(row) {
+    const text = window.prompt("Ответ на отзыв:", "");
+    if (text == null) return;
+    const answer = String(text).trim();
+    if (!answer) throw new Error("Введите текст ответа.");
+    await withBusy("review-answer", async () => {
+      if (mp === "wildberries") {
+        showLive(await mpCall("feedbacks.answer", { id: row.id, text: answer }));
+      } else {
+        showLive(
+          await mpCall("reviews.answer", {
+            review_id: row.id,
+            text: answer,
+            mark_review_as_processed: true,
+          }),
+        );
+      }
+      setStatus("Ответ отправлен.");
+      await loadReviews();
+    });
+  }
+
+  function exportHistoryCsv() {
+    const rows = filteredHistory.map((h) => {
+      const ids = marketplaceIdsFromRow(h);
+      return [
+        h.offer_id || "",
+        ids.vendorCode || "",
+        ids.nmId || "",
+        ids.productId || "",
+        h.product?.name || "",
+        h.product?.brand || "",
+        h.product?.price ?? "",
+        h.product?.stock ?? "",
+        h.status || "",
+        importStatusLabel(h),
+        h.updated_at || "",
+      ];
+    });
+    downloadCsv(
+      `marketplace-history-${mp}-${new Date().toISOString().slice(0, 10)}.csv`,
+      ["offer_id", "vendor_code", "nm_id", "product_id", "name", "brand", "price", "stock", "status", "import_status", "updated_at"],
+      rows,
+    );
+    setStatus(`Экспортировано в CSV: ${rows.length}`);
+  }
+
+  function exportOrdersCsv() {
+    downloadCsv(
+      `marketplace-orders-${mp}-${new Date().toISOString().slice(0, 10)}.csv`,
+      ["number", "status", "date", "sku", "price", "title"],
+      orderRows.map((r) => [r.number, r.status, r.date, r.sku, r.price, r.title || ""]),
+    );
+    setStatus(`Экспорт заказов: ${orderRows.length}`);
+  }
+
+  function exportReviewsCsv() {
+    downloadCsv(
+      `marketplace-reviews-${mp}-${new Date().toISOString().slice(0, 10)}.csv`,
+      ["id", "rating", "product", "date", "text"],
+      reviewRows.map((r) => [r.id, r.rating, r.product, r.date, r.text]),
+    );
+    setStatus(`Экспорт отзывов: ${reviewRows.length}`);
   }
 
   async function loadWarehouses() {
@@ -1098,16 +1320,6 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             offset: 0,
           }),
         );
-      }
-    });
-  }
-
-  async function loadReviews() {
-    await withBusy("reviews", async () => {
-      if (mp === "wildberries") {
-        showLive(await mpCall("feedbacks.list", { isAnswered: false, take: 50, skip: 0 }, { isAnswered: false, take: 50, skip: 0 }));
-      } else {
-        showLive(await mpCall("reviews.list", { filter: {}, limit: 50, sort_dir: "DESC", last_id: 0 }));
       }
     });
   }
@@ -1372,6 +1584,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 <p className="muted small">
                   Фото: {mediaCounts.photos} / {mediaLimits.photos}
                   {mediaLimits.videos ? ` · Видео: ${mediaCounts.videos} / ${mediaLimits.videos}` : ""}
+                  {mp === "ozon"
+                    ? " · На Ozon видео уходит в карточку отдельным блоком."
+                    : " · На WB видео в API карточки не отправляется — только превью здесь."}
                 </p>
                 {(product.images || []).length ? (
                   <ul className="mp-media-list">
@@ -1408,8 +1623,18 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                     : "Сгенерировать ИИ описание"
                   : "ИИ выключен"}
               </button>
-              <button type="button" className="ghost-btn" disabled={busy === "video"} onClick={generateVideo}>
-                {busy === "video" ? `Сгенерировать видео карточки${dots}` : "Сгенерировать видео карточки"}
+              <button
+                type="button"
+                className="ghost-btn"
+                disabled={busy === "video" || (mp === "wildberries" && mediaCounts.videos >= mediaLimits.videos)}
+                onClick={generateVideo}
+                title={mp === "wildberries" ? "Превью в кабинете; на WB через cards/upload видео не уходит" : "Видео отправится на Ozon при выгрузке"}
+              >
+                {busy === "video"
+                  ? `Сгенерировать видео карточки${dots}`
+                  : mp === "ozon"
+                    ? "Сгенерировать видео (Ozon)"
+                    : "Сгенерировать превью-видео"}
               </button>
               <button type="submit" disabled={busy === "create"}>
                 {busy === "create" ? "Выгрузка…" : editingHistoryId ? "Сохранить на площадке" : "Выгрузить"}
@@ -1459,12 +1684,17 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               </button>
             </div>
             <label className="field-label">
-              CSV (offer_id, name, brand, price, stock, description)
+              CSV импорт (offer_id, name, brand, price, stock, description)
               <textarea rows={6} value={csvText} onChange={(e) => setCsvText(e.target.value)} />
             </label>
-            <button type="button" disabled={busy === "csv"} onClick={submitCsv}>
-              Выгрузить CSV
-            </button>
+            <div className="mp-actions">
+              <button type="button" disabled={busy === "csv"} onClick={submitCsv}>
+                Выгрузить CSV
+              </button>
+              <button type="button" className="ghost-btn" disabled={!filteredHistory.length} onClick={exportHistoryCsv}>
+                Скачать историю CSV
+              </button>
+            </div>
             {templates.length ? (
               <div className="mp-templates">
                 <h4>Шаблоны</h4>
@@ -1485,6 +1715,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             <input placeholder="Поиск по артикулу, vendorCode, nmID" value={search} onChange={(e) => setSearch(e.target.value)} />
             <button type="button" className="ghost-btn" onClick={loadHistory}>
               Обновить историю
+            </button>
+            <button type="button" className="ghost-btn" disabled={!filteredHistory.length} onClick={exportHistoryCsv}>
+              Экспорт CSV
             </button>
             <button type="button" className="ghost-btn" disabled={busy === "live-products"} onClick={loadLiveProducts}>
               С площадки
@@ -1582,7 +1815,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                     : "на сервере не заданы YANDEX_OAUTH_CLIENT_ID/SECRET."}
               </li>
               <li>
-                <strong>Видео карточки:</strong> собирается в браузере из названия, цены и загруженных фото.
+                <strong>Видео карточки:</strong> собирается в браузере из фото. На Ozon уходит в карточку; на WB — только превью в кабинете (API cards/upload видео не принимает).
               </li>
             </ul>
           </div>
@@ -1717,6 +1950,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             <button type="button" disabled={busy === "orders"} onClick={loadOrders}>
               Загрузить заказы
             </button>
+            <button type="button" className="ghost-btn" disabled={!orderRows.length} onClick={exportOrdersCsv}>
+              Экспорт CSV
+            </button>
             <button type="button" className="ghost-btn" disabled={busy === "wh"} onClick={loadWarehouses}>
               Склады
             </button>
@@ -1727,6 +1963,44 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             ) : null}
           </div>
           <p className="muted small">В песочнице запросы на площадку не уходят. Для реальных заказов включите боевой режим и ключи.</p>
+          <div className="mp-table-wrap">
+            <table className="mp-table">
+              <thead>
+                <tr>
+                  <th>Номер</th>
+                  <th>Статус</th>
+                  <th>Дата</th>
+                  <th>Артикул / SKU</th>
+                  <th>Цена</th>
+                  {mp === "ozon" ? <th>Товары</th> : null}
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {orderRows.map((row) => (
+                  <tr key={row.key}>
+                    <td>{row.number}</td>
+                    <td>{row.status}</td>
+                    <td>{row.date ? String(row.date).slice(0, 19).replace("T", " ") : "—"}</td>
+                    <td>{row.sku || "—"}</td>
+                    <td>{row.price || "—"}</td>
+                    {mp === "ozon" ? <td>{row.title || "—"}</td> : null}
+                    <td className="mp-row-actions">
+                      {mp === "ozon" ? (
+                        <button type="button" className="ghost-btn" disabled={busy === "order-ship"} onClick={() => shipOrder(row)}>
+                          Отгрузить
+                        </button>
+                      ) : null}
+                      <button type="button" className="ghost-btn" disabled={busy === "order-cancel"} onClick={() => cancelOrder(row)}>
+                        Отменить
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!orderRows.length ? <p className="muted">Заказов пока нет — нажмите «Загрузить заказы».</p> : null}
+          </div>
         </div>
       )}
 
@@ -1746,16 +2020,50 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             <button type="button" disabled={busy === "reviews"} onClick={loadReviews}>
               Отзывы
             </button>
+            <button type="button" className="ghost-btn" disabled={!reviewRows.length} onClick={exportReviewsCsv}>
+              Экспорт CSV
+            </button>
             {mp === "wildberries" ? (
               <button type="button" className="ghost-btn" disabled={busy === "questions"} onClick={loadQuestions}>
                 Вопросы
               </button>
             ) : null}
           </div>
+          <div className="mp-table-wrap">
+            <table className="mp-table">
+              <thead>
+                <tr>
+                  <th>Оценка</th>
+                  <th>Товар</th>
+                  <th>Дата</th>
+                  <th>Текст</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {reviewRows.map((row) => (
+                  <tr key={row.key}>
+                    <td>{row.rating}</td>
+                    <td>{row.product}</td>
+                    <td>{row.date ? String(row.date).slice(0, 19).replace("T", " ") : "—"}</td>
+                    <td className="mp-review-text" title={row.text}>
+                      {row.text ? (row.text.length > 120 ? `${row.text.slice(0, 120)}…` : row.text) : "—"}
+                    </td>
+                    <td className="mp-row-actions">
+                      <button type="button" className="ghost-btn" disabled={busy === "review-answer"} onClick={() => answerReview(row)}>
+                        Ответить
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!reviewRows.length ? <p className="muted">Отзывов пока нет — нажмите «Отзывы».</p> : null}
+          </div>
         </div>
       )}
 
-      {liveRows.length ? (
+      {liveRows.length && tab !== "orders" && tab !== "reviews" ? (
         <ul className="mp-live-list">
           {liveRows.slice(0, 80).map((row, i) => (
             <li key={row.id || row.offer_id || row.posting_number || i}>
