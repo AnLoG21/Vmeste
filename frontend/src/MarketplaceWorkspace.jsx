@@ -20,11 +20,33 @@ const TABS = [
   ["products", "Товары"],
   ["manage", "Управление"],
   ["orders", "Заказы"],
+  ["supplies", "Поставки"],
   ["analytics", "Аналитика"],
   ["finance", "Финансы"],
   ["reviews", "Отзывы"],
   ["logs", "Логи"],
 ];
+
+function warehouseStorageKey(marketplace) {
+  return `vmeste_mp_warehouse_${marketplace === "wildberries" ? "wb" : "ozon"}`;
+}
+
+function readStoredWarehouse(marketplace) {
+  try {
+    return String(localStorage.getItem(warehouseStorageKey(marketplace)) || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function writeStoredWarehouse(marketplace, id) {
+  try {
+    if (id) localStorage.setItem(warehouseStorageKey(marketplace), String(id));
+    else localStorage.removeItem(warehouseStorageKey(marketplace));
+  } catch {
+    /* ignore */
+  }
+}
 
 const MEDIA_LIMITS = {
   ozon: { photos: 15, videos: 1 },
@@ -411,8 +433,11 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [financeRows, setFinanceRows] = useState([]);
   const [actionRows, setActionRows] = useState([]);
   const [webhookSecretOnce, setWebhookSecretOnce] = useState("");
-  const [warehouseId, setWarehouseId] = useState("");
+  const [warehouseId, setWarehouseId] = useState(() => readStoredWarehouse("ozon"));
   const [warehouseOptions, setWarehouseOptions] = useState([]);
+  const [supplyRows, setSupplyRows] = useState([]);
+  const [supplyName, setSupplyName] = useState("");
+  const [selectedSupplyId, setSelectedSupplyId] = useState("");
   const [rowMenuId, setRowMenuId] = useState(null);
   const [priceStock, setPriceStock] = useState({ offer_id: "", nm_id: "", price: "", stock: "" });
   const [bulkRows, setBulkRows] = useState([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
@@ -451,9 +476,19 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     setBulkRows([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
     setOrderStatusFilter("");
     setWarehouseOptions([]);
+    setSupplyRows([]);
+    setSelectedSupplyId("");
+    setSupplyName("");
+    setWarehouseId(readStoredWarehouse(mp));
     setRowMenuId(null);
     setLive(null);
   }, [mp]);
+
+  function selectWarehouse(id) {
+    const next = String(id || "");
+    setWarehouseId(next);
+    writeStoredWarehouse(mp, next);
+  }
 
   useEffect(() => {
     if (!rowMenuId) return undefined;
@@ -468,6 +503,21 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       window.removeEventListener("keydown", onKey);
     };
   }, [rowMenuId]);
+
+  useEffect(() => {
+    if (!settings || settings.environment !== "prod") return;
+    if (!["manage", "orders", "supplies"].includes(tab)) return;
+    if (warehouseOptions.length) return;
+    loadWarehouses().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, mp, settings?.environment]);
+
+  useEffect(() => {
+    if (tab !== "supplies" || mp !== "wildberries") return;
+    if (!settings || settings.environment !== "prod") return;
+    loadSupplies().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, mp, settings?.environment]);
 
   useEffect(() => {
     if (busy === "ai" || busy === "video") {
@@ -1334,6 +1384,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 since: daysAgoIso(14),
                 to: new Date().toISOString().slice(0, 19) + "Z",
                 ...(orderStatusFilter ? { status: orderStatusFilter } : {}),
+                ...(warehouseId ? { warehouse_id: Number(warehouseId) } : {}),
               },
               limit: 50,
               offset: 0,
@@ -1627,31 +1678,113 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         setStatus(data.message || "Тестовый режим: склады не загружены.");
         return;
       }
-      const rows = extractRecords(data);
-      const options = rows
+      const rows = Array.isArray(data)
+        ? data
+        : data?.result || data?.warehouses || extractRecords(data);
+      const options = (Array.isArray(rows) ? rows : [])
         .map((w) => ({
-          id: String(w.warehouse_id || w.id || w.warehouseId || ""),
-          name: w.name || w.title || `Склад ${w.warehouse_id || w.id || ""}`,
+          id: String(w.warehouse_id || w.id || w.warehouseId || w.officeId || ""),
+          name: String(w.name || w.title || w.warehouse_name || `Склад ${w.warehouse_id || w.id || ""}`).trim(),
+          is_rfbs: Boolean(w.is_rfbs ?? w.isRFBS),
         }))
         .filter((w) => w.id);
       setWarehouseOptions(options);
       setLive(null);
-      if (options[0] && !warehouseId) setWarehouseId(options[0].id);
-      setStatus(options.length ? `Складов: ${options.length}` : "Склады не найдены.");
+      const stored = readStoredWarehouse(mp);
+      const pick = options.find((o) => o.id === stored) || options[0];
+      if (pick) selectWarehouse(pick.id);
+      setStatus(options.length ? `Складов: ${options.length}` : "Склады не найдены. Проверьте ключи и боевой режим.");
     });
+  }
+
+  function normalizeSupplies(data) {
+    const list = data?.supplies || extractRecords(data);
+    return (Array.isArray(list) ? list : []).map((row, i) => ({
+      key: String(row.id || i),
+      id: String(row.id || ""),
+      name: row.name || `Поставка ${row.id || i + 1}`,
+      done: Boolean(row.done),
+      closedAt: row.closedAt || row.closed_at || "",
+      createdAt: row.createdAt || row.created_at || "",
+      cargoType: row.cargoType ?? row.cargo_type,
+      raw: row,
+    }));
   }
 
   async function loadSupplies() {
     await withBusy("supplies", async () => {
-      if (mp !== "wildberries") throw new Error("Поставки доступны для Wildberries.");
-      const data = await mpCall("supplies.list");
+      if (mp !== "wildberries") throw new Error("Поставки FBS — для Wildberries.");
+      const data = await mpCall("supplies.list", { limit: 1000 });
       if (data?.sandbox) {
+        setSupplyRows([]);
         setStatus(data.message || "Тестовый режим.");
         return;
       }
-      const rows = extractRecords(data);
+      const rows = normalizeSupplies(data);
+      setSupplyRows(rows);
       setLive(null);
-      setStatus(rows.length ? `Поставок WB: ${rows.length}` : "Поставок нет.");
+      if (!selectedSupplyId && rows[0]) setSelectedSupplyId(rows[0].id);
+      setStatus(rows.length ? `Поставок WB: ${rows.length}` : "Открытых поставок нет — создайте новую.");
+    });
+  }
+
+  async function createSupply() {
+    await withBusy("supply-create", async () => {
+      if (mp !== "wildberries") throw new Error("Поставки — для Wildberries.");
+      const name = String(supplyName || "").trim() || `Поставка ${new Date().toLocaleString("ru-RU")}`;
+      const data = await mpCall("supplies.create", { name });
+      if (data?.sandbox) throw new Error(data.message || "Тестовый режим.");
+      const id = String(data?.id || "");
+      setSupplyName("");
+      await loadSupplies();
+      if (id) setSelectedSupplyId(id);
+      setStatus(id ? `Поставка создана: ${id}` : "Поставка создана.");
+    });
+  }
+
+  async function deliverSupply(id) {
+    const supplyId = String(id || selectedSupplyId || "").trim();
+    if (!supplyId) throw new Error("Выберите поставку.");
+    if (!window.confirm(`Передать поставку ${supplyId} в доставку? После этого добавить заказы нельзя.`)) return;
+    await withBusy("supply-deliver", async () => {
+      const data = await mpCall("supplies.deliver", {}, { id: supplyId });
+      if (data?.sandbox) throw new Error(data.message || "Тестовый режим.");
+      await loadSupplies();
+      setStatus(`Поставка ${supplyId} передана в доставку.`);
+    });
+  }
+
+  async function deleteSupply(id) {
+    const supplyId = String(id || "").trim();
+    if (!supplyId) return;
+    if (!window.confirm(`Удалить пустую поставку ${supplyId}?`)) return;
+    await withBusy("supply-delete", async () => {
+      const data = await mpCall("supplies.delete", {}, { id: supplyId });
+      if (data?.sandbox) throw new Error(data.message || "Тестовый режим.");
+      if (selectedSupplyId === supplyId) setSelectedSupplyId("");
+      await loadSupplies();
+      setStatus(`Поставка ${supplyId} удалена.`);
+    });
+  }
+
+  async function addOrderToSupply(orderRow) {
+    if (mp !== "wildberries") {
+      setStatus("Добавление в поставку — для заказов Wildberries.");
+      return;
+    }
+    const supplyId = String(selectedSupplyId || "").trim();
+    if (!supplyId) {
+      setStatus("Сначала выберите или создайте поставку во вкладке «Поставки».");
+      return;
+    }
+    const orderId = orderRow?.id;
+    if (orderId == null || orderId === "") throw new Error("Нет ID заказа.");
+    if (!window.confirm(`Добавить заказ ${orderRow.number} в поставку ${supplyId}?`)) return;
+    await withBusy("supply-add", async () => {
+      const data = await mpCall("supplies.add_order", {}, { id: supplyId, orderId });
+      if (data?.sandbox) throw new Error(data.message || "Тестовый режим.");
+      setStatus(`Заказ ${orderRow.number} добавлен в поставку ${supplyId}.`);
+      await loadOrders();
     });
   }
 
@@ -2369,18 +2502,23 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 <input value={priceStock.stock} onChange={(e) => setPriceStock((p) => ({ ...p, stock: e.target.value }))} />
               </label>
               <label>
-                ID склада
+                Склад для остатков
                 {warehouseOptions.length ? (
-                  <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
+                  <select value={warehouseId} onChange={(e) => selectWarehouse(e.target.value)}>
                     <option value="">Выберите склад</option>
                     {warehouseOptions.map((w) => (
                       <option key={w.id} value={w.id}>
-                        {w.name} ({w.id})
+                        {w.name}
+                        {w.is_rfbs ? " · rFBS" : ""} ({w.id})
                       </option>
                     ))}
                   </select>
                 ) : (
-                  <input value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} placeholder="Сначала нажмите «Склады»" />
+                  <input
+                    value={warehouseId}
+                    onChange={(e) => selectWarehouse(e.target.value)}
+                    placeholder="Нажмите «Загрузить склады»"
+                  />
                 )}
               </label>
             </div>
@@ -2395,8 +2533,15 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 Загрузить категории
               </button>
               {mp === "wildberries" ? (
-                <button type="button" className="mp-btn" disabled={busy === "supplies"} onClick={loadSupplies}>
-                  Поставки WB
+                <button
+                  type="button"
+                  className="mp-btn"
+                  onClick={() => {
+                    setTab("supplies");
+                    setMenuOpen(false);
+                  }}
+                >
+                  К поставкам WB
                 </button>
               ) : null}
             </div>
@@ -2535,20 +2680,52 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       )}
 
       {tab === "orders" && (
-        <div>
-          <div className="mp-actions">
-            <button type="button" disabled={busy === "orders"} onClick={loadOrders}>
-              Загрузить заказы
-            </button>
-            <button type="button" className="ghost-btn" disabled={!orderRows.length} onClick={exportOrdersCsv}>
-              Экспорт CSV
-            </button>
-            <button type="button" className="ghost-btn" disabled={busy === "wh"} onClick={loadWarehouses}>
-              Склады
+        <div className="cafe-form-panel mp-panel">
+          <div className="mp-warehouse-bar">
+            <label>
+              Склад
+              {warehouseOptions.length ? (
+                <select value={warehouseId} onChange={(e) => selectWarehouse(e.target.value)}>
+                  <option value="">Все / не выбран</option>
+                  {warehouseOptions.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({w.id})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input value={warehouseId} onChange={(e) => selectWarehouse(e.target.value)} placeholder="ID склада" />
+              )}
+            </label>
+            <button type="button" className="mp-btn" disabled={busy === "wh"} onClick={loadWarehouses}>
+              {busy === "wh" ? "…" : "Склады"}
             </button>
             {mp === "wildberries" ? (
-              <button type="button" className="ghost-btn" disabled={busy === "supplies"} onClick={loadSupplies}>
-                Поставки
+              <label>
+                Поставка для заказов
+                <select value={selectedSupplyId} onChange={(e) => setSelectedSupplyId(e.target.value)}>
+                  <option value="">Не выбрана</option>
+                  {supplyRows
+                    .filter((s) => !s.done)
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.id})
+                      </option>
+                    ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+          <div className="mp-actions">
+            <button type="button" className="mp-btn mp-btn-primary" disabled={busy === "orders"} onClick={loadOrders}>
+              Загрузить заказы
+            </button>
+            <button type="button" className="mp-btn" disabled={!orderRows.length} onClick={exportOrdersCsv}>
+              Экспорт CSV
+            </button>
+            {mp === "wildberries" ? (
+              <button type="button" className="mp-btn" disabled={busy === "supplies"} onClick={loadSupplies}>
+                Обновить поставки
               </button>
             ) : null}
           </div>
@@ -2565,13 +2742,15 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                   <option value="cancelled">Отменён</option>
                 </select>
               </label>
-              <button type="button" className="ghost-btn" disabled={busy === "orders"} onClick={loadOrders}>
+              <button type="button" className="mp-btn" disabled={busy === "orders"} onClick={loadOrders}>
                 Применить фильтр
               </button>
             </div>
           ) : null}
           <p className="muted small">
-            FBS: сначала «Собрать», через ~1 минуту — «Этикетка» (PDF). В песочнице запросы на площадку не уходят.
+            {mp === "ozon"
+              ? "FBS: «Собрать» → через ~1 мин «Этикетка». Склад фильтрует список отправлений."
+              : "WB: новые сборочные задания. Выберите поставку и нажмите «В поставку», затем закройте поставку во вкладке «Поставки»."}
           </p>
           <div className="mp-table-wrap">
             <table className="mp-table">
@@ -2604,26 +2783,29 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                         <>
                           <button
                             type="button"
-                            className="ghost-btn"
+                            className="mp-btn"
                             disabled={busy === "order-ship" || row.status === "cancelled"}
                             onClick={() => shipOrder(row)}
-                            title="Сборка FBS"
                           >
                             Собрать
                           </button>
-                          <button
-                            type="button"
-                            className="ghost-btn"
-                            disabled={busy === "order-label"}
-                            onClick={() => printOrderLabel(row)}
-                          >
+                          <button type="button" className="mp-btn" disabled={busy === "order-label"} onClick={() => printOrderLabel(row)}>
                             {busy === "order-label" ? "…" : "Этикетка"}
                           </button>
                         </>
-                      ) : null}
+                      ) : (
+                        <button
+                          type="button"
+                          className="mp-btn"
+                          disabled={busy === "supply-add" || !selectedSupplyId}
+                          onClick={() => addOrderToSupply(row)}
+                        >
+                          В поставку
+                        </button>
+                      )}
                       <button
                         type="button"
-                        className="ghost-btn"
+                        className="mp-btn"
                         disabled={busy === "order-cancel" || String(row.status).includes("cancel")}
                         onClick={() => cancelOrder(row)}
                       >
@@ -2636,6 +2818,87 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             </table>
             {!orderRows.length ? <p className="muted">Заказов пока нет — нажмите «Загрузить заказы».</p> : null}
           </div>
+        </div>
+      )}
+
+      {tab === "supplies" && (
+        <div className="cafe-form-panel mp-panel">
+          {mp !== "wildberries" ? (
+            <p className="muted">
+              Поставки FBS (создание / закрытие) — для Wildberries. На Ozon используйте сборку и этикетки во вкладке «Заказы».
+              Склады Ozon нужны для обновления остатков в «Управлении».
+            </p>
+          ) : (
+            <>
+              <h3>Поставки WB (FBS)</h3>
+              <p className="muted small">
+                Создайте поставку → во вкладке «Заказы» добавьте сборочные задания → «В доставку». Это закрывает поставку
+                (аналог FBO-сборки на стороне продавца для FBS).
+              </p>
+              <div className="mp-warehouse-bar">
+                <label>
+                  Название новой поставки
+                  <input
+                    value={supplyName}
+                    onChange={(e) => setSupplyName(e.target.value)}
+                    placeholder={`Поставка ${new Date().toLocaleDateString("ru-RU")}`}
+                  />
+                </label>
+                <button type="button" className="mp-btn mp-btn-primary" disabled={busy === "supply-create"} onClick={createSupply}>
+                  {busy === "supply-create" ? "…" : "Создать"}
+                </button>
+                <button type="button" className="mp-btn" disabled={busy === "supplies"} onClick={loadSupplies}>
+                  Обновить список
+                </button>
+              </div>
+              <div className="mp-table-wrap">
+                <table className="mp-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Название</th>
+                      <th>Статус</th>
+                      <th>Создана</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {supplyRows.map((row) => (
+                      <tr key={row.key} className={selectedSupplyId === row.id ? "mp-row-selected" : ""}>
+                        <td>
+                          <button type="button" className="ghost-btn" onClick={() => setSelectedSupplyId(row.id)}>
+                            {row.id}
+                          </button>
+                        </td>
+                        <td>{row.name}</td>
+                        <td>{row.done ? "Закрыта / в доставке" : "Открыта"}</td>
+                        <td>{row.createdAt ? String(row.createdAt).slice(0, 19).replace("T", " ") : "—"}</td>
+                        <td className="mp-row-actions">
+                          {!row.done ? (
+                            <button
+                              type="button"
+                              className="mp-btn mp-btn-primary"
+                              disabled={busy === "supply-deliver"}
+                              onClick={() => deliverSupply(row.id)}
+                            >
+                              В доставку
+                            </button>
+                          ) : null}
+                          {!row.done ? (
+                            <button type="button" className="mp-btn" disabled={busy === "supply-delete"} onClick={() => deleteSupply(row.id)}>
+                              Удалить
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!supplyRows.length ? <p className="muted">Поставок нет — создайте первую или нажмите «Обновить список».</p> : null}
+              </div>
+              {selectedSupplyId ? <p className="muted small">Выбрана для заказов: {selectedSupplyId}</p> : null}
+            </>
+          )}
         </div>
       )}
 

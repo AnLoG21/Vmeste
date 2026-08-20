@@ -437,16 +437,22 @@ class MarketplaceCallView(APIView):
         url = resolve_url(url_tmpl, extra)
         try:
             if s.environment != "prod":
-                return Response({"sandbox": True, "message": "Песочница: запрос к площадке не отправлялся. Включите боевой режим в меню «Управление»."})
+                return Response({"sandbox": True, "message": "Тестовый режим: запрос к площадке не отправлялся. Включите боевой режим в меню «Управление»."})
             headers = ozon_headers(s) if marketplace == "ozon" else wb_headers(s)
+            use_json = method in ("POST", "PUT", "PATCH")
+            json_body = payload if use_json else None
+            if method in ("POST", "PUT") and not json_body:
+                json_body = {}
+            if method == "PATCH" and not payload:
+                json_body = None
             result = request_json(
                 provider=provider,
                 marketplace=marketplace,
                 method=method,
                 url=url,
                 headers=headers,
-                json_body=payload if method in ("POST", "PUT", "PATCH") else None,
-                params=payload if method == "GET" else extra or None,
+                json_body=json_body,
+                params=payload if method == "GET" else (extra or None),
             )
             return Response(result)
         except MarketplaceError as exc:

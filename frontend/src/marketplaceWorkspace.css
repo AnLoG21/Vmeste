@@ -829,12 +829,47 @@ body.theme-dark .mp-lightbox-close {
   box-sizing: border-box;
 }
 
+.mp-warehouse-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: end;
+  margin-bottom: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f5f8fc;
+  border: 1px solid #e2eaf3;
+}
+
+.mp-warehouse-bar label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  min-width: min(220px, 100%);
+  flex: 1 1 180px;
+}
+
+.mp-warehouse-bar select,
+.mp-warehouse-bar input {
+  border: 1px solid #d5dee8;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  background: #fff;
+}
+
+.mp-row-selected td {
+  background: rgba(26, 115, 199, 0.08);
+}
+
 .mp-inline-filter {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-size: 0.92rem;
 }
+
 
 .mp-status {
   display: inline-block;

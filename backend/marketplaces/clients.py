@@ -517,7 +517,13 @@ WB_ACTIONS = {
     "feedbacks.answer": ("PATCH", f"{WB_FEEDBACKS}/api/v1/feedbacks"),
     "supplies.list": ("GET", f"{WB_MARKETPLACE}/api/v3/supplies"),
     "supplies.create": ("POST", f"{WB_MARKETPLACE}/api/v3/supplies"),
-    "supplies.close": ("PATCH", f"{WB_MARKETPLACE}/api/v3/supplies/{{id}}/close"),
+    "supplies.get": ("GET", f"{WB_MARKETPLACE}/api/v3/supplies/{{id}}"),
+    "supplies.orders": ("GET", f"{WB_MARKETPLACE}/api/v3/supplies/{{id}}/orders"),
+    "supplies.add_order": ("PATCH", f"{WB_MARKETPLACE}/api/v3/supplies/{{id}}/orders/{{orderId}}"),
+    "supplies.deliver": ("PATCH", f"{WB_MARKETPLACE}/api/v3/supplies/{{id}}/deliver"),
+    "supplies.delete": ("DELETE", f"{WB_MARKETPLACE}/api/v3/supplies/{{id}}"),
+    # alias kept for older UI calls
+    "supplies.close": ("PATCH", f"{WB_MARKETPLACE}/api/v3/supplies/{{id}}/deliver"),
 }
 
 
