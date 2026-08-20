@@ -95,6 +95,18 @@ function daysAgoIso(days) {
   return d.toISOString().slice(0, 19) + "Z";
 }
 
+/** RFC3339 for Ozon finance / protobuf Timestamp (date-only "YYYY-MM-DD" is rejected). */
+function ozonTimestampDaysAgo(days) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  d.setUTCHours(0, 0, 0, 0);
+  return d.toISOString().replace(/\.\d{3}Z$/, ".000Z");
+}
+
+function ozonTimestampNow() {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, ".000Z");
+}
+
 function parseCsv(text) {
   const lines = String(text || "")
     .split(/\r?\n/)
@@ -400,6 +412,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [actionRows, setActionRows] = useState([]);
   const [webhookSecretOnce, setWebhookSecretOnce] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
+  const [warehouseOptions, setWarehouseOptions] = useState([]);
+  const [rowMenuId, setRowMenuId] = useState(null);
   const [priceStock, setPriceStock] = useState({ offer_id: "", nm_id: "", price: "", stock: "" });
   const [bulkRows, setBulkRows] = useState([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
   const [bulkCsv, setBulkCsv] = useState("offer_id,price,stock\nSKU-1,1290,10\nSKU-2,990,5");
@@ -436,8 +450,24 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     setActionRows([]);
     setBulkRows([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
     setOrderStatusFilter("");
+    setWarehouseOptions([]);
+    setRowMenuId(null);
     setLive(null);
   }, [mp]);
+
+  useEffect(() => {
+    if (!rowMenuId) return undefined;
+    const close = () => setRowMenuId(null);
+    const onKey = (e) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [rowMenuId]);
 
   useEffect(() => {
     if (busy === "ai" || busy === "video") {
@@ -538,7 +568,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   function showLive(data) {
     if (!data || data.sandbox) {
       setLive(null);
-      if (data?.sandbox) setStatus(data.message || "Песочница: запрос к площадке не отправлялся.");
+      if (data?.sandbox) {
+        setStatus(data.message || "Тестовый режим: запросы на площадку не уходят. Включите «Боевой» в Управлении.");
+      }
       return;
     }
     setLive(data);
@@ -721,7 +753,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       }
       if (mp === "wildberries") {
         const data = await mpCall("categories.parents");
-        if (data?.sandbox) throw new Error(data.message || "Песочница.");
+        if (data?.sandbox) throw new Error(data.message || "Тестовый режим.");
         const parents = flattenWbParents(data);
         if (!parents.length) throw new Error("Wildberries не вернул родительские категории.");
         setWbParents(parents);
@@ -732,7 +764,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         return;
       }
       const data = await mpCall("categories.tree", { language: "DEFAULT" });
-      if (data?.sandbox) throw new Error(data.message || "Песочница.");
+      if (data?.sandbox) throw new Error(data.message || "Тестовый режим.");
       const tree = extractOzonCategoryTree(data);
       if (!tree.length) throw new Error("Ozon не вернул дерево категорий.");
       setOzonCategoryTree(tree);
@@ -749,7 +781,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     setWbSubjectsLoading(true);
     try {
       const data = await mpCall("categories.subjects", {}, { parentID: parentId, limit: 1000, offset: 0 });
-      if (data?.sandbox) throw new Error(data.message || "Песочница.");
+      if (data?.sandbox) throw new Error(data.message || "Тестовый режим.");
       const options = flattenWbSubjects(data);
       setCategoryOptions(options);
       if (!options.length) setStatus("В этом разделе WB нет предметов.");
@@ -801,7 +833,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       }
       if (mp === "wildberries") {
         const data = await mpCall("categories.charcs", {}, { subject_id: categoryId });
-        if (data?.sandbox) throw new Error(data.message || "Песочница.");
+        if (data?.sandbox) throw new Error(data.message || "Тестовый режим.");
         const { visible, mirrors } = splitCardAttributes(normalizeWbCharacteristics(data));
         setAttributeFields(visible);
         setAttributeMirrors(mirrors);
@@ -822,7 +854,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         type_id: Number(typeId),
         language: "DEFAULT",
       });
-      if (data?.sandbox) throw new Error(data.message || "Песочница.");
+      if (data?.sandbox) throw new Error(data.message || "Тестовый режим.");
       const { visible, mirrors } = splitCardAttributes(normalizeOzonAttributes(data));
       setAttributeFields(visible);
       setAttributeMirrors(mirrors);
@@ -1279,7 +1311,15 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         mp === "wildberries"
           ? { settings: { cursor: { limit: 100 }, filter: { withPhoto: -1 } } }
           : { filter: { visibility: "ALL" }, last_id: "", limit: 100 };
-      showLive(await mpCall("products.list", payload));
+      const data = await mpCall("products.list", payload);
+      if (data?.sandbox) {
+        setLive(null);
+        setStatus(data.message || "Тестовый режим: список с площадки не загружен.");
+        return;
+      }
+      const rows = extractRecords(data);
+      setLive(null);
+      setStatus(rows.length ? `С площадки получено карточек: ${rows.length}` : "На площадке товаров не найдено.");
     });
   }
 
@@ -1302,7 +1342,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       const data = await mpCall("orders.list", payload);
       if (data?.sandbox) {
         setOrderRows([]);
-        setStatus(data.message || "Песочница: заказы не загружены.");
+        setStatus(data.message || "Тестовый режим: заказы не загружены.");
         return;
       }
       const rows = normalizeOrders(data, mp);
@@ -1392,11 +1432,11 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       if (mp === "wildberries") {
         data = await mpCall("feedbacks.list", { isAnswered: false, take: 50, skip: 0 }, { isAnswered: false, take: 50, skip: 0 });
       } else {
-        data = await mpCall("reviews.list", { filter: {}, limit: 50, sort_dir: "DESC", last_id: 0 });
+        data = await mpCall("reviews.list", { filter: {}, limit: 50, sort_dir: "DESC", last_id: "" });
       }
       if (data?.sandbox) {
         setReviewRows([]);
-        setStatus(data.message || "Песочница: отзывы не загружены.");
+        setStatus(data.message || "Тестовый режим: отзывы не загружены.");
         return;
       }
       const rows = normalizeReviews(data, mp);
@@ -1490,7 +1530,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Не удалось сгенерировать штрихкод.");
-      if (data.sandbox) throw new Error(data.message || "Песочница.");
+      if (data.sandbox) throw new Error(data.message || "Тестовый режим.");
       const code = (data.barcodes || [])[0];
       if (!code) throw new Error("Площадка не вернула штрихкод.");
       setProduct((p) => ({ ...p, barcode: String(code) }));
@@ -1515,8 +1555,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   async function loadFinance() {
     await withBusy("finance", async () => {
       if (mp !== "ozon") throw new Error("Финансы и акции — для Ozon.");
-      const from = daysAgoIso(30).slice(0, 10);
-      const to = new Date().toISOString().slice(0, 10);
+      const from = ozonTimestampDaysAgo(30);
+      const to = ozonTimestampNow();
       const fin = await mpCall("finance.list", {
         filter: { date: { from, to }, operation_type: [] },
         page: 1,
@@ -1524,7 +1564,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       });
       if (fin?.sandbox) {
         setFinanceRows([]);
-        setStatus(fin.message || "Песочница.");
+        setStatus(fin.message || "Тестовый режим.");
         return;
       }
       const ops = fin?.result?.operations || fin?.operations || extractRecords(fin);
@@ -1581,14 +1621,37 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
 
   async function loadWarehouses() {
     await withBusy("wh", async () => {
-      showLive(await mpCall("warehouses.list", {}));
+      const data = await mpCall("warehouses.list", {});
+      if (data?.sandbox) {
+        setWarehouseOptions([]);
+        setStatus(data.message || "Тестовый режим: склады не загружены.");
+        return;
+      }
+      const rows = extractRecords(data);
+      const options = rows
+        .map((w) => ({
+          id: String(w.warehouse_id || w.id || w.warehouseId || ""),
+          name: w.name || w.title || `Склад ${w.warehouse_id || w.id || ""}`,
+        }))
+        .filter((w) => w.id);
+      setWarehouseOptions(options);
+      setLive(null);
+      if (options[0] && !warehouseId) setWarehouseId(options[0].id);
+      setStatus(options.length ? `Складов: ${options.length}` : "Склады не найдены.");
     });
   }
 
   async function loadSupplies() {
     await withBusy("supplies", async () => {
       if (mp !== "wildberries") throw new Error("Поставки доступны для Wildberries.");
-      showLive(await mpCall("supplies.list"));
+      const data = await mpCall("supplies.list");
+      if (data?.sandbox) {
+        setStatus(data.message || "Тестовый режим.");
+        return;
+      }
+      const rows = extractRecords(data);
+      setLive(null);
+      setStatus(rows.length ? `Поставок WB: ${rows.length}` : "Поставок нет.");
     });
   }
 
@@ -1615,15 +1678,25 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   async function loadQuestions() {
     await withBusy("questions", async () => {
       if (mp !== "wildberries") throw new Error("Вопросы покупателей — для Wildberries.");
-      showLive(await mpCall("questions.list", { isAnswered: false, take: 50, skip: 0 }, { isAnswered: false, take: 50, skip: 0 }));
+      const data = await mpCall("questions.list", { isAnswered: false, take: 50, skip: 0 }, { isAnswered: false, take: 50, skip: 0 });
+      if (data?.sandbox) {
+        setStatus(data.message || "Тестовый режим.");
+        return;
+      }
+      setLive(null);
+      const rows = extractRecords(data);
+      setStatus(rows.length ? `Вопросов: ${rows.length}` : "Вопросов нет.");
     });
   }
 
   async function loadCategories() {
-    await withBusy("cats", async () => {
-      if (mp === "wildberries") showLive(await mpCall("categories.parents"));
-      else showLive(await mpCall("categories.tree", { language: "DEFAULT" }));
-    });
+    setLive(null);
+    await loadCategoryOptions();
+    setStatus(
+      mp === "wildberries"
+        ? "Категории WB загружены — выберите предмет в «Создать товар»."
+        : "Категории Ozon загружены — выберите категорию в «Создать товар».",
+    );
   }
 
   async function saveTemplate(e) {
@@ -1663,7 +1736,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     setStatus(`Подставлен шаблон «${t.name}».`);
   }
 
-  const envLabel = settings?.environment === "prod" ? "Боевой режим" : "Песочница";
+  const envLabel = settings?.environment === "prod" ? "Боевой режим" : "Тестовый режим";
+  const isSandbox = settings?.environment !== "prod";
   const filteredHistory = useMemo(
     () =>
       history.filter((h) => {
@@ -1692,7 +1766,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       <div className="mp-head">
         <div className="mp-head-title">
           <h2>Маркетплейсы</h2>
-          <p className="muted">{envLabel}</p>
+          <p className="muted">{envLabel} · {mp === "wildberries" ? "Wildberries" : "Ozon"}</p>
         </div>
         <div className="mp-toggle" role="group" aria-label="Площадка">
           <button type="button" className={mp === "ozon" ? "is-active" : ""} onClick={() => setMp("ozon")}>
@@ -1726,7 +1800,26 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         </div>
       </div>
 
-      {status ? <p className="status">{status}</p> : null}
+      {isSandbox ? (
+        <div className="mp-mode-banner" role="status">
+          <div>
+            <strong>Тестовый режим</strong>
+            <p>Запросы на Ozon/WB не уходят. Чтобы выгружать товары и заказы — откройте Управление и выберите «Боевой».</p>
+          </div>
+          <button
+            type="button"
+            className="mp-btn"
+            onClick={() => {
+              setTab("manage");
+              setMenuOpen(false);
+            }}
+          >
+            К управлению
+          </button>
+        </div>
+      ) : null}
+
+      {status ? <p className="status mp-status-line">{status}</p> : null}
       <p className="mp-section-title">{tabLabel}</p>
 
       {tab === "create" && (
@@ -1957,13 +2050,14 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             ) : null}
           </form>
 
-          <div className="cafe-form-panel">
+          <div className="cafe-form-panel mp-panel">
             <div className="mp-media-head">
-              <h3>Пакет и CSV</h3>
+              <h3>Пакетная выгрузка</h3>
               <button type="button" className="mp-plus-btn" title="Добавить строку" onClick={() => setBatch((rows) => [...rows, emptyProduct()])}>
                 <PlusIcon />
               </button>
             </div>
+            <p className="muted small">Несколько артикулов сразу — без полного заполнения карточки.</p>
             {batch.map((row, i) => (
               <div key={i} className="mp-batch-row">
                 <input placeholder="Артикул" value={row.offer_id} onChange={(e) => setBatch((rows) => rows.map((r, idx) => (idx === i ? { ...r, offer_id: e.target.value } : r)))} />
@@ -1972,27 +2066,36 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               </div>
             ))}
             <div className="mp-actions">
-              <button type="button" disabled={busy === "batch"} onClick={submitBatch}>
+              <button type="button" className="mp-btn mp-btn-primary" disabled={busy === "batch"} onClick={submitBatch}>
                 Выгрузить пакет
               </button>
             </div>
-            <label className="field-label">
-              CSV импорт (offer_id, name, brand, price, stock, description)
-              <textarea rows={6} value={csvText} onChange={(e) => setCsvText(e.target.value)} />
-            </label>
-            <div className="mp-actions">
-              <button type="button" disabled={busy === "csv"} onClick={submitCsv}>
-                Выгрузить CSV
-              </button>
-              <button type="button" className="ghost-btn" disabled={!filteredHistory.length} onClick={exportHistoryCsv}>
-                Скачать историю CSV
-              </button>
+
+            <div className="mp-csv-block">
+              <h3>Импорт из CSV</h3>
+              <p className="muted small">Колонки: offer_id, name, brand, price, stock, description (разделитель ; или ,).</p>
+              <textarea
+                className="mp-csv-area"
+                rows={7}
+                value={csvText}
+                onChange={(e) => setCsvText(e.target.value)}
+                placeholder={"offer_id,name,brand,price,stock,description\nSKU-1,Товар,Бренд,1290,10,Описание"}
+              />
+              <div className="mp-actions">
+                <button type="button" className="mp-btn mp-btn-primary" disabled={busy === "csv"} onClick={submitCsv}>
+                  Выгрузить CSV
+                </button>
+                <button type="button" className="mp-btn" disabled={!filteredHistory.length} onClick={exportHistoryCsv}>
+                  Скачать историю
+                </button>
+              </div>
             </div>
+
             {templates.length ? (
               <div className="mp-templates">
                 <h4>Шаблоны</h4>
                 {templates.map((t) => (
-                  <button key={t.id} type="button" className="ghost-btn" onClick={() => applyTemplate(t)}>
+                  <button key={t.id} type="button" className="mp-btn" onClick={() => applyTemplate(t)}>
                     {t.name}
                   </button>
                 ))}
@@ -2003,93 +2106,150 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       )}
 
       {tab === "products" && (
-        <div>
-          <div className="mp-actions">
-            <input placeholder="Поиск по артикулу, vendorCode, nmID" value={search} onChange={(e) => setSearch(e.target.value)} />
-            <button type="button" className="ghost-btn" onClick={loadHistory}>
-              Обновить историю
-            </button>
-            <button type="button" className="ghost-btn" disabled={!filteredHistory.length} onClick={exportHistoryCsv}>
-              Экспорт CSV
-            </button>
-            <button type="button" className="ghost-btn" disabled={busy === "export"} onClick={() => exportHistoryServer("csv")}>
-              CSV (сервер)
-            </button>
-            <button type="button" className="ghost-btn" disabled={busy === "export"} onClick={() => exportHistoryServer("xlsx")}>
-              Excel
-            </button>
-            <button type="button" className="ghost-btn" disabled={busy === "live-products"} onClick={loadLiveProducts}>
-              С площадки
-            </button>
-            <button
-              type="button"
-              className="ghost-btn"
-              disabled={busy === "fetch-product" || !search.trim()}
-              onClick={() => fetchProductForEdit(search.trim())}
-            >
-              Загрузить для редактирования
-            </button>
+        <div className="cafe-form-panel mp-panel mp-products-panel">
+          <div className="mp-toolbar">
+            <input
+              className="mp-toolbar-search"
+              placeholder="Поиск: артикул, vendorCode, nmID…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <div className="mp-toolbar-actions">
+              <button type="button" className="mp-btn" onClick={loadHistory}>
+                Обновить
+              </button>
+              <button type="button" className="mp-btn" disabled={!filteredHistory.length} onClick={exportHistoryCsv}>
+                CSV
+              </button>
+              <button type="button" className="mp-btn" disabled={busy === "export"} onClick={() => exportHistoryServer("xlsx")}>
+                Excel
+              </button>
+              <button type="button" className="mp-btn" disabled={busy === "live-products"} onClick={loadLiveProducts}>
+                С площадки
+              </button>
+              <button
+                type="button"
+                className="mp-btn mp-btn-primary"
+                disabled={busy === "fetch-product" || !search.trim()}
+                onClick={() => fetchProductForEdit(search.trim())}
+              >
+                Открыть по артикулу
+              </button>
+            </div>
           </div>
           <div className="mp-table-wrap">
-            <table className="mp-table">
+            <table className="mp-table mp-table-products">
               <thead>
                 <tr>
                   <th>Артикул</th>
-                  <th>vendorCode</th>
+                  <th>Код</th>
                   {mp === "wildberries" ? <th>nmID</th> : <th>product_id</th>}
                   <th>Название</th>
                   <th>Цена</th>
-                  <th>Остаток</th>
+                  <th>Ост.</th>
                   <th>Статус</th>
-                  {mp === "ozon" ? <th>Импорт Ozon</th> : null}
-                  <th />
+                  {mp === "ozon" ? <th>Импорт</th> : null}
+                  <th className="mp-col-menu" />
                 </tr>
               </thead>
               <tbody>
                 {filteredHistory.map((row) => {
                   const ids = marketplaceIdsFromRow(row);
+                  const menuOpenRow = rowMenuId === row.id;
                   return (
-                  <tr key={row.id}>
-                    <td>{row.offer_id}</td>
-                    <td>{formatMarketplaceId(ids.vendorCode)}</td>
-                    <td>{formatMarketplaceId(mp === "wildberries" ? ids.nmId : ids.productId)}</td>
-                    <td>{row.product?.name || "—"}</td>
-                    <td>{row.product?.price || "—"}</td>
-                    <td>{row.product?.stock ?? "—"}</td>
-                    <td>{row.status}</td>
-                    {mp === "ozon" ? (
-                      <td>
-                        {importStatusLabel(row)}
-                        {row.import_errors ? (
-                          <span className="muted small" title={row.import_errors}>
-                            {" "}
-                            ⚠
-                          </span>
-                        ) : null}
+                    <tr key={row.id}>
+                      <td>{row.offer_id}</td>
+                      <td>{formatMarketplaceId(ids.vendorCode)}</td>
+                      <td>{formatMarketplaceId(mp === "wildberries" ? ids.nmId : ids.productId)}</td>
+                      <td className="mp-cell-name" title={row.product?.name || ""}>
+                        {row.product?.name || "—"}
                       </td>
-                    ) : null}
-                    <td className="mp-row-actions">
-                      <button type="button" className="ghost-btn" onClick={() => openEditorFromHistory(row)}>
-                        Редактировать
-                      </button>
-                      <button type="button" className="ghost-btn" onClick={() => fillPriceStockFromHistory(row)}>
-                        Цены
-                      </button>
-                      {mp === "ozon" && row.import_task_id ? (
-                        <button type="button" className="ghost-btn" disabled={busy === "import-status"} onClick={() => checkImportStatus(row)}>
-                          Статус импорта
-                        </button>
+                      <td>{row.product?.price || "—"}</td>
+                      <td>{row.product?.stock ?? "—"}</td>
+                      <td>
+                        <span className={`mp-pill mp-pill--${String(row.status || "").slice(0, 12)}`}>{row.status}</span>
+                      </td>
+                      {mp === "ozon" ? (
+                        <td>
+                          {importStatusLabel(row)}
+                          {row.import_errors ? (
+                            <span className="muted small" title={row.import_errors}>
+                              {" "}
+                              ⚠
+                            </span>
+                          ) : null}
+                        </td>
                       ) : null}
-                      <button type="button" className="ghost-btn" onClick={() => deleteProduct(row)}>
-                        Удалить
-                      </button>
-                    </td>
-                  </tr>
+                      <td className="mp-col-menu">
+                        <div className="mp-kebab">
+                          <button
+                            type="button"
+                            className="mp-kebab-btn"
+                            aria-label="Действия"
+                            aria-expanded={menuOpenRow}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRowMenuId(menuOpenRow ? null : row.id);
+                            }}
+                          >
+                            ⋮
+                          </button>
+                          {menuOpenRow ? (
+                            <div className="mp-kebab-menu" role="menu" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setRowMenuId(null);
+                                  openEditorFromHistory(row);
+                                }}
+                              >
+                                Редактировать
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setRowMenuId(null);
+                                  fillPriceStockFromHistory(row);
+                                }}
+                              >
+                                Цены и остатки
+                              </button>
+                              {mp === "ozon" && row.import_task_id ? (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  disabled={busy === "import-status"}
+                                  onClick={() => {
+                                    setRowMenuId(null);
+                                    checkImportStatus(row);
+                                  }}
+                                >
+                                  Статус импорта
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="mp-kebab-danger"
+                                onClick={() => {
+                                  setRowMenuId(null);
+                                  deleteProduct(row);
+                                }}
+                              >
+                                Удалить на площадке
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
             </table>
-            {!filteredHistory.length ? <p className="muted">Пока нет выгрузок. Создайте карточку в меню «Создать товар».</p> : null}
+            {!filteredHistory.length ? <p className="muted">Пока нет выгрузок. Создайте карточку в «Создать товар».</p> : null}
           </div>
         </div>
       )}
@@ -2100,7 +2260,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             <h3>Что нужно для функций</h3>
             <ul className="mp-need-list">
               <li>
-                <strong>Ozon / WB:</strong> ключи ниже. Боевые запросы идут только в режиме «Боевой».
+                <strong>Ozon / WB:</strong> ключи ниже. Реальные запросы — только в режиме «Боевой».
               </li>
               <li>
                 <strong>ИИ-описание:</strong> {settings?.ai_enabled ? `включено (${settings.ai_model || "OpenRouter"}).` : "выключено. На сервере задайте OPENROUTER_API_KEY."}
@@ -2123,10 +2283,10 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             <p className="muted small">Не хранятся в платформенном .env — только у этой организации.</p>
             <div className="cafe-form-grid">
               <label>
-                Режим
+                Режим работы
                 <select value={keysForm.environment} onChange={(e) => updateKeysForm({ environment: e.target.value })}>
-                  <option value="sandbox">Песочница (без реальных вызовов на запись)</option>
-                  <option value="prod">Боевой</option>
+                  <option value="sandbox">Тестовый — запросы на площадку не уходят</option>
+                  <option value="prod">Боевой — реальные выгрузки, заказы, цены</option>
                 </select>
               </label>
               <label>
@@ -2210,21 +2370,32 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               </label>
               <label>
                 ID склада
-                <input value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} />
+                {warehouseOptions.length ? (
+                  <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
+                    <option value="">Выберите склад</option>
+                    {warehouseOptions.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name} ({w.id})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} placeholder="Сначала нажмите «Склады»" />
+                )}
               </label>
             </div>
             <div className="mp-actions">
-              <button type="button" disabled={busy === "prices"} onClick={applyPricesStocks}>
+              <button type="button" className="mp-btn mp-btn-primary" disabled={busy === "prices"} onClick={applyPricesStocks}>
                 Обновить одну строку
               </button>
-              <button type="button" className="ghost-btn" disabled={busy === "wh"} onClick={loadWarehouses}>
-                Склады
+              <button type="button" className="mp-btn" disabled={busy === "wh"} onClick={loadWarehouses}>
+                Загрузить склады
               </button>
-              <button type="button" className="ghost-btn" disabled={busy === "cats"} onClick={loadCategories}>
-                Категории
+              <button type="button" className="mp-btn" disabled={busy === "cats"} onClick={loadCategories}>
+                Загрузить категории
               </button>
               {mp === "wildberries" ? (
-                <button type="button" className="ghost-btn" disabled={busy === "supplies"} onClick={loadSupplies}>
+                <button type="button" className="mp-btn" disabled={busy === "supplies"} onClick={loadSupplies}>
                   Поставки WB
                 </button>
               ) : null}
@@ -2629,15 +2800,18 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         </div>
       )}
 
-      {liveRows.length && tab !== "orders" && tab !== "reviews" ? (
-        <ul className="mp-live-list">
-          {liveRows.slice(0, 80).map((row, i) => (
-            <li key={row.id || row.offer_id || row.posting_number || i}>
-              <strong>{recordTitle(row)}</strong>
-              {recordHint(row) ? <span className="muted small">{recordHint(row)}</span> : null}
-            </li>
-          ))}
-        </ul>
+      {liveRows.length && tab === "analytics" ? (
+        <div className="cafe-form-panel mp-panel">
+          <h3>Ответ площадки</h3>
+          <ul className="mp-live-list">
+            {liveRows.slice(0, 80).map((row, i) => (
+              <li key={row.id || row.offer_id || row.posting_number || i}>
+                <strong>{recordTitle(row)}</strong>
+                {recordHint(row) ? <span className="muted small">{recordHint(row)}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       {viewer ? (
