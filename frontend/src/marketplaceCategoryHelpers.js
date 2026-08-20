@@ -142,7 +142,7 @@ export function searchOzonCategoryLeaves(tree, query, limit = 60) {
     .trim()
     .toLowerCase()
     .replace(/ё/g, "е");
-  if (q.length < 2) return [];
+  if (q.length < 1) return [];
   const out = [];
 
   function walk(nodes, parentCategoryId, path) {

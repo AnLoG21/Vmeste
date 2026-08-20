@@ -121,7 +121,7 @@ export default function MarketplaceCategoryPicker({
   }
 
   function renderOzonBrowse() {
-    const searching = deferredQuery.trim().length >= 2;
+    const searching = deferredQuery.trim().length >= 1;
     if (searching) {
       return (
         <ul id={listId} className="mp-sselect-list" role="listbox">
@@ -148,7 +148,7 @@ export default function MarketplaceCategoryPicker({
             <span className="muted small">{stack.map((s) => s.title).join(" → ")}</span>
           </div>
         ) : (
-          <p className="muted small mp-cat-hint">Выберите раздел, затем тип. Или поиск от 2 букв.</p>
+          <p className="muted small mp-cat-hint">Выберите раздел, затем тип. Или воспользуйтесь поиском.</p>
         )}
         <ul id={listId} className="mp-sselect-list" role="listbox">
           {currentNodes.map((node, idx) => {
@@ -254,7 +254,7 @@ export default function MarketplaceCategoryPicker({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={
-              isWb ? (parentId ? "Поиск предмета в разделе…" : "Поиск раздела…") : "Поиск типа (от 2 букв)…"
+              isWb ? (parentId ? "Поиск предмета в разделе…" : "Поиск раздела…") : "Поиск типа…"
             }
             aria-label="Поиск категории"
           />
