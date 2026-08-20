@@ -36,9 +36,26 @@ export function normalizeOzonAttributes(payload) {
       required: Boolean(row.is_required ?? row.required),
       description: row.description || "",
       type: row.type || "string",
-      dictionaryId: row.dictionary_id || 0,
+      dictionaryId: Number(row.dictionary_id || 0),
+      dictionary: Boolean(row.dictionary_id),
     }))
     .filter((row) => row.id);
+}
+
+export function normalizeOzonDictionaryValues(payload) {
+  const rows = payload?.result || payload?.values || payload?.data || [];
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row) => ({
+      id: String(row.id ?? row.value_id ?? row.dictionary_value_id ?? ""),
+      label: row.value ?? row.name ?? row.title ?? String(row.id ?? ""),
+    }))
+    .filter((row) => row.id);
+}
+
+export function wbCharcInputType(charcType) {
+  if (charcType === 4) return "number";
+  return "text";
 }
 
 export function flattenWbSubjects(payload) {

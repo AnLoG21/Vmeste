@@ -131,10 +131,22 @@ def build_ozon_item(product: dict) -> dict:
     if product.get("type"):
         item["type_id"] = int(product["type"])
     chars = product.get("characteristics") or {}
+    meta = product.get("characteristics_meta") or {}
     if isinstance(chars, dict) and chars:
-        item["attributes"] = [
-            {"id": int(k), "values": [{"value": str(v)}]} for k, v in chars.items() if v not in (None, "")
-        ]
+        attrs = []
+        for k, v in chars.items():
+            if v in (None, ""):
+                continue
+            m = meta.get(str(k)) or {}
+            if m.get("dictionary"):
+                try:
+                    attrs.append({"id": int(k), "values": [{"dictionary_value_id": int(v)}]})
+                except (TypeError, ValueError):
+                    attrs.append({"id": int(k), "values": [{"value": str(v)}]})
+            else:
+                attrs.append({"id": int(k), "values": [{"value": str(v)}]})
+        if attrs:
+            item["attributes"] = attrs
     if product.get("stock") is not None:
         item["stocks"] = {"stocks": [{"stock": int(product.get("stock") or 0)}]}
     return item
@@ -199,6 +211,7 @@ def parse_ozon_product_item(item: dict) -> dict:
 
     return {
         "offer_id": str(item.get("offer_id") or "").strip(),
+        "vendor_code": str(item.get("offer_id") or item.get("vendor_code") or "").strip(),
         "name": str(item.get("name") or "").strip(),
         "brand": str(item.get("brand") or item.get("brand_name") or "").strip(),
         "price": str(price or ""),
@@ -210,7 +223,112 @@ def parse_ozon_product_item(item: dict) -> dict:
         "characteristics": attrs,
         "images": images,
         "product_id": item.get("product_id") or item.get("id"),
+        "nm_id": item.get("sku") or item.get("nm_id"),
     }
+
+
+def normalize_product_identifiers(product: dict, marketplace: str) -> dict:
+    """Ensure vendor_code / nm_id / product_id are stored in product_data."""
+    data = dict(product or {})
+    offer_id = str(data.get("offer_id") or data.get("wb_sku") or data.get("vendor_code") or "").strip()
+    if offer_id:
+        data["offer_id"] = offer_id
+    if marketplace == "wildberries":
+        data["vendor_code"] = str(data.get("vendor_code") or offer_id).strip()
+        nm = data.get("nm_id") or data.get("nmID") or data.get("nmId")
+        if nm not in (None, ""):
+            data["nm_id"] = int(nm) if str(nm).isdigit() else nm
+    else:
+        pid = data.get("product_id") or data.get("ozon_product_id")
+        if pid not in (None, ""):
+            data["product_id"] = int(pid) if str(pid).isdigit() else pid
+    return data
+
+
+def validate_product_for_import(product: dict, marketplace: str) -> list[str]:
+    errors: list[str] = []
+    offer_id = str(product.get("offer_id") or product.get("wb_sku") or "").strip()
+    name = str(product.get("name") or "").strip()
+    if not offer_id:
+        errors.append("Укажите артикул.")
+    if not name:
+        errors.append("Укажите название.")
+    if marketplace == "wildberries":
+        if not str(product.get("category") or "").strip():
+            errors.append("Выберите предмет Wildberries.")
+    else:
+        if not str(product.get("category") or "").strip():
+            errors.append("Выберите категорию Ozon.")
+        if not str(product.get("type") or "").strip():
+            errors.append("Выберите тип товара Ozon.")
+    req_ids = product.get("required_attributes") or []
+    chars = product.get("characteristics") or {}
+    names = product.get("required_attribute_names") or {}
+    if isinstance(req_ids, list):
+        for aid in req_ids:
+            key = str(aid)
+            val = chars.get(key) if isinstance(chars, dict) else None
+            if val is None and isinstance(chars, dict):
+                val = chars.get(aid)
+            if val is None or str(val).strip() == "":
+                label = names.get(key) or names.get(str(aid)) or key
+                errors.append(f"Заполните обязательную характеристику «{label}».")
+    if not normalize_marketplace_images(product):
+        errors.append("Добавьте хотя бы одно фото с публичным URL.")
+    return errors
+
+
+def fetch_wb_nm_id(provider, settings_obj: MarketplaceSettings, vendor_code: str) -> int | None:
+    vendor_code = (vendor_code or "").strip()
+    if not vendor_code:
+        return None
+    try:
+        resp = request_json(
+            provider=provider,
+            marketplace="wb",
+            method="POST",
+            url=WB_ACTIONS["products.list"][1],
+            headers=wb_headers(settings_obj),
+            json_body={
+                "settings": {
+                    "cursor": {"limit": 50},
+                    "filter": {"textSearch": vendor_code, "withPhoto": -1},
+                }
+            },
+        )
+    except MarketplaceError:
+        return None
+    cards = resp.get("cards") or (resp.get("data") or {}).get("cards") or []
+    for card in cards:
+        if not isinstance(card, dict):
+            continue
+        variant = (card.get("variants") or [{}])[0]
+        vc = str(variant.get("vendorCode") or card.get("vendorCode") or "").strip()
+        if vc == vendor_code:
+            nm = card.get("nmID") or card.get("nmId")
+            if nm is not None:
+                try:
+                    return int(nm)
+                except (TypeError, ValueError):
+                    return None
+    return None
+
+
+def apply_import_identifiers_to_history(hist, marketplace: str, summary_items: list | None = None, nm_id=None) -> None:
+    pdata = dict(hist.product_data or {})
+    if marketplace == "wildberries":
+        pdata["vendor_code"] = str(pdata.get("vendor_code") or hist.offer_id or "").strip()
+        if nm_id is not None:
+            pdata["nm_id"] = nm_id
+    elif summary_items:
+        for item in summary_items:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("offer_id") or "") == str(hist.offer_id) and item.get("product_id") is not None:
+                pdata["product_id"] = item.get("product_id")
+                break
+    hist.product_data = normalize_product_identifiers(pdata, marketplace)
+    hist.save(update_fields=["product_data"])
 
 
 def summarize_ozon_import_status(data: dict) -> dict:
@@ -251,6 +369,7 @@ def summarize_ozon_import_status(data: dict) -> dict:
 OZON_ACTIONS = {
     "categories.tree": ("POST", f"{OZON_BASE}/v1/description-category/tree"),
     "categories.attributes": ("POST", f"{OZON_BASE}/v1/description-category/attribute"),
+    "categories.attribute_values": ("POST", f"{OZON_BASE}/v1/description-category/attribute/values"),
     "barcode.add": ("POST", f"{OZON_BASE}/v1/barcode/add"),
     "barcode.generate": ("POST", f"{OZON_BASE}/v1/barcode/generate"),
     "products.import": ("POST", f"{OZON_BASE}/v3/product/import"),

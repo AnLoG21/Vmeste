@@ -16,11 +16,15 @@ from .clients import (
     build_ozon_item,
     build_wb_card,
     normalize_marketplace_images,
+    normalize_product_identifiers,
     ozon_headers,
     parse_ozon_product_item,
     request_json,
     resolve_url,
     summarize_ozon_import_status,
+    validate_product_for_import,
+    fetch_wb_nm_id,
+    apply_import_identifiers_to_history,
     wb_headers,
 )
 from .models import MarketplaceProductHistory, MarketplaceSettings, MarketplaceTemplate
@@ -119,11 +123,15 @@ def _is_video_upload(upload) -> bool:
 
 def _history_item(row: MarketplaceProductHistory) -> dict:
     resp = row.response if isinstance(row.response, dict) else {}
+    product = row.product_data if isinstance(row.product_data, dict) else {}
     return {
         "id": row.id,
         "marketplace": row.marketplace,
         "offer_id": row.offer_id,
-        "product": row.product_data,
+        "vendor_code": product.get("vendor_code") or row.offer_id,
+        "nm_id": product.get("nm_id"),
+        "product_id": product.get("product_id"),
+        "product": product,
         "status": row.status,
         "response": row.response,
         "import_task_id": resp.get("task_id"),
@@ -306,16 +314,22 @@ class MarketplaceImportView(APIView):
             return Response({"detail": "Не больше 100 товаров за раз."}, status=400)
 
         s = _settings(provider)
+        mp_key = "wildberries" if marketplace == "wildberries" else "ozon"
         results = []
         for product in products:
+            product = normalize_product_identifiers(dict(product), mp_key)
             offer_id = str(product.get("offer_id") or product.get("wb_sku") or "").strip()
             name = str(product.get("name") or "").strip()
+            validation_errors = validate_product_for_import(product, mp_key)
+            if validation_errors:
+                results.append({"offer_id": offer_id, "ok": False, "error": " ".join(validation_errors[:3])})
+                continue
             if not offer_id or not name:
                 results.append({"offer_id": offer_id, "ok": False, "error": "Нужны артикул и название."})
                 continue
             hist = MarketplaceProductHistory.objects.create(
                 provider=provider,
-                marketplace="wildberries" if marketplace == "wildberries" else "ozon",
+                marketplace=mp_key,
                 offer_id=offer_id,
                 product_data=product,
                 status="pending",
@@ -341,7 +355,17 @@ class MarketplaceImportView(APIView):
                     hist.status = "success"
                     hist.response = resp
                     hist.save(update_fields=["status", "response"])
-                    results.append({"offer_id": offer_id, "ok": True, "id": hist.id, "response": resp})
+                    nm_id = fetch_wb_nm_id(provider, s, offer_id)
+                    apply_import_identifiers_to_history(hist, "wildberries", nm_id=nm_id)
+                    results.append(
+                        {
+                            "offer_id": offer_id,
+                            "ok": True,
+                            "id": hist.id,
+                            "nm_id": nm_id,
+                            "response": resp,
+                        }
+                    )
                 else:
                     payload = {"items": [build_ozon_item(product)]}
                     resp = request_json(
@@ -501,6 +525,7 @@ class MarketplaceImportStatusView(APIView):
             else:
                 hist.status = "pending"
             hist.save(update_fields=["status", "response"])
+            apply_import_identifiers_to_history(hist, "ozon", summary_items=summary["items"])
         return Response(
             {
                 "task_id": int(task_id),
@@ -551,6 +576,7 @@ class MarketplaceProductFetchView(APIView):
                 images = [{"url": u, "public_url": u} for u in media if isinstance(u, str) and u.startswith("http")]
                 product = {
                     "offer_id": variant.get("vendorCode") or offer_id,
+                    "vendor_code": variant.get("vendorCode") or offer_id,
                     "name": variant.get("title") or card.get("title") or "",
                     "brand": variant.get("brand") or card.get("brand") or "",
                     "price": str((variant.get("sizes") or [{}])[0].get("price") or ""),

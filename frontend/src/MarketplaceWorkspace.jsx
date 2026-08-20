@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./marketplaceWorkspace.css";
 import { renderProductCardVideo } from "./productCardVideo.js";
 import {
   flattenOzonCategoryOptions,
   flattenWbSubjects,
   normalizeOzonAttributes,
+  normalizeOzonDictionaryValues,
   normalizeWbCharacteristics,
+  wbCharcInputType,
 } from "./marketplaceCategoryHelpers.js";
 
 const TABS = [
@@ -175,6 +177,46 @@ function importStatusLabel(row) {
   return row.status || "—";
 }
 
+function formatMarketplaceId(value) {
+  if (value == null || value === "") return "—";
+  return String(value);
+}
+
+function validateProductForImport(row, marketplace, fields) {
+  const errors = [];
+  const offerId = String(row.offer_id || row.wb_sku || "").trim();
+  const name = String(row.name || "").trim();
+  if (!offerId) errors.push("Укажите артикул.");
+  if (!name) errors.push("Укажите название.");
+  if (marketplace === "wildberries") {
+    if (!String(row.category || "").trim()) errors.push("Выберите предмет Wildberries.");
+  } else {
+    if (!String(row.category || "").trim()) errors.push("Выберите категорию Ozon.");
+    if (!String(row.type || "").trim()) errors.push("Выберите тип товара Ozon.");
+  }
+  for (const field of fields.filter((f) => f.required)) {
+    const val = row.characteristics?.[field.id];
+    if (val == null || String(val).trim() === "") {
+      errors.push(`Заполните «${field.name}».`);
+    }
+  }
+  const images = (Array.isArray(row.images) ? row.images : [])
+    .filter((x) => (typeof x === "string" ? true : x?.kind !== "video"))
+    .map((x) => publicUrlFor(x))
+    .filter(Boolean);
+  if (!images.length) errors.push("Добавьте хотя бы одно фото с публичным URL.");
+  return errors;
+}
+
+function marketplaceIdsFromRow(row) {
+  const product = row?.product || {};
+  return {
+    vendorCode: row?.vendor_code || product.vendor_code || row?.offer_id || product.offer_id || "",
+    nmId: row?.nm_id ?? product.nm_id ?? product.nmID ?? product.nmId ?? "",
+    productId: row?.product_id ?? product.product_id ?? product.ozon_product_id ?? "",
+  };
+}
+
 export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [tab, setTab] = useState("create");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -197,20 +239,23 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [search, setSearch] = useState("");
   const [live, setLive] = useState(null);
   const [warehouseId, setWarehouseId] = useState("");
-  const [priceStock, setPriceStock] = useState({ offer_id: "", price: "", stock: "" });
+  const [priceStock, setPriceStock] = useState({ offer_id: "", nm_id: "", price: "", stock: "" });
   const [templateForm, setTemplateForm] = useState({ name: "", brand: "", description_text: "", price: "", stock: "0" });
   const [aiFeatures, setAiFeatures] = useState("");
   const [viewer, setViewer] = useState(null);
   const [dotsTick, setDotsTick] = useState(0);
   const [categoryOptions, setCategoryOptions] = useState([]);
   const [attributeFields, setAttributeFields] = useState([]);
+  const [attributeDictOptions, setAttributeDictOptions] = useState({});
   const [categoryQuery, setCategoryQuery] = useState("");
   const [attributesHint, setAttributesHint] = useState("");
   const [editingHistoryId, setEditingHistoryId] = useState(null);
+  const keysFormDirtyRef = useRef(false);
 
   useEffect(() => {
     setCategoryOptions([]);
     setAttributeFields([]);
+    setAttributeDictOptions({});
     setCategoryQuery("");
     setAttributesHint("");
   }, [mp]);
@@ -229,20 +274,35 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const base = `${API_URL}/marketplaces`;
   const liveRows = useMemo(() => extractRecords(live), [live]);
 
-  const loadSettings = useCallback(async () => {
-    const res = await authFetch(`${base}/settings/`);
-    if (!res.ok) return;
-    const data = await res.json();
-    setSettings(data);
-    setKeysForm((prev) => ({
-      ...prev,
+  const hydrateKeysForm = useCallback((data) => {
+    setKeysForm({
       ozon_client_id: data.ozon_client_id || "",
       environment: data.environment || "sandbox",
       ozon_api_key: data.has_ozon_api_key ? "••••••••" : "",
       wb_api_key: data.has_wb_api_key ? "••••••••" : "",
       yandex_disk_token: data.has_yandex_disk ? "••••••••" : "",
-    }));
-  }, [authFetch, base]);
+    });
+    keysFormDirtyRef.current = false;
+  }, []);
+
+  const loadSettings = useCallback(
+    async ({ syncForm = false } = {}) => {
+      const res = await authFetch(`${base}/settings/`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setSettings(data);
+      // Do not wipe keys the user is typing when settings re-fetch (authFetch churn).
+      if (syncForm || !keysFormDirtyRef.current) {
+        hydrateKeysForm(data);
+      }
+    },
+    [authFetch, base, hydrateKeysForm],
+  );
+
+  function updateKeysForm(patch) {
+    keysFormDirtyRef.current = true;
+    setKeysForm((prev) => ({ ...prev, ...patch }));
+  }
 
   const loadHistory = useCallback(async () => {
     const q = search ? `&q=${encodeURIComponent(search)}` : "";
@@ -278,7 +338,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     const next = new URL(window.location.href);
     next.searchParams.delete("disk");
     window.history.replaceState({}, document.title, `${next.pathname}${next.search}${next.hash}`);
-    loadSettings().catch(() => {});
+    loadSettings({ syncForm: true }).catch(() => {});
   }, [loadSettings]);
 
   async function readError(res) {
@@ -331,7 +391,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       }
       const res = await authFetch(`${base}/settings/`, { method: "PATCH", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await readError(res));
-      await loadSettings();
+      await loadSettings({ syncForm: true });
       setStatus("Ключи сохранены.");
     });
   }
@@ -341,8 +401,18 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       .filter((x) => (typeof x === "string" ? true : x?.kind !== "video"))
       .map((x) => publicUrlFor(x))
       .filter(Boolean);
+    const requiredIds = attributeFields.filter((f) => f.required).map((f) => f.id);
+    const requiredNames = {};
+    const characteristicsMeta = {};
+    for (const field of attributeFields) {
+      if (field.required) requiredNames[field.id] = field.name;
+      if (field.dictionaryId || field.dictionary) {
+        characteristicsMeta[field.id] = { dictionary: true };
+      }
+    }
     return {
       offer_id: row.offer_id,
+      vendor_code: row.vendor_code || row.offer_id,
       name: row.name,
       brand: row.brand,
       price: row.price,
@@ -352,9 +422,14 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       category: row.category,
       type: row.type,
       characteristics: row.characteristics || {},
+      required_attributes: requiredIds,
+      required_attribute_names: requiredNames,
+      characteristics_meta: characteristicsMeta,
       images,
       wb_sku: row.offer_id,
       wb_images: images,
+      nm_id: row.nm_id,
+      product_id: row.product_id,
     };
   }
 
@@ -418,11 +493,15 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   async function submitOne(e) {
     e.preventDefault();
     await withBusy("create", async () => {
-      if (!product.offer_id || !product.name) throw new Error("Нужны артикул и название.");
+      const validationErrors = validateProductForImport(product, mp, attributeFields);
+      if (validationErrors.length) {
+        throw new Error(validationErrors.slice(0, 4).join(" "));
+      }
       await importProducts([productPayload(product)]);
       setProduct(emptyProduct());
       setEditingHistoryId(null);
       setAttributeFields([]);
+      setAttributeDictOptions({});
       setAttributesHint("");
     });
   }
@@ -466,9 +545,35 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     });
   }
 
+  async function loadOzonDictionaryOptions(categoryId, typeId, fields) {
+    const dictFields = fields.filter((f) => f.dictionaryId);
+    if (!dictFields.length) {
+      setAttributeDictOptions({});
+      return;
+    }
+    const next = {};
+    for (const field of dictFields) {
+      try {
+        const data = await mpCall("categories.attribute_values", {
+          attribute_id: Number(field.id),
+          description_category_id: Number(categoryId),
+          type_id: Number(typeId),
+          language: "DEFAULT",
+          limit: 200,
+          last_value_id: 0,
+        });
+        next[field.id] = normalizeOzonDictionaryValues(data);
+      } catch {
+        next[field.id] = [];
+      }
+    }
+    setAttributeDictOptions(next);
+  }
+
   async function loadAttributesForCategory(categoryId, typeId = "") {
     if (!categoryId) {
       setAttributeFields([]);
+      setAttributeDictOptions({});
       setAttributesHint("");
       return;
     }
@@ -482,11 +587,13 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         if (data?.sandbox) throw new Error(data.message || "Песочница.");
         const fields = normalizeWbCharacteristics(data);
         setAttributeFields(fields);
+        setAttributeDictOptions({});
         setAttributesHint(fields.length ? `Характеристик WB: ${fields.length}` : "Для предмета нет характеристик.");
         return;
       }
       if (!typeId) {
         setAttributeFields([]);
+        setAttributeDictOptions({});
         setAttributesHint("Для Ozon выберите категорию с типом товара.");
         return;
       }
@@ -499,17 +606,20 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       const fields = normalizeOzonAttributes(data);
       setAttributeFields(fields);
       setAttributesHint(fields.length ? `Характеристик Ozon: ${fields.length}` : "Для категории нет характеристик.");
+      await loadOzonDictionaryOptions(categoryId, typeId, fields);
     });
   }
 
   function onOzonCategoryPick(value) {
     const [categoryId, typeId] = String(value || "").split(":");
     setProduct((p) => ({ ...p, category: categoryId || "", type: typeId || "", characteristics: {} }));
+    setAttributeDictOptions({});
     loadAttributesForCategory(categoryId, typeId).catch(() => {});
   }
 
   function onWbCategoryPick(value) {
     setProduct((p) => ({ ...p, category: value || "", type: "", characteristics: {} }));
+    setAttributeDictOptions({});
     loadAttributesForCategory(value).catch(() => {});
   }
 
@@ -733,18 +843,26 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         body: JSON.stringify({ yandex_disk_token: "" }),
       });
       if (!res.ok) throw new Error(await readError(res));
-      await loadSettings();
+      await loadSettings({ syncForm: true });
       setStatus("Яндекс Диск отключён.");
     });
   }
 
   async function applyPricesStocks() {
     await withBusy("prices", async () => {
-      if (!priceStock.offer_id) throw new Error("Укажите артикул.");
+      if (!priceStock.offer_id && !priceStock.nm_id) throw new Error("Укажите артикул или nmID.");
       if (priceStock.price) {
         const payload =
           mp === "wildberries"
-            ? { data: [{ nmID: Number(priceStock.offer_id) || priceStock.offer_id, price: Number(priceStock.price), discount: 0 }] }
+            ? {
+                data: [
+                  {
+                    nmID: Number(priceStock.nm_id || priceStock.offer_id),
+                    price: Number(priceStock.price),
+                    discount: 0,
+                  },
+                ],
+              }
             : {
                 prices: [
                   {
@@ -778,16 +896,31 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     });
   }
 
-  async function deleteProduct(offerId) {
-    if (!window.confirm(`Удалить карточку ${offerId} на площадке?`)) return;
+  async function deleteProduct(row) {
+    const ids = typeof row === "object" ? marketplaceIdsFromRow(row) : { vendorCode: row, nmId: "", productId: "" };
+    const label = ids.vendorCode || ids.nmId || ids.productId || "товар";
+    if (!window.confirm(`Удалить карточку ${label} на площадке?`)) return;
     await withBusy("delete", async () => {
       const payload =
         mp === "wildberries"
-          ? { nmIDs: [Number(offerId) || offerId] }
-          : { product_id: [Number(offerId) || offerId] };
+          ? { nmIDs: [Number(ids.nmId || ids.vendorCode)] }
+          : { product_id: [Number(ids.productId || ids.vendorCode)] };
       showLive(await mpCall("products.delete", payload));
       setStatus("Запрос на удаление отправлен.");
     });
+  }
+
+  function fillPriceStockFromHistory(row) {
+    const ids = marketplaceIdsFromRow(row);
+    setPriceStock({
+      offer_id: ids.vendorCode,
+      nm_id: ids.nmId ? String(ids.nmId) : "",
+      price: row.product?.price != null ? String(row.product.price) : "",
+      stock: row.product?.stock != null ? String(row.product.stock) : "",
+    });
+    setTab("manage");
+    setMenuOpen(false);
+    setStatus(`Подставлены данные для ${ids.vendorCode || ids.nmId || "товара"}.`);
   }
 
   function productFromHistory(row) {
@@ -804,6 +937,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     });
     return {
       offer_id: p.offer_id || row.offer_id || "",
+      vendor_code: p.vendor_code || row.vendor_code || p.offer_id || row.offer_id || "",
+      nm_id: p.nm_id ?? row.nm_id,
+      product_id: p.product_id ?? row.product_id,
       name: p.name || "",
       brand: p.brand || "",
       price: p.price != null ? String(p.price) : "",
@@ -981,12 +1117,18 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const envLabel = settings?.environment === "prod" ? "Боевой режим" : "Песочница";
   const filteredHistory = useMemo(
     () =>
-      history.filter(
-        (h) =>
-          !search ||
-          String(h.offer_id || "").toLowerCase().includes(search.toLowerCase()) ||
-          String(h.product?.name || "").toLowerCase().includes(search.toLowerCase()),
-      ),
+      history.filter((h) => {
+        if (!search) return true;
+        const q = search.toLowerCase();
+        const ids = marketplaceIdsFromRow(h);
+        return (
+          String(h.offer_id || "").toLowerCase().includes(q) ||
+          String(h.product?.name || "").toLowerCase().includes(q) ||
+          String(ids.vendorCode || "").toLowerCase().includes(q) ||
+          String(ids.nmId || "").includes(q) ||
+          String(ids.productId || "").includes(q)
+        );
+      }),
     [history, search],
   );
   const tabLabel = TABS.find(([id]) => id === tab)?.[1] || "";
@@ -1123,18 +1265,35 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 {attributesHint ? <p className="muted small">{attributesHint}</p> : null}
                 {attributeFields.length ? (
                   <div className="mp-attrs-grid">
-                    {attributeFields.map((field) => (
-                      <label key={field.id}>
-                        {field.name}
-                        {field.required ? " *" : ""}
-                        {field.unit ? ` (${field.unit})` : ""}
-                        <input
-                          value={product.characteristics?.[field.id] || ""}
-                          onChange={(e) => setCharacteristic(field.id, e.target.value)}
-                          placeholder={field.required ? "Обязательно" : "Необязательно"}
-                        />
-                      </label>
-                    ))}
+                    {attributeFields.map((field) => {
+                      const value = product.characteristics?.[field.id] || "";
+                      const dictOptions = attributeDictOptions[field.id] || [];
+                      const inputType = mp === "wildberries" ? wbCharcInputType(field.charcType) : "text";
+                      return (
+                        <label key={field.id}>
+                          {field.name}
+                          {field.required ? " *" : ""}
+                          {field.unit ? ` (${field.unit})` : ""}
+                          {field.dictionaryId && dictOptions.length ? (
+                            <select value={value} onChange={(e) => setCharacteristic(field.id, e.target.value)}>
+                              <option value="">{field.required ? "Выберите значение" : "Необязательно"}</option>
+                              {dictOptions.map((opt) => (
+                                <option key={opt.id} value={opt.id}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type={inputType}
+                              value={value}
+                              onChange={(e) => setCharacteristic(field.id, e.target.value)}
+                              placeholder={field.required ? "Обязательно" : "Необязательно"}
+                            />
+                          )}
+                        </label>
+                      );
+                    })}
                   </div>
                 ) : null}
                 {requiredAttributeCount ? (
@@ -1227,6 +1386,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                     setProduct(emptyProduct());
                     setEditingHistoryId(null);
                     setAttributeFields([]);
+                    setAttributeDictOptions({});
                     setAttributesHint("");
                   }}
                 >
@@ -1285,7 +1445,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       {tab === "products" && (
         <div>
           <div className="mp-actions">
-            <input placeholder="Поиск по артикулу" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input placeholder="Поиск по артикулу, vendorCode, nmID" value={search} onChange={(e) => setSearch(e.target.value)} />
             <button type="button" className="ghost-btn" onClick={loadHistory}>
               Обновить историю
             </button>
@@ -1306,6 +1466,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               <thead>
                 <tr>
                   <th>Артикул</th>
+                  <th>vendorCode</th>
+                  {mp === "wildberries" ? <th>nmID</th> : <th>product_id</th>}
                   <th>Название</th>
                   <th>Цена</th>
                   <th>Остаток</th>
@@ -1315,9 +1477,13 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 </tr>
               </thead>
               <tbody>
-                {filteredHistory.map((row) => (
+                {filteredHistory.map((row) => {
+                  const ids = marketplaceIdsFromRow(row);
+                  return (
                   <tr key={row.id}>
                     <td>{row.offer_id}</td>
+                    <td>{formatMarketplaceId(ids.vendorCode)}</td>
+                    <td>{formatMarketplaceId(mp === "wildberries" ? ids.nmId : ids.productId)}</td>
                     <td>{row.product?.name || "—"}</td>
                     <td>{row.product?.price || "—"}</td>
                     <td>{row.product?.stock ?? "—"}</td>
@@ -1337,17 +1503,21 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                       <button type="button" className="ghost-btn" onClick={() => openEditorFromHistory(row)}>
                         Редактировать
                       </button>
+                      <button type="button" className="ghost-btn" onClick={() => fillPriceStockFromHistory(row)}>
+                        Цены
+                      </button>
                       {mp === "ozon" && row.import_task_id ? (
                         <button type="button" className="ghost-btn" disabled={busy === "import-status"} onClick={() => checkImportStatus(row)}>
                           Статус импорта
                         </button>
                       ) : null}
-                      <button type="button" className="ghost-btn" onClick={() => deleteProduct(row.offer_id)}>
+                      <button type="button" className="ghost-btn" onClick={() => deleteProduct(row)}>
                         Удалить
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
             {!filteredHistory.length ? <p className="muted">Пока нет выгрузок. Создайте карточку в меню «Создать товар».</p> : null}
@@ -1385,22 +1555,22 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             <div className="cafe-form-grid">
               <label>
                 Режим
-                <select value={keysForm.environment} onChange={(e) => setKeysForm((p) => ({ ...p, environment: e.target.value }))}>
+                <select value={keysForm.environment} onChange={(e) => updateKeysForm({ environment: e.target.value })}>
                   <option value="sandbox">Песочница (без реальных вызовов на запись)</option>
                   <option value="prod">Боевой</option>
                 </select>
               </label>
               <label>
                 Ozon Client ID
-                <input value={keysForm.ozon_client_id} onChange={(e) => setKeysForm((p) => ({ ...p, ozon_client_id: e.target.value }))} />
+                <input value={keysForm.ozon_client_id} onChange={(e) => updateKeysForm({ ozon_client_id: e.target.value })} />
               </label>
               <label>
                 Ozon API Key
-                <input type="password" autoComplete="off" value={keysForm.ozon_api_key} onChange={(e) => setKeysForm((p) => ({ ...p, ozon_api_key: e.target.value }))} />
+                <input type="password" autoComplete="off" value={keysForm.ozon_api_key} onChange={(e) => updateKeysForm({ ozon_api_key: e.target.value })} />
               </label>
               <label>
                 Wildberries API Key
-                <input type="password" autoComplete="off" value={keysForm.wb_api_key} onChange={(e) => setKeysForm((p) => ({ ...p, wb_api_key: e.target.value }))} />
+                <input type="password" autoComplete="off" value={keysForm.wb_api_key} onChange={(e) => updateKeysForm({ wb_api_key: e.target.value })} />
               </label>
               <div className="cafe-form-span2 mp-disk-row">
                 <span>Яндекс Диск</span>
@@ -1426,9 +1596,15 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             <h3>Цены, остатки, склады</h3>
             <div className="cafe-form-grid">
               <label>
-                Артикул
+                Артикул (vendorCode)
                 <input value={priceStock.offer_id} onChange={(e) => setPriceStock((p) => ({ ...p, offer_id: e.target.value }))} />
               </label>
+              {mp === "wildberries" ? (
+                <label>
+                  nmID (для цен/удаления)
+                  <input value={priceStock.nm_id} onChange={(e) => setPriceStock((p) => ({ ...p, nm_id: e.target.value }))} />
+                </label>
+              ) : null}
               <label>
                 Цена
                 <input value={priceStock.price} onChange={(e) => setPriceStock((p) => ({ ...p, price: e.target.value }))} />
