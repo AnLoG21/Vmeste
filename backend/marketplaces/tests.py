@@ -9,6 +9,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from marketplaces.clients import (
     build_ozon_item,
     generate_local_ean13,
+    humanize_api_error,
     normalize_marketplace_images,
     normalize_product_identifiers,
     validate_product_for_import,
@@ -63,6 +64,24 @@ class MarketplaceClientHelpersTests(SimpleTestCase):
         data = normalize_product_identifiers({"offer_id": "A1", "nmID": "123"}, "wildberries")
         self.assertEqual(data["vendor_code"], "A1")
         self.assertEqual(data["nm_id"], 123)
+
+    def test_humanize_rate_limit(self):
+        msg = humanize_api_error("rate limit exceeded for `seller-api` client, current max rate per sec.: 2", 429)
+        self.assertIn("2/сек", msg)
+
+    def test_humanize_reviews_subscription(self):
+        msg = humanize_api_error(
+            "ReviewList error: rpc error: code = PermissionDenied desc = not available with existing subscription",
+            403,
+        )
+        self.assertIn("тариф", msg.lower())
+
+    def test_validate_requires_photo(self):
+        errs = validate_product_for_import(
+            {"offer_id": "A", "name": "N", "category": "1", "type": "2", "images": []},
+            "ozon",
+        )
+        self.assertTrue(any("фото" in e.lower() for e in errs))
 
 
 class MarketplaceApiTests(TestCase):

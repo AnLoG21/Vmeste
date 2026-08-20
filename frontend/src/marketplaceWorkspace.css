@@ -114,15 +114,62 @@
   gap: 8px;
 }
 
-.mp-csv-block {
+.mp-kebab-menu-fixed {
+  position: fixed;
+  z-index: 10050;
+  min-width: 200px;
+}
+
+.mp-help-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.mp-help-card {
+  background: #f5f8fc;
+  border: 1px solid #e2eaf3;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.mp-help-card p {
+  margin: 6px 0 0;
+  font-size: 0.9rem;
+  color: #3a4658;
+}
+
+.mp-templates-block {
   margin-top: 18px;
   padding-top: 14px;
   border-top: 1px solid #e6edf5;
 }
 
-.mp-csv-block h3 {
+.mp-templates-block h4 {
   margin: 0 0 6px;
 }
+
+.mp-csv-block {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e6edf5;
+}
+
+.mp-csv-block h3,
+.mp-csv-block h4 {
+  margin: 0;
+}
+
+.mp-csv-block .mp-csv-area {
+  width: 100%;
+  display: block;
+}
+
 
 .mp-csv-area {
   width: 100%;

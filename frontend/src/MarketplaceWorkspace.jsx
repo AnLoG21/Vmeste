@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import "./marketplaceWorkspace.css";
 import { renderProductCardVideo } from "./productCardVideo.js";
 import {
@@ -109,6 +110,35 @@ function PlusIcon() {
       <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
     </svg>
   );
+}
+
+function humanizeMarketplaceError(raw, status) {
+  const text = String(raw || "").trim();
+  const low = text.toLowerCase();
+  const code = Number(status) || 0;
+  if (code === 429 || low.includes("rate limit") || low.includes("max rate") || low.includes("too many requests")) {
+    return "Слишком частые запросы к площадке (лимит ~2/сек). Подождите пару секунд и повторите.";
+  }
+  if (
+    low.includes("permissiondenied") ||
+    low.includes("permission denied") ||
+    low.includes("not available with existing subscription") ||
+    (low.includes("subscription") && (low.includes("not available") || low.includes("rpc error")))
+  ) {
+    return "Раздел недоступен на тарифе кабинета продавца (часто отзывы Premium). Проверьте подписку в Ozon/WB.";
+  }
+  if (low.includes("раздел недоступен") || low.includes("слишком частые")) return text;
+  if (code === 401 || low.includes("unauthorized") || low.includes("invalid api")) {
+    return "Ключ API отклонён. Проверьте ключи в Управлении и боевой режим.";
+  }
+  if (code === 403 || low.includes("forbidden")) {
+    return "Нет доступа к методу API. Проверьте права ключа и тариф площадки.";
+  }
+  if (low.includes("desc =")) {
+    const parts = text.split(/desc\s*=/i);
+    if (parts[1]) return parts[1].trim().slice(0, 400);
+  }
+  return text || "Ошибка площадки";
 }
 
 function daysAgoIso(days) {
@@ -386,14 +416,20 @@ function validateProductForImport(row, marketplace, fields) {
   for (const field of fields.filter((f) => f.required)) {
     const val = row.characteristics?.[field.id];
     if (val == null || String(val).trim() === "") {
-      errors.push(`Заполните «${field.name}».`);
+      errors.push(`Заполните обязательную характеристику «${field.name}».`);
     }
+  }
+  const price = String(row.price ?? "").trim();
+  if (price && Number.isNaN(Number(price.replace(",", ".")))) {
+    errors.push("Цена должна быть числом.");
   }
   const images = (Array.isArray(row.images) ? row.images : [])
     .filter((x) => (typeof x === "string" ? true : x?.kind !== "video"))
     .map((x) => publicUrlFor(x))
     .filter(Boolean);
-  if (!images.length) errors.push("Добавьте хотя бы одно фото с публичным URL.");
+  if (!images.length) {
+    errors.push("Добавьте хотя бы одно фото (публичный HTTPS URL — Яндекс Диск или загрузка в кабинете).");
+  }
   return errors;
 }
 
@@ -439,6 +475,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [supplyName, setSupplyName] = useState("");
   const [selectedSupplyId, setSelectedSupplyId] = useState("");
   const [rowMenuId, setRowMenuId] = useState(null);
+  const [rowMenuPos, setRowMenuPos] = useState(null);
   const [priceStock, setPriceStock] = useState({ offer_id: "", nm_id: "", price: "", stock: "" });
   const [bulkRows, setBulkRows] = useState([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
   const [bulkCsv, setBulkCsv] = useState("offer_id,price,stock\nSKU-1,1290,10\nSKU-2,990,5");
@@ -481,6 +518,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     setSupplyName("");
     setWarehouseId(readStoredWarehouse(mp));
     setRowMenuId(null);
+    setRowMenuPos(null);
     setLive(null);
   }, [mp]);
 
@@ -492,15 +530,20 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
 
   useEffect(() => {
     if (!rowMenuId) return undefined;
-    const close = () => setRowMenuId(null);
+    const close = () => {
+      setRowMenuId(null);
+      setRowMenuPos(null);
+    };
     const onKey = (e) => {
       if (e.key === "Escape") close();
     };
     window.addEventListener("click", close);
     window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", close, true);
     return () => {
       window.removeEventListener("click", close);
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, true);
     };
   }, [rowMenuId]);
 
@@ -602,7 +645,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
 
   async function readError(res) {
     const data = await res.json().catch(() => ({}));
-    return data.detail || data.error || `Ошибка ${res.status}`;
+    return humanizeMarketplaceError(data.detail || data.error || data.message || `Ошибка ${res.status}`, res.status);
   }
 
   async function mpCall(action, payload = {}, params = {}) {
@@ -611,7 +654,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       body: JSON.stringify({ marketplace: mp, action, payload, params }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || "Ошибка площадки");
+    if (!res.ok) throw new Error(humanizeMarketplaceError(data.detail || data.message || "Ошибка площадки", res.status));
     return data;
   }
 
@@ -632,7 +675,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     try {
       await fn();
     } catch (err) {
-      setStatus(err?.message || "Не удалось выполнить запрос.");
+      setStatus(humanizeMarketplaceError(err?.message || "Не удалось выполнить запрос."));
     } finally {
       setBusy("");
     }
@@ -713,7 +756,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || "Не удалось получить статус импорта.");
+    if (!res.ok) throw new Error(humanizeMarketplaceError(data.detail || "Не удалось получить статус импорта.", res.status));
     await loadHistory();
     return data;
   }
@@ -730,7 +773,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         }
         if (status === "failed") {
           const err = (data.items || []).map((x) => x.errors).filter(Boolean).join("; ");
-          setStatus(err ? `Ozon: ошибка импорта — ${err}` : "Ozon: ошибка импорта.");
+          setStatus(err ? `Ozon: ошибка импорта — ${humanizeMarketplaceError(err)}` : "Ozon: ошибка импорта.");
           return;
         }
       } catch {
@@ -746,10 +789,10 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       body: JSON.stringify({ marketplace: mp, products }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || "Не удалось выгрузить товары.");
+    if (!res.ok) throw new Error(humanizeMarketplaceError(data.detail || "Не удалось выгрузить товары.", res.status));
     const failed = (data.results || []).filter((r) => !r.ok);
     if (failed.length) {
-      const msg = failed[0]?.error || failed[0]?.detail || "Ошибка выгрузки.";
+      const msg = humanizeMarketplaceError(failed[0]?.error || failed[0]?.detail || "Ошибка выгрузки.");
       setStatus(`Не удалось выгрузить: ${msg}`);
     } else {
       setStatus(`Выгружено: ${data.ok} из ${data.total}.`);
@@ -1371,6 +1414,65 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       setLive(null);
       setStatus(rows.length ? `С площадки получено карточек: ${rows.length}` : "На площадке товаров не найдено.");
     });
+  }
+
+  async function syncCatalogFromMarketplace() {
+    await withBusy("catalog-sync", async () => {
+      const res = await authFetch(`${base}/products/sync-catalog/`, {
+        method: "POST",
+        body: JSON.stringify({ marketplace: mp, limit: 50 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(humanizeMarketplaceError(data.detail || data.message || `Ошибка ${res.status}`, res.status));
+      await loadHistory();
+      setStatus(
+        `Каталог подтянут: новых ${data.created || 0}, обновлено ${data.updated || 0}` +
+          (data.skipped ? `, пропущено ${data.skipped}` : "") +
+          ".",
+      );
+    });
+  }
+
+  function cloneProductToOtherMp() {
+    const target = mp === "wildberries" ? "ozon" : "wildberries";
+    const snapshot = {
+      ...emptyProduct(),
+      offer_id: product.offer_id,
+      vendor_code: product.vendor_code || product.offer_id,
+      name: product.name,
+      brand: product.brand,
+      price: product.price,
+      stock: product.stock,
+      description: product.description,
+      barcode: product.barcode,
+      images: Array.isArray(product.images) ? product.images.map((img) => ({ ...img })) : [],
+    };
+    setMp(target);
+    setProduct(snapshot);
+    setEditingHistoryId(null);
+    setAttributeFields([]);
+    setAttributeMirrors([]);
+    setAttributeDictOptions({});
+    setAttributesHint("");
+    setCategoryOptions([]);
+    setOzonCategoryTree([]);
+    setWbParents([]);
+    setTab("create");
+    setStatus(
+      `Карточка скопирована на ${target === "ozon" ? "Ozon" : "Wildberries"}. Выберите категорию этой площадки и нажмите «Выгрузить».`,
+    );
+  }
+
+  function saveCurrentAsTemplate() {
+    setTemplateForm({
+      name: product.name || product.offer_id || "Шаблон",
+      brand: product.brand || "",
+      description_text: product.description || "",
+      price: product.price || "",
+      stock: String(product.stock || "0"),
+    });
+    setTab("manage");
+    setStatus("Заполнена форма шаблона внизу «Управления» — нажмите «Сохранить шаблон».");
   }
 
   async function loadOrders() {
@@ -2158,6 +2260,12 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               <button type="submit" disabled={busy === "create"}>
                 {busy === "create" ? "Выгрузка…" : editingHistoryId ? "Сохранить на площадке" : "Выгрузить"}
               </button>
+              <button type="button" className="mp-btn" disabled={!product.offer_id && !product.name} onClick={cloneProductToOtherMp}>
+                Клонировать на {mp === "ozon" ? "WB" : "Ozon"}
+              </button>
+              <button type="button" className="mp-btn" disabled={!product.name && !product.offer_id} onClick={saveCurrentAsTemplate}>
+                В шаблон
+              </button>
               {editingHistoryId ? (
                 <button
                   type="button"
@@ -2224,16 +2332,24 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               </div>
             </div>
 
-            {templates.length ? (
-              <div className="mp-templates">
-                <h4>Шаблоны</h4>
-                {templates.map((t) => (
-                  <button key={t.id} type="button" className="mp-btn" onClick={() => applyTemplate(t)}>
-                    {t.name}
-                  </button>
-                ))}
-              </div>
-            ) : null}
+            <div className="mp-templates-block">
+              <h4>Шаблоны</h4>
+              <p className="muted small">
+                Шаблон подставляет бренд, цену, остаток и описание в форму слева. Артикул, категорию и фото
+                добавьте сами. Новые шаблоны — в «Управление» или кнопкой «В шаблон» у формы создания.
+              </p>
+              {templates.length ? (
+                <div className="mp-templates">
+                  {templates.map((t) => (
+                    <button key={t.id} type="button" className="mp-btn" onClick={() => applyTemplate(t)}>
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted small">Пока нет шаблонов.</p>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -2251,6 +2367,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               <button type="button" className="mp-btn" onClick={loadHistory}>
                 Обновить
               </button>
+              <button type="button" className="mp-btn" disabled={busy === "catalog-sync"} onClick={syncCatalogFromMarketplace}>
+                {busy === "catalog-sync" ? "Тянем…" : "Подтянуть с площадки"}
+              </button>
               <button type="button" className="mp-btn" disabled={!filteredHistory.length} onClick={exportHistoryCsv}>
                 CSV
               </button>
@@ -2258,7 +2377,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 Excel
               </button>
               <button type="button" className="mp-btn" disabled={busy === "live-products"} onClick={loadLiveProducts}>
-                С площадки
+                Список API
               </button>
               <button
                 type="button"
@@ -2322,59 +2441,23 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                             aria-expanded={menuOpenRow}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setRowMenuId(menuOpenRow ? null : row.id);
+                              if (menuOpenRow) {
+                                setRowMenuId(null);
+                                setRowMenuPos(null);
+                                return;
+                              }
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const menuH = 200;
+                              const openUp = rect.bottom + menuH > window.innerHeight - 8;
+                              setRowMenuPos({
+                                top: openUp ? Math.max(8, rect.top - menuH) : rect.bottom + 4,
+                                right: Math.max(8, window.innerWidth - rect.right),
+                              });
+                              setRowMenuId(row.id);
                             }}
                           >
                             ⋮
                           </button>
-                          {menuOpenRow ? (
-                            <div className="mp-kebab-menu" role="menu" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => {
-                                  setRowMenuId(null);
-                                  openEditorFromHistory(row);
-                                }}
-                              >
-                                Редактировать
-                              </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => {
-                                  setRowMenuId(null);
-                                  fillPriceStockFromHistory(row);
-                                }}
-                              >
-                                Цены и остатки
-                              </button>
-                              {mp === "ozon" && row.import_task_id ? (
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  disabled={busy === "import-status"}
-                                  onClick={() => {
-                                    setRowMenuId(null);
-                                    checkImportStatus(row);
-                                  }}
-                                >
-                                  Статус импорта
-                                </button>
-                              ) : null}
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="mp-kebab-danger"
-                                onClick={() => {
-                                  setRowMenuId(null);
-                                  deleteProduct(row);
-                                }}
-                              >
-                                Удалить на площадке
-                              </button>
-                            </div>
-                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -2382,8 +2465,78 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 })}
               </tbody>
             </table>
-            {!filteredHistory.length ? <p className="muted">Пока нет выгрузок. Создайте карточку в «Создать товар».</p> : null}
+            {!filteredHistory.length ? (
+              <p className="muted">Пока нет выгрузок. Создайте карточку или нажмите «Подтянуть с площадки».</p>
+            ) : null}
           </div>
+          {rowMenuId && rowMenuPos
+            ? createPortal(
+                <div
+                  className="mp-kebab-menu mp-kebab-menu-fixed"
+                  role="menu"
+                  style={{ top: rowMenuPos.top, right: rowMenuPos.right }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {(() => {
+                    const row = filteredHistory.find((h) => h.id === rowMenuId) || history.find((h) => h.id === rowMenuId);
+                    if (!row) return null;
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setRowMenuId(null);
+                            setRowMenuPos(null);
+                            openEditorFromHistory(row);
+                          }}
+                        >
+                          Редактировать
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setRowMenuId(null);
+                            setRowMenuPos(null);
+                            fillPriceStockFromHistory(row);
+                          }}
+                        >
+                          Цены и остатки
+                        </button>
+                        {mp === "ozon" && row.import_task_id ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            disabled={busy === "import-status"}
+                            onClick={() => {
+                              setRowMenuId(null);
+                              setRowMenuPos(null);
+                              checkImportStatus(row);
+                            }}
+                          >
+                            Статус импорта
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="mp-kebab-danger"
+                          onClick={() => {
+                            setRowMenuId(null);
+                            setRowMenuPos(null);
+                            deleteProduct(row);
+                          }}
+                        >
+                          Удалить на площадке
+                        </button>
+                      </>
+                    );
+                  })()}
+                </div>,
+                document.body,
+              )
+            : null}
         </div>
       )}
 
@@ -2455,27 +2608,44 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
           </form>
 
           <div className="cafe-form-panel">
-            <h3>Синхронизация и webhook</h3>
+            <h3>Статусы выгрузки и внешний сигнал</h3>
+            <div className="mp-help-cards">
+              <div className="mp-help-card">
+                <strong>Что делает «Синхронизировать»</strong>
+                <p>
+                  После выгрузки на Ozon карточка сначала в статусе «ожидает». Кнопка (и автозадача каждые 15 мин)
+                  спрашивает у Ozon: уже готово или ошибка — и обновляет список в «Товарах».
+                </p>
+              </div>
+              <div className="mp-help-card">
+                <strong>Зачем webhook</strong>
+                <p>
+                  Это ссылка для вашего скрипта/сервиса: по секрету можно запустить ту же синхронизацию снаружи
+                  (например из n8n или cron), без входа в кабинет.
+                </p>
+              </div>
+            </div>
             <p className="muted small">
-              Фоновый опрос pending-импортов Ozon (Celery каждые 15 мин) или ручной запуск / внешний webhook.
-              {settings?.last_sync_at ? ` Последний синк: ${String(settings.last_sync_at).slice(0, 19).replace("T", " ")}.` : ""}
+              {settings?.last_sync_at
+                ? `Последний запуск: ${String(settings.last_sync_at).slice(0, 19).replace("T", " ")}.`
+                : "Ещё не запускалась."}
             </p>
             <div className="mp-actions">
-              <button type="button" disabled={busy === "sync"} onClick={runSync}>
-                {busy === "sync" ? "Синк…" : "Синхронизировать сейчас"}
+              <button type="button" className="mp-btn mp-btn-primary" disabled={busy === "sync"} onClick={runSync}>
+                {busy === "sync" ? "Обновляем…" : "Обновить статусы выгрузки"}
               </button>
-              <button type="button" className="ghost-btn" disabled={busy === "webhook"} onClick={rotateWebhookSecret}>
-                {settings?.has_webhook_secret ? "Обновить webhook secret" : "Создать webhook secret"}
+              <button type="button" className="mp-btn" disabled={busy === "webhook"} onClick={rotateWebhookSecret}>
+                {settings?.has_webhook_secret ? "Обновить секрет webhook" : "Создать секрет webhook"}
               </button>
             </div>
             {settings?.webhook_url ? (
               <p className="muted small">
-                URL: <code>{settings.webhook_url}</code>
+                Адрес: <code>{settings.webhook_url}</code>
               </p>
             ) : null}
             {webhookSecretOnce ? (
               <p className="status">
-                Secret (скопируйте): <code>{webhookSecretOnce}</code>
+                Секрет (покажите один раз, скопируйте): <code>{webhookSecretOnce}</code>
               </p>
             ) : null}
           </div>
@@ -2631,50 +2801,71 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 {busy === "bulk-prices" ? "Отправка…" : "Отправить все"}
               </button>
             </div>
-            <label className="cafe-form-span2">
-              CSV
-              <textarea rows={4} value={bulkCsv} onChange={(e) => setBulkCsv(e.target.value)} />
-            </label>
-            <button type="button" className="ghost-btn" onClick={importBulkCsv}>
-              Загрузить CSV в таблицу
-            </button>
+            <div className="mp-csv-block">
+              <h4>CSV</h4>
+              <p className="muted small">Вставьте таблицу целиком. Колонки: offer_id, price, stock (или ;).</p>
+              <textarea
+                className="mp-csv-area"
+                rows={5}
+                value={bulkCsv}
+                onChange={(e) => setBulkCsv(e.target.value)}
+                placeholder={"offer_id,price,stock\nSKU-1,1290,10\nSKU-2,990,5"}
+              />
+              <button type="button" className="mp-btn" onClick={importBulkCsv}>
+                Загрузить CSV в таблицу
+              </button>
+            </div>
 
-            <form onSubmit={saveTemplate}>
-              <h4>Новый шаблон</h4>
-              <div className="cafe-form-grid">
-                <label>
-                  Название шаблона
-                  <input value={templateForm.name} onChange={(e) => setTemplateForm((p) => ({ ...p, name: e.target.value }))} required />
-                </label>
-                <label>
-                  Бренд
-                  <input value={templateForm.brand} onChange={(e) => setTemplateForm((p) => ({ ...p, brand: e.target.value }))} />
-                </label>
-                <label>
-                  Цена
-                  <input value={templateForm.price} onChange={(e) => setTemplateForm((p) => ({ ...p, price: e.target.value }))} />
-                </label>
-                <label>
-                  Остаток
-                  <input value={templateForm.stock} onChange={(e) => setTemplateForm((p) => ({ ...p, stock: e.target.value }))} />
-                </label>
-                <label className="cafe-form-span2">
-                  Текст описания
-                  <textarea rows={3} value={templateForm.description_text} onChange={(e) => setTemplateForm((p) => ({ ...p, description_text: e.target.value }))} />
-                </label>
-              </div>
-              <button type="submit">Сохранить шаблон</button>
-            </form>
-            {templates.map((t) => (
-              <div key={t.id} className="mp-tpl-row">
-                <span>
-                  {t.name} · {t.marketplace}
-                </span>
-                <button type="button" className="ghost-btn" onClick={() => deleteTemplate(t.id)}>
-                  Удалить
+            <div className="mp-templates-block">
+              <h4>Шаблоны карточек</h4>
+              <p className="muted small">
+                Шаблон — заготовка бренда, цены, остатка и текста описания. Примените его в «Создать товар», затем
+                допишите артикул, категорию и фото. Можно сохранить текущую карточку как шаблон кнопкой ниже формы
+                создания.
+              </p>
+              <form onSubmit={saveTemplate}>
+                <div className="cafe-form-grid">
+                  <label>
+                    Название шаблона
+                    <input value={templateForm.name} onChange={(e) => setTemplateForm((p) => ({ ...p, name: e.target.value }))} required />
+                  </label>
+                  <label>
+                    Бренд
+                    <input value={templateForm.brand} onChange={(e) => setTemplateForm((p) => ({ ...p, brand: e.target.value }))} />
+                  </label>
+                  <label>
+                    Цена
+                    <input value={templateForm.price} onChange={(e) => setTemplateForm((p) => ({ ...p, price: e.target.value }))} />
+                  </label>
+                  <label>
+                    Остаток
+                    <input value={templateForm.stock} onChange={(e) => setTemplateForm((p) => ({ ...p, stock: e.target.value }))} />
+                  </label>
+                  <label className="cafe-form-span2">
+                    Текст описания
+                    <textarea rows={3} value={templateForm.description_text} onChange={(e) => setTemplateForm((p) => ({ ...p, description_text: e.target.value }))} />
+                  </label>
+                </div>
+                <button type="submit" className="mp-btn mp-btn-primary">
+                  Сохранить шаблон
                 </button>
-              </div>
-            ))}
+              </form>
+              {templates.map((t) => (
+                <div key={t.id} className="mp-tpl-row">
+                  <span>
+                    {t.name} · {t.marketplace}
+                  </span>
+                  <div className="mp-actions">
+                    <button type="button" className="mp-btn" onClick={() => applyTemplate(t)}>
+                      Применить
+                    </button>
+                    <button type="button" className="ghost-btn" onClick={() => deleteTemplate(t.id)}>
+                      Удалить
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

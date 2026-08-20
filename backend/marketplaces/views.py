@@ -628,6 +628,161 @@ class MarketplaceProductFetchView(APIView):
             return Response({"detail": str(exc)}, status=min(exc.status_code, 599) if exc.status_code >= 400 else 400)
 
 
+class MarketplaceCatalogSyncView(APIView):
+    """Pull cards from marketplace into local history (bidirectional catalog sync)."""
+
+    def post(self, request):
+        import time
+
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        data = request.data if isinstance(request.data, dict) else {}
+        marketplace = (data.get("marketplace") or "ozon").strip()
+        mp_key = "wildberries" if marketplace == "wildberries" else "ozon"
+        limit = max(1, min(int(data.get("limit") or 50), 100))
+        s = _settings(provider)
+        if s.environment != "prod":
+            return Response({"detail": "Синхронизация каталога доступна в боевом режиме."}, status=400)
+
+        created = 0
+        updated = 0
+        skipped = 0
+        errors: list[str] = []
+        try:
+            products: list[dict] = []
+            if mp_key == "wildberries":
+                cursor = {"limit": limit}
+                resp = request_json(
+                    provider=provider,
+                    marketplace="wb",
+                    method="POST",
+                    url=WB_ACTIONS["products.list"][1],
+                    headers=wb_headers(s),
+                    json_body={"settings": {"cursor": cursor, "filter": {"withPhoto": -1}}},
+                )
+                cards = resp.get("cards") or (resp.get("data") or {}).get("cards") or []
+                for card in cards[:limit]:
+                    if not isinstance(card, dict):
+                        continue
+                    variant = (card.get("variants") or [{}])[0] or {}
+                    media = variant.get("mediaFiles") or variant.get("photos") or []
+                    images = [{"url": u, "public_url": u} for u in media if isinstance(u, str) and u.startswith("http")]
+                    offer = str(variant.get("vendorCode") or card.get("vendorCode") or "").strip()
+                    if not offer:
+                        skipped += 1
+                        continue
+                    products.append(
+                        {
+                            "offer_id": offer,
+                            "vendor_code": offer,
+                            "name": variant.get("title") or card.get("title") or offer,
+                            "brand": variant.get("brand") or card.get("brand") or "",
+                            "price": str((variant.get("sizes") or [{}])[0].get("price") or ""),
+                            "stock": 0,
+                            "description": variant.get("description") or "",
+                            "barcode": str(((variant.get("sizes") or [{}])[0].get("skus") or [""])[0] or ""),
+                            "category": str(card.get("subjectID") or card.get("subjectId") or ""),
+                            "images": images,
+                            "nm_id": card.get("nmID") or card.get("nmId"),
+                        }
+                    )
+            else:
+                last_id = ""
+                offer_ids: list[str] = []
+                product_ids: list[int] = []
+                while len(offer_ids) < limit:
+                    chunk = min(100, limit - len(offer_ids))
+                    listing = request_json(
+                        provider=provider,
+                        marketplace="ozon",
+                        method="POST",
+                        url=OZON_ACTIONS["products.list"][1],
+                        headers=ozon_headers(s),
+                        json_body={"filter": {"visibility": "ALL"}, "last_id": last_id, "limit": chunk},
+                    )
+                    result = listing.get("result") if isinstance(listing.get("result"), dict) else listing
+                    items = (result or {}).get("items") or []
+                    if not items:
+                        break
+                    for it in items:
+                        if not isinstance(it, dict):
+                            continue
+                        oid = str(it.get("offer_id") or "").strip()
+                        pid = it.get("product_id")
+                        if oid:
+                            offer_ids.append(oid)
+                        if pid is not None:
+                            try:
+                                product_ids.append(int(pid))
+                            except (TypeError, ValueError):
+                                pass
+                    last_id = str((result or {}).get("last_id") or "")
+                    if not last_id or len(items) < chunk:
+                        break
+                    time.sleep(0.6)
+                # Enrich via info/list in batches
+                for i in range(0, len(offer_ids), 100):
+                    batch_offers = offer_ids[i : i + 100]
+                    batch_pids = product_ids[i : i + 100]
+                    info = request_json(
+                        provider=provider,
+                        marketplace="ozon",
+                        method="POST",
+                        url=OZON_ACTIONS["products.info"][1],
+                        headers=ozon_headers(s),
+                        json_body={"offer_id": batch_offers, "product_id": batch_pids, "sku": []},
+                    )
+                    info_items = info.get("items") or (info.get("result") or {}).get("items") or []
+                    for item in info_items:
+                        if isinstance(item, dict):
+                            products.append(parse_ozon_product_item(item))
+                    time.sleep(0.6)
+
+            for product in products:
+                product = normalize_product_identifiers(dict(product), mp_key)
+                offer_id = str(product.get("offer_id") or "").strip()
+                if not offer_id:
+                    skipped += 1
+                    continue
+                existing = MarketplaceProductHistory.objects.filter(
+                    provider=provider, marketplace=mp_key, offer_id=offer_id
+                ).first()
+                if existing:
+                    existing.product_data = {**(existing.product_data or {}), **product}
+                    existing.status = "synced"
+                    existing.response = {"source": "catalog_sync"}
+                    existing.save(update_fields=["product_data", "status", "response", "updated_at"])
+                    updated += 1
+                else:
+                    MarketplaceProductHistory.objects.create(
+                        provider=provider,
+                        marketplace=mp_key,
+                        offer_id=offer_id,
+                        product_data=product,
+                        status="synced",
+                        response={"source": "catalog_sync"},
+                    )
+                    created += 1
+        except MarketplaceError as exc:
+            return Response({"detail": str(exc), "created": created, "updated": updated}, status=min(exc.status_code, 599) if exc.status_code >= 400 else 400)
+        except Exception as exc:
+            logger.exception("catalog sync failed")
+            errors.append(str(exc)[:200])
+
+        return Response(
+            {
+                "ok": True,
+                "marketplace": mp_key,
+                "created": created,
+                "updated": updated,
+                "skipped": skipped,
+                "total": created + updated,
+                "errors": errors,
+            }
+        )
+
+
 class MarketplaceDescribeView(APIView):
     def post(self, request):
         provider, err = _require_provider(request)

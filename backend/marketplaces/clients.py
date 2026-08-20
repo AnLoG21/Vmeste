@@ -26,6 +26,42 @@ class MarketplaceError(Exception):
         self.status_code = status_code
 
 
+def humanize_api_error(detail: str, status_code: int | None = None) -> str:
+    """Translate raw Ozon/WB API errors into short Russian hints."""
+    text = str(detail or "").strip()
+    low = text.lower()
+    code = int(status_code or 0)
+    if code == 429 or "rate limit" in low or "max rate" in low or "too many requests" in low:
+        return "Слишком частые запросы к площадке (лимит ~2/сек). Подождите пару секунд и повторите."
+    if (
+        "permissiondenied" in low
+        or "permission denied" in low
+        or "not available with existing subscription" in low
+        or ("subscription" in low and ("not available" in low or "rpc error" in low))
+    ):
+        return (
+            "Раздел недоступен на текущем тарифе кабинета продавца (часто отзывы Premium). "
+            "Проверьте подписку в личном кабинете Ozon/WB."
+        )
+    if "invalid google.protobuf.timestamp" in low:
+        return "Неверный формат даты для API. Обновите кабинет и повторите."
+    if "invalid value for string field last_id" in low:
+        return "Неверный параметр пагинации отзывов. Обновите кабинет и повторите."
+    if code == 401 or "unauthorized" in low or "invalid api key" in low or "api-key" in low:
+        return "Ключ API отклонён. Проверьте Client ID / API Key в Управлении и боевой режим."
+    if code == 403 or "forbidden" in low:
+        return "Нет доступа к методу API. Проверьте права ключа и тариф площадки."
+    if code >= 500:
+        return f"Площадка временно недоступна ({code}). Повторите позже."
+    # Prefer the useful tail of protobuf-style messages
+    if "desc =" in text:
+        try:
+            text = text.split("desc =", 1)[1].strip()
+        except Exception:
+            pass
+    return (text or "Ошибка площадки")[:800]
+
+
 def _log(provider, marketplace: str, method: str, endpoint: str, status_code: int | None, error: str = ""):
     try:
         MarketplaceApiLog.objects.create(
@@ -89,7 +125,7 @@ def request_json(
         data = {"raw": text}
     if not resp.ok:
         detail = data.get("message") or data.get("detail") or data.get("error") or text or resp.reason
-        raise MarketplaceError(str(detail)[:800], resp.status_code)
+        raise MarketplaceError(humanize_api_error(str(detail), resp.status_code), resp.status_code)
     if not isinstance(data, dict):
         return {"result": data}
     return data
@@ -125,7 +161,7 @@ def request_bytes(
         except ValueError:
             data = {}
         detail = data.get("message") or data.get("detail") or data.get("error") or text or resp.reason
-        raise MarketplaceError(str(detail)[:800], resp.status_code)
+        raise MarketplaceError(humanize_api_error(str(detail), resp.status_code), resp.status_code)
     _log(provider, marketplace, method, url, resp.status_code, "")
     return resp.content or b"", ctype
 
