@@ -166,11 +166,13 @@ function normalizeOrders(data, marketplace) {
   const rows = extractRecords(data);
   return rows.map((row, i) => {
     if (marketplace === "wildberries") {
+      const status = row.supplierStatus || row.wbStatus || row.status || "new";
       return {
         key: String(row.id || row.orderUid || i),
         id: row.id,
         number: String(row.id || row.orderUid || "—"),
-        status: row.supplierStatus || row.wbStatus || row.status || "new",
+        status,
+        status_label: orderStatusLabel(status, "wildberries"),
         date: row.createdAt || row.created_at || "",
         sku: row.skus?.[0] || row.article || row.nmId || "",
         price: row.convertedPrice != null ? (Number(row.convertedPrice) / 100).toFixed(2) : row.price || "",
@@ -179,18 +181,88 @@ function normalizeOrders(data, marketplace) {
     }
     const products = row.products || [];
     const names = products.map((p) => p.name || p.offer_id).filter(Boolean).slice(0, 2).join(", ");
+    const status = row.status || row.posting_status || "—";
     return {
       key: String(row.posting_number || row.order_id || i),
       id: row.posting_number,
       number: row.posting_number || String(row.order_id || "—"),
-      status: row.status || row.posting_status || "—",
+      status,
+      status_label: orderStatusLabel(status, "ozon"),
       date: row.in_process_at || row.created_at || "",
       sku: products[0]?.offer_id || "",
       price: products[0]?.price || "",
       title: names || "—",
+      can_ship: ["awaiting_packaging", "awaiting_approve"].includes(String(status)),
+      can_label: ["awaiting_deliver", "delivering", "awaiting_packaging"].includes(String(status)) || Boolean(row.posting_number),
       raw: row,
     };
   });
+}
+
+function orderStatusLabel(status, marketplace) {
+  const s = String(status || "").toLowerCase();
+  const ozon = {
+    awaiting_registration: "Ожидает регистрации",
+    acceptance_in_progress: "Идёт приёмка",
+    awaiting_approve: "Ожидает подтверждения",
+    awaiting_packaging: "Ожидает сборки",
+    awaiting_deliver: "Ожидает отгрузки",
+    delivering: "Доставляется",
+    driver_pickup: "У водителя",
+    delivered: "Доставлен",
+    cancelled: "Отменён",
+    not_accepted: "Не принят на сортировке",
+  };
+  const wb = {
+    new: "Новый",
+    confirm: "На сборке",
+    complete: "В доставке",
+    cancel: "Отменён",
+  };
+  if (marketplace === "wildberries") return wb[s] || status || "—";
+  return ozon[s] || status || "—";
+}
+
+function emptyBulkRow() {
+  return { offer_id: "", nm_id: "", product_id: "", price: "", stock: "" };
+}
+
+function parseBulkCsv(text) {
+  const lines = String(text || "")
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (!lines.length) return [];
+  const sep = lines[0].includes(";") ? ";" : ",";
+  const headers = lines[0].split(sep).map((h) => h.trim().toLowerCase().replace(/^"|"$/g, ""));
+  const idx = (names) => {
+    for (const n of names) {
+      const i = headers.indexOf(n);
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  const iOffer = idx(["offer_id", "артикул", "vendorcode", "vendor_code", "sku"]);
+  const iNm = idx(["nm_id", "nmid", "nm"]);
+  const iPid = idx(["product_id", "productid"]);
+  const iPrice = idx(["price", "цена"]);
+  const iStock = idx(["stock", "остаток", "qty", "quantity"]);
+  const start = headers.some((h) => ["offer_id", "артикул", "price", "цена", "stock", "остаток"].includes(h)) ? 1 : 0;
+  const rows = [];
+  for (let li = start; li < lines.length; li += 1) {
+    const cols = lines[li].split(sep).map((c) => c.trim().replace(/^"|"$/g, ""));
+    const offer = iOffer >= 0 ? cols[iOffer] : cols[0] || "";
+    if (!offer && !(iNm >= 0 && cols[iNm])) continue;
+    rows.push({
+      offer_id: offer || "",
+      nm_id: iNm >= 0 ? cols[iNm] || "" : "",
+      product_id: iPid >= 0 ? cols[iPid] || "" : "",
+      price: iPrice >= 0 ? cols[iPrice] || "" : cols[1] || "",
+      stock: iStock >= 0 ? cols[iStock] || "" : cols[2] || "",
+    });
+  }
+  return rows;
 }
 
 function normalizeReviews(data, marketplace) {
@@ -329,6 +401,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [webhookSecretOnce, setWebhookSecretOnce] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [priceStock, setPriceStock] = useState({ offer_id: "", nm_id: "", price: "", stock: "" });
+  const [bulkRows, setBulkRows] = useState([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
+  const [bulkCsv, setBulkCsv] = useState("offer_id,price,stock\nSKU-1,1290,10\nSKU-2,990,5");
+  const [orderStatusFilter, setOrderStatusFilter] = useState("");
   const [templateForm, setTemplateForm] = useState({ name: "", brand: "", description_text: "", price: "", stock: "0" });
   const [aiFeatures, setAiFeatures] = useState("");
   const [viewer, setViewer] = useState(null);
@@ -359,6 +434,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     setLogRows([]);
     setFinanceRows([]);
     setActionRows([]);
+    setBulkRows([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
+    setOrderStatusFilter("");
     setLive(null);
   }, [mp]);
 
@@ -996,49 +1073,106 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   async function applyPricesStocks() {
     await withBusy("prices", async () => {
       if (!priceStock.offer_id && !priceStock.nm_id) throw new Error("Укажите артикул или nmID.");
-      if (priceStock.price) {
-        const payload =
-          mp === "wildberries"
-            ? {
-                data: [
-                  {
-                    nmID: Number(priceStock.nm_id || priceStock.offer_id),
-                    price: Number(priceStock.price),
-                    discount: 0,
-                  },
-                ],
-              }
-            : {
-                prices: [
-                  {
-                    offer_id: priceStock.offer_id,
-                    price: String(priceStock.price),
-                    old_price: "0",
-                    min_price: "0",
-                    currency_code: "RUB",
-                  },
-                ],
-              };
-        showLive(await mpCall("products.prices", payload));
-      }
-      if (priceStock.stock !== "") {
-        const payload =
-          mp === "wildberries"
-            ? { stocks: [{ sku: priceStock.offer_id, amount: Number(priceStock.stock || 0) }] }
-            : {
-                stocks: [
-                  {
-                    offer_id: priceStock.offer_id,
-                    stock: Number(priceStock.stock || 0),
-                    warehouse_id: Number(warehouseId || 0),
-                  },
-                ],
-              };
-        const params = mp === "wildberries" ? { warehouseId: warehouseId || "0" } : {};
-        showLive(await mpCall("products.stocks", payload, params));
-      }
+      await sendPriceStockRows([
+        {
+          offer_id: priceStock.offer_id,
+          nm_id: priceStock.nm_id,
+          price: priceStock.price,
+          stock: priceStock.stock,
+        },
+      ]);
       setStatus("Цены и остатки отправлены.");
     });
+  }
+
+  async function sendPriceStockRows(rows) {
+    const list = (rows || []).filter((r) => r.offer_id || r.nm_id || r.product_id);
+    if (!list.length) throw new Error("Нет строк для обновления.");
+    if (list.some((r) => r.stock !== "" && r.stock != null) && !warehouseId) {
+      throw new Error("Укажите ID склада для обновления остатков.");
+    }
+    const withPrice = list.filter((r) => r.price !== "" && r.price != null);
+    const withStock = list.filter((r) => r.stock !== "" && r.stock != null);
+    if (withPrice.length) {
+      const payload =
+        mp === "wildberries"
+          ? {
+              data: withPrice.map((r) => ({
+                nmID: Number(r.nm_id || r.offer_id),
+                price: Number(r.price),
+                discount: 0,
+              })),
+            }
+          : {
+              prices: withPrice.map((r) => ({
+                offer_id: r.offer_id,
+                product_id: r.product_id ? Number(r.product_id) : undefined,
+                price: String(r.price),
+                old_price: "0",
+                min_price: "0",
+                currency_code: "RUB",
+              })),
+            };
+      showLive(await mpCall("products.prices", payload));
+    }
+    if (withStock.length) {
+      const payload =
+        mp === "wildberries"
+          ? {
+              stocks: withStock.map((r) => ({
+                sku: r.offer_id || String(r.nm_id),
+                amount: Number(r.stock || 0),
+              })),
+            }
+          : {
+              stocks: withStock.map((r) => ({
+                offer_id: r.offer_id,
+                product_id: r.product_id ? Number(r.product_id) : undefined,
+                stock: Number(r.stock || 0),
+                warehouse_id: Number(warehouseId || 0),
+              })),
+            };
+      const params = mp === "wildberries" ? { warehouseId: warehouseId || "0" } : {};
+      showLive(await mpCall("products.stocks", payload, params));
+    }
+    if (!withPrice.length && !withStock.length) {
+      throw new Error("Заполните цену и/или остаток хотя бы в одной строке.");
+    }
+  }
+
+  async function applyBulkPricesStocks() {
+    await withBusy("bulk-prices", async () => {
+      await sendPriceStockRows(bulkRows);
+      setStatus(`Массово отправлено строк: ${bulkRows.filter((r) => r.offer_id || r.nm_id).length}.`);
+    });
+  }
+
+  function fillBulkFromHistory() {
+    const rows = (history || [])
+      .slice(0, 50)
+      .map((row) => {
+        const ids = marketplaceIdsFromRow(row);
+        return {
+          offer_id: ids.vendorCode || row.offer_id || "",
+          nm_id: ids.nmId ? String(ids.nmId) : "",
+          product_id: ids.productId ? String(ids.productId) : "",
+          price: row.product?.price != null ? String(row.product.price) : "",
+          stock: row.product?.stock != null ? String(row.product.stock) : "",
+        };
+      })
+      .filter((r) => r.offer_id || r.nm_id);
+    setBulkRows(rows.length ? rows : [emptyBulkRow()]);
+    setStatus(rows.length ? `В таблицу подставлено ${rows.length} из истории.` : "В истории пока нет товаров.");
+  }
+
+  function importBulkCsv() {
+    const rows = parseBulkCsv(bulkCsv);
+    if (!rows.length) {
+      setStatus("CSV пуст или не разобран. Нужны колонки offer_id,price,stock.");
+      return;
+    }
+    setBulkRows(rows);
+    setStatus(`Из CSV загружено строк: ${rows.length}.`);
   }
 
   async function deleteProduct(row) {
@@ -1156,7 +1290,11 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
           ? {}
           : {
               dir: "DESC",
-              filter: { since: daysAgoIso(14), to: new Date().toISOString().slice(0, 19) + "Z" },
+              filter: {
+                since: daysAgoIso(14),
+                to: new Date().toISOString().slice(0, 19) + "Z",
+                ...(orderStatusFilter ? { status: orderStatusFilter } : {}),
+              },
               limit: 50,
               offset: 0,
               with: { analytics_data: true, financial_data: true },
@@ -1198,20 +1336,53 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       setStatus("Отгрузка из кабинета пока для Ozon FBS.");
       return;
     }
-    if (!window.confirm(`Отгрузить отправление ${row.number}?`)) return;
+    if (!window.confirm(`Собрать и отгрузить отправление ${row.number}?`)) return;
     await withBusy("order-ship", async () => {
-      const products = (row.raw?.products || []).map((p) => ({
-        product_id: p.sku || p.product_id,
-        quantity: p.quantity || 1,
-      }));
+      const products = (row.raw?.products || [])
+        .map((p) => ({
+          product_id: Number(p.sku || p.product_id || 0),
+          quantity: Number(p.quantity || 1),
+        }))
+        .filter((p) => p.product_id);
+      if (!products.length) throw new Error("В отправлении нет товаров с SKU — отгрузка невозможна.");
       showLive(
         await mpCall("orders.ship", {
           posting_number: row.number,
-          packages: [{ products: products.length ? products : [{ product_id: 0, quantity: 1 }] }],
+          packages: [{ products }],
         }),
       );
-      setStatus(`Запрос на отгрузку ${row.number} отправлен.`);
+      setStatus(`Отправление ${row.number} передано в сборку/отгрузку. Через ~1 мин можно печатать этикетку.`);
       await loadOrders();
+    });
+  }
+
+  async function printOrderLabel(row) {
+    if (mp !== "ozon") {
+      setStatus("Этикетки PDF из кабинета — для Ozon FBS.");
+      return;
+    }
+    await withBusy("order-label", async () => {
+      const res = await authFetch(`${base}/orders/label/`, {
+        method: "POST",
+        body: JSON.stringify({ posting_numbers: [row.number] }),
+      });
+      const ctype = res.headers.get("content-type") || "";
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Не удалось получить этикетку. Обычно нужно подождать 45–60 сек после сборки.");
+      }
+      if (!ctype.includes("pdf")) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.message || "Ozon не вернул PDF.");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ozon-label-${String(row.number).replace(/[^\w.-]+/g, "_")}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus(`Этикетка ${row.number} скачана.`);
     });
   }
 
@@ -1301,9 +1472,21 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
 
   async function generateBarcode() {
     await withBusy("barcode", async () => {
+      const productId = product.product_id || product.productId;
+      const body = {
+        marketplace: mp,
+        count: 1,
+      };
+      if (mp === "ozon") {
+        if (productId) {
+          body.product_ids = [productId];
+        } else {
+          body.local = true;
+        }
+      }
       const res = await authFetch(`${base}/barcodes/generate/`, {
         method: "POST",
-        body: JSON.stringify({ marketplace: mp, count: 1 }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Не удалось сгенерировать штрихкод.");
@@ -1311,7 +1494,11 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       const code = (data.barcodes || [])[0];
       if (!code) throw new Error("Площадка не вернула штрихкод.");
       setProduct((p) => ({ ...p, barcode: String(code) }));
-      setStatus(`Штрихкод: ${code}`);
+      setStatus(
+        data.source === "local"
+          ? `Локальный штрихкод для новой карточки: ${code}`
+          : `Штрихкод с площадки: ${code}`,
+      );
     });
   }
 
@@ -1571,7 +1758,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 Штрихкод
                 <div className="mp-inline-field">
                   <input value={product.barcode} onChange={(e) => setProduct((p) => ({ ...p, barcode: e.target.value }))} />
-                  <button type="button" className="ghost-btn" disabled={busy === "barcode"} onClick={generateBarcode}>
+                  <button type="button" className="ghost-btn" disabled={busy === "barcode"} onClick={generateBarcode} title={mp === "ozon" && !product.product_id ? "Локальный EAN-13 для новой карточки" : "Сгенерировать на площадке"}>
                     {busy === "barcode" ? "…" : "Сгенерировать"}
                   </button>
                 </div>
@@ -2028,7 +2215,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
             </div>
             <div className="mp-actions">
               <button type="button" disabled={busy === "prices"} onClick={applyPricesStocks}>
-                Обновить цены/остатки
+                Обновить одну строку
               </button>
               <button type="button" className="ghost-btn" disabled={busy === "wh"} onClick={loadWarehouses}>
                 Склады
@@ -2042,6 +2229,100 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 </button>
               ) : null}
             </div>
+
+            <h4>Массовое обновление (таблица)</h4>
+            <p className="muted small">
+              Для остатков нужен ID склада. Можно подставить из истории или вставить CSV с колонками offer_id,price,stock
+              {mp === "wildberries" ? ", nm_id" : ", product_id"}.
+            </p>
+            <div className="mp-table-wrap">
+              <table className="mp-table mp-bulk-table">
+                <thead>
+                  <tr>
+                    <th>Артикул</th>
+                    {mp === "wildberries" ? <th>nmID</th> : <th>product_id</th>}
+                    <th>Цена</th>
+                    <th>Остаток</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {bulkRows.map((row, idx) => (
+                    <tr key={idx}>
+                      <td>
+                        <input
+                          value={row.offer_id}
+                          onChange={(e) =>
+                            setBulkRows((rows) => rows.map((r, i) => (i === idx ? { ...r, offer_id: e.target.value } : r)))
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          value={mp === "wildberries" ? row.nm_id : row.product_id}
+                          onChange={(e) =>
+                            setBulkRows((rows) =>
+                              rows.map((r, i) =>
+                                i === idx
+                                  ? mp === "wildberries"
+                                    ? { ...r, nm_id: e.target.value }
+                                    : { ...r, product_id: e.target.value }
+                                  : r,
+                              ),
+                            )
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          value={row.price}
+                          onChange={(e) =>
+                            setBulkRows((rows) => rows.map((r, i) => (i === idx ? { ...r, price: e.target.value } : r)))
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          value={row.stock}
+                          onChange={(e) =>
+                            setBulkRows((rows) => rows.map((r, i) => (i === idx ? { ...r, stock: e.target.value } : r)))
+                          }
+                        />
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="ghost-btn"
+                          onClick={() => setBulkRows((rows) => rows.filter((_, i) => i !== idx))}
+                          aria-label="Удалить строку"
+                        >
+                          ×
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mp-actions">
+              <button type="button" className="ghost-btn" onClick={() => setBulkRows((rows) => [...rows, emptyBulkRow()])}>
+                + Строка
+              </button>
+              <button type="button" className="ghost-btn" onClick={fillBulkFromHistory}>
+                Из истории
+              </button>
+              <button type="button" disabled={busy === "bulk-prices"} onClick={applyBulkPricesStocks}>
+                {busy === "bulk-prices" ? "Отправка…" : "Отправить все"}
+              </button>
+            </div>
+            <label className="cafe-form-span2">
+              CSV
+              <textarea rows={4} value={bulkCsv} onChange={(e) => setBulkCsv(e.target.value)} />
+            </label>
+            <button type="button" className="ghost-btn" onClick={importBulkCsv}>
+              Загрузить CSV в таблицу
+            </button>
+
             <form onSubmit={saveTemplate}>
               <h4>Новый шаблон</h4>
               <div className="cafe-form-grid">
@@ -2100,7 +2381,27 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               </button>
             ) : null}
           </div>
-          <p className="muted small">В песочнице запросы на площадку не уходят. Для реальных заказов включите боевой режим и ключи.</p>
+          {mp === "ozon" ? (
+            <div className="mp-actions">
+              <label className="mp-inline-filter">
+                Статус FBS
+                <select value={orderStatusFilter} onChange={(e) => setOrderStatusFilter(e.target.value)}>
+                  <option value="">Все за 14 дней</option>
+                  <option value="awaiting_packaging">Ожидает сборки</option>
+                  <option value="awaiting_deliver">Ожидает отгрузки</option>
+                  <option value="delivering">Доставляется</option>
+                  <option value="delivered">Доставлен</option>
+                  <option value="cancelled">Отменён</option>
+                </select>
+              </label>
+              <button type="button" className="ghost-btn" disabled={busy === "orders"} onClick={loadOrders}>
+                Применить фильтр
+              </button>
+            </div>
+          ) : null}
+          <p className="muted small">
+            FBS: сначала «Собрать», через ~1 минуту — «Этикетка» (PDF). В песочнице запросы на площадку не уходят.
+          </p>
           <div className="mp-table-wrap">
             <table className="mp-table">
               <thead>
@@ -2118,18 +2419,43 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 {orderRows.map((row) => (
                   <tr key={row.key}>
                     <td>{row.number}</td>
-                    <td>{row.status}</td>
+                    <td>
+                      <span className={`mp-status mp-status--${String(row.status || "").replace(/[^a-z0-9_-]/gi, "")}`}>
+                        {row.status_label || row.status}
+                      </span>
+                    </td>
                     <td>{row.date ? String(row.date).slice(0, 19).replace("T", " ") : "—"}</td>
                     <td>{row.sku || "—"}</td>
                     <td>{row.price || "—"}</td>
                     {mp === "ozon" ? <td>{row.title || "—"}</td> : null}
                     <td className="mp-row-actions">
                       {mp === "ozon" ? (
-                        <button type="button" className="ghost-btn" disabled={busy === "order-ship"} onClick={() => shipOrder(row)}>
-                          Отгрузить
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            disabled={busy === "order-ship" || row.status === "cancelled"}
+                            onClick={() => shipOrder(row)}
+                            title="Сборка FBS"
+                          >
+                            Собрать
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            disabled={busy === "order-label"}
+                            onClick={() => printOrderLabel(row)}
+                          >
+                            {busy === "order-label" ? "…" : "Этикетка"}
+                          </button>
+                        </>
                       ) : null}
-                      <button type="button" className="ghost-btn" disabled={busy === "order-cancel"} onClick={() => cancelOrder(row)}>
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        disabled={busy === "order-cancel" || String(row.status).includes("cancel")}
+                        onClick={() => cancelOrder(row)}
+                      >
                         Отменить
                       </button>
                     </td>

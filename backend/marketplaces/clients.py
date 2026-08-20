@@ -95,6 +95,55 @@ def request_json(
     return data
 
 
+def request_bytes(
+    *,
+    provider,
+    marketplace: str,
+    method: str,
+    url: str,
+    headers: dict,
+    json_body: Any = None,
+) -> tuple[bytes, str]:
+    """Binary response (e.g. PDF labels). Returns (content, content_type)."""
+    try:
+        resp = requests.request(
+            method,
+            url,
+            headers=headers,
+            json=json_body,
+            timeout=TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        _log(provider, marketplace, method, url, None, str(exc))
+        raise MarketplaceError(f"Не удалось связаться с {marketplace}: {exc}", 502) from exc
+    ctype = (resp.headers.get("Content-Type") or "application/octet-stream").split(";")[0].strip()
+    if not resp.ok:
+        text = (resp.text or "")[:800]
+        _log(provider, marketplace, method, url, resp.status_code, text)
+        try:
+            data = resp.json() if resp.content else {}
+        except ValueError:
+            data = {}
+        detail = data.get("message") or data.get("detail") or data.get("error") or text or resp.reason
+        raise MarketplaceError(str(detail)[:800], resp.status_code)
+    _log(provider, marketplace, method, url, resp.status_code, "")
+    return resp.content or b"", ctype
+
+
+def generate_local_ean13(count: int = 1) -> list[str]:
+    """Internal EAN-13 (prefix 200) for new cards before they exist on Ozon."""
+    import random
+
+    out: list[str] = []
+    n = max(1, min(int(count or 1), 20))
+    for _ in range(n):
+        body = "200" + "".join(str(random.randint(0, 9)) for _ in range(9))
+        digits = [int(c) for c in body]
+        checksum = (10 - (sum(digits[i] * (3 if i % 2 else 1) for i in range(12)) % 10)) % 10
+        out.append(body + str(checksum))
+    return out
+
+
 def normalize_marketplace_images(product: dict) -> list[str]:
     """Absolute public HTTPS URLs for Ozon/WB photos (skip video items)."""
     urls: list[str] = []
@@ -434,6 +483,7 @@ OZON_ACTIONS = {
     "orders.info": ("POST", f"{OZON_BASE}/v3/posting/fbs/get"),
     "orders.cancel": ("POST", f"{OZON_BASE}/v3/posting/fbs/cancel"),
     "orders.ship": ("POST", f"{OZON_BASE}/v3/posting/fbs/ship"),
+    "orders.label": ("POST", f"{OZON_BASE}/v2/posting/fbs/package-label"),
     "analytics.data": ("POST", f"{OZON_BASE}/v1/analytics/data"),
     "analytics.stocks": ("POST", f"{OZON_BASE}/v1/analytics/stock_on_warehouses"),
     "finance.list": ("POST", f"{OZON_BASE}/v3/finance/transaction/list"),

@@ -8,12 +8,14 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from marketplaces.clients import (
     build_ozon_item,
+    generate_local_ean13,
     normalize_marketplace_images,
     normalize_product_identifiers,
     validate_product_for_import,
 )
 from marketplaces.models import MarketplaceApiLog, MarketplaceProductHistory, MarketplaceSettings
 from marketplaces.views import (
+    MarketplaceBarcodeView,
     MarketplaceExportView,
     MarketplaceLogsView,
     MarketplaceSettingsView,
@@ -151,3 +153,29 @@ class MarketplaceApiTests(TestCase):
         self.settings_obj.refresh_from_db()
         self.assertTrue(self.settings_obj.webhook_secret)
         self.assertNotEqual(self.settings_obj.webhook_secret, "test-secret-xyz")
+
+    def test_barcode_local_without_product_ids(self):
+        req = self.factory.post(
+            "/api/marketplaces/barcodes/generate/",
+            {"marketplace": "ozon", "local": True, "count": 1},
+            format="json",
+        )
+        force_authenticate(req, user=self.provider)
+        resp = MarketplaceBarcodeView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data.get("source"), "local")
+        self.assertEqual(len(resp.data.get("barcodes") or []), 1)
+        code = resp.data["barcodes"][0]
+        self.assertEqual(len(code), 13)
+        self.assertTrue(code.startswith("200"))
+
+
+class LocalEanTests(SimpleTestCase):
+    def test_ean13_checksum_length(self):
+        codes = generate_local_ean13(3)
+        self.assertEqual(len(codes), 3)
+        for code in codes:
+            self.assertEqual(len(code), 13)
+            digits = [int(c) for c in code]
+            check = (10 - (sum(digits[i] * (3 if i % 2 else 1) for i in range(12)) % 10)) % 10
+            self.assertEqual(digits[12], check)

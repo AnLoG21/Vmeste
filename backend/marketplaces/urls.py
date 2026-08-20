@@ -18,6 +18,7 @@ urlpatterns = [
     path("logs/", views.MarketplaceLogsView.as_view()),
     path("export/", views.MarketplaceExportView.as_view()),
     path("barcodes/generate/", views.MarketplaceBarcodeView.as_view()),
+    path("orders/label/", views.MarketplaceOrderLabelView.as_view()),
     path("sync/", views.MarketplaceSyncView.as_view()),
     path("webhook/", views.MarketplaceWebhookView.as_view()),
 ]

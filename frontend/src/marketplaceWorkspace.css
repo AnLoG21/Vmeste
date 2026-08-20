@@ -609,6 +609,48 @@ body.theme-dark .mp-lightbox-close {
   white-space: nowrap;
 }
 
+.mp-bulk-table input {
+  width: 100%;
+  min-width: 4.5rem;
+  box-sizing: border-box;
+}
+
+.mp-inline-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+}
+
+.mp-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  font-size: 0.85rem;
+}
+
+.mp-status--awaiting_packaging,
+.mp-status--new,
+.mp-status--confirm {
+  background: #fff3cd;
+}
+
+.mp-status--awaiting_deliver,
+.mp-status--delivering,
+.mp-status--complete {
+  background: #cfe2ff;
+}
+
+.mp-status--delivered {
+  background: #d1e7dd;
+}
+
+.mp-status--cancelled,
+.mp-status--cancel {
+  background: #f8d7da;
+}
+
 @media (max-width: 900px) {
   .mp-workspace .mp-head {
     grid-template-columns: 1fr auto;

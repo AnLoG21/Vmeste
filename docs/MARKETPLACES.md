@@ -53,13 +53,18 @@
 
 ## Штрихкоды Ozon / WB
 
-`POST /api/marketplaces/barcodes/generate/` с телом:
+`POST /api/marketplaces/barcodes/generate/`
 
-```json
-{ "marketplace": "ozon", "count": 1 }
-```
+- Новая карточка Ozon (нет `product_id`): `{ "marketplace": "ozon", "local": true }` → локальный EAN-13.
+  API Ozon требует `product_ids` (1–100) уже созданного товара — без них была ошибка validation.
+- Существующий товар Ozon: `{ "marketplace": "ozon", "product_ids": ["123"] }`
+- WB: `{ "marketplace": "wildberries", "count": 1 }`
 
-В форме карточки кнопка «Сгенерировать» подставляет значение в поле штрихкода. Только в боевом режиме.
+Кнопка в форме сама выбирает local или product_ids.
+
+## Этикетки FBS (Ozon)
+
+`POST /api/marketplaces/orders/label/` — `{ "posting_numbers": ["…"] }` → PDF (через ~1 мин после сборки).
 
 ---
 

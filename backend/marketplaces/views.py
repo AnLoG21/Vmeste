@@ -13,18 +13,20 @@ from .clients import (
     MarketplaceError,
     OZON_ACTIONS,
     WB_ACTIONS,
+    apply_import_identifiers_to_history,
     build_ozon_item,
     build_wb_card,
+    fetch_wb_nm_id,
+    generate_local_ean13,
     normalize_marketplace_images,
     normalize_product_identifiers,
     ozon_headers,
     parse_ozon_product_item,
+    request_bytes,
     request_json,
     resolve_url,
     summarize_ozon_import_status,
     validate_product_for_import,
-    fetch_wb_nm_id,
-    apply_import_identifiers_to_history,
     wb_headers,
 )
 from .models import MarketplaceApiLog, MarketplaceProductHistory, MarketplaceSettings, MarketplaceTemplate
@@ -921,7 +923,12 @@ class MarketplaceExportView(APIView):
 
 
 class MarketplaceBarcodeView(APIView):
-    """Generate barcodes via Ozon or Wildberries."""
+    """
+    Generate barcodes.
+    - Wildberries: {count}
+    - Ozon for existing cards: {product_ids: [...]} (1–100) → API /v1/barcode/generate
+    - New card without product_id: {local: true} → локальный EAN-13 (префикс 200)
+    """
 
     def post(self, request):
         provider, err = _require_provider(request)
@@ -930,9 +937,36 @@ class MarketplaceBarcodeView(APIView):
         data = request.data if isinstance(request.data, dict) else {}
         marketplace = (data.get("marketplace") or "ozon").strip()
         count = max(1, min(int(data.get("count") or 1), 20))
+        raw_ids = data.get("product_ids") or data.get("product_id") or []
+        if raw_ids is not None and not isinstance(raw_ids, list):
+            raw_ids = [raw_ids]
+        product_ids = []
+        for x in raw_ids or []:
+            s = str(x).strip()
+            if s and s not in product_ids:
+                product_ids.append(s)
+        product_ids = product_ids[:100]
+        want_local = bool(data.get("local")) or (marketplace == "ozon" and not product_ids)
+
+        if want_local or marketplace not in ("ozon", "wildberries"):
+            codes = generate_local_ean13(count)
+            return Response(
+                {
+                    "barcodes": codes,
+                    "source": "local",
+                    "message": "Локальный EAN-13 для новой карточки. На Ozon API нужны product_ids уже созданного товара.",
+                }
+            )
+
         s = _settings(provider)
         if s.environment != "prod":
-            return Response({"sandbox": True, "message": "Генерация штрихкодов доступна в боевом режиме.", "barcodes": []})
+            return Response(
+                {
+                    "sandbox": True,
+                    "message": "Генерация на площадке доступна в боевом режиме. Для черновика используйте local.",
+                    "barcodes": [],
+                }
+            )
         try:
             if marketplace == "wildberries":
                 resp = request_json(
@@ -946,6 +980,7 @@ class MarketplaceBarcodeView(APIView):
                 barcodes = resp.get("data") or resp.get("barcodes") or []
                 if isinstance(barcodes, dict):
                     barcodes = barcodes.get("barcodes") or []
+                source = "wildberries"
             else:
                 resp = request_json(
                     provider=provider,
@@ -953,14 +988,76 @@ class MarketplaceBarcodeView(APIView):
                     method="POST",
                     url=OZON_ACTIONS["barcode.generate"][1],
                     headers=ozon_headers(s),
-                    json_body={"count": count},
+                    json_body={"product_ids": product_ids},
                 )
-                result = resp.get("result") if isinstance(resp, dict) else {}
-                barcodes = (result or {}).get("barcodes") or resp.get("barcodes") or []
+                barcodes = []
+                results = resp.get("result") if isinstance(resp.get("result"), list) else None
+                if results is None and isinstance(resp.get("results"), list):
+                    results = resp["results"]
+                if isinstance(results, list):
+                    for row in results:
+                        if not isinstance(row, dict):
+                            continue
+                        for b in row.get("barcodes") or []:
+                            if b:
+                                barcodes.append(str(b))
+                if not barcodes:
+                    barcodes = resp.get("barcodes") or []
+                errors = resp.get("errors") or []
+                if errors and not barcodes:
+                    first = errors[0] if isinstance(errors[0], dict) else {"error": errors[0]}
+                    msg = first.get("error") or first.get("message") or str(first)
+                    return Response({"detail": msg, "errors": errors, "raw": resp}, status=400)
+                source = "ozon"
             if not isinstance(barcodes, list):
                 barcodes = []
             barcodes = [str(b) for b in barcodes if b]
-            return Response({"barcodes": barcodes, "raw": resp})
+            return Response({"barcodes": barcodes, "source": source, "raw": resp})
+        except MarketplaceError as exc:
+            return Response({"detail": str(exc)}, status=min(exc.status_code, 599) if exc.status_code >= 400 else 400)
+
+
+class MarketplaceOrderLabelView(APIView):
+    """PDF этикетки Ozon FBS: POST {posting_numbers: [...]}."""
+
+    def post(self, request):
+        from django.http import HttpResponse
+
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        data = request.data if isinstance(request.data, dict) else {}
+        numbers = data.get("posting_numbers") or data.get("posting_number") or []
+        if isinstance(numbers, str):
+            numbers = [numbers]
+        if not isinstance(numbers, list):
+            numbers = []
+        numbers = [str(n).strip() for n in numbers if str(n).strip()][:20]
+        if not numbers:
+            return Response({"detail": "Укажите posting_numbers."}, status=400)
+        s = _settings(provider)
+        if s.environment != "prod":
+            return Response(
+                {"sandbox": True, "message": "Печать этикеток доступна в боевом режиме."},
+                status=400,
+            )
+        try:
+            content, ctype = request_bytes(
+                provider=provider,
+                marketplace="ozon",
+                method="POST",
+                url=OZON_ACTIONS["orders.label"][1],
+                headers=ozon_headers(s),
+                json_body={"posting_number": numbers},
+            )
+            if "pdf" not in (ctype or "").lower() and content[:4] != b"%PDF":
+                # Sometimes API wraps error as JSON with 200 — already handled by request_bytes on !ok
+                text = content[:400].decode("utf-8", errors="replace")
+                return Response({"detail": text or "Ozon не вернул PDF этикетки."}, status=400)
+            resp = HttpResponse(content, content_type="application/pdf")
+            name = numbers[0].replace("/", "-") if len(numbers) == 1 else "ozon-labels"
+            resp["Content-Disposition"] = f'attachment; filename="{name}.pdf"'
+            return resp
         except MarketplaceError as exc:
             return Response({"detail": str(exc)}, status=min(exc.status_code, 599) if exc.status_code >= 400 else 400)
 
