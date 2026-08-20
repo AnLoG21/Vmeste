@@ -313,6 +313,22 @@
   outline: none;
 }
 
+.mp-cat-panel {
+  max-height: min(420px, 65vh);
+}
+
+.mp-cat-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 0;
+  flex-wrap: wrap;
+}
+
+.mp-cat-hint {
+  margin: 8px 10px 0;
+}
+
 .mp-sselect-list {
   list-style: none;
   margin: 0;

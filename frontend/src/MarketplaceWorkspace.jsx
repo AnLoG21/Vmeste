@@ -3,7 +3,8 @@ import "./marketplaceWorkspace.css";
 import { renderProductCardVideo } from "./productCardVideo.js";
 import {
   applyAttributeMirrors,
-  flattenOzonCategoryOptions,
+  extractOzonCategoryTree,
+  flattenWbParents,
   flattenWbSubjects,
   normalizeOzonAttributes,
   normalizeOzonDictionaryValues,
@@ -11,6 +12,7 @@ import {
   splitCardAttributes,
   wbCharcInputType,
 } from "./marketplaceCategoryHelpers.js";
+import MarketplaceCategoryPicker from "./marketplaceCategoryPicker.jsx";
 import SearchableSelect from "./marketplaceSearchableSelect.jsx";
 
 const TABS = [
@@ -248,6 +250,10 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [viewer, setViewer] = useState(null);
   const [dotsTick, setDotsTick] = useState(0);
   const [categoryOptions, setCategoryOptions] = useState([]);
+  const [ozonCategoryTree, setOzonCategoryTree] = useState([]);
+  const [wbParents, setWbParents] = useState([]);
+  const [wbParentId, setWbParentId] = useState("");
+  const [wbSubjectsLoading, setWbSubjectsLoading] = useState(false);
   const [attributeFields, setAttributeFields] = useState([]);
   const [attributeMirrors, setAttributeMirrors] = useState([]);
   const [attributeDictOptions, setAttributeDictOptions] = useState({});
@@ -257,6 +263,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
 
   useEffect(() => {
     setCategoryOptions([]);
+    setOzonCategoryTree([]);
+    setWbParents([]);
+    setWbParentId("");
     setAttributeFields([]);
     setAttributeMirrors([]);
     setAttributeDictOptions({});
@@ -538,21 +547,45 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         throw new Error("Категории с площадки доступны в боевом режиме (Меню → Управление).");
       }
       if (mp === "wildberries") {
-        const data = await mpCall("categories.subjects", {}, { limit: 1000, offset: 0 });
+        const data = await mpCall("categories.parents");
         if (data?.sandbox) throw new Error(data.message || "Песочница.");
-        const options = flattenWbSubjects(data);
-        if (!options.length) throw new Error("Wildberries не вернул список предметов.");
-        setCategoryOptions(options);
-        setStatus(`Загружено предметов WB: ${options.length}.`);
+        const parents = flattenWbParents(data);
+        if (!parents.length) throw new Error("Wildberries не вернул родительские категории.");
+        setWbParents(parents);
+        setWbParentId("");
+        setCategoryOptions([]);
+        setOzonCategoryTree([]);
+        setStatus(`Загружено разделов WB: ${parents.length}. Выберите раздел, затем предмет.`);
         return;
       }
       const data = await mpCall("categories.tree", { language: "DEFAULT" });
       if (data?.sandbox) throw new Error(data.message || "Песочница.");
-      const options = flattenOzonCategoryOptions(data);
-      if (!options.length) throw new Error("Ozon не вернул дерево категорий.");
-      setCategoryOptions(options);
-      setStatus(`Загружено категорий Ozon: ${options.length}.`);
+      const tree = extractOzonCategoryTree(data);
+      if (!tree.length) throw new Error("Ozon не вернул дерево категорий.");
+      setOzonCategoryTree(tree);
+      setCategoryOptions([]);
+      setWbParents([]);
+      setStatus(`Дерево Ozon загружено (${tree.length} корневых разделов). Откройте список и идите по уровням или ищите.`);
     });
+  }
+
+  async function loadWbSubjectsForParent(parentId) {
+    setWbParentId(parentId || "");
+    setCategoryOptions([]);
+    if (!parentId) return;
+    setWbSubjectsLoading(true);
+    try {
+      const data = await mpCall("categories.subjects", {}, { parentID: parentId, limit: 1000, offset: 0 });
+      if (data?.sandbox) throw new Error(data.message || "Песочница.");
+      const options = flattenWbSubjects(data);
+      setCategoryOptions(options);
+      if (!options.length) setStatus("В этом разделе WB нет предметов.");
+    } catch (err) {
+      setCategoryOptions([]);
+      setStatus(err?.message || "Не удалось загрузить предметы WB.");
+    } finally {
+      setWbSubjectsLoading(false);
+    }
   }
 
   async function loadOzonDictionaryOptions(categoryId, typeId, fields) {
@@ -1149,18 +1182,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   );
   const tabLabel = TABS.find(([id]) => id === tab)?.[1] || "";
   const ozonCategoryValue = product.category && product.type ? `${product.category}:${product.type}` : "";
-  const categorySelectOptions = useMemo(() => {
-    if (mp === "wildberries") {
-      return categoryOptions.map((item) => ({
-        value: item.id,
-        label: item.parent ? `${item.name} · ${item.parent}` : item.name,
-      }));
-    }
-    return categoryOptions.map((item) => ({
-      value: `${item.categoryId}:${item.typeId}`,
-      label: item.label,
-    }));
-  }, [categoryOptions, mp]);
+  const categoriesReady = mp === "wildberries" ? wbParents.length > 0 : ozonCategoryTree.length > 0;
   const requiredAttributeCount = attributeFields.filter((f) => f.required).length;
   const mediaLimits = mediaLimitsFor(mp);
   const mediaCounts = countMediaItems(product.images);
@@ -1246,31 +1268,35 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                 {mp === "wildberries" ? (
                   <label>
                     Предмет (subjectID)
-                    <SearchableSelect
+                    <MarketplaceCategoryPicker
+                      marketplace="wildberries"
                       value={product.category}
-                      options={categorySelectOptions}
+                      parents={wbParents}
+                      subjects={categoryOptions}
+                      parentId={wbParentId}
+                      onParentChange={loadWbSubjectsForParent}
+                      subjectsLoading={wbSubjectsLoading}
                       onChange={onWbCategoryPick}
                       placeholder="Выберите предмет"
-                      searchPlaceholder="Поиск предмета…"
-                      disabled={!categoryOptions.length}
+                      disabled={!categoriesReady}
                     />
                   </label>
                 ) : (
                   <label>
                     Категория и тип
-                    <SearchableSelect
+                    <MarketplaceCategoryPicker
+                      marketplace="ozon"
+                      tree={ozonCategoryTree}
                       value={ozonCategoryValue}
-                      options={categorySelectOptions}
                       onChange={onOzonCategoryPick}
                       placeholder="Выберите категорию"
-                      searchPlaceholder="Поиск категории или типа…"
-                      disabled={!categoryOptions.length}
+                      disabled={!categoriesReady}
                     />
                   </label>
                 )}
-                {!categoryOptions.length ? (
+                {!categoriesReady ? (
                   <p className="muted small">
-                    Нажмите «Загрузить с площадки» в боевом режиме — подтянутся категории и обязательные характеристики, как в кабинете Ozon/WB.
+                    Нажмите «Загрузить с площадки» в боевом режиме — подтянутся категории по уровням (без зависания).
                   </p>
                 ) : null}
                 {attributesHint ? <p className="muted small">{attributesHint}</p> : null}

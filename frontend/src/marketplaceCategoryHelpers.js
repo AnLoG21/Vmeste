@@ -105,6 +105,98 @@ export function flattenOzonCategoryOptions(tree) {
   return out.sort((a, b) => a.label.localeCompare(b.label, "ru"));
 }
 
+/** Keep Ozon tree as-is for drill-down UI (no full flatten). */
+export function extractOzonCategoryTree(payload) {
+  const roots = Array.isArray(payload) ? payload : payload?.result || payload?.data || [];
+  return Array.isArray(roots) ? roots : [];
+}
+
+export function ozonBrowseChildren(nodes) {
+  return (Array.isArray(nodes) ? nodes : []).filter((n) => n && typeof n === "object");
+}
+
+export function ozonNodeKey(node, idx = 0) {
+  if (node?.type_id) return `t:${node.type_id}`;
+  if (node?.description_category_id) return `c:${node.description_category_id}`;
+  return `i:${idx}:${node?.category_name || node?.type_name || ""}`;
+}
+
+export function ozonNodeTitle(node) {
+  return String(node?.type_name || node?.category_name || "Без названия");
+}
+
+export function ozonNodeIsSelectableType(node) {
+  return Boolean(node?.type_id && (node?.description_category_id || node?.category_name != null));
+}
+
+export function ozonNodeHasChildren(node) {
+  return Array.isArray(node?.children) && node.children.length > 0;
+}
+
+/**
+ * Search leaf types in Ozon tree without building the full flat list.
+ * Stops after `limit` matches to keep UI responsive.
+ */
+export function searchOzonCategoryLeaves(tree, query, limit = 60) {
+  const q = String(query || "")
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, "е");
+  if (q.length < 2) return [];
+  const out = [];
+
+  function walk(nodes, parentCategoryId, path) {
+    if (out.length >= limit) return;
+    for (const node of nodes || []) {
+      if (out.length >= limit) return;
+      if (!node || typeof node !== "object") continue;
+      const catId = node.description_category_id ?? parentCategoryId;
+      const nextPath = node.category_name ? [...path, node.category_name] : path;
+      if (node.type_id && catId) {
+        const label = [...nextPath, node.type_name].filter(Boolean).join(" → ");
+        if (label.toLowerCase().replace(/ё/g, "е").includes(q)) {
+          out.push({
+            categoryId: String(catId),
+            typeId: String(node.type_id),
+            label,
+            value: `${catId}:${node.type_id}`,
+          });
+        }
+      }
+      if (Array.isArray(node.children) && node.children.length) {
+        walk(node.children, catId, nextPath);
+      }
+    }
+  }
+
+  walk(Array.isArray(tree) ? tree : [], null, []);
+  return out;
+}
+
+/** Resolve selected Ozon value label from tree without full flatten. */
+export function findOzonCategoryLabel(tree, categoryId, typeId) {
+  if (!categoryId || !typeId) return "";
+  let found = "";
+  function walk(nodes, parentCategoryId, path) {
+    if (found) return;
+    for (const node of nodes || []) {
+      if (found) return;
+      if (!node || typeof node !== "object") continue;
+      const catId = node.description_category_id ?? parentCategoryId;
+      const nextPath = node.category_name ? [...path, node.category_name] : path;
+      if (String(node.type_id) === String(typeId) && String(catId) === String(categoryId)) {
+        found = [...nextPath, node.type_name].filter(Boolean).join(" → ");
+        return;
+      }
+      if (Array.isArray(node.children) && node.children.length) {
+        walk(node.children, catId, nextPath);
+      }
+    }
+  }
+  walk(Array.isArray(tree) ? tree : [], null, []);
+  return found;
+}
+
 export function normalizeOzonAttributes(payload) {
   const rows = payload?.result || payload?.attributes || payload?.data || [];
   if (!Array.isArray(rows)) return [];
@@ -146,6 +238,19 @@ export function flattenWbSubjects(payload) {
       id: String(row.subjectID ?? row.id ?? row.objectID ?? ""),
       name: row.subjectName ?? row.name ?? row.objectName ?? "",
       parent: row.parentName || row.parent || "",
+      parentId: row.parentID != null ? String(row.parentID) : "",
+    }))
+    .filter((row) => row.id && row.name)
+    .sort((a, b) => a.name.localeCompare(b.name, "ru"));
+}
+
+export function flattenWbParents(payload) {
+  const rows = payload?.data || payload?.result || payload?.parents || [];
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row) => ({
+      id: String(row.id ?? row.parentID ?? row.objectID ?? ""),
+      name: row.name ?? row.parentName ?? row.objectName ?? "",
     }))
     .filter((row) => row.id && row.name)
     .sort((a, b) => a.name.localeCompare(b.name, "ru"));

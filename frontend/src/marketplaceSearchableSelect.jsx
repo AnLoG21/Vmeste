@@ -1,8 +1,8 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
 
 /**
- * Compact combobox: type to filter long option lists (categories, dictionaries).
- * options: [{ value: string, label: string }]
+ * Compact combobox: type to filter option lists.
+ * Renders at most `maxVisible` rows to avoid UI freezes on large dictionaries.
  */
 export default function SearchableSelect({
   value = "",
@@ -13,12 +13,14 @@ export default function SearchableSelect({
   emptyText = "Ничего не найдено",
   disabled = false,
   allowClear = true,
+  maxVisible = 80,
 }) {
   const listId = useId();
   const rootRef = useRef(null);
   const searchRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
   const [activeIdx, setActiveIdx] = useState(0);
 
   const selected = useMemo(
@@ -27,14 +29,17 @@ export default function SearchableSelect({
   );
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = deferredQuery.trim().toLowerCase();
     if (!q) return options;
     return options.filter((o) => {
       const label = String(o.label || "").toLowerCase();
       const val = String(o.value || "").toLowerCase();
       return label.includes(q) || val.includes(q);
     });
-  }, [options, query]);
+  }, [options, deferredQuery]);
+
+  const visible = useMemo(() => filtered.slice(0, Math.max(1, maxVisible)), [filtered, maxVisible]);
+  const truncated = filtered.length > visible.length;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -53,7 +58,7 @@ export default function SearchableSelect({
 
   useEffect(() => {
     setActiveIdx(0);
-  }, [query]);
+  }, [deferredQuery]);
 
   function pick(next) {
     onChange?.(next);
@@ -76,7 +81,7 @@ export default function SearchableSelect({
     }
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIdx((i) => Math.min(i + 1, Math.max(filtered.length - 1, 0)));
+      setActiveIdx((i) => Math.min(i + 1, Math.max(visible.length - 1, 0)));
       return;
     }
     if (e.key === "ArrowUp") {
@@ -86,7 +91,7 @@ export default function SearchableSelect({
     }
     if (e.key === "Enter") {
       e.preventDefault();
-      const row = filtered[activeIdx];
+      const row = visible[activeIdx];
       if (row) pick(row.value);
     }
   }
@@ -127,7 +132,7 @@ export default function SearchableSelect({
                 </button>
               </li>
             ) : null}
-            {filtered.map((opt, idx) => {
+            {visible.map((opt, idx) => {
               const isSelected = String(opt.value) === String(value);
               const isActive = idx === activeIdx;
               return (
@@ -143,7 +148,12 @@ export default function SearchableSelect({
                 </li>
               );
             })}
-            {!filtered.length ? <li className="mp-sselect-empty">{emptyText}</li> : null}
+            {!visible.length ? <li className="mp-sselect-empty">{emptyText}</li> : null}
+            {truncated ? (
+              <li className="mp-sselect-empty">
+                Показаны {visible.length} из {filtered.length}. Уточните поиск.
+              </li>
+            ) : null}
           </ul>
         </div>
       ) : null}
