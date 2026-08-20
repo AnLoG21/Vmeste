@@ -28,6 +28,22 @@ class MarketplaceSettings(models.Model):
         default="",
         help_text="Секрет для входящего webhook синхронизации.",
     )
+    low_stock_threshold = models.PositiveIntegerField(
+        default=5,
+        help_text="Порог алерта «низкий остаток» (шт.).",
+    )
+    price_protect_enabled = models.BooleanField(
+        default=False,
+        help_text="Защита цены: мин. цена и отключение автоскидок при выгрузке цен.",
+    )
+    price_min_floor_percent = models.PositiveIntegerField(
+        default=10,
+        help_text="Мин. цена = цена × (100 − N)% / 100. Например 10 → не ниже 90% от цены.",
+    )
+    ozon_disable_auto_actions = models.BooleanField(
+        default=True,
+        help_text="При защите цены отправлять auto_action_enabled=DISABLED на Ozon.",
+    )
     last_sync_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -72,6 +88,30 @@ class MarketplaceTemplate(models.Model):
     description_text = models.TextField(blank=True, default="")
     price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     stock = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+
+class MarketplaceReplyTemplate(models.Model):
+    KIND_REVIEW = "review"
+    KIND_QUESTION = "question"
+    KIND_CHOICES = [
+        (KIND_REVIEW, "Отзыв"),
+        (KIND_QUESTION, "Вопрос"),
+    ]
+
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="marketplace_reply_templates",
+    )
+    name = models.CharField(max_length=180)
+    marketplace = models.CharField(max_length=20, choices=[("ozon", "Ozon"), ("wildberries", "Wildberries"), ("any", "Любая")])
+    kind = models.CharField(max_length=16, choices=KIND_CHOICES, default=KIND_REVIEW)
+    body = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -29,7 +29,13 @@ from .clients import (
     validate_product_for_import,
     wb_headers,
 )
-from .models import MarketplaceApiLog, MarketplaceProductHistory, MarketplaceSettings, MarketplaceTemplate
+from .models import (
+    MarketplaceApiLog,
+    MarketplaceProductHistory,
+    MarketplaceReplyTemplate,
+    MarketplaceSettings,
+    MarketplaceTemplate,
+)
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -204,6 +210,10 @@ class MarketplaceSettingsView(APIView):
                 "has_webhook_secret": bool((s.webhook_secret or "").strip()),
                 "webhook_url": request.build_absolute_uri("/api/marketplaces/webhook/"),
                 "last_sync_at": s.last_sync_at.isoformat() if s.last_sync_at else None,
+                "low_stock_threshold": s.low_stock_threshold,
+                "price_protect_enabled": s.price_protect_enabled,
+                "price_min_floor_percent": s.price_min_floor_percent,
+                "ozon_disable_auto_actions": s.ozon_disable_auto_actions,
             }
         )
 
@@ -240,6 +250,20 @@ class MarketplaceSettingsView(APIView):
                 body = dict(body)
             body["webhook_secret"] = s.webhook_secret
             return Response(body)
+        if "low_stock_threshold" in data:
+            try:
+                s.low_stock_threshold = max(0, min(int(data.get("low_stock_threshold") or 0), 100000))
+            except (TypeError, ValueError):
+                pass
+        if "price_protect_enabled" in data:
+            s.price_protect_enabled = bool(data.get("price_protect_enabled"))
+        if "price_min_floor_percent" in data:
+            try:
+                s.price_min_floor_percent = max(0, min(int(data.get("price_min_floor_percent") or 0), 90))
+            except (TypeError, ValueError):
+                pass
+        if "ozon_disable_auto_actions" in data:
+            s.ozon_disable_auto_actions = bool(data.get("ozon_disable_auto_actions"))
         s.save()
         return self.get(request)
 
@@ -309,6 +333,138 @@ class MarketplaceTemplateView(APIView):
             return err
         MarketplaceTemplate.objects.filter(provider=provider, id=pk).delete()
         return Response({"ok": True})
+
+
+class MarketplaceReplyTemplateView(APIView):
+    def get(self, request):
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        rows = MarketplaceReplyTemplate.objects.filter(provider=provider)
+        kind = (request.query_params.get("kind") or "").strip()
+        if kind in ("review", "question"):
+            rows = rows.filter(kind=kind)
+        return Response(
+            {
+                "results": [
+                    {
+                        "id": t.id,
+                        "name": t.name,
+                        "marketplace": t.marketplace,
+                        "kind": t.kind,
+                        "body": t.body,
+                    }
+                    for t in rows[:100]
+                ]
+            }
+        )
+
+    def post(self, request):
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        data = request.data if isinstance(request.data, dict) else {}
+        body = str(data.get("body") or "").strip()
+        if not body:
+            return Response({"detail": "Введите текст шаблона ответа."}, status=400)
+        kind = str(data.get("kind") or MarketplaceReplyTemplate.KIND_REVIEW).strip()
+        if kind not in (MarketplaceReplyTemplate.KIND_REVIEW, MarketplaceReplyTemplate.KIND_QUESTION):
+            kind = MarketplaceReplyTemplate.KIND_REVIEW
+        mp = str(data.get("marketplace") or "any").strip()
+        if mp not in ("ozon", "wildberries", "any"):
+            mp = "any"
+        t = MarketplaceReplyTemplate.objects.create(
+            provider=provider,
+            name=str(data.get("name") or "Шаблон ответа")[:180],
+            marketplace=mp,
+            kind=kind,
+            body=body[:4000],
+        )
+        return Response({"id": t.id}, status=201)
+
+    def delete(self, request, pk=None):
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        MarketplaceReplyTemplate.objects.filter(provider=provider, id=pk).delete()
+        return Response({"ok": True})
+
+
+class MarketplaceAlertsView(APIView):
+    def get(self, request):
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        s = _settings(provider)
+        mp = (request.query_params.get("marketplace") or "").strip()
+        hist = MarketplaceProductHistory.objects.filter(provider=provider)
+        if mp in ("ozon", "wildberries"):
+            hist = hist.filter(marketplace=mp)
+
+        low_stock = []
+        failed_imports = []
+        threshold = int(s.low_stock_threshold or 0)
+        for row in hist.order_by("-updated_at")[:300]:
+            product = row.product_data if isinstance(row.product_data, dict) else {}
+            try:
+                stock = int(product.get("stock") or 0)
+            except (TypeError, ValueError):
+                stock = 0
+            if threshold >= 0 and stock <= threshold:
+                low_stock.append(
+                    {
+                        "id": row.id,
+                        "offer_id": row.offer_id,
+                        "name": product.get("name") or row.offer_id,
+                        "stock": stock,
+                        "marketplace": row.marketplace,
+                    }
+                )
+            status = str(row.status or "").lower()
+            import_status = str((row.response or {}).get("import_status") or "").lower() if isinstance(row.response, dict) else ""
+            if status == "failed" or import_status == "failed":
+                err_msg = ""
+                if isinstance(row.response, dict):
+                    err_msg = str(row.response.get("import_errors") or row.response.get("error") or "")[:300]
+                failed_imports.append(
+                    {
+                        "id": row.id,
+                        "offer_id": row.offer_id,
+                        "name": product.get("name") or row.offer_id,
+                        "status": row.status,
+                        "error": err_msg,
+                        "marketplace": row.marketplace,
+                    }
+                )
+
+        logs_qs = MarketplaceApiLog.objects.filter(provider=provider).exclude(error_message="")
+        if mp:
+            logs_qs = logs_qs.filter(marketplace__in=[mp, "wb" if mp == "wildberries" else mp, ""])
+        log_errors = [
+            {
+                "id": log.id,
+                "endpoint": log.endpoint,
+                "status_code": log.status_code,
+                "error": (log.error_message or "")[:300],
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+                "marketplace": log.marketplace,
+            }
+            for log in logs_qs[:20]
+        ]
+
+        return Response(
+            {
+                "low_stock_threshold": threshold,
+                "low_stock": low_stock[:30],
+                "failed_imports": failed_imports[:30],
+                "log_errors": log_errors,
+                "counts": {
+                    "low_stock": len(low_stock),
+                    "failed_imports": len(failed_imports),
+                    "log_errors": len(log_errors),
+                },
+            }
+        )
 
 
 class MarketplaceImportView(APIView):
