@@ -661,8 +661,11 @@ function marketplaceIdsFromRow(row) {
   };
 }
 
-export default function MarketplaceWorkspace({ authFetch, API_URL }) {
-  const [tab, setTab] = useState("create");
+export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }) {
+  const canViewKeys = accessPerms?.marketplace_view_keys !== false;
+  const canManageOrders = accessPerms?.marketplace_manage_orders !== false;
+  const canManageCatalog = accessPerms?.marketplace_manage_catalog !== false;
+  const [tab, setTab] = useState(canManageCatalog ? "create" : canManageOrders ? "orders" : "manage");
   const [menuOpen, setMenuOpen] = useState(false);
   const [mp, setMp] = useState("ozon");
   const [settings, setSettings] = useState(null);
@@ -676,6 +679,10 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     price_protect_enabled: false,
     price_min_floor_percent: 10,
     ozon_disable_auto_actions: true,
+    notify_telegram: true,
+    notify_push: true,
+    notify_on_new_orders: true,
+    notify_on_sync_errors: true,
   });
   const [history, setHistory] = useState([]);
   const [templates, setTemplates] = useState([]);
@@ -698,6 +705,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
   const [financeRows, setFinanceRows] = useState([]);
   const [actionRows, setActionRows] = useState([]);
   const [alerts, setAlerts] = useState(null);
+  const [opsSummary, setOpsSummary] = useState(null);
   const [analyticsCharts, setAnalyticsCharts] = useState({ sales: [], stocks: [], unit: [] });
   const [webhookSecretOnce, setWebhookSecretOnce] = useState("");
   const [warehouseId, setWarehouseId] = useState(() => readStoredWarehouse("ozon"));
@@ -818,6 +826,10 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
       price_protect_enabled: Boolean(data.price_protect_enabled),
       price_min_floor_percent: data.price_min_floor_percent ?? 10,
       ozon_disable_auto_actions: data.ozon_disable_auto_actions !== false,
+      notify_telegram: data.notify_telegram !== false,
+      notify_push: data.notify_push !== false,
+      notify_on_new_orders: data.notify_on_new_orders !== false,
+      notify_on_sync_errors: data.notify_on_sync_errors !== false,
     });
     keysFormDirtyRef.current = false;
   }, []);
@@ -870,6 +882,11 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     const res = await authFetch(`${base}/alerts/?marketplace=${mp === "wildberries" ? "wildberries" : "ozon"}`);
     if (res.ok) setAlerts(await res.json());
   }, [authFetch, base, mp]);
+
+  const loadOpsSummary = useCallback(async () => {
+    const res = await authFetch(`${base}/ops/summary/?hours=24`);
+    if (res.ok) setOpsSummary(await res.json());
+  }, [authFetch, base]);
 
   useEffect(() => {
     loadSettings().catch(() => setStatus("Не удалось загрузить настройки."));
@@ -941,6 +958,10 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
         price_protect_enabled: Boolean(keysForm.price_protect_enabled),
         price_min_floor_percent: Number(keysForm.price_min_floor_percent ?? 10),
         ozon_disable_auto_actions: Boolean(keysForm.ozon_disable_auto_actions),
+        notify_telegram: Boolean(keysForm.notify_telegram),
+        notify_push: Boolean(keysForm.notify_push),
+        notify_on_new_orders: Boolean(keysForm.notify_on_new_orders),
+        notify_on_sync_errors: Boolean(keysForm.notify_on_sync_errors),
       };
       if (keysForm.ozon_api_key && !keysForm.ozon_api_key.startsWith("•")) body.ozon_api_key = keysForm.ozon_api_key;
       if (keysForm.wb_api_key && !keysForm.wb_api_key.startsWith("•")) body.wb_api_key = keysForm.wb_api_key;
@@ -1782,6 +1803,27 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     });
   }
 
+  async function linkOrderToChat(row) {
+    await withBusy("order-chat", async () => {
+      const res = await authFetch(`${base}/orders/link-chat/`, {
+        method: "POST",
+        body: JSON.stringify({
+          marketplace: mp,
+          order_id: row.number || row.id,
+          text: `Заказ ${mp === "wildberries" ? "WB" : "Ozon"} ${row.number || row.id}${row.sku ? ` · ${row.sku}` : ""}`,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(humanizeMarketplaceError(data.detail || "Не удалось связать с чатом", res.status));
+      setStatus(`Заказ сохранён в чат Вместе (conversation #${data.conversation_id}).`);
+    });
+  }
+
+  async function loadOpsSummaryClick() {
+    await withBusy("ops", loadOpsSummary);
+    setStatus("Сводка за 24 часа обновлена.");
+  }
+
   async function cancelOrder(row) {
     const label = row.number || row.id;
     if (!window.confirm(`Отменить заказ ${label}?`)) return;
@@ -2362,6 +2404,17 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
     [history, search],
   );
   const tabLabel = TABS.find(([id]) => id === tab)?.[1] || "";
+  const visibleTabs = useMemo(
+    () =>
+      TABS.filter(([id]) => {
+        if (["create", "products", "analytics"].includes(id)) return canManageCatalog;
+        if (id === "manage") return canViewKeys || canManageCatalog;
+        if (["orders", "supplies", "reviews", "finance"].includes(id)) return canManageOrders || canManageCatalog;
+        if (id === "logs") return canViewKeys || canManageCatalog || canManageOrders;
+        return true;
+      }),
+    [canManageCatalog, canManageOrders, canViewKeys],
+  );
   const ozonCategoryValue = product.category && product.type ? `${product.category}:${product.type}` : "";
   const categoriesReady = mp === "wildberries" ? wbParents.length > 0 : ozonCategoryTree.length > 0;
   const requiredAttributeCount = attributeFields.filter((f) => f.required).length;
@@ -2404,7 +2457,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
           </button>
           {menuOpen ? (
             <div className="mp-menu-drop">
-              {TABS.map(([id, label]) => (
+              {visibleTabs.map(([id, label]) => (
                 <button
                   key={id}
                   type="button"
@@ -3038,6 +3091,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               </li>
             </ul>
           </div>
+          {canViewKeys ? (
           <form className="cafe-form-panel" onSubmit={saveKeys}>
             <h3>Ключи площадок</h3>
             <p className="muted small">Не хранятся в платформенном .env — только у этой организации.</p>
@@ -3080,49 +3134,66 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
               Сохранить ключи
             </button>
           </form>
+          ) : (
+            <div className="cafe-form-panel">
+              <p className="muted">Ключи площадок скрыты — нет права «видеть/менять ключи». Настраивает руководитель в «Сотрудники».</p>
+            </div>
+          )}
 
           <div className="cafe-form-panel">
             <h3>Контроль цены и алерты</h3>
             <p className="muted small">
-              Защита цены: при отправке цен на Ozon ставится min_price и при необходимости отключаются автоакции
-              (auto_action_enabled=DISABLED). На WB скидка в выгрузке остаётся 0. Сохраняется вместе с ключами.
+              При выгрузке цен задаём нижний порог и (для Ozon) запрет автоакций. Настройки сохраняются вместе с ключами.
             </p>
-            <div className="cafe-form-grid">
-              <label className="mp-check cafe-form-span2">
+            <div className="mp-price-control">
+              <label className="mp-switch-row">
+                <span className="mp-switch-text">
+                  <strong>Защитить цену от автоскидок и акций</strong>
+                  <em>Площадка не опустит цену ниже вашего минимума при автоакциях</em>
+                </span>
                 <input
                   type="checkbox"
                   checked={Boolean(keysForm.price_protect_enabled)}
                   onChange={(e) => updateKeysForm({ price_protect_enabled: e.target.checked })}
                 />
-                Включить защиту цены от перебивания скидками/акциями
               </label>
-              <label>
-                Пол мин. цены, %
-                <input
-                  type="number"
-                  min={0}
-                  max={90}
-                  value={keysForm.price_min_floor_percent}
-                  onChange={(e) => updateKeysForm({ price_min_floor_percent: e.target.value })}
-                />
-              </label>
-              <label>
-                Порог низкого остатка, шт.
-                <input
-                  type="number"
-                  min={0}
-                  value={keysForm.low_stock_threshold}
-                  onChange={(e) => updateKeysForm({ low_stock_threshold: e.target.value })}
-                />
-              </label>
-              <label className="mp-check cafe-form-span2">
+              <label className="mp-switch-row">
+                <span className="mp-switch-text">
+                  <strong>Ozon: не включать в автоакции при смене цены</strong>
+                  <em>В API уходит auto_action_enabled = DISABLED</em>
+                </span>
                 <input
                   type="checkbox"
                   checked={Boolean(keysForm.ozon_disable_auto_actions)}
                   onChange={(e) => updateKeysForm({ ozon_disable_auto_actions: e.target.checked })}
                 />
-                Ozon: отключать участие в автоакциях при выгрузке цен
               </label>
+              <div className="cafe-form-grid">
+                <label>
+                  Макс. снижение цены, %
+                  <input
+                    type="number"
+                    min={0}
+                    max={90}
+                    value={keysForm.price_min_floor_percent}
+                    onChange={(e) => updateKeysForm({ price_min_floor_percent: e.target.value })}
+                    disabled={!keysForm.price_protect_enabled}
+                  />
+                  <span className="muted small">
+                    Пример: цена 1000 ₽ и 10% → минимум 900 ₽. Ниже Ozon не опустит через акции.
+                  </span>
+                </label>
+                <label>
+                  Порог низкого остатка, шт.
+                  <input
+                    type="number"
+                    min={0}
+                    value={keysForm.low_stock_threshold}
+                    onChange={(e) => updateKeysForm({ low_stock_threshold: e.target.value })}
+                  />
+                  <span className="muted small">Алерт, если в истории остаток ≤ этого числа.</span>
+                </label>
+              </div>
             </div>
             <button type="button" className="mp-btn" disabled={busy === "keys"} onClick={saveKeys}>
               Сохранить контроль цены
@@ -3139,6 +3210,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                         · {x.offer_id} ({x.stock})
                       </span>
                     ))}
+                    {(alerts.counts?.low_stock || 0) > 0 ? (
+                      <p className="muted small">Что делать: пополните остаток во вкладке Управление → цены/остатки или на складе площадки.</p>
+                    ) : null}
                   </li>
                   <li>
                     Failed-импорт: {alerts.counts?.failed_imports || 0}
@@ -3148,14 +3222,127 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                         · {x.offer_id}
                       </span>
                     ))}
+                    {(alerts.counts?.failed_imports || 0) > 0 ? (
+                      <p className="muted small">
+                        Что делать: откройте товар в «Товарах» → статус импорта / ошибка, исправьте атрибуты или фото и выгрузите снова.
+                      </p>
+                    ) : null}
                   </li>
-                  <li>Ошибки в логах: {alerts.counts?.log_errors || 0}</li>
+                  <li>
+                    Ошибки в логах: {alerts.counts?.log_errors || 0}
+                    {(alerts.log_errors || []).slice(0, 3).map((x) => (
+                      <div key={x.id} className="mp-alert-log-hint">
+                        <code>{x.status_code || "—"}</code> {x.hint || x.error}
+                      </div>
+                    ))}
+                    {(alerts.counts?.log_errors || 0) > 0 ? (
+                      <p className="muted small">
+                        Это история ответов API (часто лимит ~2/сек или отказ тарифа). Откройте «Логи», подождите и повторите запрос;
+                        при 401/403 проверьте ключи в Управлении.
+                      </p>
+                    ) : null}
+                  </li>
                 </ul>
-                <button type="button" className="ghost-btn" onClick={() => withBusy("alerts", loadAlerts)}>
-                  Обновить алерты
-                </button>
+                <div className="mp-actions">
+                  <button type="button" className="ghost-btn" onClick={() => withBusy("alerts", loadAlerts)}>
+                    Обновить алерты
+                  </button>
+                  <button
+                    type="button"
+                    className="mp-btn"
+                    onClick={() => {
+                      setTab("logs");
+                      setMenuOpen(false);
+                    }}
+                  >
+                    Открыть логи
+                  </button>
+                </div>
               </div>
             ) : null}
+          </div>
+
+          {canViewKeys ? (
+            <div className="cafe-form-panel">
+              <h3>Уведомления Telegram / push</h3>
+              <p className="muted small">
+                Telegram: тот же чат организации, что в настройках уведомлений бронирований
+                {settings?.telegram_ready ? " (подключён)." : " (пока не подключён — включите Telegram в организации)."} Push — на устройства с приложением.
+              </p>
+              <div className="mp-price-control">
+                <label className="mp-switch-row">
+                  <span className="mp-switch-text">
+                    <strong>Telegram</strong>
+                    <em>Сообщения в org-чат бота</em>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(keysForm.notify_telegram)}
+                    onChange={(e) => updateKeysForm({ notify_telegram: e.target.checked })}
+                  />
+                </label>
+                <label className="mp-switch-row">
+                  <span className="mp-switch-text">
+                    <strong>Push / in-app</strong>
+                    <em>Владелец и сотрудники с правами маркетплейсов</em>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(keysForm.notify_push)}
+                    onChange={(e) => updateKeysForm({ notify_push: e.target.checked })}
+                  />
+                </label>
+                <label className="mp-switch-row">
+                  <span className="mp-switch-text">
+                    <strong>Новые заказы</strong>
+                    <em>Опрос площадки раз в ~10 мин</em>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(keysForm.notify_on_new_orders)}
+                    onChange={(e) => updateKeysForm({ notify_on_new_orders: e.target.checked })}
+                  />
+                </label>
+                <label className="mp-switch-row">
+                  <span className="mp-switch-text">
+                    <strong>Ошибки синка</strong>
+                    <em>Failed-импорт и сбои фоновых задач</em>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(keysForm.notify_on_sync_errors)}
+                    onChange={(e) => updateKeysForm({ notify_on_sync_errors: e.target.checked })}
+                  />
+                </label>
+              </div>
+              <button type="button" className="mp-btn" disabled={busy === "keys"} onClick={saveKeys}>
+                Сохранить уведомления
+              </button>
+            </div>
+          ) : null}
+
+          <div className="cafe-form-panel">
+            <h3>Что сломалось за сутки</h3>
+            <p className="muted small">Сводка failed-импортов и ошибок API за последние 24 часа. Фоновые задачи с retry и dedup-блокировкой.</p>
+            <div className="mp-actions">
+              <button type="button" className="mp-btn" disabled={busy === "ops"} onClick={loadOpsSummaryClick}>
+                {busy === "ops" ? "Загрузка…" : "Обновить сводку"}
+              </button>
+            </div>
+            {opsSummary ? (
+              <ul className="mp-need-list">
+                <li>Pending-импортов сейчас: {opsSummary.counts?.pending_imports || 0}</li>
+                <li>Failed за {opsSummary.hours} ч: {opsSummary.counts?.failed_imports || 0}</li>
+                <li>Ошибок в логах за {opsSummary.hours} ч: {opsSummary.counts?.log_errors || 0}</li>
+                {(opsSummary.log_errors || []).slice(0, 5).map((x) => (
+                  <li key={x.id} className="muted small">
+                    <code>{x.status_code || "—"}</code> {x.hint || x.error}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted small">Нажмите «Обновить сводку».</p>
+            )}
           </div>
 
           <div className="cafe-form-panel">
@@ -3545,6 +3732,15 @@ export default function MarketplaceWorkspace({ authFetch, API_URL }) {
                           В поставку
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        disabled={busy === "order-chat"}
+                        onClick={() => linkOrderToChat(row)}
+                        title="Сохранить заказ в чат Вместе"
+                      >
+                        В чат
+                      </button>
                       <button
                         type="button"
                         className="mp-btn"

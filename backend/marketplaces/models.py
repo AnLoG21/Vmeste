@@ -44,6 +44,11 @@ class MarketplaceSettings(models.Model):
         default=True,
         help_text="При защите цены отправлять auto_action_enabled=DISABLED на Ozon.",
     )
+    notify_telegram = models.BooleanField(default=True)
+    notify_push = models.BooleanField(default=True)
+    notify_on_new_orders = models.BooleanField(default=True)
+    notify_on_sync_errors = models.BooleanField(default=True)
+    last_seen_order_ids = models.JSONField(default=dict, blank=True)
     last_sync_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 

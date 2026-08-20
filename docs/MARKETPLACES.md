@@ -116,8 +116,14 @@
 - Отзывы + фильтр «без ответа»; шаблоны ответов (`/reply-templates/`).
 - Вопросы WB: список и ответ (`questions.list` / `questions.answer`).
 - Аналитика: продажи, остатки на складах, юнит-экономика по SKU.
-- Алерты: `GET /alerts/` — низкий остаток, failed-импорт, ошибки логов.
-- Контроль цены в настройках: `price_protect_enabled`, `price_min_floor_percent`, `ozon_disable_auto_actions`.
+- Алерты: `GET /alerts/` — низкий остаток, failed-импорт, ошибки логов (с подсказкой «что делать»).
+- Контроль цены: защита от автоскидок, «макс. снижение цены, %», отключение автоакций Ozon.
+- Уведомления Telegram/push о новых заказах и ошибках синка (настройки в Управлении; Celery `poll_new_orders`).
+- Роли сотрудников: `marketplace_view_keys` / `marketplace_manage_orders` / `marketplace_manage_catalog`.
+- Связка заказа с чатом: `POST /orders/link-chat/`.
+- Дашборд «что сломалось»: `GET /ops/summary/?hours=24`; sync-задачи с retry и Redis-dedup.
+
+Sandbox e2e-тесты (без живого API): `python manage.py test marketplaces.tests_e2e_sandbox`.
 
 ---
 

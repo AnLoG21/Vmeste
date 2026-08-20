@@ -1069,6 +1069,71 @@ body.theme-dark .mp-lightbox-close {
   font: inherit;
 }
 
+.mp-price-control {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 10px 0 14px;
+}
+
+.mp-switch-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #e2eaf3;
+  border-radius: 12px;
+  background: #f8fafc;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.mp-switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.mp-switch-text strong {
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: #1f2937;
+}
+
+.mp-switch-text em {
+  font-style: normal;
+  font-size: 0.84rem;
+  color: #667788;
+}
+
+.mp-switch-row > input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  align-self: flex-start;
+}
+
+.mp-price-control .cafe-form-grid label .muted {
+  margin-top: 4px;
+}
+
+.mp-alert-log-hint {
+  margin: 4px 0 0 0;
+  font-size: 0.86rem;
+  color: #5c3a3a;
+}
+
+.mp-alert-log-hint code {
+  margin-right: 6px;
+}
+
 .mp-analytics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

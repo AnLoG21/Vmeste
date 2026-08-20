@@ -10,6 +10,8 @@ urlpatterns = [
     path("reply-templates/", views.MarketplaceReplyTemplateView.as_view()),
     path("reply-templates/<int:pk>/", views.MarketplaceReplyTemplateView.as_view()),
     path("alerts/", views.MarketplaceAlertsView.as_view()),
+    path("ops/summary/", views.MarketplaceOpsSummaryView.as_view()),
+    path("orders/link-chat/", views.MarketplaceOrderChatLinkView.as_view()),
     path("products/import/", views.MarketplaceImportView.as_view()),
     path("products/import-status/", views.MarketplaceImportStatusView.as_view()),
     path("products/fetch/", views.MarketplaceProductFetchView.as_view()),

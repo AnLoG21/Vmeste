@@ -3004,6 +3004,9 @@ export default function App() {
       manage_client_chats: true,
       manage_staff: false,
       can_delegate_permissions: false,
+      marketplace_view_keys: false,
+      marketplace_manage_orders: true,
+      marketplace_manage_catalog: false,
     };
     if (!me || me.role !== "staff") return base;
     const link = orgStaff.find((l) => Number(l.staff) === Number(me.id));
@@ -7155,10 +7158,20 @@ export default function App() {
     } else if (id === "cafe" || id === "cafe_orders") {
       return false;
     }
-    if (me?.provider_sphere === "marketplaces") {
+    if (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces") {
       if (id === "intervals" || id === "bookings" || id === "services" || id === "my_bookings") return false;
       if (id === "analytics" || id === "reviews") return false;
-      if (id === "marketplaces" && role !== "provider") return false;
+      if (id === "marketplaces") {
+        if (role === "provider") return me?.provider_sphere === "marketplaces";
+        if (role === "staff") {
+          return (
+            staffHasPerm("marketplace_manage_orders") ||
+            staffHasPerm("marketplace_manage_catalog") ||
+            staffHasPerm("marketplace_view_keys")
+          );
+        }
+        return false;
+      }
     } else if (id === "marketplaces") {
       return false;
     }
@@ -11501,6 +11514,9 @@ export default function App() {
               manage_client_chats: true,
               manage_staff: false,
               can_delegate_permissions: false,
+              marketplace_view_keys: false,
+              marketplace_manage_orders: true,
+              marketplace_manage_catalog: false,
               ...(link.permissions || {}),
             };
             const permLabels = [
@@ -11511,11 +11527,14 @@ export default function App() {
               ["manage_client_chats", "Чаты с клиентами"],
               ["manage_staff", "Добавление сотрудников"],
               ["can_delegate_permissions", "Может настраивать права других"],
+              ["marketplace_view_keys", "Маркетплейсы: видеть/менять ключи"],
+              ["marketplace_manage_orders", "Маркетплейсы: только заказы/отзывы"],
+              ["marketplace_manage_catalog", "Маркетплейсы: каталог и выгрузка"],
             ].filter(([key]) => {
-              if (me?.provider_sphere === "marketplaces") {
+              if (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces") {
                 return !["manage_bookings", "manage_intervals", "manage_services"].includes(key);
               }
-              return true;
+              return !String(key).startsWith("marketplace_");
             });
             const rowName = formatStaffClientName(link.staff_user);
             const permsOpen = staffPermsOpenId === link.id;
@@ -12643,8 +12662,30 @@ export default function App() {
         {accessToken && currentView === "cafe_orders" && me?.role === "provider" && me?.provider_sphere === "cafe_restaurant" && (
           <CafeOrdersPage authFetch={authFetch} API_URL={API_URL} />
         )}
-        {accessToken && currentView === "marketplaces" && me?.role === "provider" && me?.provider_sphere === "marketplaces" && (
-          <MarketplaceWorkspace authFetch={authFetch} API_URL={API_URL} />
+        {accessToken &&
+          currentView === "marketplaces" &&
+          ((me?.role === "provider" && me?.provider_sphere === "marketplaces") ||
+            (me?.role === "staff" &&
+              (staffHasPerm("marketplace_manage_orders") ||
+                staffHasPerm("marketplace_manage_catalog") ||
+                staffHasPerm("marketplace_view_keys")))) && (
+          <MarketplaceWorkspace
+            authFetch={authFetch}
+            API_URL={API_URL}
+            accessPerms={
+              me?.role === "staff"
+                ? {
+                    marketplace_view_keys: Boolean(staffEffectivePerms.marketplace_view_keys),
+                    marketplace_manage_orders: Boolean(staffEffectivePerms.marketplace_manage_orders),
+                    marketplace_manage_catalog: Boolean(staffEffectivePerms.marketplace_manage_catalog),
+                  }
+                : {
+                    marketplace_view_keys: true,
+                    marketplace_manage_orders: true,
+                    marketplace_manage_catalog: true,
+                  }
+            }
+          />
         )}
         {accessToken && currentView === "inspections" && (me?.role === "provider" || me?.role === "staff") && (
           <InspectionWorkspace

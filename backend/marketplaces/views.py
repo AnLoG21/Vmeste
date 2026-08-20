@@ -18,6 +18,7 @@ from .clients import (
     build_wb_card,
     fetch_wb_nm_id,
     generate_local_ean13,
+    humanize_api_error,
     normalize_marketplace_images,
     normalize_product_identifiers,
     ozon_headers,
@@ -61,16 +62,90 @@ def _provider(user):
     return user
 
 
-def _require_provider(request):
-    provider = _provider(request.user)
-    if not provider:
-        return None, Response({"detail": "Кабинет маркетплейсов доступен только исполнителям этой сферы."}, status=403)
+def _staff_marketplace_link(user):
+    """Accepted staff link to a marketplaces provider, if any."""
+    if not user or not user.is_authenticated:
+        return None
+    if getattr(user, "role", None) != User.Role.STAFF:
+        return None
+    from booking.models import ProviderStaff
+
+    return (
+        ProviderStaff.objects.filter(
+            staff=user,
+            is_active=True,
+            invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+            provider__role=User.Role.PROVIDER,
+            provider__provider_sphere=User.ProviderSphere.MARKETPLACES,
+        )
+        .select_related("provider")
+        .first()
+    )
+
+
+def _full_marketplace_perms():
+    return {
+        "marketplace_view_keys": True,
+        "marketplace_manage_orders": True,
+        "marketplace_manage_catalog": True,
+    }
+
+
+def _staff_marketplace_perms(link) -> dict:
+    perms = link.permissions if isinstance(link.permissions, dict) else {}
+    return {
+        "marketplace_view_keys": bool(perms.get("marketplace_view_keys")),
+        "marketplace_manage_orders": bool(perms.get("marketplace_manage_orders", True)),
+        "marketplace_manage_catalog": bool(perms.get("marketplace_manage_catalog")),
+    }
+
+
+def _resolve_marketplace_access(request):
+    """
+    Returns (provider, perms_dict, error_response).
+    Provider is always the organization owner (marketplace sphere).
+    """
+    owner = _provider(request.user)
+    if owner:
+        return owner, _full_marketplace_perms(), None
+    link = _staff_marketplace_link(request.user)
+    if link:
+        return link.provider, _staff_marketplace_perms(link), None
+    return None, None, Response(
+        {"detail": "Кабинет маркетплейсов доступен исполнителям этой сферы и их сотрудникам."},
+        status=403,
+    )
+
+
+def _require_provider(request, *, need_keys=False, need_orders=False, need_catalog=False):
+    provider, perms, err = _resolve_marketplace_access(request)
+    if err:
+        return None, err
+    if need_keys and not perms.get("marketplace_view_keys"):
+        return None, Response({"detail": "Нет права просматривать/менять ключи площадок."}, status=403)
+    if need_orders and not perms.get("marketplace_manage_orders"):
+        return None, Response({"detail": "Нет права работать с заказами маркетплейса."}, status=403)
+    if need_catalog and not perms.get("marketplace_manage_catalog"):
+        return None, Response({"detail": "Нет права управлять каталогом."}, status=403)
+    request.marketplace_perms = perms
     return provider, None
 
 
 def _settings(provider) -> MarketplaceSettings:
     obj, _ = MarketplaceSettings.objects.get_or_create(provider=provider)
     return obj
+
+
+def _log_error_hint(error: str, status_code: int | None) -> str:
+    msg = humanize_api_error(error, status_code)
+    low = (error or "").lower()
+    if "rate limit" in low or (status_code == 429):
+        return f"{msg} → подождите 2–5 сек и повторите; не гоняйте массовые запросы подряд."
+    if status_code in (401, 403) or "unauthorized" in low or "forbidden" in low:
+        return f"{msg} → проверьте Client ID / API Key и боевой режим."
+    if "subscription" in low or "permissiondenied" in low:
+        return f"{msg} → откройте тариф/Premium в кабинете продавца."
+    return f"{msg} → детали во вкладке «Логи»; исправьте данные и повторите действие."
 
 
 def _upload_to_yandex_disk(token: str, filename: str, upload) -> str | None:
@@ -188,13 +263,23 @@ class MarketplaceSettingsView(APIView):
         if err:
             return err
         s = _settings(provider)
+        perms = getattr(request, "marketplace_perms", _full_marketplace_perms())
+        telegram_ready = False
+        try:
+            from notifications.delivery import get_or_create_messaging
+
+            msg = get_or_create_messaging(provider)
+            telegram_ready = bool(msg.enable_telegram and msg.has_telegram())
+        except Exception:
+            telegram_ready = False
+        can_keys = bool(perms.get("marketplace_view_keys"))
         return Response(
             {
                 "environment": s.environment,
-                "ozon_client_id": s.ozon_client_id,
-                "has_ozon_api_key": s.has_ozon(),
-                "has_wb_api_key": s.has_wb(),
-                "has_yandex_disk": bool((s.yandex_disk_token or "").strip()),
+                "ozon_client_id": s.ozon_client_id if can_keys else "",
+                "has_ozon_api_key": s.has_ozon() if can_keys else False,
+                "has_wb_api_key": s.has_wb() if can_keys else False,
+                "has_yandex_disk": bool((s.yandex_disk_token or "").strip()) if can_keys else False,
                 "yandex_disk_oauth": bool(settings.YANDEX_OAUTH_CLIENT_ID and settings.YANDEX_OAUTH_CLIENT_SECRET),
                 "video_enabled": True,
                 "ai_enabled": bool((getattr(settings, "OPENROUTER_API_KEY", "") or "").strip())
@@ -207,13 +292,19 @@ class MarketplaceSettingsView(APIView):
                     if bool((getattr(settings, "OPENROUTER_API_KEY", "") or "").strip())
                     else (getattr(settings, "OLLAMA_MODEL", "") or "")
                 ),
-                "has_webhook_secret": bool((s.webhook_secret or "").strip()),
+                "has_webhook_secret": bool((s.webhook_secret or "").strip()) if can_keys else False,
                 "webhook_url": request.build_absolute_uri("/api/marketplaces/webhook/"),
                 "last_sync_at": s.last_sync_at.isoformat() if s.last_sync_at else None,
                 "low_stock_threshold": s.low_stock_threshold,
                 "price_protect_enabled": s.price_protect_enabled,
                 "price_min_floor_percent": s.price_min_floor_percent,
                 "ozon_disable_auto_actions": s.ozon_disable_auto_actions,
+                "notify_telegram": s.notify_telegram,
+                "notify_push": s.notify_push,
+                "notify_on_new_orders": s.notify_on_new_orders,
+                "notify_on_sync_errors": s.notify_on_sync_errors,
+                "permissions": perms,
+                "telegram_ready": telegram_ready,
             }
         )
 
@@ -221,10 +312,24 @@ class MarketplaceSettingsView(APIView):
         provider, err = _require_provider(request)
         if err:
             return err
+        perms = getattr(request, "marketplace_perms", _full_marketplace_perms())
         s = _settings(provider)
         data = request.data if isinstance(request.data, dict) else {}
+        touches_keys = any(
+            k in data
+            for k in (
+                "environment",
+                "ozon_client_id",
+                "ozon_api_key",
+                "wb_api_key",
+                "yandex_disk_token",
+                "rotate_webhook_secret",
+            )
+        )
+        if touches_keys and not perms.get("marketplace_view_keys"):
+            return Response({"detail": "Нет права менять ключи площадок."}, status=403)
         env = (data.get("environment") or s.environment or "sandbox").strip()
-        if env in ("sandbox", "prod"):
+        if "environment" in data and env in ("sandbox", "prod"):
             s.environment = env
         if "ozon_client_id" in data:
             s.ozon_client_id = str(data.get("ozon_client_id") or "").strip()
@@ -264,6 +369,14 @@ class MarketplaceSettingsView(APIView):
                 pass
         if "ozon_disable_auto_actions" in data:
             s.ozon_disable_auto_actions = bool(data.get("ozon_disable_auto_actions"))
+        if "notify_telegram" in data:
+            s.notify_telegram = bool(data.get("notify_telegram"))
+        if "notify_push" in data:
+            s.notify_push = bool(data.get("notify_push"))
+        if "notify_on_new_orders" in data:
+            s.notify_on_new_orders = bool(data.get("notify_on_new_orders"))
+        if "notify_on_sync_errors" in data:
+            s.notify_on_sync_errors = bool(data.get("notify_on_sync_errors"))
         s.save()
         return self.get(request)
 
@@ -446,6 +559,7 @@ class MarketplaceAlertsView(APIView):
                 "endpoint": log.endpoint,
                 "status_code": log.status_code,
                 "error": (log.error_message or "")[:300],
+                "hint": _log_error_hint(log.error_message or "", log.status_code),
                 "created_at": log.created_at.isoformat() if log.created_at else None,
                 "marketplace": log.marketplace,
             }
@@ -467,9 +581,116 @@ class MarketplaceAlertsView(APIView):
         )
 
 
+class MarketplaceOpsSummaryView(APIView):
+    """Dashboard: what broke in the last N hours."""
+
+    def get(self, request):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        try:
+            hours = max(1, min(int(request.query_params.get("hours") or 24), 168))
+        except (TypeError, ValueError):
+            hours = 24
+        since = timezone.now() - timedelta(hours=hours)
+        failed = list(
+            MarketplaceProductHistory.objects.filter(provider=provider, status="failed", updated_at__gte=since).order_by(
+                "-updated_at"
+            )[:50]
+        )
+        logs = list(
+            MarketplaceApiLog.objects.filter(provider=provider, created_at__gte=since)
+            .exclude(error_message="")
+            .order_by("-id")[:50]
+        )
+        pending = MarketplaceProductHistory.objects.filter(provider=provider, status="pending").count()
+        return Response(
+            {
+                "hours": hours,
+                "since": since.isoformat(),
+                "pending_imports": pending,
+                "failed_imports": [
+                    {
+                        "id": row.id,
+                        "offer_id": row.offer_id,
+                        "marketplace": row.marketplace,
+                        "error": str((row.response or {}).get("import_errors") or (row.response or {}).get("error") or "")[:300]
+                        if isinstance(row.response, dict)
+                        else "",
+                        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                    }
+                    for row in failed
+                ],
+                "log_errors": [
+                    {
+                        "id": log.id,
+                        "endpoint": log.endpoint,
+                        "status_code": log.status_code,
+                        "error": (log.error_message or "")[:300],
+                        "hint": _log_error_hint(log.error_message or "", log.status_code),
+                        "created_at": log.created_at.isoformat() if log.created_at else None,
+                    }
+                    for log in logs
+                ],
+                "counts": {
+                    "failed_imports": len(failed),
+                    "log_errors": len(logs),
+                    "pending_imports": pending,
+                },
+            }
+        )
+
+
+class MarketplaceOrderChatLinkView(APIView):
+    """Link a marketplace order to Vmeste chat (client or org notes)."""
+
+    def post(self, request):
+        provider, err = _require_provider(request, need_orders=True)
+        if err:
+            return err
+        data = request.data if isinstance(request.data, dict) else {}
+        order_id = str(data.get("order_id") or data.get("posting_number") or "").strip()
+        if not order_id:
+            return Response({"detail": "Укажите order_id / posting_number."}, status=400)
+        marketplace = "wildberries" if (data.get("marketplace") or "") == "wildberries" else "ozon"
+        client = None
+        client_id = data.get("client_id")
+        if client_id not in (None, ""):
+            try:
+                client = User.objects.filter(id=int(client_id), role=User.Role.CLIENT).first()
+            except (TypeError, ValueError):
+                client = None
+        try:
+            from chat.services import post_marketplace_order_note
+
+            msg = post_marketplace_order_note(
+                provider,
+                marketplace=marketplace,
+                order_id=order_id,
+                text=str(data.get("text") or ""),
+                sender=request.user,
+                client=client,
+            )
+        except Exception as exc:
+            logger.exception("order chat link failed")
+            return Response({"detail": str(exc)[:300]}, status=400)
+        return Response(
+            {
+                "ok": True,
+                "conversation_id": msg.conversation_id,
+                "message_id": msg.id,
+                "linked_to_client": bool(client),
+            }
+        )
+
+
 class MarketplaceImportView(APIView):
     def post(self, request):
-        provider, err = _require_provider(request)
+        provider, err = _require_provider(request, need_catalog=True)
         if err:
             return err
         data = request.data if isinstance(request.data, dict) else {}

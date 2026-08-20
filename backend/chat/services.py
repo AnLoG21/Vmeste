@@ -114,6 +114,51 @@ def post_review_reply_in_chat(provider, client, review, reply_text: str, sender=
     )
 
 
+def post_marketplace_order_note(provider, *, marketplace: str, order_id: str, text: str = "", sender=None, client=None):
+    """Связка заказа маркетплейса с перепиской: клиентский чат или «Избранное» организации."""
+    sender = sender or provider
+    order_id = str(order_id or "").strip()
+    marketplace = "wildberries" if marketplace == "wildberries" else "ozon"
+    label = "Wildberries" if marketplace == "wildberries" else "Ozon"
+    body = (text or "").strip() or f"Заказ {label} {order_id}"
+    payload = {
+        "marketplace": marketplace,
+        "order_id": order_id,
+        "source": "marketplace",
+    }
+    if client is not None:
+        conv, _ = get_or_create_client_conversation(provider, client)
+    else:
+        conv = (
+            Conversation.objects.filter(
+                organization=provider,
+                is_saved_messages=True,
+                is_group=False,
+            )
+            .order_by("id")
+            .first()
+        )
+        if not conv:
+            with transaction.atomic():
+                conv = Conversation.objects.create(
+                    title="Заказы маркетплейсов",
+                    is_group=False,
+                    is_saved_messages=True,
+                    is_client_correspondence=False,
+                    organization=provider,
+                )
+                ConversationMember.objects.get_or_create(conversation=conv, user=provider)
+        else:
+            ConversationMember.objects.get_or_create(conversation=conv, user=provider)
+    return Message.objects.create(
+        conversation=conv,
+        sender=sender,
+        kind=Message.Kind.TEXT,
+        text=body,
+        payload=payload,
+    )
+
+
 def post_booking_message(provider, client, text, sender=None):
     if not (text or "").strip():
         return None

@@ -11,6 +11,9 @@ def default_staff_permissions():
         "manage_client_chats": True,
         "manage_staff": False,
         "can_delegate_permissions": False,
+        "marketplace_view_keys": False,
+        "marketplace_manage_orders": True,
+        "marketplace_manage_catalog": False,
     }
 
 
