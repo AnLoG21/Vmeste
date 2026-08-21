@@ -64,10 +64,42 @@ class ProviderStaffViewSet(viewsets.ModelViewSet):
                 .select_related("staff", "provider")
                 .prefetch_related("portfolio_photos")
             )
+        if user.role == "staff":
+            own_links = list(
+                ProviderStaff.objects.filter(
+                    staff=user,
+                    is_active=True,
+                    invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+                )
+            )
+            manages = any(
+                bool((l.permissions or {}).get("can_delegate_permissions"))
+                or bool((l.permissions or {}).get("manage_staff"))
+                for l in own_links
+            )
+            if manages and own_links:
+                provider_ids = [l.provider_id for l in own_links]
+                return (
+                    ProviderStaff.objects.filter(provider_id__in=provider_ids)
+                    .select_related("staff", "provider")
+                    .prefetch_related("portfolio_photos")
+                )
+            return (
+                ProviderStaff.objects.filter(staff=user)
+                .select_related("staff", "provider")
+                .prefetch_related("portfolio_photos")
+            )
+        return ProviderStaff.objects.none()
+
+    def _staff_manager_link(self, user):
         return (
-            ProviderStaff.objects.filter(staff=user)
-            .select_related("staff", "provider")
-            .prefetch_related("portfolio_photos")
+            ProviderStaff.objects.filter(
+                staff=user,
+                is_active=True,
+                invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+            )
+            .order_by("id")
+            .first()
         )
 
     def _can_edit_staff_card(self, link) -> bool:
@@ -82,6 +114,10 @@ class ProviderStaffViewSet(viewsets.ModelViewSet):
         link = self.get_object()
         user = request.user
         if user.role == "staff":
+            own = self._staff_manager_link(user)
+            can_delegate = bool(own and (own.permissions or {}).get("can_delegate_permissions"))
+            if can_delegate and own and link.provider_id == own.provider_id:
+                return super().partial_update(request, *args, **kwargs)
             if link.staff_id != user.id:
                 return Response(status=status.HTTP_403_FORBIDDEN)
             # Сотрудник может править только свою краткую информацию
@@ -183,11 +219,31 @@ class ProviderStaffViewSet(viewsets.ModelViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def create(self, request, *args, **kwargs):
-        if request.user.role != "provider":
-            return Response(status=status.HTTP_403_FORBIDDEN)
         from subscriptions.access import provider_can_manage_staff
 
-        if not provider_can_manage_staff(request.user):
+        provider = None
+        if request.user.role == "provider":
+            provider = request.user
+        elif request.user.role == "staff":
+            own = (
+                ProviderStaff.objects.filter(
+                    staff=request.user,
+                    is_active=True,
+                    invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+                )
+                .select_related("provider")
+                .first()
+            )
+            if not own or not bool((own.permissions or {}).get("manage_staff")):
+                return Response(
+                    {"detail": "Нет права «Добавление сотрудников»."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            provider = own.provider
+        else:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        if not provider_can_manage_staff(provider):
             return Response(
                 {
                     "detail": "Добавление сотрудников доступно на тарифе «Бизнес». Записи остаются бесплатными."
@@ -225,7 +281,12 @@ class ProviderStaffViewSet(viewsets.ModelViewSet):
                 {"detail": "Можно приглашать только пользователей с ролью «клиент» или «сотрудник»."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        existing = ProviderStaff.objects.filter(provider=request.user, staff=staff_user).first()
+        if staff_user.id == provider.id:
+            return Response(
+                {"detail": "Нельзя пригласить самого владельца организации."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        existing = ProviderStaff.objects.filter(provider=provider, staff=staff_user).first()
         if existing:
             if existing.invitation_status == ProviderStaff.InvitationStatus.PENDING:
                 return Response({"detail": "Приглашение уже отправлено."}, status=status.HTTP_400_BAD_REQUEST)
@@ -244,7 +305,7 @@ class ProviderStaffViewSet(viewsets.ModelViewSet):
                 ser = self.get_serializer(existing)
                 return Response(ser.data, status=status.HTTP_200_OK)
         link = ProviderStaff.objects.create(
-            provider=request.user,
+            provider=provider,
             staff=staff_user,
             display_name=display_name,
             invitation_status=ProviderStaff.InvitationStatus.PENDING,

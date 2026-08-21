@@ -17,7 +17,10 @@ export const VIEW_PATHS = {
   inspections: "/inspections",
   marketplaces: "/marketplaces",
   client_map: "/map",
+  activity: "/activity",
   client_book: "/book",
+  cafe_my_orders: "/cafe-orders-mine",
+  loyalty: "/loyalty",
   client_bookings: "/my-bookings",
   client_reviews: "/my-reviews",
 };

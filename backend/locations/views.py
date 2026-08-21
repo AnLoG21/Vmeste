@@ -19,6 +19,23 @@ from .models import ProviderLocation
 from .serializers import ProviderLocationClientSerializer, ProviderLocationSerializer
 
 
+def _haversine_km(lat1, lon1, lat2, lon2):
+    """Rough distance in km for nearby sort (sphere / service discovery)."""
+    from math import asin, cos, radians, sin, sqrt
+
+    try:
+        la1, lo1, la2, lo2 = map(float, (lat1, lon1, lat2, lon2))
+    except (TypeError, ValueError):
+        return 1e9
+    if not all(abs(x) <= 180 for x in (la1, lo1, la2, lo2)):
+        return 1e9
+    r = 6371.0
+    dlat = radians(la2 - la1)
+    dlon = radians(lo2 - lo1)
+    a = sin(dlat / 2) ** 2 + cos(radians(la1)) * cos(radians(la2)) * sin(dlon / 2) ** 2
+    return 2 * r * asin(min(1.0, sqrt(a)))
+
+
 def _parse_time_hm(value):
     if not value or not isinstance(value, str):
         return None
@@ -294,6 +311,25 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
                     "provider_working_hours": prov.organization_working_hours or {},
                 }
             )
+
+        near_lat = (request.query_params.get("near_lat") or "").strip()
+        near_lon = (request.query_params.get("near_lon") or "").strip()
+        if near_lat and near_lon:
+            try:
+                lat0 = float(near_lat)
+                lon0 = float(near_lon)
+
+                def _dist_key(item):
+                    return _haversine_km(lat0, lon0, item.get("latitude"), item.get("longitude"))
+
+                data.sort(key=_dist_key)
+                for item in data:
+                    d = _dist_key(item)
+                    if d < 1e8:
+                        item["distance_km"] = round(d, 2)
+            except (TypeError, ValueError):
+                pass
+
         return Response(data)
 
     def _provider_price_range(self, provider_id):

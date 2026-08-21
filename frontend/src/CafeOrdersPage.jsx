@@ -83,6 +83,14 @@ function PrintReceiptIcon() {
   );
 }
 
+function orderRelevantToPerms(order, { canOrders, canKitchen, canSeating, canDelivery }) {
+  const mode = order?.mode || "";
+  if (mode === "delivery") return canDelivery || canOrders || canKitchen;
+  if (mode === "dine_in") return canSeating || canOrders || canKitchen;
+  if (mode === "takeaway") return canOrders || canKitchen;
+  return canOrders || canKitchen || canSeating || canDelivery;
+}
+
 export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null, orgStaff = [], providerId = null }) {
   const perms = accessPerms || {
     cafe_orders: true,
@@ -94,6 +102,7 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
   const canKitchen = Boolean(perms.cafe_kitchen);
   const canSeating = Boolean(perms.cafe_seating);
   const canDelivery = Boolean(perms.cafe_delivery);
+  const roleSound = { canOrders, canKitchen, canSeating, canDelivery };
   const courierOptions = useMemo(() => {
     const list = (orgStaff || []).filter((l) => l.is_active && l.invitation_status !== "pending");
     return list.map((l) => ({
@@ -162,14 +171,20 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
     const list = Array.isArray(data) ? data : [];
     if (primed.current) {
       const fresh = list.filter((o) => !knownIds.current.has(o.id));
-      const kitchenNew = fresh.filter((o) => KITCHEN_STATUSES.has(o.status) || o.status === "paid" || o.status === "accepted");
-      if (fresh.length && soundOn) playBeep(kitchenNew.length ? 3 : 1);
+      const forMe = fresh.filter((o) => orderRelevantToPerms(o, roleSound));
+      if (forMe.length && soundOn) {
+        const kitchenNew = forMe.filter(
+          (o) => KITCHEN_STATUSES.has(o.status) || o.status === "paid" || o.status === "accepted",
+        );
+        // Звук только по роли (кухня / зал / доставка), не общий «бип вкладки» на любой заказ.
+        playBeep(canKitchen && kitchenNew.length ? 3 : 1);
+      }
     } else {
       primed.current = true;
     }
     knownIds.current = new Set(list.map((o) => o.id));
     setOrders(list);
-  }, [API_URL, authFetch, soundOn]);
+  }, [API_URL, authFetch, soundOn, canOrders, canKitchen, canSeating, canDelivery]);
 
   const loadFloorAndMenu = useCallback(async () => {
     const [fRes, mRes] = await Promise.all([
@@ -186,7 +201,8 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
       }
       if (primedWaiter.current) {
         const fresh = activeCalls.filter((k) => !knownWaiterCalls.current.has(k));
-        if (fresh.length && soundOn) {
+        // Вызов официанта — только залу/заказам, не кухне/курьеру без этих прав.
+        if (fresh.length && soundOn && (canSeating || canOrders)) {
           playBeep(2);
           try {
             if (typeof Notification !== "undefined" && Notification.permission === "granted") {
@@ -209,7 +225,7 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
       setFloorId((prev) => prev || floorsData[0]?.id || null);
     }
     if (mRes.ok) setCategories(await mRes.json());
-  }, [API_URL, authFetch, soundOn]);
+  }, [API_URL, authFetch, soundOn, canSeating, canOrders]);
 
   useEffect(() => {
     loadOrders();

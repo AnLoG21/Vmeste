@@ -10,6 +10,7 @@ import CafeOrdersPage from "./CafeOrdersPage.jsx";
 import CafeProviderWorkspace from "./CafeProviderWorkspace.jsx";
 import ClientCafeOrdersPage from "./ClientCafeOrdersPage.jsx";
 import ClientLoyaltyPage from "./ClientLoyaltyPage.jsx";
+import ClientActivityFeed from "./ClientActivityFeed.jsx";
 import MarketplaceWorkspace from "./MarketplaceWorkspace.jsx";
 import InspectionWorkspace from "./InspectionWorkspace.jsx";
 import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
@@ -17,6 +18,13 @@ import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
 import SalonLoyaltyPackagesPanel from "./SalonLoyaltyPackagesPanel.jsx";
 import MiniDatePicker from "./MiniDatePicker.jsx";
+import {
+  orgSphereOf,
+  staffPermLabelsForSphere,
+  sphereUsesServiceAssignment,
+  STAFF_PERM_DEFAULTS,
+} from "./staffPermissions.js";
+import { getDevicePosition } from "./geoPosition.js";
 import "./landing.css";
 import {
   ORG_GALLERY_MAX_PHOTOS,
@@ -247,19 +255,21 @@ const BOOKMARK_CATALOG = [
   { id: "cafe", label: "Зал и меню", roles: ["provider", "staff"] },
   { id: "cafe_orders", label: "Заказы", roles: ["provider", "staff"] },
   { id: "cafe_my_orders", label: "Заказы из ресторанов", roles: ["client"] },
+  { id: "activity", label: "Моё", roles: ["client"] },
   { id: "loyalty", label: "Лояльность", roles: ["client"] },
-  { id: "inspections", label: "Приёмка", roles: ["provider", "staff"] },
+  { id: "inspections", label: "Приёмка", roles: ["client", "provider", "staff"] },
   { id: "marketplaces", label: "Маркетплейсы", roles: ["provider"], menuIcon: "market" },
   { id: "analytics", label: "Аналитика", roles: ["provider", "staff"], menuIcon: "analytics" },
 ];
 
 const DEFAULT_SUBNAV_BOOKMARKS = {
-  client: ["client_map", "bookings", "cafe_my_orders", "loyalty", "chats"],
-  provider: ["bookings", "client_map", "my_bookings", "chats"],
-  staff: ["bookings", "reviews", "chats"],
+  client: ["client_map", "activity", "chats"],
+  provider: ["bookings", "client_map", "analytics", "my_bookings", "chats"],
+  staff: ["bookings", "reviews", "analytics", "chats"],
   provider_cafe: ["cafe_orders", "cafe", "reviews", "analytics", "client_map", "chats"],
-  staff_cafe: ["cafe_orders", "cafe", "chats"],
-  provider_service: ["bookings", "client_map", "my_bookings", "chats", "inspections"],
+  staff_cafe: ["cafe_orders", "cafe", "analytics", "chats"],
+  provider_service: ["bookings", "client_map", "my_bookings", "analytics", "chats", "inspections"],
+  provider_salon: ["bookings", "client_map", "my_bookings", "analytics", "chats"],
   provider_marketplaces: ["marketplaces", "analytics", "reviews", "chats"],
 };
 
@@ -272,6 +282,9 @@ function defaultSubnavBookmarks(role, sphere) {
   }
   if (role === "provider" && sphere === "service_center") {
     return [...DEFAULT_SUBNAV_BOOKMARKS.provider_service];
+  }
+  if (role === "provider" && sphere === "hair_salon") {
+    return [...DEFAULT_SUBNAV_BOOKMARKS.provider_salon];
   }
   if (role === "provider" && sphere === "marketplaces") {
     return [...DEFAULT_SUBNAV_BOOKMARKS.provider_marketplaces];
@@ -295,9 +308,9 @@ function loadSubnavBookmarks(role, sphere) {
     );
     let next = list.filter((id) => allowed.has(id));
     if (role === "client") {
-      next = next.filter((id) => id !== "inspections");
-      if (!next.includes("cafe_my_orders")) next = [...next, "cafe_my_orders"];
-      if (!next.includes("loyalty")) next = [...next, "loyalty"];
+      if (!next.includes("activity")) {
+        next = ["activity", ...next.filter((id) => !["bookings", "activity"].includes(id))];
+      }
     }
     if (role === "provider" && sphere === "cafe_restaurant") {
       next = next.filter((id) => id !== "bookings");
@@ -3021,6 +3034,11 @@ export default function App() {
   const canManageOrgSettings =
     me?.role === "provider" || (me?.role === "staff" && Boolean(staffEffectivePerms.can_delegate_permissions));
 
+  const canInviteStaff =
+    me?.role === "provider" || (me?.role === "staff" && Boolean(staffEffectivePerms.manage_staff));
+
+  const canAccessStaffPage = canManageOrgSettings || canInviteStaff;
+
   const orgActiveStaffIdsKey = useMemo(
     () =>
       orgStaff
@@ -3722,10 +3740,21 @@ export default function App() {
     }
     if (f.time_from) p.set("time_from", f.time_from);
     if (f.time_to) p.set("time_to", f.time_to);
-    const qs = p.toString();
-    const url = qs ? `${API_URL}/locations/?${qs}` : `${API_URL}/locations/`;
     let cancelled = false;
     (async () => {
+      // «Рядом»: сортировка по дистанции при известной геолокации (особенно с фильтром сферы/услуги).
+      try {
+        const pos = await getDevicePosition();
+        if (pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lon)) {
+          p.set("near_lat", String(pos.lat));
+          p.set("near_lon", String(pos.lon));
+        }
+      } catch {
+        /* ignore geo */
+      }
+      if (cancelled) return;
+      const qs = p.toString();
+      const url = qs ? `${API_URL}/locations/?${qs}` : `${API_URL}/locations/`;
       const locationsRes = await authFetch(url);
       if (cancelled || !locationsRes.ok) return;
       setAllLocations(await locationsRes.json());
@@ -3734,6 +3763,21 @@ export default function App() {
       cancelled = true;
     };
   }, [accessToken, me?.role, clientDiscoverSearch, clientDiscoverFilters]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const sphere = clientDiscoverFilters?.sphere;
+    const label = sphereOptions.find((s) => s.key === sphere)?.value;
+    const service = String(clientDiscoverFilters?.service || "").trim();
+    let title = "Вместе";
+    if (label && service) title = `${service} · ${label} рядом — Вместе`;
+    else if (label) title = `${label} рядом — Вместе`;
+    else if (service) title = `${service} рядом — Вместе`;
+    document.title = title;
+    return () => {
+      document.title = "Вместе";
+    };
+  }, [clientDiscoverFilters?.sphere, clientDiscoverFilters?.service, sphereOptions]);
 
   useEffect(() => {
     if (!accessToken || me?.role !== "client") return;
@@ -5993,7 +6037,8 @@ export default function App() {
     }
     setStaffInviteStatus("Приглашение отправлено. Сотрудник увидит запрос в чатах.");
     setStaffInviteForm({ invite_identifier: "" });
-    loadSellerData();
+    if (me?.role === "provider") loadSellerData();
+    else loadStaffWorkspace();
     loadChatActivity();
   }
 
@@ -7079,14 +7124,33 @@ export default function App() {
     const def = BOOKMARK_CATALOG.find((b) => b.id === id);
     if (!def || !def.roles.includes(role)) return false;
     if (id === "reviews" && !canViewOrgReviews()) return false;
-    if (id === "analytics" && role === "staff" && !staffHasPerm("manage_bookings")) return false;
+    if (id === "analytics" && role === "staff") {
+      const sphere = orgSphereOf(me);
+      if (sphere === "cafe_restaurant") {
+        if (
+          !staffHasPerm("cafe_orders") &&
+          !staffHasPerm("cafe_kitchen") &&
+          !staffHasPerm("cafe_settings")
+        ) {
+          return false;
+        }
+      } else if (sphere === "marketplaces") {
+        if (!staffHasPerm("marketplace_manage_orders") && !staffHasPerm("marketplace_manage_catalog")) {
+          return false;
+        }
+      } else if (!staffHasPerm("manage_bookings")) {
+        return false;
+      }
+    }
     if (role === "staff") {
       if (id === "bookings" && !staffHasPerm("manage_bookings")) return false;
       if (id === "intervals" && !staffHasPerm("manage_intervals")) return false;
       if (id === "services" && !staffHasPerm("manage_services")) return false;
       if (id === "chats" && !staffHasPerm("manage_chats") && !staffHasPerm("manage_client_chats")) return false;
     }
-    if ((id === "staff" || id === "organization") && !canManageOrgSettings) return false;
+    if (id === "organization" && !canManageOrgSettings) return false;
+    if (id === "staff" && !canAccessStaffPage) return false;
+    if (id === "activity" && role !== "client") return false;
     if (me?.provider_sphere === "cafe_restaurant" || me?.employer_sphere === "cafe_restaurant") {
       if (
         id === "intervals" ||
@@ -7138,7 +7202,7 @@ export default function App() {
       return false;
     }
     if (id === "inspections") {
-      if (role === "client") return false;
+      if (role === "client") return true;
       if (role === "provider") return me?.provider_sphere === "service_center";
       if (role === "staff") {
         return (
@@ -7184,7 +7248,14 @@ export default function App() {
 
   function renderSubnavBookmarkButton(id) {
     if (!isBookmarkAvailable(id)) return null;
-    const active = currentView === id;
+    const active =
+      currentView === id ||
+      (id === "analytics" &&
+        currentView === "marketplaces" &&
+        marketplaceInitialTab === "analytics") ||
+      (id === "reviews" &&
+        currentView === "marketplaces" &&
+        marketplaceInitialTab === "reviews");
     const label = bookmarkLabel(id, me?.role, me?.provider_sphere);
     if (id === "chats") {
       return (
@@ -7302,6 +7373,10 @@ export default function App() {
         color: "#ef6c00",
         d: "M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.11 0 2-.9 2-2V5c0-1.1-.89-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z",
       },
+      activity: {
+        color: "#5d4037",
+        d: "M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z",
+      },
       loyalty: {
         color: "#c62828",
         d: "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z",
@@ -7327,7 +7402,7 @@ export default function App() {
     const role = me?.role;
     if (!role) return [];
     const inSubnav = new Set(subnavBookmarks);
-    const preferred = ["marketplaces", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "client_map", "my_bookings", "intervals", "services", "analytics", "bookings", "reviews", "chats"];
+    const preferred = ["marketplaces", "cafe", "cafe_orders", "activity", "cafe_my_orders", "loyalty", "client_map", "my_bookings", "intervals", "services", "analytics", "bookings", "reviews", "chats"];
     return preferred.filter((id) => !inSubnav.has(id) && isBookmarkAvailable(id));
   }
 
@@ -11755,7 +11830,10 @@ export default function App() {
   }
 
   function renderStaffManagement() {
-    if (!canManageOrgSettings) return null;
+    if (!canAccessStaffPage) return null;
+    const orgSphere = orgSphereOf(me);
+    const permLabels = staffPermLabelsForSphere(orgSphere);
+    const showServiceAssignment = sphereUsesServiceAssignment(orgSphere);
     return (
       <section className="card profile-card">
         <h2>Сотрудники</h2>
@@ -11765,7 +11843,7 @@ export default function App() {
         {me?.role === "provider" && (
           <p className="muted">Руководитель настраивает всё. Сотрудник с правом «Может настраивать права других» видит этот раздел и может менять права коллег.</p>
         )}
-        {me?.role === "provider" && (
+        {canInviteStaff && (
           <form onSubmit={inviteStaff} className="form">
             <input
               placeholder="Email или логин сотрудника"
@@ -11779,66 +11857,13 @@ export default function App() {
         <ul className="list staff-list">
           {orgStaff.map((link) => {
             const permBase = {
-              manage_bookings: true,
-              manage_intervals: false,
-              manage_services: false,
-              manage_chats: true,
-              manage_client_chats: true,
-              manage_staff: false,
-              can_delegate_permissions: false,
-              marketplace_view_keys: false,
-              marketplace_manage_orders: true,
-              marketplace_manage_catalog: false,
-              cafe_orders: true,
-              cafe_kitchen: false,
-              cafe_seating: true,
-              cafe_delivery: false,
-              cafe_menu: false,
-              cafe_settings: false,
+              ...STAFF_PERM_DEFAULTS,
               ...(link.permissions || {}),
             };
-            const permLabels = [
-              ["manage_bookings", "Записи клиентов"],
-              ["manage_intervals", "Календарь интервалов"],
-              ["manage_services", "Услуги и категории"],
-              ["manage_chats", "Чаты организации"],
-              ["manage_client_chats", "Чаты с клиентами"],
-              ["manage_staff", "Добавление сотрудников"],
-              ["can_delegate_permissions", "Может настраивать права других"],
-              ["manage_inspections", "Автосервис: приёмка / заказ-наряды"],
-              ["marketplace_view_keys", "Маркетплейсы: видеть/менять ключи"],
-              ["marketplace_manage_orders", "Маркетплейсы: только заказы/отзывы"],
-              ["marketplace_manage_catalog", "Маркетплейсы: каталог и выгрузка"],
-              ["cafe_orders", "Кафе: заказы зала"],
-              ["cafe_kitchen", "Кафе: кухня"],
-              ["cafe_seating", "Кафе: посадка / столы"],
-              ["cafe_delivery", "Кафе: доставка / курьер"],
-              ["cafe_menu", "Кафе: меню"],
-              ["cafe_settings", "Кафе: настройки и зоны"],
-            ].filter(([key]) => {
-              if (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces") {
-                return !["manage_bookings", "manage_intervals", "manage_services", "manage_inspections"].includes(key) && !String(key).startsWith("cafe_");
-              }
-              if (me?.provider_sphere === "cafe_restaurant") {
-                return (
-                  !["manage_bookings", "manage_intervals", "manage_services", "manage_inspections"].includes(key) &&
-                  !String(key).startsWith("marketplace_")
-                );
-              }
-              if (me?.provider_sphere === "service_center") {
-                return !String(key).startsWith("marketplace_") && !String(key).startsWith("cafe_");
-              }
-              if (me?.provider_sphere === "hair_salon") {
-                return (
-                  !String(key).startsWith("marketplace_") &&
-                  !String(key).startsWith("cafe_") &&
-                  key !== "manage_inspections"
-                );
-              }
-              return !String(key).startsWith("marketplace_") && !String(key).startsWith("cafe_");
-            });
             const rowName = formatStaffClientName(link.staff_user);
             const permsOpen = staffPermsOpenId === link.id;
+            const canEditPerms =
+              me?.role === "provider" || Boolean(staffEffectivePerms.can_delegate_permissions);
             return (
               <li key={link.id} className="staff-block">
                 <div className="staff-row">
@@ -11872,7 +11897,7 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                {link.is_active && (me?.role === "provider" || staffEffectivePerms.can_delegate_permissions) && (
+                {link.is_active && canEditPerms && (
                   <div className="staff-perms">
                     <button
                       type="button"
@@ -11897,7 +11922,7 @@ export default function App() {
                     )}
                   </div>
                 )}
-                {link.is_active && (me?.role === "provider" || staffEffectivePerms.can_delegate_permissions) && (
+                {link.is_active && canEditPerms && showServiceAssignment && (
                   <div className="staff-perms">
                     <button
                       type="button"
@@ -12011,7 +12036,7 @@ export default function App() {
       : { backgroundColor: activeChatWallpaper }
     : undefined;
   const tgMainDark = activeChatWallpaper === "#1e2a24";
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "inspections", "marketplaces"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces"].includes(currentView);
 
   return (
     <div className={`page${accessToken ? " page-logged" : " page--guest"}`}>
@@ -12219,7 +12244,7 @@ export default function App() {
                     <span className="menu-item-label">Подписки</span>
                   </button>
                 )}
-                {canManageOrgSettings && (
+                {canAccessStaffPage && (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("staff"); setMenuOpen(false); }}>
                     <span className="menu-item-icon" aria-hidden="true">
                       <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" /></svg>
@@ -13053,7 +13078,7 @@ export default function App() {
             onOpenPhotos={openOrgPhotoLightbox}
           />
         )}
-        {accessToken && currentView === "staff" && canManageOrgSettings && renderStaffManagement()}
+        {accessToken && currentView === "staff" && canAccessStaffPage && renderStaffManagement()}
 
         {accessToken && canViewOrgReviews() && currentView === "reviews" && renderProviderReviewsBlock()}
         {accessToken && me?.role === "provider" && currentView === "bookings" && me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" && renderBookingsBlock("Записи клиентов")}
@@ -15045,6 +15070,13 @@ export default function App() {
           </section>
         )}
 
+        {accessToken && me?.role === "client" && currentView === "activity" && (
+          <ClientActivityFeed
+            authFetch={authFetch}
+            API_URL={API_URL}
+            onNavigate={(view) => setCurrentView(view)}
+          />
+        )}
         {accessToken && me?.role === "client" && currentView === "bookings" && renderBookingsBlock("Мои записи")}
         {accessToken && me?.role === "client" && currentView === "cafe_my_orders" && (
           <ClientCafeOrdersPage authFetch={authFetch} API_URL={API_URL} />

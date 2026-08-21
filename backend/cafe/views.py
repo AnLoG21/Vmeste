@@ -1258,14 +1258,11 @@ class CafeGuestOrderCreateView(APIView):
                 if twin:
                     order.client = twin
 
-            org_shop_id = (settings_obj.yookassa_shop_id or "").strip()
-            org_secret = (settings_obj.yookassa_secret_key or "").strip()
-
             if pay_method == CafeOrder.PayMethod.ONLINE:
                 from payments.gateway import create_org_payment, provider_ready
+                from payments.resolve import resolve_org_payment_setup
 
-                code = settings_obj.payment_provider or "yookassa"
-                creds = settings_obj.payment_creds()
+                code, creds = resolve_org_payment_setup(provider)
                 if not provider_ready(code, creds):
                     order.delete()
                     return Response(

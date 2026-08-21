@@ -10,6 +10,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from payments.gateway import create_org_payment, provider_ready, sync_payment_status
+from payments.resolve import resolve_org_payment_setup
 
 from .models import Booking, ProviderAcquiring
 
@@ -43,15 +44,8 @@ def ensure_calendar_token(provider) -> str:
 
 
 def resolve_payment_setup(provider) -> tuple[str, dict]:
-    """Return (provider_code, creds) for booking prepay."""
-    acq = ProviderAcquiring.objects.filter(provider=provider).first()
-    code = (acq.payment_provider if acq else "yookassa") or "yookassa"
-    creds = acq.payment_creds() if acq else {}
-    if not provider_ready(code, creds) and getattr(provider, "provider_sphere", "") == "cafe_restaurant":
-        cafe = getattr(provider, "cafe_settings", None)
-        if cafe and provider_ready(cafe.payment_provider, cafe.payment_creds()):
-            return cafe.payment_provider or "yookassa", cafe.payment_creds()
-    return code, creds
+    """Return (provider_code, creds) for booking prepay — общий слой payments.resolve."""
+    return resolve_org_payment_setup(provider)
 
 
 def resolve_yookassa_keys(provider) -> tuple[str, str]:

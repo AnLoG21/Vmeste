@@ -9679,3 +9679,82 @@ body.theme-dark .password-eye-btn:hover {
 .auth-role-hint {
   margin: 0 0 10px;
 }
+
+/* Client unified activity feed */
+.client-activity-feed-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.client-activity-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 16px;
+}
+.client-activity-tabs button {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.client-activity-tabs button.is-active {
+  border-color: #1f6feb;
+  color: #1f6feb;
+  font-weight: 600;
+}
+.client-activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.client-activity-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.client-activity-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.client-activity-kind {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #f0f3f7;
+  color: #334;
+  white-space: nowrap;
+}
+.client-activity-kind--booking { background: #e3f2fd; color: #1565c0; }
+.client-activity-kind--cafe { background: #fff3e0; color: #ef6c00; }
+.client-activity-kind--inspection { background: #e0f2f1; color: #00897b; }
+.client-activity-kind--loyalty { background: #fce4ec; color: #c62828; }
+.client-activity-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.org-review-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

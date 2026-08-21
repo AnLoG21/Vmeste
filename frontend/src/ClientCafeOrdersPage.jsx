@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import CafeOrderMapPin, { yandexMapsPinUrl } from "./CafeOrderMapPin.jsx";
 import { hasCoords } from "./geoPosition.js";
+import OrgReviewComposer, { Stars } from "./OrgReviewComposer.jsx";
 import "./cafeGuest.css";
 
 const STATUS_FLOW = [
@@ -34,25 +35,6 @@ function statusIndex(status) {
   return i < 0 ? -1 : i;
 }
 
-function Stars({ value, onChange, readOnly = false }) {
-  return (
-    <span className="cafe-stars" aria-label={value ? `Оценка ${value}` : "Без оценки"}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button
-          key={n}
-          type="button"
-          className={`cafe-star${n <= value ? " is-on" : ""}`}
-          disabled={readOnly}
-          onClick={() => onChange?.(n)}
-          aria-label={`${n} звёзд`}
-        >
-          ★
-        </button>
-      ))}
-    </span>
-  );
-}
-
 /**
  * Клиентский список заказов из кафе/ресторанов.
  */
@@ -63,6 +45,7 @@ export default function ClientCafeOrdersPage({ authFetch, API_URL }) {
   const [status, setStatus] = useState("");
   const [ratingBusy, setRatingBusy] = useState(null);
   const [reviewForm, setReviewForm] = useState({ rating: 5, text: "" });
+  const [reviewPhotos, setReviewPhotos] = useState([]);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -171,8 +154,7 @@ export default function ClientCafeOrdersPage({ authFetch, API_URL }) {
     }
   }
 
-  async function submitOrgReview(e) {
-    e.preventDefault();
+  async function submitOrgReview() {
     if (!selected?.id || !selected.provider) return;
     setReviewBusy(true);
     setStatus("");
@@ -182,10 +164,7 @@ export default function ClientCafeOrdersPage({ authFetch, API_URL }) {
       fd.append("cafe_order", String(selected.id));
       fd.append("rating", String(reviewForm.rating || 5));
       fd.append("text", reviewForm.text || "");
-      const input = document.getElementById("cafe-order-review-photos");
-      if (input?.files) {
-        for (const f of input.files) fd.append("photos", f);
-      }
+      for (const f of reviewPhotos) fd.append("photos", f);
       const res = await authFetch(`${API_URL}/reviews/`, { method: "POST", body: fd });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -199,7 +178,7 @@ export default function ClientCafeOrdersPage({ authFetch, API_URL }) {
         return;
       }
       setReviewForm({ rating: 5, text: "" });
-      if (input) input.value = "";
+      setReviewPhotos([]);
       await loadDetail(selected.id);
       setStatus("Отзыв отправлен.");
     } finally {
@@ -337,26 +316,20 @@ export default function ClientCafeOrdersPage({ authFetch, API_URL }) {
                 ) : null}
               </div>
             ) : (
-              <form className="cafe-order-review-form" onSubmit={submitOrgReview}>
+              <div className="cafe-order-review-form">
                 <p className="muted small">Оценка и отзыв доступны после завершения заказа.</p>
-                <Stars
-                  value={reviewForm.rating}
-                  onChange={(rating) => setReviewForm((p) => ({ ...p, rating }))}
-                />
-                <textarea
+                <OrgReviewComposer
+                  rating={reviewForm.rating}
+                  text={reviewForm.text}
+                  onRatingChange={(rating) => setReviewForm((p) => ({ ...p, rating }))}
+                  onTextChange={(text) => setReviewForm((p) => ({ ...p, text }))}
+                  photos={reviewPhotos}
+                  onPhotosChange={setReviewPhotos}
+                  busy={reviewBusy}
+                  onSubmit={submitOrgReview}
                   placeholder="Текст отзыва (необязательно)"
-                  value={reviewForm.text}
-                  onChange={(e) => setReviewForm((p) => ({ ...p, text: e.target.value }))}
-                  rows={3}
                 />
-                <label className="field-label" htmlFor="cafe-order-review-photos">
-                  Фото (необязательно)
-                </label>
-                <input id="cafe-order-review-photos" type="file" accept="image/*" multiple />
-                <button type="submit" className="landing-btn" disabled={reviewBusy}>
-                  {reviewBusy ? "Отправка…" : "Отправить отзыв"}
-                </button>
-              </form>
+              </div>
             )}
           </section>
         ) : null}
