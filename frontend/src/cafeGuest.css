@@ -548,37 +548,50 @@
 }
 .cafe-guest-address {
   position: relative;
+  z-index: 5;
+  overflow: visible;
 }
-.cafe-guest-suggest {
-  list-style: none;
-  margin: 4px 0 0;
-  padding: 4px;
+.cafe-guest-address-hint {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+}
+.cafe-guest-suggestions.suggestions,
+.cafe-guest-address .suggestions {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #ffd9bd;
+  border-radius: 8px;
+  padding: 6px;
+  background: #fff;
   position: absolute;
   left: 0;
   right: 0;
-  z-index: 30;
-  max-height: 220px;
+  top: calc(100% + 4px);
+  z-index: 60;
+  max-height: 240px;
   overflow: auto;
-  background: #fff;
-  border: 1px solid #ffd0a8;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(90, 40, 10, 0.12);
+  box-shadow: 0 10px 28px rgba(90, 40, 10, 0.14);
+  box-sizing: border-box;
 }
-.cafe-guest-suggest-item {
-  display: block;
-  width: 100%;
+.cafe-guest-address .suggestion-item {
   text-align: left;
-  border: 0;
-  background: transparent;
+  background: #fff7ef;
+  color: #8d3e00;
+  border: 1px solid #ffd9bd;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
   padding: 10px 12px;
   border-radius: 8px;
   font: inherit;
   cursor: pointer;
-  color: #3d2412;
 }
-.cafe-guest-suggest-item:hover,
-.cafe-guest-suggest-item:focus {
-  background: #fff3e8;
+.cafe-guest-address .suggestion-item:hover,
+.cafe-guest-address .suggestion-item:focus {
+  background: #ffe8d2;
 }
 .muted.small,
 .muted {

@@ -449,6 +449,22 @@ button:hover {
   gap: 8px;
 }
 
+.org-calendar-copy-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.org-calendar-copy-row input {
+  min-width: 0;
+}
+
+.org-calendar-block .ghost-btn {
+  margin-top: 4px;
+}
+
 .calendar-grid {
   margin-top: 10px;
   display: grid;

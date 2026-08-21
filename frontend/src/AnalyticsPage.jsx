@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const WIDGETS_KEY = "vmeste_analytics_widgets_v1";
+const WIDGETS_KEY_BOOKING = "vmeste_analytics_widgets_v1";
+const WIDGETS_KEY_CAFE = "vmeste_analytics_widgets_cafe_v1";
 
-const DEFAULT_WIDGETS = {
+const DEFAULT_WIDGETS_BOOKING = {
   kpis: true,
   statuses: true,
   bookingsChart: true,
@@ -13,20 +14,51 @@ const DEFAULT_WIDGETS = {
   table: true,
 };
 
-const STATUS_LABELS = {
+const DEFAULT_WIDGETS_CAFE = {
+  kpis: true,
+  statuses: true,
+  modes: true,
+  bookingsChart: true,
+  revenueChart: true,
+  servicesChart: true,
+  staffChart: false,
+  ratingsChart: true,
+  table: true,
+};
+
+const BOOKING_STATUS_LABELS = {
   new: "Новая",
   confirmed: "Подтверждена",
   cancelled: "Отменена",
   done: "Выполнена",
 };
 
-function loadWidgets() {
+const CAFE_STATUS_LABELS = {
+  awaiting_payment: "Ожидает оплаты",
+  paid: "Оплачен",
+  accepted: "Принят",
+  cooking: "Готовится",
+  ready: "Готов",
+  delivering: "Доставляется",
+  done: "Завершён",
+  cancelled: "Отменён",
+};
+
+const CAFE_MODE_LABELS = {
+  dine_in: "За столом",
+  takeaway: "Самовывоз",
+  delivery: "Доставка",
+};
+
+function loadWidgets(isCafe) {
+  const key = isCafe ? WIDGETS_KEY_CAFE : WIDGETS_KEY_BOOKING;
+  const defaults = isCafe ? DEFAULT_WIDGETS_CAFE : DEFAULT_WIDGETS_BOOKING;
   try {
-    const raw = localStorage.getItem(WIDGETS_KEY);
-    if (!raw) return { ...DEFAULT_WIDGETS };
-    return { ...DEFAULT_WIDGETS, ...JSON.parse(raw) };
+    const raw = localStorage.getItem(key);
+    if (!raw) return { ...defaults };
+    return { ...defaults, ...JSON.parse(raw) };
   } catch {
-    return { ...DEFAULT_WIDGETS };
+    return { ...defaults };
   }
 }
 
@@ -95,7 +127,9 @@ function LineChart({ points, valueKey = "value", color = "#1f6feb" }) {
   );
 }
 
-export default function AnalyticsPage({ apiUrl, authFetch }) {
+export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }) {
+  const isCafe = providerSphere === "cafe_restaurant";
+  const statusLabels = isCafe ? CAFE_STATUS_LABELS : BOOKING_STATUS_LABELS;
   const [appliedFrom, setAppliedFrom] = useState(() => daysAgoIso(30));
   const [appliedTo, setAppliedTo] = useState(() => todayIso());
   const [draftFrom, setDraftFrom] = useState(() => daysAgoIso(30));
@@ -105,18 +139,23 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [widgets, setWidgets] = useState(loadWidgets);
+  const [widgets, setWidgets] = useState(() => loadWidgets(isCafe));
   const [widgetsOpen, setWidgetsOpen] = useState(false);
   const [tableFilter, setTableFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [sortKey, setSortKey] = useState("created_at");
   const [sortDir, setSortDir] = useState("desc");
 
+  useEffect(() => {
+    setWidgets(loadWidgets(isCafe));
+  }, [isCafe]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     const qs = new URLSearchParams({ from: appliedFrom, to: appliedTo });
-    const res = await authFetch(`${apiUrl}/booking/analytics/?${qs}`);
+    const url = isCafe ? `${apiUrl}/cafe/analytics/?${qs}` : `${apiUrl}/booking/analytics/?${qs}`;
+    const res = await authFetch(url);
     if (!res.ok) {
       setError("Не удалось загрузить аналитику.");
       setData(null);
@@ -125,7 +164,7 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
     }
     setData(await res.json());
     setLoading(false);
-  }, [apiUrl, authFetch, appliedFrom, appliedTo]);
+  }, [apiUrl, authFetch, appliedFrom, appliedTo, isCafe]);
 
   useEffect(() => {
     load();
@@ -151,7 +190,7 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
     setWidgets((prev) => {
       const next = { ...prev, [key]: !prev[key] };
       try {
-        localStorage.setItem(WIDGETS_KEY, JSON.stringify(next));
+        localStorage.setItem(isCafe ? WIDGETS_KEY_CAFE : WIDGETS_KEY_BOOKING, JSON.stringify(next));
       } catch {
         /* ignore */
       }
@@ -163,18 +202,30 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else {
       setSortKey(key);
-      setSortDir(key === "created_at" || key === "price" ? "desc" : "asc");
+      setSortDir(key === "created_at" || key === "price" || key === "total" ? "desc" : "asc");
     }
   }
 
+  const tableRows = isCafe ? data?.orders || [] : data?.bookings || [];
+
   const filteredRows = useMemo(() => {
-    const rows = data?.bookings || [];
+    const rows = tableRows;
     const q = tableFilter.trim().toLowerCase();
     let out = rows;
     if (statusFilter) out = out.filter((r) => r.status === statusFilter);
     if (q) {
       out = out.filter((r) =>
-        [r.service, r.staff, r.client, r.status, STATUS_LABELS[r.status]]
+        [
+          r.service,
+          r.staff,
+          r.client,
+          r.guest,
+          r.table_label,
+          r.mode,
+          CAFE_MODE_LABELS[r.mode],
+          r.status,
+          statusLabels[r.status],
+        ]
           .filter(Boolean)
           .join(" ")
           .toLowerCase()
@@ -188,30 +239,66 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
       if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
       return String(av ?? "").localeCompare(String(bv ?? ""), "ru") * dir;
     });
-  }, [data, tableFilter, statusFilter, sortKey, sortDir]);
+  }, [tableRows, tableFilter, statusFilter, sortKey, sortDir, statusLabels]);
 
-  const serviceBars = (data?.by_service || []).slice(0, 10).map((s) => ({
-    id: s.id,
-    label: s.name,
-    value: s.count,
-  }));
+  const serviceBars = (
+    isCafe ? data?.by_item || [] : data?.by_service || []
+  )
+    .slice(0, 10)
+    .map((s) => ({
+      id: s.id ?? s.name,
+      label: s.name,
+      value: s.count,
+    }));
+
   const staffBars = (data?.by_staff || []).slice(0, 10).map((s) => ({
     id: s.id ?? "none",
     label: s.name,
     value: s.count,
   }));
+
+  const modeBars = (data?.by_mode_detail || []).map((m) => ({
+    id: m.mode,
+    label: CAFE_MODE_LABELS[m.mode] || m.mode,
+    value: m.count,
+  }));
+
   const ratingBars = Object.entries(data?.rating_histogram || {})
     .map(([k, v]) => ({ label: `${k}★`, value: v, id: k }))
     .sort((a, b) => Number(b.id) - Number(a.id));
 
   const periodLabel = `${new Date(`${appliedFrom}T12:00:00`).toLocaleDateString("ru-RU")} – ${new Date(`${appliedTo}T12:00:00`).toLocaleDateString("ru-RU")}`;
 
+  const widgetOptions = isCafe
+    ? [
+        ["kpis", "Сводка"],
+        ["statuses", "По статусам"],
+        ["modes", "По режимам"],
+        ["bookingsChart", "Заказы по дням"],
+        ["revenueChart", "Выручка по дням"],
+        ["servicesChart", "Топ блюд"],
+        ["ratingsChart", "Оценки блюд"],
+        ["table", "Таблица заказов"],
+      ]
+    : [
+        ["kpis", "Сводка"],
+        ["statuses", "По статусам"],
+        ["bookingsChart", "Записи по дням"],
+        ["revenueChart", "Выручка по дням"],
+        ["servicesChart", "По услугам"],
+        ["staffChart", "По мастерам"],
+        ["ratingsChart", "Оценки"],
+        ["table", "Таблица записей"],
+      ];
+
   return (
     <section className="card full-width analytics-page">
       <div className="analytics-head">
         <div>
           <h2>Аналитика</h2>
-          <p className="muted small">Записи, выручка и отзывы · {periodLabel}</p>
+          <p className="muted small">
+            {isCafe ? "Заказы, выручка и оценки блюд" : "Записи, выручка и отзывы"} · {periodLabel}
+          </p>
         </div>
         <div className="analytics-toolbar">
           <button type="button" className="ghost-btn" onClick={() => setWidgetsOpen((v) => !v)}>
@@ -255,16 +342,7 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
 
       {widgetsOpen && (
         <div className="analytics-widgets-panel">
-          {[
-            ["kpis", "Сводка"],
-            ["statuses", "По статусам"],
-            ["bookingsChart", "Записи по дням"],
-            ["revenueChart", "Выручка по дням"],
-            ["servicesChart", "По услугам"],
-            ["staffChart", "По мастерам"],
-            ["ratingsChart", "Оценки"],
-            ["table", "Таблица записей"],
-          ].map(([key, label]) => (
+          {widgetOptions.map(([key, label]) => (
             <label key={key} className="checkbox">
               <input type="checkbox" checked={!!widgets[key]} onChange={() => toggleWidget(key)} />
               {label}
@@ -279,20 +357,33 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
       {widgets.kpis && data?.totals && (
         <div className="analytics-kpis">
           <div className="analytics-kpi">
-            <span className="analytics-kpi-label">Записей</span>
-            <strong>{data.totals.bookings}</strong>
+            <span className="analytics-kpi-label">{isCafe ? "Заказов" : "Записей"}</span>
+            <strong>{isCafe ? data.totals.orders : data.totals.bookings}</strong>
           </div>
           <div className="analytics-kpi">
-            <span className="analytics-kpi-label">Выручка (выполнено)</span>
+            <span className="analytics-kpi-label">{isCafe ? "Выручка" : "Выручка (выполнено)"}</span>
             <strong>{Math.round(data.totals.revenue_estimate).toLocaleString("ru-RU")} ₽</strong>
           </div>
           <div className="analytics-kpi">
-            <span className="analytics-kpi-label">Средняя оценка</span>
-            <strong>{data.totals.average_rating || "—"}</strong>
+            <span className="analytics-kpi-label">{isCafe ? "Средний чек" : "Средняя оценка"}</span>
+            <strong>
+              {isCafe
+                ? `${Math.round(data.totals.average_check || 0).toLocaleString("ru-RU")} ₽`
+                : data.totals.average_rating || "—"}
+            </strong>
           </div>
           <div className="analytics-kpi">
-            <span className="analytics-kpi-label">Отзывов</span>
-            <strong>{data.totals.reviews_count}</strong>
+            <span className="analytics-kpi-label">{isCafe ? "Оценок блюд" : "Отзывов"}</span>
+            <strong>
+              {isCafe ? (
+                <>
+                  {data.totals.ratings_count || 0}
+                  {data.totals.average_rating ? ` · ${data.totals.average_rating}` : ""}
+                </>
+              ) : (
+                data.totals.reviews_count
+              )}
+            </strong>
           </div>
         </div>
       )}
@@ -303,7 +394,7 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
           <div className="analytics-status-grid">
             {Object.entries(data.totals.by_status).map(([st, cnt]) => (
               <div key={st} className="analytics-kpi analytics-kpi--sm">
-                <span className="analytics-kpi-label">{STATUS_LABELS[st] || st}</span>
+                <span className="analytics-kpi-label">{statusLabels[st] || st}</span>
                 <strong>{cnt}</strong>
               </div>
             ))}
@@ -311,11 +402,18 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
         </div>
       )}
 
+      {isCafe && widgets.modes && modeBars.length ? (
+        <div className="analytics-panel">
+          <h3>По режимам</h3>
+          <BarChart items={modeBars} color="#2f5d50" />
+        </div>
+      ) : null}
+
       <div className="analytics-grid">
         {widgets.bookingsChart && (
           <div className="analytics-panel">
-            <h3>Записи по дням</h3>
-            <LineChart points={data?.by_day || []} valueKey="bookings" color="#1f6feb" />
+            <h3>{isCafe ? "Заказы по дням" : "Записи по дням"}</h3>
+            <LineChart points={data?.by_day || []} valueKey={isCafe ? "orders" : "bookings"} color="#1f6feb" />
           </div>
         )}
         {widgets.revenueChart && (
@@ -326,11 +424,11 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
         )}
         {widgets.servicesChart && (
           <div className="analytics-panel">
-            <h3>Топ услуг</h3>
+            <h3>{isCafe ? "Топ блюд" : "Топ услуг"}</h3>
             <BarChart items={serviceBars} color="#1f6feb" />
           </div>
         )}
-        {widgets.staffChart && (
+        {!isCafe && widgets.staffChart && (
           <div className="analytics-panel">
             <h3>По мастерам</h3>
             <BarChart items={staffBars} color="#c45c26" />
@@ -338,7 +436,7 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
         )}
         {widgets.ratingsChart && (
           <div className="analytics-panel">
-            <h3>Распределение оценок</h3>
+            <h3>{isCafe ? "Оценки блюд" : "Распределение оценок"}</h3>
             <BarChart items={ratingBars} color="#d4a017" />
           </div>
         )}
@@ -347,7 +445,7 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
       {widgets.table && (
         <div className="analytics-panel analytics-table-wrap">
           <div className="analytics-table-toolbar">
-            <h3>Записи</h3>
+            <h3>{isCafe ? "Заказы" : "Записи"}</h3>
             <input
               type="search"
               placeholder="Поиск…"
@@ -356,7 +454,7 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
             />
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">Все статусы</option>
-              {Object.entries(STATUS_LABELS).map(([k, v]) => (
+              {Object.entries(statusLabels).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}
                 </option>
@@ -367,14 +465,24 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
             <table className="analytics-table">
               <thead>
                 <tr>
-                  {[
-                    ["created_at", "Создана"],
-                    ["status", "Статус"],
-                    ["service", "Услуга"],
-                    ["staff", "Мастер"],
-                    ["client", "Клиент"],
-                    ["price", "Цена"],
-                  ].map(([key, label]) => (
+                  {(isCafe
+                    ? [
+                        ["created_at", "Создан"],
+                        ["status", "Статус"],
+                        ["mode", "Режим"],
+                        ["table_label", "Стол"],
+                        ["guest", "Гость"],
+                        ["total", "Сумма"],
+                      ]
+                    : [
+                        ["created_at", "Создана"],
+                        ["status", "Статус"],
+                        ["service", "Услуга"],
+                        ["staff", "Мастер"],
+                        ["client", "Клиент"],
+                        ["price", "Цена"],
+                      ]
+                  ).map(([key, label]) => (
                     <th key={key}>
                       <button type="button" className="analytics-sort-btn" onClick={() => toggleSort(key)}>
                         {label}
@@ -388,14 +496,25 @@ export default function AnalyticsPage({ apiUrl, authFetch }) {
                 {filteredRows.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="muted">
-                      Нет записей
+                      {isCafe ? "Нет заказов" : "Нет записей"}
                     </td>
                   </tr>
+                ) : isCafe ? (
+                  filteredRows.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.created_at ? new Date(r.created_at).toLocaleString("ru-RU") : "—"}</td>
+                      <td>{statusLabels[r.status] || r.status}</td>
+                      <td>{CAFE_MODE_LABELS[r.mode] || r.mode}</td>
+                      <td>{r.table_label || "—"}</td>
+                      <td>{r.guest || "—"}</td>
+                      <td>{Math.round(r.total || 0).toLocaleString("ru-RU")} ₽</td>
+                    </tr>
+                  ))
                 ) : (
                   filteredRows.map((r) => (
                     <tr key={r.id}>
                       <td>{r.created_at ? new Date(r.created_at).toLocaleString("ru-RU") : "—"}</td>
-                      <td>{STATUS_LABELS[r.status] || r.status}</td>
+                      <td>{statusLabels[r.status] || r.status}</td>
                       <td>{r.service}</td>
                       <td>{r.staff}</td>
                       <td>{r.client}</td>

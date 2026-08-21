@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { loadYandexMaps } from "./yandexMapsLoader.js";
+import { detectCityHint, fetchAddressSuggestions } from "./addressSuggest.js";
 
 /**
- * Поле адреса с подсказками Яндекс.Карт (suggest / geocode).
+ * Поле адреса с подсказками — как при регистрации организации.
  */
 export default function CafeGuestAddressInput({
   value,
@@ -10,13 +10,30 @@ export default function CafeGuestAddressInput({
   onSelectPlace,
   placeholder = "Адрес доставки *",
   required = false,
-  cityHint = "",
+  cityHint: cityHintProp = "",
 }) {
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
+  const [cityHint, setCityHint] = useState(cityHintProp || "");
   const seqRef = useRef(0);
   const timerRef = useRef(null);
   const wrapRef = useRef(null);
+  const pickedRef = useRef(false);
+
+  useEffect(() => {
+    if (cityHintProp) setCityHint(cityHintProp);
+  }, [cityHintProp]);
+
+  useEffect(() => {
+    if (cityHintProp) return undefined;
+    let cancelled = false;
+    detectCityHint().then((city) => {
+      if (!cancelled && city) setCityHint(city);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [cityHintProp]);
 
   useEffect(() => {
     function onDoc(e) {
@@ -26,109 +43,37 @@ export default function CafeGuestAddressInput({
     return () => document.removeEventListener("pointerdown", onDoc);
   }, []);
 
-  async function fetchSuggestions(query) {
+  async function runSuggest(query) {
     const trimmed = String(query || "").trim();
     const seq = ++seqRef.current;
-    if (trimmed.length < 3) {
+    if (trimmed.length < 2) {
       setSuggestions([]);
+      setOpen(false);
       return;
     }
-    try {
-      const ymaps = await loadYandexMaps();
-      if (!ymaps || seqRef.current !== seq) return;
-      await new Promise((r) => ymaps.ready(r));
-      if (seqRef.current !== seq) return;
-
-      let items = [];
-      const q = cityHint && !trimmed.toLowerCase().includes(String(cityHint).toLowerCase())
-        ? `${cityHint}, ${trimmed}`
-        : trimmed;
-
-      if (typeof ymaps.suggest === "function") {
-        try {
-          const raw = await ymaps.suggest(q, { results: 8 });
-          items = (raw || [])
-            .map((it) => {
-              const label = String(it.displayName || it.value || "").trim();
-              return label ? { label, query: label } : null;
-            })
-            .filter(Boolean);
-        } catch {
-          items = [];
-        }
-      }
-
-      if (!items.length) {
-        try {
-          const res = await ymaps.geocode(q, { results: 6 });
-          const list = [];
-          res.geoObjects.each((obj) => {
-            const label = String(obj.getAddressLine?.() || obj.properties.get("text") || "").trim();
-            const coords = obj.geometry.getCoordinates();
-            if (label) list.push({ label, query: label, lat: coords[0], lon: coords[1] });
-          });
-          items = list;
-        } catch {
-          /* ignore */
-        }
-      }
-
-      if (seqRef.current !== seq) return;
-      setSuggestions(items);
-      setOpen(items.length > 0);
-    } catch {
-      if (seqRef.current === seq) setSuggestions([]);
-    }
+    const items = await fetchAddressSuggestions(trimmed, { cityHint });
+    if (seqRef.current !== seq) return;
+    setSuggestions(items);
+    setOpen(items.length > 0);
   }
 
   function handleChange(e) {
     const v = e.target.value;
+    pickedRef.current = false;
     onChange?.(v);
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => fetchSuggestions(v), 280);
+    timerRef.current = setTimeout(() => runSuggest(v), 280);
   }
 
-  async function pick(item) {
+  function pick(item) {
+    pickedRef.current = true;
     setOpen(false);
     setSuggestions([]);
-    onChange?.(item.label);
-    let lat = item.lat;
-    let lon = item.lon;
-    if (lat == null || lon == null) {
-      try {
-        const ymaps = await loadYandexMaps();
-        if (ymaps) {
-          const res = await ymaps.geocode(item.query || item.label, { results: 1 });
-          const first = res.geoObjects.get(0);
-          if (first) {
-            const coords = first.geometry.getCoordinates();
-            lat = coords[0];
-            lon = coords[1];
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    if (lat != null && lon != null) {
-      onSelectPlace?.({ address: item.label, lat, lon });
-    }
-  }
-
-  async function geocodeTyped() {
-    const trimmed = String(value || "").trim();
-    if (trimmed.length < 5) return;
-    try {
-      const ymaps = await loadYandexMaps();
-      if (!ymaps) return;
-      const res = await ymaps.geocode(trimmed, { results: 1 });
-      const first = res.geoObjects.get(0);
-      if (!first) return;
-      const coords = first.geometry.getCoordinates();
-      const label = String(first.getAddressLine?.() || trimmed).trim();
-      onSelectPlace?.({ address: label, lat: coords[0], lon: coords[1] });
-    } catch {
-      /* ignore */
+    const line = String(item.value || "").trim();
+    onChange?.(line);
+    if (item.city) setCityHint(item.city);
+    if (Number.isFinite(item.lat) && Number.isFinite(item.lon)) {
+      onSelectPlace?.({ address: line, lat: item.lat, lon: item.lon });
     }
   }
 
@@ -138,34 +83,34 @@ export default function CafeGuestAddressInput({
         placeholder={placeholder}
         value={value}
         onChange={handleChange}
-        onFocus={() => suggestions.length && setOpen(true)}
+        onFocus={() => {
+          if (suggestions.length) setOpen(true);
+          else if (String(value || "").trim().length >= 2) runSuggest(value);
+        }}
         onBlur={() => {
-          window.setTimeout(() => {
-            setOpen(false);
-            if (!suggestions.length) geocodeTyped();
-          }, 180);
+          window.setTimeout(() => setOpen(false), 200);
         }}
         required={required}
         rows={2}
         autoComplete="street-address"
       />
-      {open && suggestions.length ? (
-        <ul className="cafe-guest-suggest" role="listbox">
+      {cityHint ? <p className="hint cafe-guest-address-hint">Город поиска: {cityHint}</p> : null}
+      {open && suggestions.length > 0 ? (
+        <div className="suggestions cafe-guest-suggestions" role="listbox">
           {suggestions.map((item, idx) => (
-            <li key={`${item.label}-${idx}`}>
-              <button
-                type="button"
-                className="cafe-guest-suggest-item"
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  pick(item);
-                }}
-              >
-                {item.label}
-              </button>
-            </li>
+            <button
+              key={`${item.value}-${idx}`}
+              type="button"
+              className="suggestion-item"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                pick(item);
+              }}
+            >
+              {item.value}
+            </button>
           ))}
-        </ul>
+        </div>
       ) : null}
     </div>
   );

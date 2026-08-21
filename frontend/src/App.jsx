@@ -251,7 +251,7 @@ const DEFAULT_SUBNAV_BOOKMARKS = {
   client: ["client_map", "bookings", "chats"],
   provider: ["bookings", "client_map", "my_bookings", "chats"],
   staff: ["bookings", "reviews", "chats"],
-  provider_cafe: ["cafe_orders", "cafe", "client_map", "my_bookings", "chats"],
+  provider_cafe: ["cafe_orders", "cafe", "analytics", "client_map", "chats"],
   provider_service: ["bookings", "client_map", "my_bookings", "chats", "inspections"],
   provider_marketplaces: ["marketplaces", "chats"],
 };
@@ -3110,6 +3110,8 @@ export default function App() {
   }
 
   function canViewOrgReviews() {
+    if (me?.provider_sphere === "cafe_restaurant" || me?.employer_sphere === "cafe_restaurant") return false;
+    if (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces") return false;
     return me?.role === "provider" || (me?.role === "staff" && staffHasPerm("manage_bookings"));
   }
 
@@ -3360,7 +3362,12 @@ export default function App() {
     if (
       me?.role === "provider" &&
       me?.provider_sphere === "cafe_restaurant" &&
-      currentView === "bookings"
+      (currentView === "bookings" ||
+        currentView === "my_bookings" ||
+        currentView === "booking_history" ||
+        currentView === "reviews" ||
+        currentView === "intervals" ||
+        currentView === "services")
     ) {
       setCurrentView("cafe_orders");
     }
@@ -7165,7 +7172,16 @@ export default function App() {
     }
     if ((id === "staff" || id === "organization") && !canManageOrgSettings) return false;
     if (me?.provider_sphere === "cafe_restaurant") {
-      if (id === "intervals" || id === "bookings" || id === "services") return false;
+      if (
+        id === "intervals" ||
+        id === "bookings" ||
+        id === "services" ||
+        id === "my_bookings" ||
+        id === "booking_history" ||
+        id === "reviews"
+      ) {
+        return false;
+      }
       if ((id === "cafe" || id === "cafe_orders") && role !== "provider") return false;
     } else if (id === "cafe" || id === "cafe_orders") {
       return false;
@@ -10682,6 +10698,8 @@ export default function App() {
         )}
         {me?.role === "provider" && me?.provider_sphere !== "marketplaces" && (
           <>
+            {me?.provider_sphere !== "cafe_restaurant" ? (
+              <>
             <h3 id="org-booking-messages">Сообщения при работе с записями</h3>
             <form
               onSubmit={saveOrgBookingMessages}
@@ -10897,27 +10915,49 @@ export default function App() {
               <p className="status">{orgAcquiringSaveStatus}</p>
             </form>
 
-            <h3>Календари (Google / Яндекс)</h3>
+            <h3>Календарь записей</h3>
             <p className="muted small">
-              Подпишите календарь записей по ссылке ICS — события появятся в Google Календаре или Яндекс Календаре и будут обновляться автоматически.
+              Скопируйте ссылку и добавьте её в Google Календарь, Яндекс Календарь или Apple Календарь как подписку по URL —
+              события будут обновляться автоматически.
             </p>
             {orgCalendarLinks ? (
-              <div className="form">
-                <label className="field-label">
-                  Ссылка ICS
-                  <input type="text" readOnly value={orgCalendarLinks.ics_url || ""} onFocus={(e) => e.target.select()} />
+              <div className="form org-calendar-block">
+                <label className="field-label" htmlFor="org-ics-url">
+                  Ссылка календаря (ICS)
                 </label>
-                <div className="row-2">
-                  <a className="ghost-btn" href={orgCalendarLinks.google_url || "#"} target="_blank" rel="noreferrer">
-                    Открыть в Google
-                  </a>
-                  <a className="ghost-btn" href={orgCalendarLinks.webcal_url || "#"}>
-                    webcal://
-                  </a>
+                <div className="org-calendar-copy-row">
+                  <input
+                    id="org-ics-url"
+                    type="text"
+                    readOnly
+                    value={orgCalendarLinks.ics_url || ""}
+                    onFocus={(e) => e.target.select()}
+                  />
+                  <button
+                    type="button"
+                    className="landing-btn landing-btn--primary"
+                    onClick={async () => {
+                      const url = orgCalendarLinks.ics_url || "";
+                      try {
+                        await navigator.clipboard.writeText(url);
+                        setOrgCalendarStatus("Ссылка скопирована");
+                      } catch {
+                        setOrgCalendarStatus("Не удалось скопировать — выделите поле вручную");
+                      }
+                    }}
+                  >
+                    Скопировать
+                  </button>
                 </div>
-                <p className="muted small">{orgCalendarLinks.yandex_hint}</p>
+                {orgCalendarLinks.yandex_hint ? (
+                  <p className="muted small">{orgCalendarLinks.yandex_hint}</p>
+                ) : (
+                  <p className="muted small">
+                    Google: Настройки → Добавить календарь → Из URL. Яндекс / Apple: новая подписка по ссылке.
+                  </p>
+                )}
                 <button type="button" className="ghost-btn" onClick={rotateOrgCalendarToken}>
-                  Сменить ссылку (сбросить старую)
+                  Сменить ссылку
                 </button>
                 <p className="status">{orgCalendarStatus}</p>
               </div>
@@ -10971,6 +11011,21 @@ export default function App() {
               ) : null}
               {renderOrgMessengerChannels()}
             </form>
+              </>
+            ) : (
+              <>
+                <h3>Уведомления</h3>
+                <p className="muted small">
+                  Подключите Telegram или другие каналы для оповещений по заказам кафе. Настройки онлайн-оплаты — во вкладке
+                  «Зал и меню → Режимы, доставка и оплата».
+                </p>
+                <form onSubmit={saveOrgMessaging} className="form">
+                  {renderOrgMessengerChannels()}
+                  <button type="submit">Сохранить</button>
+                  <p className="status">{orgMessagingSaveStatus}</p>
+                </form>
+              </>
+            )}
 
             <h3>Карточка для клиентов</h3>
 
@@ -11557,6 +11612,9 @@ export default function App() {
               if (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces") {
                 return !["manage_bookings", "manage_intervals", "manage_services"].includes(key);
               }
+              if (me?.provider_sphere === "cafe_restaurant") {
+                return !["manage_bookings", "manage_intervals", "manage_services"].includes(key) && !String(key).startsWith("marketplace_");
+              }
               return !String(key).startsWith("marketplace_");
             });
             const rowName = formatStaffClientName(link.staff_user);
@@ -11925,12 +11983,14 @@ export default function App() {
                   </span>
                   <span className="menu-item-label">Настройки</span>
                 </button>
+                {me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" ? (
                 <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("booking_history"); setMenuOpen(false); }}>
                   <span className="menu-item-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z" /></svg>
                   </span>
                   <span className="menu-item-label">История записей</span>
                 </button>
+                ) : null}
                 {me?.role !== "client" && (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("subscriptions"); setMenuOpen(false); }}>
                     <span className="menu-item-icon" aria-hidden="true">
@@ -12678,7 +12738,11 @@ export default function App() {
         )}
 
         {accessToken && (me?.role === "provider" || me?.role === "staff") && currentView === "analytics" && (
-          <AnalyticsPage apiUrl={API_URL} authFetch={authFetch} />
+          <AnalyticsPage
+            apiUrl={API_URL}
+            authFetch={authFetch}
+            providerSphere={me?.provider_sphere || me?.employer_sphere || ""}
+          />
         )}
 
         {accessToken && currentView === "settings" && renderGeneralSettings()}
@@ -12743,9 +12807,9 @@ export default function App() {
         {accessToken && currentView === "staff" && canManageOrgSettings && renderStaffManagement()}
 
         {accessToken && canViewOrgReviews() && currentView === "reviews" && renderProviderReviewsBlock()}
-        {accessToken && me?.role === "provider" && currentView === "bookings" && renderBookingsBlock("Записи клиентов")}
-        {accessToken && me?.role === "provider" && currentView === "intervals" && renderSlotCalendar(true)}
-        {accessToken && me?.role === "staff" && currentView === "bookings" && staffHasPerm("manage_bookings") && renderBookingsBlock("Записи")}
+        {accessToken && me?.role === "provider" && currentView === "bookings" && me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" && renderBookingsBlock("Записи клиентов")}
+        {accessToken && me?.role === "provider" && currentView === "intervals" && me?.provider_sphere !== "cafe_restaurant" && renderSlotCalendar(true)}
+        {accessToken && me?.role === "staff" && currentView === "bookings" && staffHasPerm("manage_bookings") && me?.provider_sphere !== "cafe_restaurant" && me?.employer_sphere !== "cafe_restaurant" && renderBookingsBlock("Записи")}
         {accessToken && currentView === "chats" && (me?.role === "client" || me?.role === "provider" || me?.role === "staff") && (
           <section className="card full-width tg-chats-card">
             <div
@@ -14085,7 +14149,7 @@ export default function App() {
           </section>
         )}
 
-        {accessToken && me?.role === "provider" && currentView === "services" && (
+        {accessToken && me?.role === "provider" && currentView === "services" && me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" && (
           <div className="services-layout">
             <section className="card">
               {renderServiceTree()}
@@ -14671,7 +14735,7 @@ export default function App() {
         )}
 
         {accessToken && me?.role === "client" && currentView === "bookings" && renderBookingsBlock("Мои записи")}
-        {accessToken && me?.role === "provider" && currentView === "my_bookings" && renderBookingsBlock("Мои записи")}
+        {accessToken && me?.role === "provider" && currentView === "my_bookings" && me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" && renderBookingsBlock("Мои записи")}
 
         {accessToken && currentView === "booking_history" && renderBookingHistory()}
 

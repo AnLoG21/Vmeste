@@ -899,7 +899,6 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                       onSelectPlace={applyDeliveryPlace}
                       placeholder="Адрес доставки *"
                       required
-                      cityHint=""
                     />
                     <CafeGuestDeliveryMap
                       zones={deliveryZones}

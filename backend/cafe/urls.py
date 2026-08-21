@@ -1,9 +1,11 @@
 from django.urls import path
 
 from . import views
+from .analytics import CafeAnalyticsSummaryView
 
 urlpatterns = [
     path("settings/", views.CafeSettingsView.as_view()),
+    path("analytics/", CafeAnalyticsSummaryView.as_view()),
     path("floors/", views.CafeFloorPlanListCreateView.as_view()),
     path("floors/<int:pk>/", views.CafeFloorPlanDetailView.as_view()),
     path("floors/<int:plan_id>/tables/", views.CafeTableListCreateView.as_view()),
