@@ -856,6 +856,59 @@
   border: 1px solid #ffe4cc;
 }
 
+.cafe-zones-edit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.cafe-zones-edit-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.cafe-zones-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid #ffd0a8;
+  background: #fff;
+  color: #7a3d0e;
+  cursor: pointer;
+}
+
+.cafe-zones-icon-btn:hover {
+  background: #fff3e8;
+  border-color: #c45c00;
+}
+
+.cafe-zones-icon-btn.is-active {
+  background: #ffe8d2;
+  border-color: #c45c00;
+  color: #c45c00;
+}
+
+.cafe-zones-icon-btn--danger {
+  color: #b71c1c;
+  border-color: #ffc9c9;
+}
+
+.cafe-zones-icon-btn--danger:hover {
+  background: #ffebee;
+  border-color: #e53935;
+}
+
+.cafe-zones-edit-hint {
+  margin: 0 0 10px;
+}
+
 /* ——— Печать QR ——— */
 .cafe-qr-print-overlay {
   position: fixed;
