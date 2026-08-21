@@ -148,6 +148,46 @@ def _log_error_hint(error: str, status_code: int | None) -> str:
     return f"{msg} → детали во вкладке «Логи»; исправьте данные и повторите действие."
 
 
+def _active_api_log_errors(provider, *, marketplace: str = "", limit: int = 20) -> list[dict]:
+    """Ошибки логов, которые ещё актуальны: последний вызов этого endpoint ещё с ошибкой.
+
+    Исторические сбои после успешного повтора не показываются в алертах.
+    """
+    from django.db.models import Max
+
+    qs = MarketplaceApiLog.objects.filter(provider=provider)
+    mp = (marketplace or "").strip()
+    if mp in ("ozon", "wildberries"):
+        qs = qs.filter(marketplace__in=[mp, "wb" if mp == "wildberries" else mp, ""])
+
+    latest_rows = (
+        qs.values("marketplace", "endpoint")
+        .annotate(latest_id=Max("id"))
+        .order_by()
+    )
+    latest_ids = [row["latest_id"] for row in latest_rows if row.get("latest_id")]
+    if not latest_ids:
+        return []
+
+    logs = (
+        MarketplaceApiLog.objects.filter(id__in=latest_ids)
+        .exclude(error_message="")
+        .order_by("-id")[:limit]
+    )
+    return [
+        {
+            "id": log.id,
+            "endpoint": log.endpoint,
+            "status_code": log.status_code,
+            "error": (log.error_message or "")[:300],
+            "hint": _log_error_hint(log.error_message or "", log.status_code),
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+            "marketplace": log.marketplace,
+        }
+        for log in logs
+    ]
+
+
 def _upload_to_yandex_disk(token: str, filename: str, upload) -> str | None:
     import requests
 
@@ -550,21 +590,7 @@ class MarketplaceAlertsView(APIView):
                     }
                 )
 
-        logs_qs = MarketplaceApiLog.objects.filter(provider=provider).exclude(error_message="")
-        if mp:
-            logs_qs = logs_qs.filter(marketplace__in=[mp, "wb" if mp == "wildberries" else mp, ""])
-        log_errors = [
-            {
-                "id": log.id,
-                "endpoint": log.endpoint,
-                "status_code": log.status_code,
-                "error": (log.error_message or "")[:300],
-                "hint": _log_error_hint(log.error_message or "", log.status_code),
-                "created_at": log.created_at.isoformat() if log.created_at else None,
-                "marketplace": log.marketplace,
-            }
-            for log in logs_qs[:20]
-        ]
+        log_errors = _active_api_log_errors(provider, marketplace=mp, limit=20)
 
         return Response(
             {

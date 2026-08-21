@@ -53,6 +53,25 @@ def _get_or_create_settings(provider):
     return obj
 
 
+def _provider_hours_payload(provider) -> dict:
+    from users.org_profile import provider_working_hours_payload
+
+    return provider_working_hours_payload(provider)
+
+
+def _reject_if_cafe_closed(provider):
+    """Блокирует оформление заказа вне графика работы организации."""
+    from users.org_profile import is_organization_open_now, organization_closed_order_detail, normalize_working_hours
+
+    hours = normalize_working_hours(getattr(provider, "organization_working_hours", None) or {})
+    if is_organization_open_now(hours):
+        return None
+    return Response(
+        {"detail": organization_closed_order_detail(hours)},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
 def _session_from_request(request):
     token = (request.headers.get("X-Cafe-Session") or request.data.get("session_token") or "").strip()
     if not token:
@@ -503,6 +522,7 @@ class CafeTablePublicView(APIView):
                     "takeaway": settings_obj.enable_takeaway,
                     "delivery": settings_obj.enable_delivery,
                 },
+                **_provider_hours_payload(provider),
             }
         )
 
@@ -545,6 +565,7 @@ class CafeTableUnlockView(APIView):
                 "delivery_info": settings_obj.delivery_info,
                 "delivery_fee": str(settings_obj.delivery_fee),
                 "delivery_min_order": str(settings_obj.delivery_min_order),
+                **_provider_hours_payload(provider),
             }
         )
 
@@ -582,6 +603,7 @@ class CafeOrgPublicView(APIView):
                     "takeaway": settings_obj.enable_takeaway,
                     "delivery": settings_obj.enable_delivery,
                 },
+                **_provider_hours_payload(provider),
             }
         )
 
@@ -625,6 +647,7 @@ class CafeOrgPublicView(APIView):
                 "delivery_info": settings_obj.delivery_info,
                 "delivery_fee": str(settings_obj.delivery_fee),
                 "delivery_min_order": str(settings_obj.delivery_min_order),
+                **_provider_hours_payload(provider),
             }
         )
 
@@ -681,6 +704,7 @@ class CafeOrgDineInAttachView(APIView):
                 "delivery_info": settings_obj.delivery_info,
                 "delivery_fee": str(settings_obj.delivery_fee),
                 "delivery_min_order": str(settings_obj.delivery_min_order),
+                **_provider_hours_payload(provider),
             }
         )
 
@@ -727,6 +751,9 @@ class CafeGuestOrderCreateView(APIView):
         provider = _session_provider(sess)
         if not provider:
             return Response({"detail": "Сессия недействительна."}, status=status.HTTP_401_UNAUTHORIZED)
+        closed = _reject_if_cafe_closed(provider)
+        if closed:
+            return closed
         settings_obj = _get_or_create_settings(provider)
         mode = (request.data.get("mode") or "").strip()
         if mode == CafeOrder.Mode.DINE_IN:

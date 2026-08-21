@@ -150,6 +150,11 @@ def _find_or_create_oauth_user(
     username_hint: str,
     role: str = "",
 ) -> User:
+    """Найти пользователя только по social id или создать нового.
+
+    Не сливаем аккаунты по email (это подмешивало чужие кабинеты через VK/Яндекс)
+    и не повышаем client→provider при повторном OAuth.
+    """
     oauth_id = str(oauth_id or "").strip()
     email = (email or "").strip().lower()
     first_name = (first_name or "").strip()[:150]
@@ -160,20 +165,20 @@ def _find_or_create_oauth_user(
     _detach_stale_oauth_ids(id_field, oauth_id)
     live = {"is_active": True, "account_deleted_at__isnull": True}
     user = User.objects.filter(**{id_field: oauth_id}, **live).first()
-    if not user and email:
-        user = User.objects.filter(email__iexact=email, **live).first()
-        if user:
-            setattr(user, id_field, oauth_id)
 
     if user:
-        changed = [id_field]
-        if intended_role == User.Role.PROVIDER and user.role == User.Role.CLIENT:
-            user.role = User.Role.PROVIDER
-            changed.append("role")
+        changed: list[str] = []
+        # Роль не меняем: вход через соцсеть не превращает клиента в исполнителя.
         if email and not (user.email or "").strip():
-            user.email = email
-            user.email_verified = True
-            changed.extend(["email", "email_verified"])
+            taken = (
+                User.objects.filter(email__iexact=email, **live)
+                .exclude(pk=user.pk)
+                .exists()
+            )
+            if not taken:
+                user.email = email
+                user.email_verified = True
+                changed.extend(["email", "email_verified"])
         elif email and (user.email or "").strip().lower() == email:
             if not user.email_verified:
                 user.email_verified = True
@@ -187,18 +192,24 @@ def _find_or_create_oauth_user(
         if phone and not (user.phone or "").strip():
             user.phone = phone
             changed.append("phone")
-        user.save(update_fields=list(dict.fromkeys(changed)))
+        if changed:
+            user.save(update_fields=list(dict.fromkeys(changed)))
         return user
+
+    # Email уже занят другим живым аккаунтом — не копируем, иначе путаница кабинетов.
+    email_to_set = email
+    if email and User.objects.filter(email__iexact=email, **live).exists():
+        email_to_set = ""
 
     now = timezone.now()
     user = User(
         username=_unique_username(username_hint or f"user_{oauth_id}"),
-        email=email,
+        email=email_to_set,
         first_name=first_name,
         last_name=last_name,
         phone=phone,
         role=intended_role,
-        email_verified=bool(email),
+        email_verified=bool(email_to_set),
         consent_privacy_at=now,
         consent_offer_at=now,
         age_confirmed_at=now,
@@ -332,6 +343,7 @@ class VkOAuthStartView(APIView):
             "code_challenge_method": "S256",
             "scope": "email phone",
             "lang_id": "0",
+            "force_confirm": "1",
         }
         response = HttpResponseRedirect(f"{VK_AUTHORIZE}?{urlencode(params)}")
         _set_oauth_cookie(

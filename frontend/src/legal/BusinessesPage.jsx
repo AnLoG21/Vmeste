@@ -4,6 +4,7 @@ import { SITE_LEGAL } from "./siteLegal.js";
 import JsonLd from "../seo/JsonLd.jsx";
 import { breadcrumbListJsonLd, faqPageJsonLd, organizationJsonLd } from "../seo/schema.js";
 import { setPageMeta } from "../seo/setPageMeta.js";
+import LandingAutomationRequest, { scrollLandingHash } from "../LandingAutomationRequest.jsx";
 
 const BUSINESSES = [
   {
@@ -114,11 +115,15 @@ export default function BusinessesPage() {
   }, []);
 
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash && hash.length > 1) {
-      const el = document.getElementById(hash.slice(1));
-      window.setTimeout(() => el?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
-    }
+    const applyHash = () => {
+      const hash = window.location.hash;
+      if (hash && hash.length > 1) {
+        window.setTimeout(() => scrollLandingHash(hash), 80);
+      }
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
   }, []);
 
   return (
@@ -244,10 +249,22 @@ export default function BusinessesPage() {
             <p>
               Оставьте заявку на индивидуальную автоматизацию — подключим каталог и процессы под ваш бизнес.
             </p>
-            <a className="landing-btn landing-btn--primary" href="/#automation-request">
+            <a
+              className="landing-btn landing-btn--primary"
+              href="#automation-request"
+              onClick={(e) => {
+                e.preventDefault();
+                scrollLandingHash("#automation-request");
+                if (window.location.hash !== "#automation-request") {
+                  window.history.replaceState(null, "", "#automation-request");
+                }
+              }}
+            >
               Оставить заявку
             </a>
           </section>
+
+          <LandingAutomationRequest className="landing-section landing-request businesses-request" />
         </div>
       </main>
 

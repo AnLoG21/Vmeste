@@ -16,11 +16,13 @@ from marketplaces.clients import (
 )
 from marketplaces.models import MarketplaceApiLog, MarketplaceProductHistory, MarketplaceSettings
 from marketplaces.views import (
+    MarketplaceAlertsView,
     MarketplaceBarcodeView,
     MarketplaceExportView,
     MarketplaceLogsView,
     MarketplaceSettingsView,
     MarketplaceWebhookView,
+    _active_api_log_errors,
     _history_item,
 )
 
@@ -187,6 +189,35 @@ class MarketplaceApiTests(TestCase):
         code = resp.data["barcodes"][0]
         self.assertEqual(len(code), 13)
         self.assertTrue(code.startswith("200"))
+
+    def test_alerts_log_errors_clear_after_success(self):
+        endpoint = "https://api-seller.ozon.ru/v3/product/list"
+        MarketplaceApiLog.objects.create(
+            provider=self.provider,
+            marketplace="ozon",
+            endpoint=endpoint,
+            method="POST",
+            status_code=429,
+            error_message="rate limit exceeded",
+        )
+        active = _active_api_log_errors(self.provider, marketplace="ozon")
+        self.assertEqual(len(active), 1)
+
+        MarketplaceApiLog.objects.create(
+            provider=self.provider,
+            marketplace="ozon",
+            endpoint=endpoint,
+            method="POST",
+            status_code=200,
+            error_message="",
+        )
+        self.assertEqual(_active_api_log_errors(self.provider, marketplace="ozon"), [])
+
+        req = self.factory.get("/api/marketplaces/alerts/?marketplace=ozon")
+        force_authenticate(req, user=self.provider)
+        resp = MarketplaceAlertsView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["counts"]["log_errors"], 0)
 
 
 class LocalEanTests(SimpleTestCase):

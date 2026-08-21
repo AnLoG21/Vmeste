@@ -27,6 +27,99 @@ def default_working_hours():
     return {key: dict(base) for key in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")}
 
 
+_DAY_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
+def normalize_working_hours(raw) -> dict:
+    base = default_working_hours()
+    if not isinstance(raw, dict):
+        return base
+    for key in _DAY_KEYS:
+        row = raw.get(key)
+        if isinstance(row, dict):
+            base[key] = {
+                "open": str(row.get("open") or "09:00")[:5],
+                "close": str(row.get("close") or "18:00")[:5],
+                "closed": bool(row.get("closed")),
+            }
+    return base
+
+
+def _parse_hm_to_minutes(hm: str) -> int:
+    parts = str(hm or "00:00").split(":")
+    try:
+        h = int(parts[0])
+        m = int(parts[1]) if len(parts) > 1 else 0
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(24 * 60, h * 60 + m))
+
+
+def is_organization_open_now(hours, when=None) -> bool:
+    """Сейчас в рабочих часах организации (часовой пояс TIME_ZONE, по умолчанию Москва)."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    when = when or timezone.localtime()
+    h = normalize_working_hours(hours)
+    now_min = when.hour * 60 + when.minute
+
+    def covers(row, minutes: int) -> bool:
+        if row.get("closed"):
+            return False
+        open_min = _parse_hm_to_minutes(row.get("open"))
+        close_min = _parse_hm_to_minutes(row.get("close"))
+        if open_min == close_min:
+            return False
+        if open_min < close_min:
+            return open_min <= minutes < close_min
+        # Ночной график 22:00–02:00
+        return minutes >= open_min or minutes < close_min
+
+    today = h.get(_DAY_KEYS[when.weekday()]) or {}
+    if covers(today, now_min):
+        return True
+    # Раннее утро: ещё действует вчерашний ночной интервал (до close)
+    yesterday = when - timedelta(days=1)
+    prev = h.get(_DAY_KEYS[yesterday.weekday()]) or {}
+    if prev.get("closed"):
+        return False
+    open_min = _parse_hm_to_minutes(prev.get("open"))
+    close_min = _parse_hm_to_minutes(prev.get("close"))
+    if open_min > close_min and now_min < close_min:
+        return True
+    return False
+
+
+def organization_closed_order_detail(hours=None, when=None) -> str:
+    """Сообщение для гостя, если заказ вне графика."""
+    from django.utils import timezone
+
+    when = when or timezone.localtime()
+    h = normalize_working_hours(hours)
+    day_key = _DAY_KEYS[when.weekday()]
+    row = h.get(day_key) or {}
+    if row.get("closed"):
+        return "Сегодня выходной. Заказы (самовывоз, доставка и за столом) недоступны."
+    open_hm = row.get("open") or "09:00"
+    close_hm = row.get("close") or "18:00"
+    return (
+        f"Сейчас нерабочее время ({open_hm}–{close_hm}). "
+        "Заказы — в том числе самовывоз и доставка — недоступны."
+    )
+
+
+def provider_working_hours_payload(provider) -> dict:
+    hours = normalize_working_hours(getattr(provider, "organization_working_hours", None) or {})
+    open_now = is_organization_open_now(hours)
+    return {
+        "working_hours": hours,
+        "is_open": open_now,
+        "closed_message": "" if open_now else organization_closed_order_detail(hours),
+    }
+
+
 class OrganizationClientProfileView(APIView):
     """Публичная карточка организации для клиента (карта, запись)."""
 

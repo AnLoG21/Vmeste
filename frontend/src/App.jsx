@@ -3171,7 +3171,13 @@ export default function App() {
         { key: "marketplaces", value: "Маркетплейсы" },
       ];
   const needsCredentialsSetup = Boolean(accessToken && me && me.needs_credentials_setup);
-  const needsOnboarding = Boolean(accessToken && me && !needsCredentialsSetup && me.profile_complete === false);
+  const needsOnboarding = Boolean(
+    accessToken &&
+      me &&
+      !needsCredentialsSetup &&
+      me.profile_complete === false &&
+      me.role === "provider",
+  );
   const onboardingPrefillIdRef = useRef(null);
   const credentialsPrefillIdRef = useRef(null);
 
@@ -3303,6 +3309,8 @@ export default function App() {
     setAuthMode(mode);
     setShowAuthModal(true);
     setRegisterStep(1);
+    // Не тащим «Для бизнеса» во вход/клиентскую регистрацию — иначе OAuth создаёт исполнителя.
+    setForm({ ...emptyRegisterForm });
     if (mode === "register") {
       setVerifyEmailNotice(null);
       setResendStatus("");
@@ -4183,21 +4191,25 @@ export default function App() {
   }, [accessToken, currentView, me?.role, me?.id, staffEffectivePerms.manage_chats]);
 
   useEffect(() => {
-    if ((showAuthModal || needsOnboarding) && (authMode === "register" || needsOnboarding) && form.role === "provider") {
+    const isProviderFlow =
+      needsOnboarding ? me?.role === "provider" : form.role === "provider";
+    if ((showAuthModal || needsOnboarding) && (authMode === "register" || needsOnboarding) && isProviderFlow) {
       initMap();
     }
-  }, [showAuthModal, authMode, registerStep, form.role, form.provider_sphere, needsOnboarding]);
+  }, [showAuthModal, authMode, registerStep, form.role, form.provider_sphere, needsOnboarding, me?.role]);
 
   useEffect(() => {
+    const isProviderFlow =
+      needsOnboarding ? me?.role === "provider" : form.role === "provider";
     if (
       (showAuthModal || needsOnboarding) &&
       (authMode === "register" || needsOnboarding) &&
-      form.role === "provider" &&
+      isProviderFlow &&
       (registerStep === 2 || needsOnboarding)
     ) {
       detectCityByGeolocation();
     }
-  }, [showAuthModal, authMode, form.role, registerStep, needsOnboarding]);
+  }, [showAuthModal, authMode, form.role, registerStep, needsOnboarding, me?.role]);
 
   useEffect(() => {
     if (me?.role !== "provider" || !me?.id) {
@@ -12280,7 +12292,7 @@ export default function App() {
                       )}
                     </>
                   )}
-                  {registerStep === 2 && form.role === "provider" && (
+                  {registerStep === 2 && (needsOnboarding ? me?.role === "provider" : form.role === "provider") && (
                     <>
                       <p className="muted small auth-provider-disclaimer">
                         {needsOnboarding
@@ -12416,7 +12428,16 @@ export default function App() {
               {needsOnboarding ? null : authMode === "login" || authMode === "register" ? (
                 <>
                   <p className="auth-switch-text">{authMode === "login" ? "Нет аккаунта?" : "Уже есть аккаунт?"}</p>
-                  <button className="ghost-btn" type="button" onClick={() => setAuthMode((prev) => (prev === "login" ? "register" : "login"))}>
+                  <button
+                    className="ghost-btn"
+                    type="button"
+                    onClick={() => {
+                      const next = authMode === "login" ? "register" : "login";
+                      setRegisterStep(1);
+                      setForm({ ...emptyRegisterForm });
+                      setAuthMode(next);
+                    }}
+                  >
                     {authMode === "login" ? "Регистрация" : "Войти"}
                   </button>
                 </>

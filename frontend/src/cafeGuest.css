@@ -471,6 +471,26 @@
   color: #8d3e00;
   margin-top: 12px;
 }
+.cafe-guest-closed {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #fff3e8;
+  border: 1px solid #ffbf8a;
+  color: #6b3410;
+}
+.cafe-guest-closed strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 1.05rem;
+}
+.cafe-guest-closed p {
+  margin: 0 0 6px;
+  line-height: 1.45;
+}
+.cafe-guest-closed p:last-child {
+  margin-bottom: 0;
+}
 .cafe-dine-attached {
   margin: -8px 0 14px;
 }

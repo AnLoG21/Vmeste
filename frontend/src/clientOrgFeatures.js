@@ -164,7 +164,10 @@ export function isOrganizationOpenNow(hours, now = new Date()) {
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const openMin = parseHmToMinutes(row.open);
   const closeMin = parseHmToMinutes(row.close);
-  return nowMin >= openMin && nowMin < closeMin;
+  if (openMin === closeMin) return false;
+  if (openMin < closeMin) return nowMin >= openMin && nowMin < closeMin;
+  // Ночной график, например 22:00–02:00
+  return nowMin >= openMin || nowMin < closeMin;
 }
 
 export function getMapPinZoomTier(zoom) {

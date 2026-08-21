@@ -4,6 +4,7 @@ import { API_URL } from "./config.js";
 import JsonLd from "./seo/JsonLd.jsx";
 import { SITE_ORIGIN, breadcrumbListJsonLd } from "./seo/schema.js";
 import { setPageMeta } from "./seo/setPageMeta.js";
+import { getOrgWorkingHoursStatus, isOrganizationOpenNow } from "./clientOrgFeatures.js";
 import "./landing.css";
 import "./cafeGuest.css";
 
@@ -379,6 +380,10 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
 
   async function submitOrder(e) {
     e.preventDefault();
+    if (!isOpenNow) {
+      setStatus(closedMessage);
+      return;
+    }
     if (!modeOrder) {
       setStatus("Выберите режим заказа");
       return;
@@ -463,6 +468,21 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
   }
 
   const modes = unlock?.modes || info?.modes || {};
+  const workingHours = info?.working_hours || unlock?.working_hours || null;
+  const hoursStatus = workingHours ? getOrgWorkingHoursStatus(workingHours) : null;
+  const isOpenNow =
+    typeof info?.is_open === "boolean"
+      ? info.is_open
+      : typeof unlock?.is_open === "boolean"
+        ? unlock.is_open
+        : workingHours
+          ? isOrganizationOpenNow(workingHours)
+          : true;
+  const closedMessage =
+    info?.closed_message ||
+    unlock?.closed_message ||
+    (hoursStatus?.isRed ? hoursStatus.mainText : "") ||
+    "Сейчас нерабочее время. Заказы недоступны.";
   const ready = Boolean(session) && !booting;
   const needsPin = mode === "table" && !session;
   const ratedIds = new Set((completedOrder?.item_ratings || []).map((r) => r.menu_item));
@@ -536,6 +556,14 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
       </header>
 
       {booting && !info ? <p className="cafe-guest-status">Открываем меню…</p> : null}
+
+      {!booting && !isOpenNow ? (
+        <div className="cafe-guest-closed" role="status">
+          <strong>Заведение сейчас закрыто</strong>
+          <p>{closedMessage}</p>
+          <p className="muted small">Меню можно смотреть, но оформить заказ (самовывоз, доставка или за столом) нельзя до открытия.</p>
+        </div>
+      ) : null}
 
       {needsPin ? (
         <form className="cafe-guest-card" onSubmit={unlockTable}>
@@ -778,7 +806,9 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                   />
                   <span>Сервисный сбор {SERVICE_CHARGE_PERCENT}% (поддержка платформы)</span>
                 </label>
-                <button type="submit" className="landing-btn landing-btn--primary">Оформить заказ</button>
+                <button type="submit" className="landing-btn landing-btn--primary" disabled={!isOpenNow}>
+                  {isOpenNow ? "Оформить заказ" : "Сейчас закрыто"}
+                </button>
                 {orderResult && !orderResult.confirmation_url ? (
                   <p className="landing-form-status">
                     Заказ #{orderResult.id} принят{guestEmail ? `, чек отправим на ${guestEmail} после оплаты` : ""}

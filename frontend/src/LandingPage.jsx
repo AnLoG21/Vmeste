@@ -11,8 +11,8 @@ import {
   HOME_FAQ,
 } from "./seo/schema.js";
 import { setPageMeta } from "./seo/setPageMeta.js";
-import { phoneFieldProps } from "./phone.js";
 import LandingDemo from "./LandingDemo.jsx";
+import LandingAutomationRequest, { scrollLandingHash } from "./LandingAutomationRequest.jsx";
 
 function formatPlanPrice(plan) {
   if (plan?.plan_type === "free" || plan?.slug === "starter") return "Бесплатно";
@@ -105,15 +105,6 @@ const INTEGRATIONS = [
 export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
   const requestRef = useRef(null);
   const pricingRef = useRef(null);
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    phone: "+7",
-    telegram: "",
-    message: "",
-    accept_privacy: false,
-  });
-  const [formStatus, setFormStatus] = useState("");
   const [plans, setPlans] = useState([]);
   const [demoOpen, setDemoOpen] = useState(false);
 
@@ -159,54 +150,36 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
   }, []);
 
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash === "#pricing") {
-      pricingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else if (hash === "#request" || hash === "#automation-request") {
-      requestRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else if (hash === "#demo") {
-      setDemoOpen(true);
-    } else if (hash && hash.length > 1) {
-      const el = document.getElementById(hash.slice(1));
-      el?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    const applyHash = () => {
+      const hash = window.location.hash;
+      if (hash === "#demo") {
+        setDemoOpen(true);
+        return;
+      }
+      if (!hash || hash.length < 2) return;
+      window.setTimeout(() => {
+        if (hash === "#pricing") {
+          scrollLandingHash("#pricing");
+          return;
+        }
+        if (hash === "#request" || hash === "#automation-request") {
+          scrollLandingHash("#automation-request");
+          return;
+        }
+        scrollLandingHash(hash);
+      }, 120);
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
   }, []);
 
   function scrollToRequest() {
-    requestRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollLandingHash("#automation-request");
   }
 
   function scrollToPricing() {
-    pricingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  async function submitRequest(e) {
-    e.preventDefault();
-    if (!form.accept_privacy) {
-      setFormStatus("Нужно согласие на обработку персональных данных.");
-      return;
-    }
-    setFormStatus("Отправляем...");
-    const response = await fetch(`${API_URL}/users/automation-request/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        privacy_version: SITE_LEGAL.privacyVersion,
-      }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const err =
-        data.detail ||
-        data.accept_privacy?.[0] ||
-        (typeof data === "object" && Object.values(data).flat?.()[0]) ||
-        "Не удалось отправить заявку.";
-      setFormStatus(typeof err === "string" ? err : "Не удалось отправить заявку.");
-      return;
-    }
-    setFormStatus(data.detail || "Заявка отправлена!");
-    setForm({ name: "", email: "", phone: "+7", telegram: "", message: "", accept_privacy: false });
+    scrollLandingHash("#pricing");
   }
 
   return (
@@ -366,9 +339,10 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
             <article className="landing-feature landing-feature--accent">
               <h3>Подписка</h3>
               <p>
-                Сначала можно активировать <strong>бесплатную неделю «Старт»</strong> — один раз.
-                Дальше тариф «Бизнес» за 990 ₽/мес с полным функционалом. Оплата через ЮKassa, перед
-                оплатой можно ввести промокод.
+                <strong>Бесплатный</strong> — онлайн-запись, каталог, чаты и карта без ограничения по
+                сроку, оплата картой не нужна. <strong>Бизнес</strong> — 990 ₽/мес: сотрудники,
+                аналитика и приоритетная поддержка. Оплата через ЮKassa, перед оплатой можно ввести
+                промокод.
               </p>
             </article>
           </div>
@@ -439,7 +413,14 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               <span>Ozon и Wildberries</span>
               <span className="landing-biz-link">Подробнее →</span>
             </a>
-            <a className="landing-biz-card landing-biz-card--more" href="/#automation-request">
+            <a
+              className="landing-biz-card landing-biz-card--more"
+              href="#automation-request"
+              onClick={(e) => {
+                e.preventDefault();
+                scrollToRequest();
+              }}
+            >
               <span className="landing-biz-emoji" aria-hidden="true">
                 ✨
               </span>
@@ -589,19 +570,49 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           </p>
         </section>
 
-        <section className="landing-section landing-delivery">
+        <section className="landing-section landing-delivery" id="delivery">
           <h2>Получение услуги после оплаты</h2>
           <p className="landing-section-lead">
-            Вместе — облачный онлайн-сервис (SaaS). Физическая доставка товаров не производится.
+            Вместе — облачный онлайн-сервис (SaaS). Физическая доставка товаров не производится:
+            доступ к кабинету открывается сразу после активации подписки.
           </p>
-          <ol className="landing-steps">
-            <li>Зарегистрируйтесь на сайте и подтвердите email.</li>
-            <li>Войдите в личный кабинет и откройте раздел «Подписки».</li>
-            <li>
-              Активируйте бесплатную неделю «Старт» или оплатите «Бизнес» через ЮKassa (можно с
-              промокодом).
+          <ol className="landing-delivery-grid">
+            <li className="landing-delivery-card">
+              <span className="landing-delivery-step" aria-hidden="true">
+                1
+              </span>
+              <div>
+                <strong>Регистрация</strong>
+                <p>Создайте аккаунт на сайте и подтвердите email.</p>
+              </div>
             </li>
-            <li>После активации доступ появляется сразу — статус подписки станет «Активна».</li>
+            <li className="landing-delivery-card">
+              <span className="landing-delivery-step" aria-hidden="true">
+                2
+              </span>
+              <div>
+                <strong>Кабинет и тарифы</strong>
+                <p>Войдите и откройте раздел «Подписки».</p>
+              </div>
+            </li>
+            <li className="landing-delivery-card">
+              <span className="landing-delivery-step" aria-hidden="true">
+                3
+              </span>
+              <div>
+                <strong>Оплата или старт</strong>
+                <p>Бесплатный тариф или «Бизнес» через ЮKassa (можно с промокодом).</p>
+              </div>
+            </li>
+            <li className="landing-delivery-card">
+              <span className="landing-delivery-step" aria-hidden="true">
+                4
+              </span>
+              <div>
+                <strong>Мгновенный доступ</strong>
+                <p>После активации статус станет «Активна» — можно работать сразу.</p>
+              </div>
+            </li>
           </ol>
         </section>
 
@@ -626,65 +637,15 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </button>{" "}
               на платформе.
             </p>
+            <button type="button" className="landing-btn landing-btn--primary" onClick={scrollToRequest}>
+              Оставить заявку
+            </button>
           </div>
         </section>
 
-        <section className="landing-section landing-request" ref={requestRef} id="automation-request">
-          <h2>Оставить заявку на автоматизацию</h2>
-          <p className="landing-section-lead">
-            Укажите email — он обязателен, чтобы мы могли ответить. Телефон и Telegram — по желанию,
-            заполните хотя бы один удобный способ связи.
-          </p>
-          <form className="landing-request-form" onSubmit={submitRequest}>
-            <input
-              placeholder="Ваше имя *"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-            />
-            <input
-              type="email"
-              placeholder="Email *"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              required
-            />
-            <input
-              placeholder="Телефон"
-              {...phoneFieldProps(form.phone, (phone) => setForm({ ...form, phone }))}
-            />
-            <input
-              placeholder="Telegram (@username)"
-              value={form.telegram}
-              onChange={(e) => setForm({ ...form, telegram: e.target.value })}
-            />
-            <textarea
-              placeholder="Расскажите о вашем бизнесе и задачах"
-              rows={4}
-              value={form.message}
-              onChange={(e) => setForm({ ...form, message: e.target.value })}
-            />
-            <label className="checkbox landing-consent-item">
-              <input
-                type="checkbox"
-                checked={Boolean(form.accept_privacy)}
-                onChange={(e) => setForm({ ...form, accept_privacy: e.target.checked })}
-                required
-              />
-              <span>
-                Согласен(на) на обработку персональных данных согласно{" "}
-                <a href="/privacy" target="_blank" rel="noopener noreferrer">
-                  политике конфиденциальности
-                </a>{" "}
-                (версия {SITE_LEGAL.privacyVersion})
-              </span>
-            </label>
-            <button type="submit" className="landing-btn landing-btn--primary">
-              Отправить заявку
-            </button>
-            {formStatus && <p className="landing-form-status">{formStatus}</p>}
-          </form>
-        </section>
+        <div ref={requestRef}>
+          <LandingAutomationRequest />
+        </div>
 
         <section className="landing-section landing-roadmap">
           <h2>Функционал платформы</h2>
@@ -756,7 +717,6 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           <h2>Готовы начать?</h2>
           <p>
             Записи бесплатны. Сотрудники и приоритетная поддержка — в тарифе Бизнес. Можно сначала открыть демо.
-            обратно наверх.
           </p>
           <div className="landing-hero-actions">
             <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>

@@ -104,7 +104,14 @@ export default function LandingDemo({ open, onClose, onRegister, onStartDemo }) 
         {error ? <p className="landing-form-status">{error}</p> : null}
         <p className="landing-demo-caption">
           Это общий демо-аккаунт, не ваша организация. Для своего бизнеса{" "}
-          <button type="button" className="landing-link-btn" onClick={onRegister}>
+          <button
+            type="button"
+            className="landing-link-btn"
+            onClick={() => {
+              onClose();
+              onRegister?.();
+            }}
+          >
             зарегистрируйтесь
           </button>
           .

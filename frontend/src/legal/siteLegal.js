@@ -12,6 +12,6 @@ export const SITE_LEGAL = {
   /** Должны совпадать с backend/users/legal_versions.py */
   privacyVersion: "2026-07-27",
   privacyPublishedAt: "2026-07-27",
-  offerVersion: "2026-07-27",
-  offerPublishedAt: "2026-07-27",
+  offerVersion: "2026-08-21",
+  offerPublishedAt: "2026-08-21",
 };
