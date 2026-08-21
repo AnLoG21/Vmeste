@@ -235,6 +235,7 @@ class BookingSerializer(serializers.ModelSerializer):
     slot_ends_at = serializers.SerializerMethodField()
     review = serializers.SerializerMethodField()
     inspection = serializers.SerializerMethodField()
+    client_package_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -265,6 +266,8 @@ class BookingSerializer(serializers.ModelSerializer):
             "payment_url",
             "paid_at",
             "inspection",
+            "client_package",
+            "client_package_name",
         ]
         read_only_fields = [
             "client",
@@ -286,6 +289,8 @@ class BookingSerializer(serializers.ModelSerializer):
             "payment_url",
             "paid_at",
             "inspection",
+            "client_package",
+            "client_package_name",
         ]
 
     def get_organization_name(self, obj):
@@ -372,6 +377,12 @@ class BookingSerializer(serializers.ModelSerializer):
             "vehicle_plate": report.vehicle_plate or "",
             "vehicle_title": report.vehicle_title or "",
         }
+
+    def get_client_package_name(self, obj):
+        pkg = getattr(obj, "client_package", None)
+        if not pkg:
+            return ""
+        return (getattr(getattr(pkg, "package", None), "name", None) or "").strip()
 
     def get_client_display_name(self, obj):
         from .booking_actions import client_display_name

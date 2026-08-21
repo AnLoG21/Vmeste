@@ -27,11 +27,65 @@ export function findZoneAt(lat, lon, zones) {
   return null;
 }
 
+function polygonCentroid(ring) {
+  if (!ring?.length) return null;
+  let sumLat = 0;
+  let sumLon = 0;
+  ring.forEach((p) => {
+    sumLat += Number(p[0]);
+    sumLon += Number(p[1]);
+  });
+  return [sumLat / ring.length, sumLon / ring.length];
+}
+
 function setPinOnMap(ymaps, map, pinRef, lat, lon) {
   if (pinRef.current) map.geoObjects.remove(pinRef.current);
   pinRef.current = new ymaps.Placemark([lat, lon], {}, { preset: "islands#orangeDotIcon", draggable: true });
   map.geoObjects.add(pinRef.current);
   return pinRef.current;
+}
+
+function drawZones(ymaps, map, zonesLayerRef, zones) {
+  if (zonesLayerRef.current) {
+    map.geoObjects.remove(zonesLayerRef.current);
+    zonesLayerRef.current = null;
+  }
+  const collection = new ymaps.GeoObjectCollection();
+  (zones || []).forEach((z) => {
+    const ring = (z.polygon || []).map((p) => [Number(p[0]), Number(p[1])]);
+    if (ring.length < 3) return;
+    const feeLabel = `${Number(z.fee || 0).toLocaleString("ru-RU")} ₽`;
+    collection.add(
+      new ymaps.Polygon(
+        [ring],
+        { hintContent: `${z.name || "Зона"}: ${feeLabel}` },
+        {
+          fillColor: `${z.color || "#ff6a00"}44`,
+          strokeColor: z.color || "#ff6a00",
+          strokeWidth: 2,
+          interactivityModel: "default#transparent",
+        },
+      ),
+    );
+    const center = polygonCentroid(ring);
+    if (center) {
+      collection.add(
+        new ymaps.Placemark(
+          center,
+          { iconContent: feeLabel, hintContent: `${z.name || "Зона"}: ${feeLabel}` },
+          { preset: "islands#darkOrangeStretchyIcon", cursor: "pointer" },
+        ),
+      );
+    }
+  });
+  map.geoObjects.add(collection);
+  zonesLayerRef.current = collection;
+  try {
+    const bounds = collection.getBounds();
+    if (bounds) map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 24 });
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Карта зон + выбор точки доставки для гостя (клик / перенос метки). */
@@ -45,6 +99,7 @@ export default function CafeGuestDeliveryMap({
   const hostRef = useRef(null);
   const mapRef = useRef(null);
   const pinRef = useRef(null);
+  const zonesLayerRef = useRef(null);
   const onPickRef = useRef(onPick);
   const zonesRef = useRef(zones);
   const [error, setError] = useState("");
@@ -93,43 +148,6 @@ export default function CafeGuestDeliveryMap({
             zoom: pin ? 15 : 13,
             controls: ["zoomControl", "geolocationControl"],
           });
-          (zones || []).forEach((z) => {
-            const ring = (z.polygon || []).map((p) => [p[0], p[1]]);
-            if (ring.length < 3) return;
-            const poly = new ymaps.Polygon(
-              [ring],
-              { hintContent: `${z.name}: ${Number(z.fee || 0)} ₽` },
-              {
-                fillColor: `${z.color || "#ff6a00"}44`,
-                strokeColor: z.color || "#ff6a00",
-                strokeWidth: 2,
-                interactivityModel: "default#transparent",
-              },
-            );
-            map.geoObjects.add(poly);
-            // Подпись стоимости в центре зоны
-            let sumLat = 0;
-            let sumLon = 0;
-            ring.forEach((p) => {
-              sumLat += Number(p[0]);
-              sumLon += Number(p[1]);
-            });
-            const cLat = sumLat / ring.length;
-            const cLon = sumLon / ring.length;
-            const feeLabel = `${Number(z.fee || 0).toLocaleString("ru-RU")} ₽`;
-            const label = new ymaps.Placemark(
-              [cLat, cLon],
-              {
-                iconContent: feeLabel,
-                hintContent: `${z.name || "Зона"}: ${feeLabel}`,
-              },
-              {
-                preset: "islands#darkOrangeStretchyIcon",
-                cursor: "pointer",
-              },
-            );
-            map.geoObjects.add(label);
-          });
 
           async function handleCoords(lat, lon) {
             const address = await reverseGeocodeLatLon(lat, lon);
@@ -146,6 +164,8 @@ export default function CafeGuestDeliveryMap({
             const coords = e.get("coords");
             handleCoords(coords[0], coords[1]);
           });
+
+          drawZones(ymaps, map, zonesLayerRef, zonesRef.current);
 
           if (pin?.lat != null && pin?.lon != null) {
             setPinOnMap(ymaps, map, pinRef, pin.lat, pin.lon);
@@ -166,9 +186,24 @@ export default function CafeGuestDeliveryMap({
         mapRef.current = null;
       }
       pinRef.current = null;
+      zonesLayerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const ymaps = window.ymaps;
+    const map = mapRef.current;
+    if (!ymaps || !map) return;
+    ymaps.ready(() => {
+      drawZones(ymaps, map, zonesLayerRef, zones);
+      setHint(
+        (zones || []).length
+          ? "Нажмите на карту внутри зоны доставки или выберите адрес выше"
+          : "Укажите точку на карте или адрес выше",
+      );
+    });
+  }, [zones]);
 
   useEffect(() => {
     const ymaps = window.ymaps;

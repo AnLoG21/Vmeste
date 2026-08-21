@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { API_URL } from "./config.js";
+import MiniDatePicker from "./MiniDatePicker.jsx";
 import "./bookingWidget.css";
+import "./styles.css";
 
 function todayIso() {
   const d = new Date();
@@ -306,23 +308,18 @@ export default function BookingWidgetPage({ slug }) {
             </div>
           ) : null}
 
-          <label className="bw-label" htmlFor="bw-date">
-            Дата
-          </label>
-          <input
+          <MiniDatePicker
             id="bw-date"
-            type="date"
+            label="Дата"
             value={bookDate}
-            min={todayIso()}
-            required
-            onChange={(e) => {
-              setBookDate(e.target.value);
+            alwaysOpen
+            availableDates={serviceId ? availableDates : null}
+            onChange={(iso) => {
+              setBookDate(iso);
               setWindowSel("");
             }}
           />
-          {availableDates.length > 0 ? (
-            <p className="bw-muted small">Свободные даты: {availableDates.slice(0, 8).join(", ")}…</p>
-          ) : serviceId ? (
+          {serviceId && availableDates.length === 0 ? (
             <p className="bw-muted small">Нет свободных дат на ближайшие недели.</p>
           ) : null}
 

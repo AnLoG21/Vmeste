@@ -120,12 +120,12 @@ export default function SalonLoyaltyPackagesPanel({ authFetch, API_URL, services
       <h3>Лояльность</h3>
       <form className="form" onSubmit={saveLoyalty}>
         <label className="loyalty-enable-row">
-          <span>Включить баллы</span>
           <input
             type="checkbox"
             checked={Boolean(loyalty.enabled)}
             onChange={(e) => setLoyalty((p) => ({ ...p, enabled: e.target.checked }))}
           />
+          <span>Включить баллы</span>
         </label>
         <label>
           Баллов за визит

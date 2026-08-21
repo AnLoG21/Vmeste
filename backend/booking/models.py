@@ -98,6 +98,14 @@ class Booking(models.Model):
     paid_at = models.DateTimeField(null=True, blank=True)
     reminder_24h_sent = models.BooleanField(default=False)
     reminder_2h_sent = models.BooleanField(default=False)
+    client_package = models.ForeignKey(
+        "ClientPackage",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="bookings_used",
+        help_text="Абонемент, списанный при оплате/записи.",
+    )
 
 
 class ProviderAcquiring(models.Model):

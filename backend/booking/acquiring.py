@@ -95,6 +95,13 @@ def expire_unpaid_bookings(provider_id=None) -> int:
 
 def attach_prepay_if_needed(booking: Booking) -> dict | None:
     expire_unpaid_bookings(booking.provider_id)
+    if getattr(booking, "client_package_id", None):
+        # Оплата абонементом — предоплата не нужна
+        if booking.payment_status != "paid":
+            booking.payment_status = "paid"
+            booking.prepay_amount = 0
+            booking.save(update_fields=["payment_status", "prepay_amount"])
+        return None
     acq = ProviderAcquiring.objects.filter(provider_id=booking.provider_id).first()
     mode = (acq.prepay_mode if acq else ProviderAcquiring.PrepayMode.OFF) or ProviderAcquiring.PrepayMode.OFF
     if mode == ProviderAcquiring.PrepayMode.OFF:

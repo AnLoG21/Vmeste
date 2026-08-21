@@ -16,6 +16,7 @@ import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
 import SalonLoyaltyPackagesPanel from "./SalonLoyaltyPackagesPanel.jsx";
+import MiniDatePicker from "./MiniDatePicker.jsx";
 import "./landing.css";
 import {
   ORG_GALLERY_MAX_PHOTOS,
@@ -2276,179 +2277,6 @@ function BookingMessageField({
   );
 }
 
-function MiniDatePicker({
-  id,
-  label,
-  value,
-  onChange,
-  allowClear = false,
-  alwaysOpen = false,
-  availableDates = null,
-}) {
-  const [open, setOpen] = useState(alwaysOpen);
-  const wrapRef = useRef(null);
-  const today = todayIsoDate();
-  const availableSet = useMemo(() => {
-    if (!availableDates) return null;
-    if (availableDates instanceof Set) return availableDates;
-    return new Set(Array.isArray(availableDates) ? availableDates.map(String) : []);
-  }, [availableDates]);
-  const parsed = value ? new Date(`${value}T12:00:00`) : null;
-  const initialMonth = parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date();
-  const [viewMonth, setViewMonth] = useState(
-    () => `${initialMonth.getFullYear()}-${String(initialMonth.getMonth() + 1).padStart(2, "0")}`,
-  );
-
-  useEffect(() => {
-    if (alwaysOpen || !open) return undefined;
-    function onDoc(e) {
-      if (wrapRef.current?.contains(e.target)) return;
-      setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc, true);
-    return () => document.removeEventListener("mousedown", onDoc, true);
-  }, [open, alwaysOpen]);
-
-  useEffect(() => {
-    if (alwaysOpen) setOpen(true);
-  }, [alwaysOpen]);
-
-  useEffect(() => {
-    if (!value) return;
-    const d = new Date(`${value}T12:00:00`);
-    if (!Number.isNaN(d.getTime())) {
-      setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-    }
-  }, [value]);
-
-  const [vy, vm] = viewMonth.split("-").map(Number);
-  const first = new Date(vy, vm - 1, 1);
-  const daysInMonth = new Date(vy, vm, 0).getDate();
-  const offset = (first.getDay() + 6) % 7;
-  const cells = [];
-  for (let i = 0; i < offset; i += 1) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d += 1) cells.push(d);
-
-  const displayLabel = value
-    ? new Date(`${value}T12:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })
-    : "Выбрать дату";
-
-  const calendar = (
-    <div
-      className={["mini-date-picker-popover", alwaysOpen && "mini-date-picker-popover--inline"].filter(Boolean).join(" ")}
-      role="dialog"
-      aria-label="Календарь"
-    >
-      <div className="mini-date-picker-nav">
-        <button
-          type="button"
-          className="mini-date-nav-btn"
-          aria-label="Предыдущий месяц"
-          onClick={() => {
-            const d = new Date(vy, vm - 2, 1);
-            setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-          }}
-        >
-          ‹
-        </button>
-        <span className="mini-date-picker-month">
-          {first.toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}
-        </span>
-        <button
-          type="button"
-          className="mini-date-nav-btn"
-          aria-label="Следующий месяц"
-          onClick={() => {
-            const d = new Date(vy, vm, 1);
-            setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-          }}
-        >
-          ›
-        </button>
-      </div>
-      <div className="mini-date-picker-weekdays">
-        {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((wd) => (
-          <span key={wd} className="mini-date-wd">
-            {wd}
-          </span>
-        ))}
-      </div>
-      <div className="mini-date-picker-grid">
-        {cells.map((day, idx) => {
-          if (!day) return <span key={`e-${idx}`} className="mini-date-cell mini-date-cell--empty" />;
-          const iso = `${vy}-${String(vm).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-          const isToday = iso === today;
-          const isSelected = iso === value;
-          const isBookable = !availableSet || availableSet.has(iso);
-          const isPast = iso < today;
-          const disabled = Boolean(availableSet) && (!isBookable || isPast);
-          return (
-            <button
-              key={iso}
-              type="button"
-              disabled={disabled}
-              className={[
-                "mini-date-cell",
-                isToday && "mini-date-cell--today",
-                isSelected && "mini-date-cell--selected",
-                isBookable && availableSet && "mini-date-cell--available",
-                disabled && "mini-date-cell--disabled",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              onClick={() => {
-                if (disabled) return;
-                onChange(iso);
-                if (!alwaysOpen) setOpen(false);
-              }}
-            >
-              {day}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-
-  return (
-    <div className={["mini-date-picker", alwaysOpen && "mini-date-picker--open"].filter(Boolean).join(" ")} ref={wrapRef}>
-      {label ? (
-        <label className="field-label" htmlFor={id}>
-          {label}
-        </label>
-      ) : null}
-      {alwaysOpen ? (
-        <div id={id} className={`mini-date-picker-btn${value ? "" : " mini-date-picker-btn--empty"}`} aria-live="polite">
-          {displayLabel}
-        </div>
-      ) : (
-        <button
-          id={id}
-          type="button"
-          className={`mini-date-picker-btn${value ? "" : " mini-date-picker-btn--empty"}`}
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-        >
-          {displayLabel}
-        </button>
-      )}
-      {allowClear && value ? (
-        <button
-          type="button"
-          className="ghost-btn mini-date-picker-clear"
-          onClick={() => {
-            onChange("");
-            if (!alwaysOpen) setOpen(false);
-          }}
-        >
-          Не учитывать дату
-        </button>
-      ) : null}
-      {(alwaysOpen || open) && calendar}
-    </div>
-  );
-}
-
 function StaffServicesAssignment({ link, categories, services, onSave }) {
   const [treeOpen, setTreeOpen] = useState({});
   const visibleServiceIds = new Set(services.map((s) => Number(s.id)));
@@ -2789,9 +2617,12 @@ export default function App() {
     windowKey: "",
     comment: "",
     loyaltyPoints: "",
+    usePackage: true,
+    clientPackageId: "",
   });
   const [bookLoyaltyInfo, setBookLoyaltyInfo] = useState(null);
   const [mapOrgPackages, setMapOrgPackages] = useState([]);
+  const [bookClientPackages, setBookClientPackages] = useState([]);
 
   const [categoryOpen, setCategoryOpen] = useState({});
   const [subcategoryOpen, setSubcategoryOpen] = useState({});
@@ -8174,12 +8005,32 @@ export default function App() {
     }
     setClientBookWindows([]);
     setBookLoyaltyInfo(null);
-    setClientBookingForm((p) => ({ ...p, loyaltyPoints: "" }));
+    setBookClientPackages([]);
+    setClientBookingForm((p) => ({ ...p, loyaltyPoints: "", usePackage: true, clientPackageId: "" }));
     if (me?.role === "client" && accessToken) {
       authFetch(`${API_URL}/booking/loyalty/me/?provider=${encodeURIComponent(pid)}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => setBookLoyaltyInfo(data))
         .catch(() => setBookLoyaltyInfo(null));
+      authFetch(`${API_URL}/booking/client-packages/`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((list) => {
+          const mine = (Array.isArray(list) ? list : []).filter(
+            (p) =>
+              Number(p.provider) === Number(pid) &&
+              p.status === "active" &&
+              Number(p.visits_remaining) > 0,
+          );
+          setBookClientPackages(mine);
+          if (mine.length) {
+            setClientBookingForm((p) => ({
+              ...p,
+              usePackage: true,
+              clientPackageId: String(mine[0].id),
+            }));
+          }
+        })
+        .catch(() => setBookClientPackages([]));
     }
   }
 
@@ -8205,7 +8056,12 @@ export default function App() {
         staff: win.staff_id ?? null,
         comment: clientBookingForm.comment,
         option_ids: clientBookingForm.optionIds || [],
-        loyalty_points: Number(clientBookingForm.loyaltyPoints) || 0,
+        loyalty_points:
+          clientBookingForm.usePackage && bookClientPackages.length
+            ? 0
+            : Number(clientBookingForm.loyaltyPoints) || 0,
+        use_package: Boolean(clientBookingForm.usePackage && clientBookingForm.clientPackageId),
+        client_package: clientBookingForm.usePackage ? clientBookingForm.clientPackageId || null : null,
       }),
     });
     if (!response.ok) {
@@ -8221,7 +8077,11 @@ export default function App() {
     await reloadBookingsList();
     const monthKey = isoMonthKey(created.slot_starts_at || win.starts_at);
     if (monthKey) setBookingsMonth(monthKey);
-    setClientStatus("Запись создана.");
+    setClientStatus(
+      created.client_package
+        ? "Запись создана — списан визит по абонементу."
+        : "Запись создана.",
+    );
     setClientBookingForm({
       locationId: "",
       provider: "",
@@ -8232,8 +8092,11 @@ export default function App() {
       comment: "",
       loyaltyPoints: "",
       staffId: "any",
+      usePackage: true,
+      clientPackageId: "",
     });
     setBookLoyaltyInfo(null);
+    setBookClientPackages([]);
     setClientBookWindows([]);
     setClientBookModalOpen(false);
     setMapOrgPopup(null);
@@ -15728,7 +15591,38 @@ export default function App() {
                   value={clientBookingForm.comment}
                   onChange={(e) => setClientBookingForm((p) => ({ ...p, comment: e.target.value }))}
                 />
-                {bookLoyaltyInfo?.enabled && Number(bookLoyaltyInfo.balance) > 0 ? (
+                {bookClientPackages.length > 0 ? (
+                  <div className="client-book-package-box">
+                    <label className="checkbox loyalty-enable-row">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(clientBookingForm.usePackage)}
+                        onChange={(e) =>
+                          setClientBookingForm((p) => ({ ...p, usePackage: e.target.checked }))
+                        }
+                      />
+                      <span>Оплатить абонементом</span>
+                    </label>
+                    {clientBookingForm.usePackage ? (
+                      <select
+                        value={clientBookingForm.clientPackageId}
+                        onChange={(e) =>
+                          setClientBookingForm((p) => ({ ...p, clientPackageId: e.target.value }))
+                        }
+                      >
+                        {bookClientPackages.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.package_name} — осталось {p.visits_remaining}/{p.visits_total}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
+                    <p className="muted small">При оплате абонементом списывается 1 визит, предоплата не нужна.</p>
+                  </div>
+                ) : null}
+                {bookLoyaltyInfo?.enabled &&
+                Number(bookLoyaltyInfo.balance) > 0 &&
+                !(clientBookingForm.usePackage && bookClientPackages.length) ? (
                   <label className="field-label">
                     Списать баллы (баланс {Number(bookLoyaltyInfo.balance).toLocaleString("ru-RU")}
                     {bookLoyaltyInfo.rub_per_point
@@ -15748,7 +15642,11 @@ export default function App() {
                   </label>
                 ) : null}
                 <button type="submit" disabled={!clientBookingForm.windowKey}>
-                  {mapOrgProfile?.prepay?.ready ? "Перейти к оплате" : "Подтвердить"}
+                  {clientBookingForm.usePackage && bookClientPackages.length
+                    ? "Записаться по абонементу"
+                    : mapOrgProfile?.prepay?.ready
+                      ? "Перейти к оплате"
+                      : "Подтвердить"}
                 </button>
               </form>
               <p className="status">{clientStatus}</p>

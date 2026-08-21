@@ -134,3 +134,22 @@
   color: #b91c1c;
   margin: 0.5rem 0 0;
 }
+
+.bw-form .mini-date-picker {
+  margin: 0.35rem 0 0.15rem;
+}
+
+.bw-form .mini-date-picker-btn {
+  background: #fff;
+  border: 1px solid #e5d5c8;
+}
+
+.bw-form .field-label {
+  display: block;
+  margin-top: 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #78716c;
+}

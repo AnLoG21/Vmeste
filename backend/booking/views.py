@@ -576,7 +576,23 @@ class BookingViewSet(viewsets.ModelViewSet):
         return self._respond_created_booking(booking)
 
     def _apply_loyalty_redeem(self, booking, data):
-        from .loyalty import loyalty_discount_rub, redeem_loyalty_points
+        from .loyalty import consume_package_visit, loyalty_discount_rub, redeem_loyalty_points
+
+        use_package = str(data.get("use_package") or "").strip().lower() in ("1", "true", "yes")
+        package_id = data.get("client_package") or data.get("package_id")
+        if use_package or package_id:
+            try:
+                pkg_id = int(package_id) if package_id not in (None, "", "null") else None
+            except (TypeError, ValueError):
+                pkg_id = None
+            purchase = consume_package_visit(booking, package_id=pkg_id)
+            if not purchase:
+                raise ValueError("Нет активного абонемента для этой услуги.")
+            note = f"[абонемент «{purchase.package.name}», осталось {purchase.visits_remaining}]"
+            booking.comment = f"{(booking.comment or '').strip()} {note}".strip()[:250]
+            booking.save(update_fields=["comment"])
+            # С абонементом баллы за оплату не списываем
+            return
 
         try:
             points = int(data.get("loyalty_points") or 0)

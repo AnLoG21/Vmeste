@@ -6,7 +6,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import F, Q
+from django.db.models import Q
 from django.utils import timezone
 
 from .models import (
@@ -74,28 +74,9 @@ def sell_package(*, provider, client, package: VisitPackage, note: str = "") -> 
     )
 
 
-@transaction.atomic
-def consume_package_visit(booking) -> ClientPackage | None:
-    """Debit one visit from the first suitable active package. Returns purchase or None."""
-    if not booking or not booking.client_id or not booking.service_id:
-        return None
-    packs = active_client_packages(booking.provider_id, booking.client_id, booking.service_id)
-    if not packs:
-        return None
-    purchase = ClientPackage.objects.select_for_update().get(pk=packs[0].pk)
-    if purchase.visits_remaining <= 0:
-        return None
-    purchase.visits_remaining = F("visits_remaining") - 1
-    purchase.save(update_fields=["visits_remaining"])
-    purchase.refresh_from_db()
-    if purchase.visits_remaining <= 0:
-        purchase.status = ClientPackage.Status.EXHAUSTED
-        purchase.save(update_fields=["status"])
-    return purchase
-
-
 def booking_amount_rub(booking) -> Decimal:
-    price = Decimal(str(getattr(booking.service, "price", 0) or 0))
+    service = getattr(booking, "service", None)
+    price = Decimal(str(getattr(service, "price", 0) or 0))
     for opt in booking.selected_options or []:
         try:
             price += Decimal(str(opt.get("price") or 0))
@@ -107,21 +88,28 @@ def booking_amount_rub(booking) -> Decimal:
 @transaction.atomic
 def award_loyalty_for_visit(booking) -> int:
     """Award points after mark-done. Returns points awarded."""
+    if not booking or not booking.client_id or not booking.provider_id:
+        return 0
+    if LoyaltyLedger.objects.filter(booking_id=booking.id, reason="visit", delta__gt=0).exists():
+        return 0
     settings_obj = LoyaltySettings.objects.filter(provider_id=booking.provider_id, enabled=True).first()
-    if not settings_obj or not booking.client_id:
+    if not settings_obj:
         return 0
     points = int(settings_obj.points_per_visit or 0)
     per100 = int(settings_obj.points_per_100_rub or 0)
     if per100:
+        if getattr(booking, "service_id", None) and getattr(booking, "service", None) is None:
+            from catalog.models import Service
+
+            booking.service = Service.objects.filter(pk=booking.service_id).first()
         amount = booking_amount_rub(booking)
         points += int(amount // 100) * per100
     if points <= 0:
         return 0
     account = get_or_create_loyalty_account(booking.provider, booking.client)
     account = LoyaltyAccount.objects.select_for_update().get(pk=account.pk)
-    account.balance = F("balance") + points
+    account.balance = int(account.balance or 0) + points
     account.save(update_fields=["balance", "updated_at"])
-    account.refresh_from_db()
     LoyaltyLedger.objects.create(
         account=account,
         delta=points,
@@ -130,6 +118,57 @@ def award_loyalty_for_visit(booking) -> int:
         note="Начисление за визит",
     )
     return points
+
+
+@transaction.atomic
+def consume_package_visit(booking, package_id: int | None = None) -> ClientPackage | None:
+    """Debit one visit from a suitable active package. Returns purchase or None."""
+    if not booking or not booking.client_id or not booking.service_id:
+        return None
+    if getattr(booking, "client_package_id", None):
+        return ClientPackage.objects.filter(pk=booking.client_package_id).first()
+    packs = active_client_packages(booking.provider_id, booking.client_id, booking.service_id)
+    if not packs:
+        return None
+    purchase = None
+    if package_id:
+        purchase = next((p for p in packs if int(p.id) == int(package_id)), None)
+    if purchase is None:
+        purchase = packs[0]
+    purchase = ClientPackage.objects.select_for_update().get(pk=purchase.pk)
+    if purchase.visits_remaining <= 0:
+        return None
+    remaining = int(purchase.visits_remaining) - 1
+    purchase.visits_remaining = remaining
+    update_fields = ["visits_remaining"]
+    if remaining <= 0:
+        purchase.status = ClientPackage.Status.EXHAUSTED
+        update_fields.append("status")
+    purchase.save(update_fields=update_fields)
+    if hasattr(booking, "client_package_id"):
+        booking.client_package_id = purchase.id
+        booking.save(update_fields=["client_package"])
+    return purchase
+
+
+@transaction.atomic
+def restore_package_visit(booking) -> bool:
+    """Return one visit to package if booking used an абонемент."""
+    pkg_id = getattr(booking, "client_package_id", None)
+    if not pkg_id:
+        return False
+    purchase = ClientPackage.objects.select_for_update().filter(pk=pkg_id).first()
+    if not purchase:
+        return False
+    purchase.visits_remaining = int(purchase.visits_remaining or 0) + 1
+    update_fields = ["visits_remaining"]
+    if purchase.status == ClientPackage.Status.EXHAUSTED and purchase.visits_remaining > 0:
+        purchase.status = ClientPackage.Status.ACTIVE
+        update_fields.append("status")
+    purchase.save(update_fields=update_fields)
+    booking.client_package_id = None
+    booking.save(update_fields=["client_package"])
+    return True
 
 
 @transaction.atomic
@@ -142,11 +181,10 @@ def redeem_loyalty_points(*, provider, client, points: int, booking=None, note: 
         raise ValueError("Лояльность выключена.")
     account = get_or_create_loyalty_account(provider, client)
     account = LoyaltyAccount.objects.select_for_update().get(pk=account.pk)
-    if account.balance < points:
+    if int(account.balance or 0) < points:
         raise ValueError("Недостаточно баллов.")
-    account.balance = F("balance") - points
+    account.balance = int(account.balance or 0) - points
     account.save(update_fields=["balance", "updated_at"])
-    account.refresh_from_db()
     LoyaltyLedger.objects.create(
         account=account,
         delta=-points,

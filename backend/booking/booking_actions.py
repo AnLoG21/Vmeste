@@ -130,6 +130,12 @@ def cancel_booking_by_org(booking, actor):
     booking.status = Booking.Status.CANCELLED
     booking.save(update_fields=["status"])
     release_booking_occupancy(booking)
+    try:
+        from .loyalty import restore_package_visit
+
+        restore_package_visit(booking)
+    except Exception:
+        pass
     text = msg_tpl.replace("{date}", when)
     post_booking_message(provider, booking.client, text, sender=actor)
     try:
@@ -148,6 +154,9 @@ def cancel_booking_by_org(booking, actor):
 
 
 def mark_booking_done(booking, actor):
+    import logging
+
+    logger = logging.getLogger(__name__)
     provider = booking.provider
     slot = getattr(booking, "slot", None)
     if slot:
@@ -161,13 +170,30 @@ def mark_booking_done(booking, actor):
     booking.save(update_fields=["status"])
     text = msg_tpl.replace("{date}", format_booking_when(booking))
     post_booking_message(provider, booking.client, text, sender=actor)
+    # Reload with relations for loyalty/package
     try:
-        from .loyalty import award_loyalty_for_visit, consume_package_visit
+        booking = Booking.objects.select_related("service", "provider", "client", "client_package").get(pk=booking.pk)
+    except Booking.DoesNotExist:
+        pass
+    try:
+        from .loyalty import consume_package_visit
 
         consume_package_visit(booking)
-        award_loyalty_for_visit(booking)
     except Exception:
-        pass
+        logger.exception("consume_package_visit failed for booking %s", getattr(booking, "id", None))
+    try:
+        from .loyalty import award_loyalty_for_visit
+
+        awarded = award_loyalty_for_visit(booking)
+        if awarded:
+            logger.info("loyalty awarded %s points for booking %s", awarded, booking.id)
+        else:
+            logger.info(
+                "loyalty awarded 0 for booking %s (enabled settings / points?)",
+                getattr(booking, "id", None),
+            )
+    except Exception:
+        logger.exception("award_loyalty_for_visit failed for booking %s", getattr(booking, "id", None))
     try:
         from notifications.delivery import deliver_booking_event
 
@@ -192,6 +218,12 @@ def cancel_booking_by_client(booking):
     booking.status = Booking.Status.CANCELLED
     booking.save(update_fields=["status"])
     release_booking_occupancy(booking)
+    try:
+        from .loyalty import restore_package_visit
+
+        restore_package_visit(booking)
+    except Exception:
+        pass
     post_booking_message(provider, client, text, sender=client)
     try:
         from notifications.delivery import deliver_booking_event

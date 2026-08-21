@@ -153,16 +153,15 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
             robots: "index,follow",
             imageAlt: `${infoData.organization_name || "Кафе"} — меню`,
           });
-          if (!sessionStorage.getItem(storageKey)) {
-            const openRes = await fetch(`${API_URL}/cafe/m/${encodeURIComponent(keyId)}/`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: "{}",
-            });
-            const openData = await openRes.json().catch(() => ({}));
-            if (!openRes.ok) throw new Error(openData.detail || "Не удалось открыть меню");
-            if (!cancelled) applySession(openData, { preferDineIn: false });
-          }
+          // Всегда обновляем гостевую сессию, чтобы подтянуть актуальные зоны доставки
+          const openRes = await fetch(`${API_URL}/cafe/m/${encodeURIComponent(keyId)}/`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+          });
+          const openData = await openRes.json().catch(() => ({}));
+          if (!openRes.ok) throw new Error(openData.detail || "Не удалось открыть меню");
+          if (!cancelled) applySession(openData, { preferDineIn: false });
           return;
         }
 
@@ -267,12 +266,17 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
     ? Math.max(0, Number(tipCustomAmount) || 0)
     : Math.round(cartTotal * (tipPercent / 100));
   const serviceChargeAmount = includeServiceCharge ? Math.round(cartTotal * (SERVICE_CHARGE_PERCENT / 100)) : 0;
-  const deliveryAmount =
-    modeOrder === "delivery"
-      ? Number(deliveryZone?.fee != null ? deliveryZone.fee : unlock?.delivery_fee || 0)
-      : 0;
   const deliveryZones = unlock?.delivery_zones || [];
   const needsDeliveryPin = modeOrder === "delivery" && deliveryZones.length > 0;
+  const deliveryAmount =
+    modeOrder !== "delivery"
+      ? 0
+      : deliveryZones.length > 0
+        ? deliveryZone != null
+          ? Number(deliveryZone.fee || 0)
+          : null
+        : Number(unlock?.delivery_fee || 0);
+  const deliveryAmountSafe = deliveryAmount == null ? 0 : deliveryAmount;
   const deliveryMinOrder =
     modeOrder === "delivery"
       ? Number(
@@ -318,7 +322,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
     setDeliveryZone(zone || null);
   }
 
-  const grandTotal = cartTotal + tipAmount + deliveryAmount + serviceChargeAmount;
+  const grandTotal = cartTotal + tipAmount + deliveryAmountSafe + serviceChargeAmount;
 
   const prefsOrgKey = useMemo(() => {
     return (
@@ -961,11 +965,9 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                         <p>
                           Доставка:{" "}
                           <strong>
-                            {deliveryAmount > 0
-                              ? `${deliveryAmount.toLocaleString("ru-RU")} ₽`
-                              : deliveryPin || !deliveryZones.length
-                                ? "0 ₽"
-                                : "—"}
+                            {deliveryAmount != null
+                              ? `${Number(deliveryAmount).toLocaleString("ru-RU")} ₽`
+                              : "—"}
                           </strong>
                           {deliveryZone?.name ? ` · зона «${deliveryZone.name}»` : ""}
                         </p>
@@ -1038,9 +1040,9 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                     <p>
                       Доставка:{" "}
                       <strong>
-                        {deliveryFeeError
+                        {deliveryFeeError || deliveryAmount == null
                           ? "—"
-                          : `${Number(deliveryAmount || 0).toLocaleString("ru-RU")} ₽`}
+                          : `${Number(deliveryAmount).toLocaleString("ru-RU")} ₽`}
                       </strong>
                     </p>
                   ) : null}
