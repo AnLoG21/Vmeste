@@ -5,6 +5,8 @@ from __future__ import annotations
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -24,15 +26,20 @@ from .serializers import (
 User = get_user_model()
 
 
-def _provider_user(request):
-    if request.user.role != "provider":
+def _resolve_client(raw: str):
+    """Resolve client by numeric id or username/login (as shown in chats)."""
+    value = (raw or "").strip()
+    if not value:
         return None
-    return request.user
+    if value.isdigit():
+        return User.objects.filter(pk=int(value), role=User.Role.CLIENT).first()
+    return User.objects.filter(username__iexact=value, role=User.Role.CLIENT).first()
 
 
 class VisitPackageViewSet(viewsets.ModelViewSet):
     serializer_class = VisitPackageSerializer
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
         user = self.request.user
@@ -67,6 +74,23 @@ class VisitPackageViewSet(viewsets.ModelViewSet):
         instance.is_active = False
         instance.save(update_fields=["is_active"])
 
+    @action(detail=True, methods=["post"], url_path="purchase")
+    def purchase(self, request, pk=None):
+        """Client self-purchase of an active package (оплата у администратора / офлайн)."""
+        if request.user.role != User.Role.CLIENT:
+            return Response({"detail": "Только для клиентов."}, status=status.HTTP_403_FORBIDDEN)
+        package = get_object_or_404(VisitPackage, pk=pk, is_active=True)
+        try:
+            purchase = sell_package(
+                provider=package.provider,
+                client=request.user,
+                package=package,
+                note="Самостоятельная покупка в приложении",
+            )
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(ClientPackageSerializer(purchase).data, status=status.HTTP_201_CREATED)
+
 
 class ClientPackageViewSet(viewsets.ModelViewSet):
     serializer_class = ClientPackageSerializer
@@ -79,7 +103,11 @@ class ClientPackageViewSet(viewsets.ModelViewSet):
             qs = ClientPackage.objects.filter(provider=user)
             client = (self.request.query_params.get("client") or "").strip()
             if client:
-                qs = qs.filter(client_id=client)
+                resolved = _resolve_client(client)
+                if resolved:
+                    qs = qs.filter(client=resolved)
+                else:
+                    qs = qs.filter(client_id=client) if client.isdigit() else qs.none()
             return qs.select_related("package", "client", "provider")
         return ClientPackage.objects.filter(client=user).select_related("package", "provider")
 
@@ -90,9 +118,14 @@ class ClientPackageViewSet(viewsets.ModelViewSet):
         data = request.data or {}
         try:
             package = VisitPackage.objects.get(pk=int(data.get("package")), provider=request.user)
-            client = User.objects.get(pk=int(data.get("client")), role=User.Role.CLIENT)
-        except (VisitPackage.DoesNotExist, User.DoesNotExist, TypeError, ValueError):
-            return Response({"detail": "Укажите package и client."}, status=status.HTTP_400_BAD_REQUEST)
+        except (VisitPackage.DoesNotExist, TypeError, ValueError):
+            return Response({"detail": "Укажите package."}, status=status.HTTP_400_BAD_REQUEST)
+        client = _resolve_client(str(data.get("client") or data.get("client_login") or ""))
+        if not client:
+            return Response(
+                {"detail": "Клиент не найден. Укажите логин (как в чатах) или ID."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
             purchase = sell_package(
                 provider=request.user,
@@ -125,22 +158,25 @@ class LoyaltySettingsView(APIView):
 
 
 class MyLoyaltyView(APIView):
-    """Client: balance at a provider. Provider: lookup by client id."""
+    """Client: balance at a provider (or all accounts). Provider: lookup by client id/login."""
 
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         provider_id = (request.query_params.get("provider") or "").strip()
-        client_id = (request.query_params.get("client") or "").strip()
+        client_raw = (request.query_params.get("client") or "").strip()
         if request.user.role == "provider":
-            if not client_id:
-                # list top accounts
+            if not client_raw:
                 qs = LoyaltyAccount.objects.filter(provider=request.user).select_related("client")[:100]
                 return Response(LoyaltyAccountSerializer(qs, many=True).data)
-            account = get_or_create_loyalty_account(request.user, get_object_or_404(User, pk=client_id))
+            client = _resolve_client(client_raw)
+            if not client:
+                return Response({"detail": "Клиент не найден."}, status=status.HTTP_404_NOT_FOUND)
+            account = get_or_create_loyalty_account(request.user, client)
             return Response(LoyaltyAccountSerializer(account).data)
         if not provider_id:
-            return Response({"detail": "Укажите provider."}, status=status.HTTP_400_BAD_REQUEST)
+            qs = LoyaltyAccount.objects.filter(client=request.user).select_related("provider")[:100]
+            return Response(LoyaltyAccountSerializer(qs, many=True).data)
         account = get_or_create_loyalty_account(
             get_object_or_404(User, pk=provider_id, role=User.Role.PROVIDER),
             request.user,
@@ -150,3 +186,15 @@ class MyLoyaltyView(APIView):
         data["enabled"] = bool(settings_obj.enabled)
         data["rub_per_point"] = str(settings_obj.rub_per_point)
         return Response(data)
+
+
+class MyLoyaltyAccountsView(APIView):
+    """Alias list of client loyalty accounts."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != User.Role.CLIENT:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        qs = LoyaltyAccount.objects.filter(client=request.user).select_related("provider")[:100]
+        return Response(LoyaltyAccountSerializer(qs, many=True).data)

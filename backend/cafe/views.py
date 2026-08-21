@@ -24,6 +24,7 @@ from .models import (
     CafeSettings,
     CafeTable,
 )
+from users.models import User
 from .receipt_service import SERVICE_CHARGE_PERCENT, build_order_receipt_pdf_bytes, send_order_receipt_after_payment
 from .serializers import (
     CafeFloorPlanSerializer,
@@ -512,7 +513,18 @@ class CafeProviderOrdersView(APIView):
         if new_status not in allowed:
             return Response({"status": ["Некорректный статус."]}, status=status.HTTP_400_BAD_REQUEST)
         order.status = new_status
-        order.save(update_fields=["status", "updated_at"])
+        update_fields = ["status", "updated_at"]
+        if "courier_lat" in request.data and "courier_lon" in request.data:
+            try:
+                order.courier_lat = float(request.data.get("courier_lat"))
+                order.courier_lon = float(request.data.get("courier_lon"))
+                from django.utils import timezone as dj_tz
+
+                order.courier_updated_at = dj_tz.now()
+                update_fields.extend(["courier_lat", "courier_lon", "courier_updated_at"])
+            except (TypeError, ValueError):
+                pass
+        order.save(update_fields=update_fields)
         if new_status in (CafeOrder.Status.DONE, CafeOrder.Status.CANCELLED) and order.table_id:
             active = CafeOrder.objects.filter(
                 table_id=order.table_id,
@@ -1019,6 +1031,22 @@ class CafeGuestOrderCreateView(APIView):
             order.service_charge_amount = service_charge_amount
             order.total = items_total + delivery_fee + tip_amount + service_charge_amount
             order.provider_payout_amount = order.total - service_charge_amount
+            try:
+                d_lat = float(request.data.get("delivery_lat"))
+                d_lon = float(request.data.get("delivery_lon"))
+                order.delivery_lat = d_lat
+                order.delivery_lon = d_lon
+            except (TypeError, ValueError):
+                pass
+            if request.user and getattr(request.user, "is_authenticated", False) and request.user.role == User.Role.CLIENT:
+                order.client = request.user
+            elif guest_phone:
+                # Link to existing client account by phone when possible
+                phone_digits = "".join(ch for ch in guest_phone if ch.isdigit())
+                if len(phone_digits) >= 10:
+                    twin = User.objects.filter(role=User.Role.CLIENT, phone__icontains=phone_digits[-10:]).first()
+                    if twin:
+                        order.client = twin
 
             org_shop_id = (settings_obj.yookassa_shop_id or "").strip()
             org_secret = (settings_obj.yookassa_secret_key or "").strip()
@@ -1120,6 +1148,7 @@ class CafeMenuItemRateView(APIView):
             CafeOrder.Status.ACCEPTED,
             CafeOrder.Status.COOKING,
             CafeOrder.Status.READY,
+            CafeOrder.Status.TO_COURIER,
             CafeOrder.Status.DELIVERING,
             CafeOrder.Status.DONE,
         }:
@@ -1140,3 +1169,56 @@ class CafeMenuItemRateView(APIView):
                 "rating_count": item.rating_count,
             }
         )
+
+
+class CafeClientOrdersView(APIView):
+    """Заказы кафе текущего клиента (для раздела «Мои заказы»)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        qs = (
+            CafeOrder.objects.filter(client=user)
+            .select_related("provider")
+            .prefetch_related("items", "item_ratings")
+            .order_by("-id")[:100]
+        )
+        if not qs.exists() and getattr(user, "phone", None):
+            digits = "".join(ch for ch in str(user.phone) if ch.isdigit())
+            if len(digits) >= 10:
+                qs = (
+                    CafeOrder.objects.filter(guest_phone__icontains=digits[-10:])
+                    .select_related("provider")
+                    .prefetch_related("items", "item_ratings")
+                    .order_by("-id")[:100]
+                )
+        return Response(CafeOrderSerializer(qs, many=True).data)
+
+    def get_object_detail(self, request, pk):
+        pass
+
+    def patch(self, request, pk):
+        """Клиент не меняет статус; endpoint для расширения (резерв)."""
+        return Response({"detail": "Недоступно."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+
+class CafeClientOrderDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        order = (
+            CafeOrder.objects.filter(pk=pk)
+            .select_related("provider")
+            .prefetch_related("items", "item_ratings")
+            .first()
+        )
+        if not order:
+            return Response({"detail": "Не найдено."}, status=status.HTTP_404_NOT_FOUND)
+        ok = order.client_id == request.user.id
+        if not ok and getattr(request.user, "phone", None):
+            digits = "".join(ch for ch in str(request.user.phone) if ch.isdigit())
+            ok = bool(digits and digits[-10:] in (order.guest_phone or ""))
+        if not ok:
+            return Response({"detail": "Не найдено."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(CafeOrderSerializer(order).data)

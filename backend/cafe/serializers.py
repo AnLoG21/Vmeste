@@ -246,11 +246,13 @@ class CafeOrderSerializer(serializers.ModelSerializer):
     item_ratings = CafeOrderItemRatingSerializer(many=True, read_only=True)
     table_label = serializers.CharField(source="table.label", read_only=True, default="")
     can_rate = serializers.SerializerMethodField()
+    organization_name = serializers.SerializerMethodField()
 
     class Meta:
         model = CafeOrder
         fields = [
             "id",
+            "provider",
             "mode",
             "status",
             "pay_method",
@@ -258,6 +260,11 @@ class CafeOrderSerializer(serializers.ModelSerializer):
             "guest_phone",
             "guest_email",
             "delivery_address",
+            "delivery_lat",
+            "delivery_lon",
+            "courier_lat",
+            "courier_lon",
+            "courier_updated_at",
             "comment",
             "items_total",
             "tip_percent",
@@ -276,11 +283,15 @@ class CafeOrderSerializer(serializers.ModelSerializer):
             "can_rate",
             "created_at",
             "paid_at",
+            "organization_name",
         ]
         read_only_fields = [
+            "provider",
             "status",
             "items_total",
             "delivery_fee",
+            "delivery_lat",
+            "delivery_lon",
             "total",
             "confirmation_url",
             "created_at",
@@ -291,7 +302,14 @@ class CafeOrderSerializer(serializers.ModelSerializer):
             "table_label",
             "service_charge_amount",
             "provider_payout_amount",
+            "organization_name",
         ]
+
+    def get_organization_name(self, obj):
+        prov = getattr(obj, "provider", None)
+        if not prov:
+            return ""
+        return (getattr(prov, "organization_name", None) or "").strip() or (prov.username or "")
 
     def get_can_rate(self, obj):
         return obj.status in {
@@ -299,6 +317,7 @@ class CafeOrderSerializer(serializers.ModelSerializer):
             CafeOrder.Status.ACCEPTED,
             CafeOrder.Status.COOKING,
             CafeOrder.Status.READY,
+            CafeOrder.Status.TO_COURIER,
             CafeOrder.Status.DELIVERING,
             CafeOrder.Status.DONE,
         }

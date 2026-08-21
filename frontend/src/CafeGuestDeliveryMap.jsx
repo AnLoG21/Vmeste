@@ -107,6 +107,28 @@ export default function CafeGuestDeliveryMap({
               },
             );
             map.geoObjects.add(poly);
+            // Подпись стоимости в центре зоны
+            let sumLat = 0;
+            let sumLon = 0;
+            ring.forEach((p) => {
+              sumLat += Number(p[0]);
+              sumLon += Number(p[1]);
+            });
+            const cLat = sumLat / ring.length;
+            const cLon = sumLon / ring.length;
+            const feeLabel = `${Number(z.fee || 0).toLocaleString("ru-RU")} ₽`;
+            const label = new ymaps.Placemark(
+              [cLat, cLon],
+              {
+                iconContent: feeLabel,
+                hintContent: `${z.name || "Зона"}: ${feeLabel}`,
+              },
+              {
+                preset: "islands#darkOrangeStretchyIcon",
+                cursor: "pointer",
+              },
+            );
+            map.geoObjects.add(label);
           });
 
           async function handleCoords(lat, lon) {

@@ -603,7 +603,8 @@
   color: #444;
 }
 .cafe-order-badge--cooking,
-.cafe-order-badge--delivering {
+.cafe-order-badge--delivering,
+.cafe-order-badge--to_courier {
   background: #ffe566;
   color: #5c4a00;
 }

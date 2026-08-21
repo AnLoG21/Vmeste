@@ -332,6 +332,12 @@ class VisitPackage(models.Model):
         help_text="Пусто — любой визит к этой организации.",
     )
     is_active = models.BooleanField(default=True)
+    cover_image = models.ImageField(
+        upload_to="visit_packages/%Y/%m/",
+        null=True,
+        blank=True,
+        help_text="Обложка абонемента для карточки организации.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

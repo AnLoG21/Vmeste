@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CafeFloorCanvas from "./CafeFloorCanvas.jsx";
+import CafeOrderMapPin, { yandexMapsPinUrl } from "./CafeOrderMapPin.jsx";
 import "./cafeGuest.css";
 import "./cafeProvider.css";
 
@@ -11,13 +12,14 @@ const statusLabels = {
   accepted: "Принят",
   cooking: "Готовится",
   ready: "Готов",
-  delivering: "Доставляется",
+  to_courier: "Передаём курьеру",
+  delivering: "В пути",
   done: "Завершён",
   cancelled: "Отменён",
 };
 
-const STATUS_ACTIONS = ["accepted", "cooking", "ready", "done", "cancelled"];
-const KITCHEN_STATUSES = new Set(["paid", "accepted", "cooking", "ready", "awaiting_payment"]);
+const STATUS_ACTIONS = ["accepted", "cooking", "ready", "to_courier", "delivering", "done", "cancelled"];
+const KITCHEN_STATUSES = new Set(["paid", "accepted", "cooking", "ready", "awaiting_payment", "to_courier"]);
 
 function formatGuestPhone(phone) {
   const raw = String(phone || "").trim();
@@ -300,11 +302,11 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
     return items;
   }, [categories, menuQuery]);
 
-  async function setOrderStatus(id, next) {
+  async function setOrderStatus(id, next, extra = {}) {
     await authFetch(`${API_URL}/cafe/orders/${id}/`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: next }),
+      body: JSON.stringify({ status: next, ...extra }),
     });
     await loadOrders();
     await loadFloorAndMenu();
@@ -444,10 +446,64 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                 </li>
               ))}
             </ul>
+            {o.comment ? <p className="muted small">Комментарий: {o.comment}</p> : null}
+            {o.mode === "delivery" && o.delivery_address ? (
+              <div className="cafe-order-delivery-block">
+                <p>
+                  <strong>Адрес:</strong> {o.delivery_address}
+                </p>
+                {o.delivery_fee != null ? (
+                  <p className="muted small">Доставка: {Number(o.delivery_fee).toLocaleString("ru-RU")} ₽</p>
+                ) : null}
+                {o.delivery_lat != null && o.delivery_lon != null ? (
+                  <>
+                    <CafeOrderMapPin
+                      lat={o.delivery_lat}
+                      lon={o.delivery_lon}
+                      courierLat={o.courier_lat}
+                      courierLon={o.courier_lon}
+                    />
+                    <a
+                      className="landing-btn landing-btn--ghost cafe-yandex-maps-btn"
+                      href={yandexMapsPinUrl(o.delivery_lat, o.delivery_lon)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Открыть в Яндекс.Картах
+                    </a>
+                    {(o.status === "to_courier" || o.status === "delivering") ? (
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={() => {
+                          if (!navigator.geolocation) {
+                            setStatus("Геолокация недоступна в этом браузере");
+                            return;
+                          }
+                          navigator.geolocation.getCurrentPosition(
+                            (pos) => {
+                              setOrderStatus(o.id, o.status, {
+                                courier_lat: pos.coords.latitude,
+                                courier_lon: pos.coords.longitude,
+                              });
+                            },
+                            () => setStatus("Не удалось получить геолокацию курьера"),
+                          );
+                        }}
+                      >
+                        Обновить местоположение курьера
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            ) : null}
             <div className="cafe-status-actions">
               {(kitchen
                 ? ["accepted", "cooking", "ready", "done"]
-                : STATUS_ACTIONS
+                : o.mode === "delivery"
+                  ? STATUS_ACTIONS
+                  : STATUS_ACTIONS.filter((st) => st !== "to_courier" && st !== "delivering")
               ).map((st) => (
                 <button
                   key={st}

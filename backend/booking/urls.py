@@ -6,6 +6,7 @@ from .calendar_feed import CalendarFeedView, CalendarSettingsView
 from .loyalty_views import (
     ClientPackageViewSet,
     LoyaltySettingsView,
+    MyLoyaltyAccountsView,
     MyLoyaltyView,
     VisitPackageViewSet,
 )
@@ -40,6 +41,7 @@ urlpatterns = [
     path("calendar/<str:token>.ics", CalendarFeedView.as_view(), name="booking-calendar-ics"),
     path("loyalty/settings/", LoyaltySettingsView.as_view(), name="booking-loyalty-settings"),
     path("loyalty/me/", MyLoyaltyView.as_view(), name="booking-loyalty-me"),
+    path("loyalty/accounts/", MyLoyaltyAccountsView.as_view(), name="booking-loyalty-accounts"),
     path("public/<slug:slug>/", PublicWidgetCatalogView.as_view(), name="booking-widget-catalog"),
     path("public/<slug:slug>/windows/", PublicWidgetWindowsView.as_view(), name="booking-widget-windows"),
     path("public/<slug:slug>/dates/", PublicWidgetDatesView.as_view(), name="booking-widget-dates"),

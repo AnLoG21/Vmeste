@@ -26,6 +26,8 @@ urlpatterns = [
     path("guest/menu/", views.CafeGuestMenuView.as_view()),
     path("guest/order/", views.CafeGuestOrderCreateView.as_view()),
     path("guest/order/<int:order_id>/", views.CafeGuestOrderDetailView.as_view()),
+    path("my-orders/", views.CafeClientOrdersView.as_view()),
+    path("my-orders/<int:pk>/", views.CafeClientOrderDetailView.as_view()),
     path("guest/call-waiter/", views.CafeGuestCallWaiterView.as_view()),
     path("menu/items/<int:item_id>/ingredients/", views.CafeMenuItemIngredientView.as_view()),
     path("menu/items/<int:item_id>/ingredients/<int:ingredient_id>/", views.CafeMenuItemIngredientView.as_view()),

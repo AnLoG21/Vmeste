@@ -535,6 +535,11 @@ class BookingViewSet(viewsets.ModelViewSet):
                 return Response({"detail": "Услуга не найдена."}, status=status.HTTP_400_BAD_REQUEST)
             except ValueError as e:
                 return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                self._apply_loyalty_redeem(booking, request.data)
+            except ValueError as e:
+                transaction.set_rollback(True)
+                return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
             return self._respond_created_booking(booking)
 
         if not slot_id:
@@ -542,7 +547,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         try:
             slot = AvailabilitySlot.objects.select_for_update().get(pk=slot_id)
         except AvailabilitySlot.DoesNotExist:
-            return Response({"detail": "Слот не найден."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Слот не найден."}, status=status.HTTP_404_NOT_FOUND)
         if slot.is_booked:
             return Response({"detail": "Слот уже занят."}, status=status.HTTP_400_BAD_REQUEST)
         try:
@@ -563,7 +568,34 @@ class BookingViewSet(viewsets.ModelViewSet):
             staff_id=int(staff_id) if staff_id not in (None, "", "null") else slot.staff_id,
             comment=comment,
         )
+        try:
+            self._apply_loyalty_redeem(booking, request.data)
+        except ValueError as e:
+            transaction.set_rollback(True)
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return self._respond_created_booking(booking)
+
+    def _apply_loyalty_redeem(self, booking, data):
+        from .loyalty import loyalty_discount_rub, redeem_loyalty_points
+
+        try:
+            points = int(data.get("loyalty_points") or 0)
+        except (TypeError, ValueError):
+            points = 0
+        if points <= 0:
+            return
+        redeemed = redeem_loyalty_points(
+            provider=booking.provider,
+            client=booking.client,
+            points=points,
+            booking=booking,
+            note="Списание при записи",
+        )
+        if redeemed:
+            discount = loyalty_discount_rub(booking.provider, redeemed)
+            note = f"[баллы −{redeemed}, скидка ≈ {discount} ₽]"
+            booking.comment = f"{(booking.comment or '').strip()} {note}".strip()[:250]
+            booking.save(update_fields=["comment"])
 
     @action(detail=True, methods=["post"], url_path="pay")
     def pay(self, request, pk=None):

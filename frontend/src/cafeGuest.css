@@ -23,6 +23,37 @@
   flex: 1;
   min-width: 0;
 }
+.cafe-guest-back {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(40, 24, 12, 0.08);
+  color: #3a2414;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.cafe-guest-back:hover {
+  background: rgba(40, 24, 12, 0.14);
+}
+.cafe-delivery-fee-box {
+  margin: 8px 0 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 140, 40, 0.08);
+  border: 1px solid rgba(255, 140, 40, 0.25);
+}
+.cafe-delivery-fee-box.is-error {
+  background: rgba(180, 40, 40, 0.06);
+  border-color: rgba(180, 40, 40, 0.35);
+}
+.cafe-delivery-fee-error {
+  margin: 0;
+  color: #a32020;
+  font-size: 0.92rem;
+}
 .cafe-guest-logo {
   width: 72px;
   height: 72px;

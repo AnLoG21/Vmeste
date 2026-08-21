@@ -420,6 +420,7 @@ class VisitPackageSerializer(serializers.ModelSerializer):
     service_ids = serializers.ListField(
         child=serializers.IntegerField(), required=False, allow_empty=True
     )
+    cover_image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = VisitPackage
@@ -433,9 +434,25 @@ class VisitPackageSerializer(serializers.ModelSerializer):
             "validity_days",
             "service_ids",
             "is_active",
+            "cover_image",
+            "cover_image_url",
             "created_at",
         ]
-        read_only_fields = ["provider", "created_at"]
+        read_only_fields = ["provider", "created_at", "cover_image_url"]
+        extra_kwargs = {"cover_image": {"write_only": True, "required": False}}
+
+    def get_cover_image_url(self, obj):
+        f = getattr(obj, "cover_image", None)
+        if not f:
+            return ""
+        try:
+            url = f.url
+        except Exception:
+            return ""
+        request = self.context.get("request")
+        if request:
+            return request.build_absolute_uri(url)
+        return url
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -460,12 +477,14 @@ class VisitPackageSerializer(serializers.ModelSerializer):
 class ClientPackageSerializer(serializers.ModelSerializer):
     package_name = serializers.CharField(source="package.name", read_only=True)
     client_name = serializers.SerializerMethodField()
+    provider_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ClientPackage
         fields = [
             "id",
             "provider",
+            "provider_name",
             "client",
             "package",
             "package_name",
@@ -481,6 +500,12 @@ class ClientPackageSerializer(serializers.ModelSerializer):
 
     def get_client_name(self, obj):
         return client_display_name(getattr(obj, "client", None))
+
+    def get_provider_name(self, obj):
+        prov = getattr(obj, "provider", None)
+        if not prov:
+            return ""
+        return (getattr(prov, "organization_name", None) or "").strip() or (prov.username or "")
 
 
 class LoyaltySettingsSerializer(serializers.ModelSerializer):
@@ -499,12 +524,27 @@ class LoyaltySettingsSerializer(serializers.ModelSerializer):
 
 class LoyaltyAccountSerializer(serializers.ModelSerializer):
     client_name = serializers.SerializerMethodField()
+    provider_name = serializers.SerializerMethodField()
 
     class Meta:
         model = LoyaltyAccount
-        fields = ["id", "provider", "client", "client_name", "balance", "updated_at"]
+        fields = [
+            "id",
+            "provider",
+            "provider_name",
+            "client",
+            "client_name",
+            "balance",
+            "updated_at",
+        ]
         read_only_fields = fields
 
     def get_client_name(self, obj):
         return client_display_name(getattr(obj, "client", None))
+
+    def get_provider_name(self, obj):
+        prov = getattr(obj, "provider", None)
+        if not prov:
+            return ""
+        return (getattr(prov, "organization_name", None) or "").strip() or (prov.username or "")
 

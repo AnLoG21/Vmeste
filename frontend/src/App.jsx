@@ -8,6 +8,8 @@ import SubscriptionsPage from "./SubscriptionsPage.jsx";
 import AnalyticsPage from "./AnalyticsPage.jsx";
 import CafeOrdersPage from "./CafeOrdersPage.jsx";
 import CafeProviderWorkspace from "./CafeProviderWorkspace.jsx";
+import ClientCafeOrdersPage from "./ClientCafeOrdersPage.jsx";
+import ClientLoyaltyPage from "./ClientLoyaltyPage.jsx";
 import MarketplaceWorkspace from "./MarketplaceWorkspace.jsx";
 import InspectionWorkspace from "./InspectionWorkspace.jsx";
 import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
@@ -243,13 +245,15 @@ const BOOKMARK_CATALOG = [
   { id: "organization", label: "Организация", roles: ["provider"] },
   { id: "cafe", label: "Зал и меню", roles: ["provider"] },
   { id: "cafe_orders", label: "Заказы", roles: ["provider"] },
+  { id: "cafe_my_orders", label: "Заказы из ресторанов", roles: ["client"] },
+  { id: "loyalty", label: "Лояльность", roles: ["client"] },
   { id: "inspections", label: "Приёмка", roles: ["provider", "staff"] },
   { id: "marketplaces", label: "Маркетплейсы", roles: ["provider"], menuIcon: "market" },
   { id: "analytics", label: "Аналитика", roles: ["provider", "staff"], menuIcon: "analytics" },
 ];
 
 const DEFAULT_SUBNAV_BOOKMARKS = {
-  client: ["client_map", "bookings", "chats"],
+  client: ["client_map", "bookings", "cafe_my_orders", "loyalty", "chats"],
   provider: ["bookings", "client_map", "my_bookings", "chats"],
   staff: ["bookings", "reviews", "chats"],
   provider_cafe: ["cafe_orders", "cafe", "analytics", "client_map", "chats"],
@@ -287,6 +291,8 @@ function loadSubnavBookmarks(role, sphere) {
     let next = list.filter((id) => allowed.has(id));
     if (role === "client") {
       next = next.filter((id) => id !== "inspections");
+      if (!next.includes("cafe_my_orders")) next = [...next, "cafe_my_orders"];
+      if (!next.includes("loyalty")) next = [...next, "loyalty"];
     }
     if (role === "provider" && sphere === "cafe_restaurant") {
       next = next.filter((id) => id !== "bookings");
@@ -2782,7 +2788,10 @@ export default function App() {
     bookDate: "",
     windowKey: "",
     comment: "",
+    loyaltyPoints: "",
   });
+  const [bookLoyaltyInfo, setBookLoyaltyInfo] = useState(null);
+  const [mapOrgPackages, setMapOrgPackages] = useState([]);
 
   const [categoryOpen, setCategoryOpen] = useState({});
   const [subcategoryOpen, setSubcategoryOpen] = useState({});
@@ -7198,6 +7207,9 @@ export default function App() {
     } else if (id === "cafe" || id === "cafe_orders") {
       return false;
     }
+    if (id === "cafe_my_orders" || id === "loyalty") {
+      return role === "client";
+    }
     if (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces") {
       if (id === "intervals" || id === "bookings" || id === "services" || id === "my_bookings") return false;
       if (id === "analytics" || id === "reviews") return false;
@@ -7361,6 +7373,14 @@ export default function App() {
         color: "#ad1457",
         d: "M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.11 0 2-.9 2-2V5c0-1.1-.89-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z",
       },
+      cafe_my_orders: {
+        color: "#ef6c00",
+        d: "M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.11 0 2-.9 2-2V5c0-1.1-.89-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z",
+      },
+      loyalty: {
+        color: "#c62828",
+        d: "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z",
+      },
       inspections: {
         color: "#00897b",
         d: "M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l7.59-7.59L21 8l-9 9z",
@@ -7382,7 +7402,7 @@ export default function App() {
     const role = me?.role;
     if (!role) return [];
     const inSubnav = new Set(subnavBookmarks);
-    const preferred = ["marketplaces", "cafe", "cafe_orders", "client_map", "my_bookings", "intervals", "services", "analytics", "bookings", "reviews", "chats"];
+    const preferred = ["marketplaces", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "client_map", "my_bookings", "intervals", "services", "analytics", "bookings", "reviews", "chats"];
     return preferred.filter((id) => !inSubnav.has(id) && isBookmarkAvailable(id));
   }
 
@@ -7422,10 +7442,9 @@ export default function App() {
     );
     await loadSellerData();
     const openCats = {};
-    const openSubs = {};
-    for (const c of categories) openCats[c.id] = true;
+    for (const c of categories) openCats[c.id] = false;
     setCategoryOpen((prev) => ({ ...openCats, ...prev }));
-    setSubcategoryOpen((prev) => ({ ...openSubs, ...prev }));
+    setSubcategoryOpen((prev) => ({ ...prev }));
   }
 
   function updateServiceDraft(serviceId, patch) {
@@ -8154,6 +8173,14 @@ export default function App() {
       setBookProviderStaff([]);
     }
     setClientBookWindows([]);
+    setBookLoyaltyInfo(null);
+    setClientBookingForm((p) => ({ ...p, loyaltyPoints: "" }));
+    if (me?.role === "client" && accessToken) {
+      authFetch(`${API_URL}/booking/loyalty/me/?provider=${encodeURIComponent(pid)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => setBookLoyaltyInfo(data))
+        .catch(() => setBookLoyaltyInfo(null));
+    }
   }
 
   async function createClientBooking(event) {
@@ -8178,6 +8205,7 @@ export default function App() {
         staff: win.staff_id ?? null,
         comment: clientBookingForm.comment,
         option_ids: clientBookingForm.optionIds || [],
+        loyalty_points: Number(clientBookingForm.loyaltyPoints) || 0,
       }),
     });
     if (!response.ok) {
@@ -8202,7 +8230,10 @@ export default function App() {
       bookDate: clientDiscoverFilters.slot_date || "",
       windowKey: "",
       comment: "",
+      loyaltyPoints: "",
+      staffId: "any",
     });
+    setBookLoyaltyInfo(null);
     setClientBookWindows([]);
     setClientBookModalOpen(false);
     setMapOrgPopup(null);
@@ -8468,6 +8499,13 @@ export default function App() {
     loadMapOrgSummary(loc.provider);
     // Публично показываем карточки сотрудников организации
     void loadMapOrgStaff(loc.provider);
+    setMapOrgPackages([]);
+    if (accessToken && me?.role === "client") {
+      authFetch(`${API_URL}/booking/packages/?provider=${loc.provider}`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((list) => setMapOrgPackages(Array.isArray(list) ? list.filter((p) => p.is_active !== false) : []))
+        .catch(() => setMapOrgPackages([]));
+    }
     window.setTimeout(fitClientDiscoverMapViewport, 0);
   }
 
@@ -10266,7 +10304,7 @@ export default function App() {
         <div className="tree-list catalog-tree">
           {categories.map((cat) => {
             const { groups, loose } = groupCategoryServices(cat);
-            const catOpen = categoryOpen[cat.id] ?? true;
+            const catOpen = categoryOpen[cat.id] ?? false;
             const catActive = services.filter((s) => Number(s.category) === Number(cat.id) && s.is_active).length;
             return (
               <div key={cat.id} className="tree-node catalog-tree-category">
@@ -10282,7 +10320,7 @@ export default function App() {
                   <div className="tree-children">
                     {groups.map(({ sub, items }) => {
                       const subKey = `${cat.id}-${sub.id}`;
-                      const subOpen = subcategoryOpen[subKey] ?? true;
+                      const subOpen = subcategoryOpen[subKey] ?? false;
                       return (
                         <div key={sub.id} className="catalog-tree-subcategory">
                           <button
@@ -11980,7 +12018,7 @@ export default function App() {
       : { backgroundColor: activeChatWallpaper }
     : undefined;
   const tgMainDark = activeChatWallpaper === "#1e2a24";
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "inspections", "marketplaces"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "inspections", "marketplaces"].includes(currentView);
 
   return (
     <div className={`page${accessToken ? " page-logged" : " page--guest"}`}>
@@ -14570,6 +14608,43 @@ export default function App() {
 
                   {mapOrgPopup.address && <p className="muted small">{mapOrgPopup.address}</p>}
 
+                  {mapOrgPackages.length > 0 ? (
+                    <div className="loyalty-packages-scroll map-org-packages">
+                      {mapOrgPackages.map((p) => (
+                        <article key={p.id} className="loyalty-package-card">
+                          {p.cover_image_url ? (
+                            <img src={p.cover_image_url} alt="" className="loyalty-package-cover" />
+                          ) : (
+                            <div className="loyalty-package-cover loyalty-package-cover--empty" />
+                          )}
+                          <strong>{p.name}</strong>
+                          <p className="muted small">
+                            {p.visits_count} виз. · {Number(p.price).toLocaleString("ru-RU")} ₽
+                            {p.validity_days ? ` · ${p.validity_days} дн.` : ""}
+                          </p>
+                          {p.description ? <p className="small">{p.description}</p> : null}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const res = await authFetch(`${API_URL}/booking/packages/${p.id}/purchase/`, {
+                                method: "POST",
+                                body: "{}",
+                              });
+                              const data = await res.json().catch(() => ({}));
+                              showToast(
+                                res.ok
+                                  ? "Абонемент оформлен — детали в разделе «Лояльность»."
+                                  : data.detail || "Не удалось купить абонемент.",
+                              );
+                            }}
+                          >
+                            Купить
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
+
                   <div className="map-org-sheet-actions row-2">
                     {mapOrgPopup.provider_sphere === "cafe_restaurant" || mapOrgProfile?.is_cafe ? (
                       <button
@@ -14931,6 +15006,12 @@ export default function App() {
         )}
 
         {accessToken && me?.role === "client" && currentView === "bookings" && renderBookingsBlock("Мои записи")}
+        {accessToken && me?.role === "client" && currentView === "cafe_my_orders" && (
+          <ClientCafeOrdersPage authFetch={authFetch} API_URL={API_URL} />
+        )}
+        {accessToken && me?.role === "client" && currentView === "loyalty" && (
+          <ClientLoyaltyPage authFetch={authFetch} API_URL={API_URL} />
+        )}
         {accessToken && me?.role === "provider" && currentView === "my_bookings" && me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" && renderBookingsBlock("Мои записи")}
 
         {accessToken && currentView === "booking_history" && renderBookingHistory()}
@@ -15647,6 +15728,25 @@ export default function App() {
                   value={clientBookingForm.comment}
                   onChange={(e) => setClientBookingForm((p) => ({ ...p, comment: e.target.value }))}
                 />
+                {bookLoyaltyInfo?.enabled && Number(bookLoyaltyInfo.balance) > 0 ? (
+                  <label className="field-label">
+                    Списать баллы (баланс {Number(bookLoyaltyInfo.balance).toLocaleString("ru-RU")}
+                    {bookLoyaltyInfo.rub_per_point
+                      ? `, 1 балл ≈ ${bookLoyaltyInfo.rub_per_point} ₽`
+                      : ""}
+                    )
+                    <input
+                      type="number"
+                      min="0"
+                      max={Number(bookLoyaltyInfo.balance) || 0}
+                      placeholder="0"
+                      value={clientBookingForm.loyaltyPoints}
+                      onChange={(e) =>
+                        setClientBookingForm((p) => ({ ...p, loyaltyPoints: e.target.value }))
+                      }
+                    />
+                  </label>
+                ) : null}
                 <button type="submit" disabled={!clientBookingForm.windowKey}>
                   {mapOrgProfile?.prepay?.ready ? "Перейти к оплате" : "Подтвердить"}
                 </button>

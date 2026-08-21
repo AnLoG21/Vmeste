@@ -284,7 +284,8 @@ class CafeOrder(models.Model):
         ACCEPTED = "accepted", "Принят"
         COOKING = "cooking", "Готовится"
         READY = "ready", "Готов"
-        DELIVERING = "delivering", "Доставляется"
+        TO_COURIER = "to_courier", "Передаём курьеру"
+        DELIVERING = "delivering", "В пути"
         DONE = "done", "Завершён"
         CANCELLED = "cancelled", "Отменён"
 
@@ -297,6 +298,13 @@ class CafeOrder(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="cafe_orders",
+    )
+    client = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cafe_client_orders",
     )
     table = models.ForeignKey(
         CafeTable,
@@ -326,6 +334,11 @@ class CafeOrder(models.Model):
         help_text="Сумма к выплате организации (без сервисного сбора).",
     )
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    delivery_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    delivery_lon = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    courier_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    courier_lon = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    courier_updated_at = models.DateTimeField(null=True, blank=True)
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     yookassa_payment_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     confirmation_url = models.URLField(blank=True, default="")

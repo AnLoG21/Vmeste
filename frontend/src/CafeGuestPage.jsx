@@ -91,6 +91,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryPin, setDeliveryPin] = useState(null);
   const [deliveryZone, setDeliveryZone] = useState(null);
+  const [orderComment, setOrderComment] = useState("");
   const [tipPercent, setTipPercent] = useState(20);
   const [tipCustomMode, setTipCustomMode] = useState(false);
   const [tipCustomAmount, setTipCustomAmount] = useState("");
@@ -272,6 +273,24 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
       : 0;
   const deliveryZones = unlock?.delivery_zones || [];
   const needsDeliveryPin = modeOrder === "delivery" && deliveryZones.length > 0;
+  const deliveryMinOrder =
+    modeOrder === "delivery"
+      ? Number(
+          deliveryZone?.min_order > 0
+            ? deliveryZone.min_order
+            : unlock?.delivery_min_order || 0,
+        )
+      : 0;
+  const deliveryFeeError =
+    modeOrder !== "delivery"
+      ? ""
+      : deliveryZones.length > 0 && !deliveryZone
+        ? deliveryPin
+          ? "Адрес вне зоны доставки — выберите точку внутри цветной области"
+          : "Укажите адрес и точку на карте, чтобы рассчитать доставку"
+        : deliveryMinOrder > 0 && cartTotal < deliveryMinOrder
+          ? `Минимальная сумма заказа для доставки: ${deliveryMinOrder.toLocaleString("ru-RU")} ₽ (сейчас ${cartTotal.toLocaleString("ru-RU")} ₽)`
+          : "";
   const onDeliveryPick = useCallback(({ lat, lon, zone, address, outside }) => {
     // Адрес с карты всегда подставляем в поле (даже если точка вне зоны)
     if (address) setDeliveryAddress(address);
@@ -505,6 +524,10 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
       setStatus("Укажите точку доставки на карте внутри зоны.");
       return;
     }
+    if (modeOrder === "delivery" && deliveryFeeError) {
+      setStatus(deliveryFeeError);
+      return;
+    }
     if (!cartLines.length) {
       setStatus("Корзина пуста");
       return;
@@ -527,6 +550,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
         delivery_lat: deliveryPin?.lat,
         delivery_lon: deliveryPin?.lon,
         delivery_zone_id: deliveryZone?.id || "",
+        comment: orderComment,
         items: cartLines.map((i) => ({
           menu_item: i.menuItemId,
           quantity: i.quantity,
@@ -651,6 +675,17 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
       {menuJsonLd ? <JsonLd id="vmeste-menu-jsonld" data={menuJsonLd} /> : null}
       <header className="cafe-guest-header">
         <div className="cafe-guest-brand">
+          <button
+            type="button"
+            className="cafe-guest-back"
+            aria-label="Назад на карту"
+            title="Назад на карту"
+            onClick={() => {
+              window.location.href = "/";
+            }}
+          >
+            ←
+          </button>
           <img
             src={info?.logo_url || unlock?.logo_url || logoMain}
             alt={orgName}
@@ -918,19 +953,47 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                       pin={deliveryPin}
                       onPick={onDeliveryPick}
                     />
-                    {deliveryZones.length ? null : (
-                      <p className="muted small">{unlock?.delivery_info || "Доставка по указанному адресу."}</p>
-                    )}
-                    {deliveryZone ? (
-                      <p className="muted small">
-                        Зона «{deliveryZone.name}»: {Number(deliveryZone.fee || 0).toLocaleString("ru-RU")} ₽
-                        {Number(deliveryZone.min_order) > 0
-                          ? ` · мин. заказ ${Number(deliveryZone.min_order).toLocaleString("ru-RU")} ₽`
-                          : ""}
-                      </p>
-                    ) : null}
+                    <div className={`cafe-delivery-fee-box${deliveryFeeError ? " is-error" : ""}`}>
+                      {deliveryZones.length ? null : (
+                        <p className="muted small">{unlock?.delivery_info || "Доставка по указанному адресу."}</p>
+                      )}
+                      {modeOrder === "delivery" && !deliveryFeeError ? (
+                        <p>
+                          Доставка:{" "}
+                          <strong>
+                            {deliveryAmount > 0
+                              ? `${deliveryAmount.toLocaleString("ru-RU")} ₽`
+                              : deliveryPin || !deliveryZones.length
+                                ? "0 ₽"
+                                : "—"}
+                          </strong>
+                          {deliveryZone?.name ? ` · зона «${deliveryZone.name}»` : ""}
+                        </p>
+                      ) : null}
+                      {deliveryFeeError ? <p className="cafe-delivery-fee-error">{deliveryFeeError}</p> : null}
+                      {deliveryMinOrder > 0 && !deliveryFeeError ? (
+                        <p className="muted small">
+                          Мин. заказ: {deliveryMinOrder.toLocaleString("ru-RU")} ₽
+                        </p>
+                      ) : null}
+                    </div>
+                    <textarea
+                      placeholder="Комментарий к заказу (подъезд, домофон, пожелания…)"
+                      value={orderComment}
+                      onChange={(e) => setOrderComment(e.target.value)}
+                      rows={2}
+                      maxLength={1000}
+                    />
                   </>
-                ) : null}
+                ) : (
+                  <textarea
+                    placeholder="Комментарий к заказу (необязательно)"
+                    value={orderComment}
+                    onChange={(e) => setOrderComment(e.target.value)}
+                    rows={2}
+                    maxLength={1000}
+                  />
+                )}
                 <label>
                   Оплата
                   <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
@@ -971,12 +1034,29 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                 </label>
                 <div className="cafe-total-block">
                   <p>Блюда: <strong>{cartTotal.toLocaleString("ru-RU")} ₽</strong></p>
-                  {deliveryAmount > 0 ? <p>Доставка: <strong>{deliveryAmount.toLocaleString("ru-RU")} ₽</strong></p> : null}
+                  {modeOrder === "delivery" ? (
+                    <p>
+                      Доставка:{" "}
+                      <strong>
+                        {deliveryFeeError
+                          ? "—"
+                          : `${Number(deliveryAmount || 0).toLocaleString("ru-RU")} ₽`}
+                      </strong>
+                    </p>
+                  ) : null}
                   {tipAmount > 0 ? <p>Чаевые: <strong>{tipAmount.toLocaleString("ru-RU")} ₽</strong></p> : null}
                   {serviceChargeAmount > 0 ? (
                     <p>Сервисный сбор ({SERVICE_CHARGE_PERCENT}%): <strong>{serviceChargeAmount.toLocaleString("ru-RU")} ₽</strong></p>
                   ) : null}
-                  <p className="cafe-grand-total">Итого: <strong>{grandTotal.toLocaleString("ru-RU")} ₽</strong></p>
+                  <p className="cafe-grand-total">
+                    Итого:{" "}
+                    <strong>
+                      {(deliveryFeeError ? cartTotal + tipAmount + serviceChargeAmount : grandTotal).toLocaleString(
+                        "ru-RU",
+                      )}{" "}
+                      ₽
+                    </strong>
+                  </p>
                 </div>
                 <label className="checkbox cafe-service-charge">
                   <input

@@ -77,19 +77,31 @@ export default function SalonLoyaltyPackagesPanel({ authFetch, API_URL, services
     reload();
   }
 
+  async function uploadCover(pkgId, file) {
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("cover_image", file);
+    const res = await authFetch(`${API_URL}/booking/packages/${pkgId}/`, {
+      method: "PATCH",
+      body: fd,
+    });
+    setStatus(res.ok ? "Фото абонемента сохранено." : "Не удалось загрузить фото.");
+    if (res.ok) reload();
+  }
+
   async function sellPackage(e) {
     e.preventDefault();
     const res = await authFetch(`${API_URL}/booking/client-packages/`, {
       method: "POST",
       body: JSON.stringify({
         package: Number(sell.package),
-        client: Number(sell.client),
+        client: String(sell.client || "").trim(),
         note: sell.note,
       }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setStatus(data.detail || "Не удалось выдать абонемент. Укажите ID клиента.");
+      setStatus(data.detail || "Не удалось выдать абонемент. Укажите логин клиента (как в чатах).");
       return;
     }
     setSell({ package: "", client: "", note: "" });
@@ -102,17 +114,18 @@ export default function SalonLoyaltyPackagesPanel({ authFetch, API_URL, services
       <h2>Абонементы и лояльность</h2>
       <p className="muted small">
         Пакеты визитов списываются при отметке «услуга оказана». Баллы начисляются за каждый завершённый визит.
+        Абонементы клиент может купить в приложении (или вы выдаёте по логину).
       </p>
 
       <h3>Лояльность</h3>
       <form className="form" onSubmit={saveLoyalty}>
-        <label className="checkbox">
+        <label className="loyalty-enable-row">
+          <span>Включить баллы</span>
           <input
             type="checkbox"
             checked={Boolean(loyalty.enabled)}
             onChange={(e) => setLoyalty((p) => ({ ...p, enabled: e.target.checked }))}
           />
-          Включить баллы
         </label>
         <label>
           Баллов за визит
@@ -145,9 +158,24 @@ export default function SalonLoyaltyPackagesPanel({ authFetch, API_URL, services
       <h3>Абонементы</h3>
       <ul className="salon-package-list">
         {packages.filter((p) => p.is_active !== false).map((p) => (
-          <li key={p.id}>
-            <strong>{p.name}</strong> — {p.visits_count} виз. · {Number(p.price).toLocaleString("ru-RU")} ₽
-            {p.validity_days ? ` · ${p.validity_days} дн.` : ""}
+          <li key={p.id} className="salon-package-row">
+            <label className="salon-package-photo-btn" title="Фото абонемента">
+              {p.cover_image_url ? (
+                <img src={p.cover_image_url} alt="" />
+              ) : (
+                <span aria-hidden="true">📷</span>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(e) => uploadCover(p.id, e.target.files?.[0])}
+              />
+            </label>
+            <div>
+              <strong>{p.name}</strong> — {p.visits_count} виз. · {Number(p.price).toLocaleString("ru-RU")} ₽
+              {p.validity_days ? ` · ${p.validity_days} дн.` : ""}
+            </div>
           </li>
         ))}
         {packages.length === 0 ? <li className="muted">Пока нет пакетов.</li> : null}
@@ -230,7 +258,7 @@ export default function SalonLoyaltyPackagesPanel({ authFetch, API_URL, services
             ))}
         </select>
         <input
-          placeholder="ID клиента (из карточки записи / чата)"
+          placeholder="Логин клиента (как в чатах) или ID"
           value={sell.client}
           onChange={(e) => setSell((p) => ({ ...p, client: e.target.value }))}
           required
