@@ -606,14 +606,29 @@ class CafeProviderOrdersView(APIView):
         update_fields = ["status", "updated_at"]
         if "courier_lat" in request.data and "courier_lon" in request.data:
             try:
-                order.courier_lat = float(request.data.get("courier_lat"))
-                order.courier_lon = float(request.data.get("courier_lon"))
+                clat = float(request.data.get("courier_lat"))
+                clon = float(request.data.get("courier_lon"))
+                if abs(clat) < 0.0001 and abs(clon) < 0.0001:
+                    return Response(
+                        {"detail": "Некорректные координаты курьера."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if abs(clat) > 90 or abs(clon) > 180:
+                    return Response(
+                        {"detail": "Некорректные координаты курьера."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                order.courier_lat = clat
+                order.courier_lon = clon
                 from django.utils import timezone as dj_tz
 
                 order.courier_updated_at = dj_tz.now()
                 update_fields.extend(["courier_lat", "courier_lon", "courier_updated_at"])
             except (TypeError, ValueError):
-                pass
+                return Response(
+                    {"detail": "Некорректные координаты курьера."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         order.save(update_fields=update_fields)
         if new_status in (CafeOrder.Status.DONE, CafeOrder.Status.CANCELLED) and order.table_id:
             active = CafeOrder.objects.filter(

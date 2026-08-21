@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import CafeOrderMapPin, { yandexMapsPinUrl } from "./CafeOrderMapPin.jsx";
+import { hasCoords } from "./geoPosition.js";
 import "./cafeGuest.css";
 
 const STATUS_FLOW = [
@@ -50,12 +51,6 @@ function Stars({ value, onChange, readOnly = false }) {
       ))}
     </span>
   );
-}
-
-function hasCoords(lat, lon) {
-  const a = Number(lat);
-  const b = Number(lon);
-  return Number.isFinite(a) && Number.isFinite(b);
 }
 
 /**

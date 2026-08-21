@@ -142,11 +142,25 @@ export default function CafeGuestDeliveryMap({
           if (cancelled || mapRef.current) return;
           const map = new ymaps.Map(hostRef.current, {
             center: [
-              pin?.lat || Number(centerLat) || 55.751244,
-              pin?.lon || Number(centerLon) || 37.618423,
+              pin?.lat != null && Number.isFinite(Number(pin.lat))
+                ? Number(pin.lat)
+                : Number(centerLat) || 55.751244,
+              pin?.lon != null && Number.isFinite(Number(pin.lon))
+                ? Number(pin.lon)
+                : Number(centerLon) || 37.618423,
             ],
             zoom: pin ? 15 : 13,
-            controls: ["zoomControl", "geolocationControl"],
+            controls: ["zoomControl"],
+          });
+
+          const geoControl = new ymaps.control.GeolocationControl({
+            options: { provider: "browser", noPlacemark: true },
+          });
+          map.controls.add(geoControl);
+          geoControl.events.add("locationchange", (e) => {
+            const position = e.get("position");
+            if (!Array.isArray(position) || position.length < 2) return;
+            handleCoords(Number(position[0]), Number(position[1]));
           });
 
           async function handleCoords(lat, lon) {

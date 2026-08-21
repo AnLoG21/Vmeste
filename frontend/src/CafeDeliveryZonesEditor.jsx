@@ -82,8 +82,13 @@ export default function CafeDeliveryZonesEditor({
           const map = new ymaps.Map(mapHostRef.current, {
             center: [Number(centerLat) || 55.751244, Number(centerLon) || 37.618423],
             zoom: 13,
-            controls: ["zoomControl", "geolocationControl", "searchControl"],
+            controls: ["zoomControl", "searchControl"],
           });
+          map.controls.add(
+            new ymaps.control.GeolocationControl({
+              options: { provider: "browser" },
+            }),
+          );
           mapRef.current = map;
           setMapReady(true);
         });

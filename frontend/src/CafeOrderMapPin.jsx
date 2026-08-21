@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { hasCoords } from "./geoPosition.js";
 import { loadYandexMaps } from "./yandexMapsLoader.js";
 
 /** Компактная карта с меткой адреса (и опционально курьера). */
@@ -16,11 +17,14 @@ export default function CafeOrderMapPin({
 
   useEffect(() => {
     let cancelled = false;
+    if (!hasCoords(lat, lon)) return undefined;
+
     const la = Number(lat);
     const lo = Number(lon);
-    if (!Number.isFinite(la) || !Number.isFinite(lo)) return undefined;
+    const showCourier = hasCoords(courierLat, courierLon);
+    const cLa = showCourier ? Number(courierLat) : null;
+    const cLo = showCourier ? Number(courierLon) : null;
 
-    // дать контейнеру отрисоваться с высотой
     const timer = window.setTimeout(() => {
       loadYandexMaps()
         .then((ymaps) => {
@@ -47,9 +51,7 @@ export default function CafeOrderMapPin({
                 { preset: "islands#orangeDotIcon" },
               ),
             );
-            const cLa = Number(courierLat);
-            const cLo = Number(courierLon);
-            if (Number.isFinite(cLa) && Number.isFinite(cLo)) {
+            if (showCourier) {
               map.geoObjects.add(
                 new ymaps.Placemark(
                   [cLa, cLo],
@@ -63,7 +65,6 @@ export default function CafeOrderMapPin({
                 /* ignore */
               }
             }
-            // принудительно пересчитать размер (модалка / смена вкладки)
             try {
               map.container.fitToViewport();
             } catch {
@@ -89,9 +90,7 @@ export default function CafeOrderMapPin({
     };
   }, [lat, lon, courierLat, courierLon, mapKey]);
 
-  const la = Number(lat);
-  const lo = Number(lon);
-  if (!Number.isFinite(la) || !Number.isFinite(lo)) return null;
+  if (!hasCoords(lat, lon)) return null;
 
   return (
     <div
@@ -115,8 +114,6 @@ export default function CafeOrderMapPin({
 }
 
 export function yandexMapsPinUrl(lat, lon) {
-  const la = Number(lat);
-  const lo = Number(lon);
-  if (!Number.isFinite(la) || !Number.isFinite(lo)) return "";
-  return `https://yandex.ru/maps/?pt=${lo},${la}&z=16&l=map`;
+  if (!hasCoords(lat, lon)) return "";
+  return `https://yandex.ru/maps/?pt=${Number(lon)},${Number(lat)}&z=16&l=map`;
 }

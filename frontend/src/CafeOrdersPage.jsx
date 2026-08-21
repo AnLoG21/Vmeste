@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CafeFloorCanvas from "./CafeFloorCanvas.jsx";
 import CafeOrderMapPin, { yandexMapsPinUrl } from "./CafeOrderMapPin.jsx";
+import { getDevicePosition, hasCoords } from "./geoPosition.js";
 import "./cafeGuest.css";
 import "./cafeProvider.css";
 
@@ -27,12 +28,6 @@ function formatGuestPhone(phone) {
   const digits = raw.replace(/\D/g, "");
   if (!digits || digits === "7" || digits === "8") return "";
   return raw;
-}
-
-function hasCoords(lat, lon) {
-  const a = Number(lat);
-  const b = Number(lon);
-  return Number.isFinite(a) && Number.isFinite(b);
 }
 
 function cartLineKey(menuItemId, removed = []) {
@@ -309,13 +304,33 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
   }, [categories, menuQuery]);
 
   async function setOrderStatus(id, next, extra = {}) {
-    await authFetch(`${API_URL}/cafe/orders/${id}/`, {
+    const res = await authFetch(`${API_URL}/cafe/orders/${id}/`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: next, ...extra }),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setStatus(err.detail || err.status?.[0] || "Не удалось обновить заказ");
+      return false;
+    }
     await loadOrders();
     await loadFloorAndMenu();
+    return true;
+  }
+
+  async function updateCourierLocation(order) {
+    setStatus("Определяем местоположение…");
+    try {
+      const { lat, lon } = await getDevicePosition();
+      const ok = await setOrderStatus(order.id, order.status, {
+        courier_lat: lat,
+        courier_lon: lon,
+      });
+      if (ok) setStatus(`Местоположение курьера обновлено (${lat.toFixed(5)}, ${lon.toFixed(5)})`);
+    } catch (e) {
+      setStatus(e?.message || "Не удалось получить геолокацию курьера");
+    }
   }
 
   async function patchTable(id, patch) {
@@ -480,8 +495,8 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                       mapKey={`org-order-${o.id}-${o.courier_updated_at || ""}-${o.courier_lat}-${o.courier_lon}`}
                       lat={o.delivery_lat}
                       lon={o.delivery_lon}
-                      courierLat={o.courier_lat}
-                      courierLon={o.courier_lon}
+                      courierLat={hasCoords(o.courier_lat, o.courier_lon) ? o.courier_lat : null}
+                      courierLon={hasCoords(o.courier_lat, o.courier_lon) ? o.courier_lon : null}
                       height={220}
                     />
                     <a
@@ -496,21 +511,7 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                       <button
                         type="button"
                         className="ghost-btn"
-                        onClick={() => {
-                          if (!navigator.geolocation) {
-                            setStatus("Геолокация недоступна в этом браузере");
-                            return;
-                          }
-                          navigator.geolocation.getCurrentPosition(
-                            (pos) => {
-                              setOrderStatus(o.id, o.status, {
-                                courier_lat: pos.coords.latitude,
-                                courier_lon: pos.coords.longitude,
-                              });
-                            },
-                            () => setStatus("Не удалось получить геолокацию курьера"),
-                          );
-                        }}
+                        onClick={() => updateCourierLocation(o)}
                       >
                         Обновить местоположение курьера
                       </button>
