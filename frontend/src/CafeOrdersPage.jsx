@@ -92,6 +92,8 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
   const [selectedTableId, setSelectedTableId] = useState(null);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [status, setStatus] = useState("");
+  const [geoStatus, setGeoStatus] = useState("");
+  const [geoBusy, setGeoBusy] = useState(false);
   const [menuQuery, setMenuQuery] = useState("");
   const [draftLines, setDraftLines] = useState([]);
   const [orderOpen, setOrderOpen] = useState(false);
@@ -129,7 +131,6 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
     }
     knownIds.current = new Set(list.map((o) => o.id));
     setOrders(list);
-    setStatus("");
   }, [API_URL, authFetch, soundOn]);
 
   const loadFloorAndMenu = useCallback(async () => {
@@ -312,24 +313,50 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       setStatus(err.detail || err.status?.[0] || "Не удалось обновить заказ");
-      return false;
+      return null;
     }
-    await loadOrders();
+    const updated = await res.json().catch(() => null);
+    if (updated?.id) {
+      setOrders((prev) => prev.map((o) => (Number(o.id) === Number(updated.id) ? { ...o, ...updated } : o)));
+    } else {
+      await loadOrders();
+    }
     await loadFloorAndMenu();
-    return true;
+    return updated;
+  }
+
+  async function saveCourierCoords(order, lat, lon, label = "Местоположение курьера обновлено") {
+    const updated = await setOrderStatus(order.id, order.status, {
+      courier_lat: Number(lat),
+      courier_lon: Number(lon),
+    });
+    if (updated) {
+      setGeoStatus(`${label}: ${Number(lat).toFixed(5)}, ${Number(lon).toFixed(5)}`);
+      return true;
+    }
+    return false;
   }
 
   async function updateCourierLocation(order) {
-    setStatus("Определяем местоположение…");
+    setGeoBusy(true);
+    setGeoStatus("Определяем местоположение… Разрешите доступ, если браузер спросит.");
     try {
-      const { lat, lon } = await getDevicePosition();
-      const ok = await setOrderStatus(order.id, order.status, {
-        courier_lat: lat,
-        courier_lon: lon,
-      });
-      if (ok) setStatus(`Местоположение курьера обновлено (${lat.toFixed(5)}, ${lon.toFixed(5)})`);
+      const { lat, lon, source } = await getDevicePosition();
+      const ok = await saveCourierCoords(
+        order,
+        lat,
+        lon,
+        source?.startsWith("yandex")
+          ? "Местоположение обновлено (приблизительно)"
+          : "Местоположение курьера обновлено",
+      );
+      if (!ok) setGeoStatus("Координаты получены, но сервер не сохранил их");
     } catch (e) {
-      setStatus(e?.message || "Не удалось получить геолокацию курьера");
+      setGeoStatus(
+        `${e?.message || "Не удалось получить геолокацию"}. Можно кликнуть по карте, чтобы поставить точку курьера вручную.`,
+      );
+    } finally {
+      setGeoBusy(false);
     }
   }
 
@@ -498,6 +525,19 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                       courierLat={hasCoords(o.courier_lat, o.courier_lon) ? o.courier_lat : null}
                       courierLon={hasCoords(o.courier_lat, o.courier_lon) ? o.courier_lon : null}
                       height={220}
+                      onPickCourier={
+                        o.status === "to_courier" || o.status === "delivering"
+                          ? ({ lat, lon }) => {
+                              setGeoStatus("Сохраняем точку с карты…");
+                              saveCourierCoords(o, lat, lon, "Точка курьера с карты");
+                            }
+                          : null
+                      }
+                      pickHint={
+                        o.status === "to_courier" || o.status === "delivering"
+                          ? "Клик по карте — поставить курьера вручную (если GPS не сработал)"
+                          : ""
+                      }
                     />
                     <a
                       className="landing-btn landing-btn--ghost cafe-yandex-maps-btn"
@@ -511,11 +551,13 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                       <button
                         type="button"
                         className="ghost-btn"
+                        disabled={geoBusy}
                         onClick={() => updateCourierLocation(o)}
                       >
-                        Обновить местоположение курьера
+                        {geoBusy ? "Определяем…" : "Обновить местоположение курьера"}
                       </button>
                     ) : null}
+                    {geoStatus ? <p className="status cafe-geo-status">{geoStatus}</p> : null}
                   </>
                 ) : null}
               </div>

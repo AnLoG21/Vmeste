@@ -11,9 +11,14 @@ export default function CafeOrderMapPin({
   height = 220,
   className = "",
   mapKey = "",
+  /** Если задан — клик по карте ставит точку курьера */
+  onPickCourier = null,
+  pickHint = "",
 }) {
   const hostRef = useRef(null);
   const mapRef = useRef(null);
+  const onPickRef = useRef(onPickCourier);
+  onPickRef.current = onPickCourier;
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +70,16 @@ export default function CafeOrderMapPin({
                 /* ignore */
               }
             }
+            if (typeof onPickRef.current === "function") {
+              map.events.add("click", (e) => {
+                const coords = e.get("coords");
+                if (!Array.isArray(coords) || coords.length < 2) return;
+                const plat = Number(coords[0]);
+                const plon = Number(coords[1]);
+                if (!hasCoords(plat, plon)) return;
+                onPickRef.current({ lat: plat, lon: plon });
+              });
+            }
             try {
               map.container.fitToViewport();
             } catch {
@@ -88,27 +103,31 @@ export default function CafeOrderMapPin({
         mapRef.current = null;
       }
     };
-  }, [lat, lon, courierLat, courierLon, mapKey]);
+  }, [lat, lon, courierLat, courierLon, mapKey, Boolean(onPickCourier)]);
 
   if (!hasCoords(lat, lon)) return null;
 
   return (
-    <div
-      className={`cafe-order-map-pin ${className}`.trim()}
-      style={{ height, width: "100%", position: "relative", minHeight: height }}
-    >
+    <div className={`cafe-order-map-wrap ${className}`.trim()}>
       <div
-        ref={hostRef}
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          borderRadius: 10,
-          overflow: "hidden",
-          background: "#f0ebe4",
-        }}
-      />
+        className="cafe-order-map-pin"
+        style={{ height, width: "100%", position: "relative", minHeight: height }}
+      >
+        <div
+          ref={hostRef}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            borderRadius: 10,
+            overflow: "hidden",
+            background: "#f0ebe4",
+            cursor: onPickCourier ? "crosshair" : "default",
+          }}
+        />
+      </div>
+      {pickHint ? <p className="muted small">{pickHint}</p> : null}
     </div>
   );
 }

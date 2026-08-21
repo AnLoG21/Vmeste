@@ -250,6 +250,10 @@ class CafeOrderSerializer(serializers.ModelSerializer):
     delivery_address = serializers.SerializerMethodField()
     has_review = serializers.SerializerMethodField()
     review = serializers.SerializerMethodField()
+    delivery_lat = serializers.SerializerMethodField()
+    delivery_lon = serializers.SerializerMethodField()
+    courier_lat = serializers.SerializerMethodField()
+    courier_lon = serializers.SerializerMethodField()
 
     class Meta:
         model = CafeOrder
@@ -322,6 +326,29 @@ class CafeOrderSerializer(serializers.ModelSerializer):
         if not prov:
             return ""
         return (getattr(prov, "organization_name", None) or "").strip() or (prov.username or "")
+
+    def _coord(self, value):
+        if value is None:
+            return None
+        try:
+            n = float(value)
+        except (TypeError, ValueError):
+            return None
+        if abs(n) < 0.0001:
+            return None
+        return n
+
+    def get_delivery_lat(self, obj):
+        return self._coord(obj.delivery_lat)
+
+    def get_delivery_lon(self, obj):
+        return self._coord(obj.delivery_lon)
+
+    def get_courier_lat(self, obj):
+        return self._coord(obj.courier_lat)
+
+    def get_courier_lon(self, obj):
+        return self._coord(obj.courier_lon)
 
     def get_delivery_address(self, obj):
         import re
