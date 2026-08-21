@@ -141,6 +141,19 @@ def _is_cafe_provider(user):
     )
 
 
+def _gate_cafe(request, **needs):
+    from .access import require_cafe
+
+    return require_cafe(request, **needs)
+
+
+def _cafe_auth(request, **needs):
+    provider, _perms, err = _gate_cafe(request, **needs)
+    if err:
+        return None, err
+    return provider, None
+
+
 def _get_or_create_settings(provider):
     obj, _ = CafeSettings.objects.get_or_create(provider=provider)
     return obj
@@ -221,19 +234,21 @@ class CafeSettingsView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
+        provider, err = _cafe_auth(request, need_any=True)
+        if err:
+            return err
         from users.slug_utils import ensure_organization_slug
 
-        ensure_organization_slug(request.user)
+        ensure_organization_slug(provider)
         return Response(
-            CafeSettingsSerializer(_get_or_create_settings(request.user), context={"request": request}).data
+            CafeSettingsSerializer(_get_or_create_settings(provider), context={"request": request}).data
         )
 
     def patch(self, request):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        obj = _get_or_create_settings(request.user)
+        provider, err = _cafe_auth(request, need_settings=True)
+        if err:
+            return err
+        obj = _get_or_create_settings(provider)
         raw = request.data
         if hasattr(raw, "lists"):
             # QueryDict: JSON-поля могут прийти строкой
@@ -278,17 +293,19 @@ class CafeFloorPlanListCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        qs = CafeFloorPlan.objects.filter(provider=request.user).prefetch_related("tables")
+        provider, err = _cafe_auth(request, need_seating=True, need_orders=True, need_settings=True)
+        if err:
+            return err
+        qs = CafeFloorPlan.objects.filter(provider=provider).prefetch_related("tables")
         return Response(CafeFloorPlanSerializer(qs, many=True).data)
 
     def post(self, request):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
+        provider, err = _cafe_auth(request, need_settings=True)
+        if err:
+            return err
         ser = CafeFloorPlanSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        plan = CafeFloorPlan.objects.create(provider=request.user, **ser.validated_data)
+        plan = CafeFloorPlan.objects.create(provider=provider, **ser.validated_data)
         return Response(CafeFloorPlanSerializer(plan).data, status=status.HTTP_201_CREATED)
 
 
@@ -296,18 +313,22 @@ class CafeFloorPlanDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def patch(self, request, pk):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        plan = get_object_or_404(CafeFloorPlan, pk=pk, provider=request.user)
+        
+        provider, err = _cafe_auth(request, need_seating=True, need_settings=True)
+        if err:
+            return err
+        plan = get_object_or_404(CafeFloorPlan, pk=pk, provider=provider)
         ser = CafeFloorPlanSerializer(plan, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         ser.save()
         return Response(CafeFloorPlanSerializer(plan).data)
 
     def delete(self, request, pk):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        plan = get_object_or_404(CafeFloorPlan, pk=pk, provider=request.user)
+        
+        provider, err = _cafe_auth(request, need_settings=True)
+        if err:
+            return err
+        plan = get_object_or_404(CafeFloorPlan, pk=pk, provider=provider)
         plan.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -316,9 +337,11 @@ class CafeTableListCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, plan_id):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        plan = get_object_or_404(CafeFloorPlan, pk=plan_id, provider=request.user)
+        
+        provider, err = _cafe_auth(request, need_seating=True, need_orders=True, need_settings=True)
+        if err:
+            return err
+        plan = get_object_or_404(CafeFloorPlan, pk=plan_id, provider=provider)
         ser = CafeTableSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         table = CafeTable.objects.create(floor_plan=plan, **ser.validated_data)
@@ -329,9 +352,11 @@ class CafeTableDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def patch(self, request, pk):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        table = get_object_or_404(CafeTable, pk=pk, floor_plan__provider=request.user)
+        
+        provider, err = _cafe_auth(request, need_seating=True, need_orders=True, need_settings=True)
+        if err:
+            return err
+        table = get_object_or_404(CafeTable, pk=pk, floor_plan__provider=provider)
         if request.data.get("clear_waiter_call") in ("1", "true", True):
             table.waiter_called_at = None
             table.save(update_fields=["waiter_called_at"])
@@ -342,9 +367,11 @@ class CafeTableDetailView(APIView):
         return Response(CafeTableSerializer(table).data)
 
     def delete(self, request, pk):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        table = get_object_or_404(CafeTable, pk=pk, floor_plan__provider=request.user)
+        
+        provider, err = _cafe_auth(request, need_settings=True)
+        if err:
+            return err
+        table = get_object_or_404(CafeTable, pk=pk, floor_plan__provider=provider)
         table.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -353,23 +380,27 @@ class CafeMenuCategoryListCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        qs = CafeMenuCategory.objects.filter(provider=request.user).prefetch_related(
+        
+        provider, err = _cafe_auth(request, need_menu=True, need_orders=True)
+        if err:
+            return err
+        qs = CafeMenuCategory.objects.filter(provider=provider).prefetch_related(
             "items__photos",
             "items__removable_ingredients",
         )
         return Response(CafeMenuCategorySerializer(qs, many=True, context={"request": request}).data)
 
     def post(self, request):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
+        
+        provider, err = _cafe_auth(request, need_menu=True)
+        if err:
+            return err
         ser = CafeMenuCategorySerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         data = ser.validated_data
         if data.get("is_novelties"):
-            CafeMenuCategory.objects.filter(provider=request.user, is_novelties=True).update(is_novelties=False)
-        cat = CafeMenuCategory.objects.create(provider=request.user, **data)
+            CafeMenuCategory.objects.filter(provider=provider, is_novelties=True).update(is_novelties=False)
+        cat = CafeMenuCategory.objects.create(provider=provider, **data)
         return Response(
             CafeMenuCategorySerializer(cat, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
@@ -380,22 +411,26 @@ class CafeMenuCategoryDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def patch(self, request, pk):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        cat = get_object_or_404(CafeMenuCategory, pk=pk, provider=request.user)
+        
+        provider, err = _cafe_auth(request, need_menu=True, need_orders=True)
+        if err:
+            return err
+        cat = get_object_or_404(CafeMenuCategory, pk=pk, provider=provider)
         ser = CafeMenuCategorySerializer(cat, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         if ser.validated_data.get("is_novelties"):
-            CafeMenuCategory.objects.filter(provider=request.user, is_novelties=True).exclude(pk=cat.pk).update(
+            CafeMenuCategory.objects.filter(provider=provider, is_novelties=True).exclude(pk=cat.pk).update(
                 is_novelties=False
             )
         ser.save()
         return Response(CafeMenuCategorySerializer(cat, context={"request": request}).data)
 
     def delete(self, request, pk):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        cat = get_object_or_404(CafeMenuCategory, pk=pk, provider=request.user)
+        
+        provider, err = _cafe_auth(request, need_menu=True)
+        if err:
+            return err
+        cat = get_object_or_404(CafeMenuCategory, pk=pk, provider=provider)
         cat.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -404,12 +439,14 @@ class CafeMenuItemListCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
+        
+        provider, err = _cafe_auth(request, need_menu=True)
+        if err:
+            return err
         ser = CafeMenuItemSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         cat = ser.validated_data["category"]
-        if cat.provider_id != request.user.id:
+        if cat.provider_id != provider.id:
             return Response({"category": ["Чужая категория."]}, status=status.HTTP_400_BAD_REQUEST)
         item = CafeMenuItem.objects.create(**ser.validated_data)
         return Response(
@@ -422,20 +459,24 @@ class CafeMenuItemDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def patch(self, request, pk):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        item = get_object_or_404(CafeMenuItem, pk=pk, category__provider=request.user)
+        
+        provider, err = _cafe_auth(request, need_menu=True, need_orders=True)
+        if err:
+            return err
+        item = get_object_or_404(CafeMenuItem, pk=pk, category__provider=provider)
         ser = CafeMenuItemSerializer(item, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
-        if "category" in ser.validated_data and ser.validated_data["category"].provider_id != request.user.id:
+        if "category" in ser.validated_data and ser.validated_data["category"].provider_id != provider.id:
             return Response({"category": ["Чужая категория."]}, status=status.HTTP_400_BAD_REQUEST)
         ser.save()
         return Response(CafeMenuItemSerializer(item, context={"request": request}).data)
 
     def delete(self, request, pk):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        item = get_object_or_404(CafeMenuItem, pk=pk, category__provider=request.user)
+        
+        provider, err = _cafe_auth(request, need_menu=True)
+        if err:
+            return err
+        item = get_object_or_404(CafeMenuItem, pk=pk, category__provider=provider)
         item.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -445,9 +486,11 @@ class CafeMenuItemPhotoView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, item_id):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        item = get_object_or_404(CafeMenuItem, pk=item_id, category__provider=request.user)
+        
+        provider, err = _cafe_auth(request, need_menu=True, need_orders=True)
+        if err:
+            return err
+        item = get_object_or_404(CafeMenuItem, pk=item_id, category__provider=provider)
         if item.photos.count() >= MENU_ITEM_MAX_PHOTOS:
             return Response(
                 {"detail": f"Максимум {MENU_ITEM_MAX_PHOTOS} фото на блюдо."},
@@ -463,15 +506,17 @@ class CafeMenuItemPhotoView(APIView):
         )
 
     def delete(self, request, item_id, photo_id=None):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
+        
+        provider, err = _cafe_auth(request, need_menu=True)
+        if err:
+            return err
         if not photo_id:
             return Response(status=status.HTTP_400_BAD_REQUEST)
         photo = get_object_or_404(
             CafeMenuItemPhoto,
             pk=photo_id,
             item_id=item_id,
-            item__category__provider=request.user,
+            item__category__provider=provider,
         )
         photo.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -481,9 +526,11 @@ class CafeMenuItemIngredientView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, item_id):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        item = get_object_or_404(CafeMenuItem, pk=item_id, category__provider=request.user)
+        
+        provider, err = _cafe_auth(request, need_menu=True)
+        if err:
+            return err
+        item = get_object_or_404(CafeMenuItem, pk=item_id, category__provider=provider)
         name = (request.data.get("name") or "").strip()
         if not name:
             return Response({"name": ["Укажите название."]}, status=status.HTTP_400_BAD_REQUEST)
@@ -494,15 +541,17 @@ class CafeMenuItemIngredientView(APIView):
         )
 
     def delete(self, request, item_id, ingredient_id=None):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
+        
+        provider, err = _cafe_auth(request, need_menu=True)
+        if err:
+            return err
         if not ingredient_id:
             return Response(status=status.HTTP_400_BAD_REQUEST)
         ing = get_object_or_404(
             CafeMenuItemRemovableIngredient,
             pk=ingredient_id,
             item_id=item_id,
-            item__category__provider=request.user,
+            item__category__provider=provider,
         )
         ing.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -512,22 +561,26 @@ class CafeProviderOrdersView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        qs = CafeOrder.objects.filter(provider=request.user).prefetch_related("items")[:100]
+        
+        provider, err = _cafe_auth(request, need_orders=True, need_kitchen=True, need_delivery=True, need_seating=True)
+        if err:
+            return err
+        qs = CafeOrder.objects.filter(provider=provider).prefetch_related("items")[:100]
         return Response(CafeOrderSerializer(qs, many=True).data)
 
     def post(self, request):
         """Официант создаёт заказ за стол."""
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
+        
+        provider, err = _cafe_auth(request, need_orders=True)
+        if err:
+            return err
         try:
             table_id = int(request.data.get("table") or 0)
         except (TypeError, ValueError):
             table_id = 0
         table = (
             CafeTable.objects.select_related("floor_plan")
-            .filter(pk=table_id, floor_plan__provider=request.user, is_active=True)
+            .filter(pk=table_id, floor_plan__provider=provider, is_active=True)
             .first()
         )
         if not table:
@@ -540,7 +593,7 @@ class CafeProviderOrdersView(APIView):
             pay_method = CafeOrder.PayMethod.CASH
         with transaction.atomic():
             order = CafeOrder.objects.create(
-                provider=request.user,
+                provider=provider,
                 table=table,
                 mode=CafeOrder.Mode.DINE_IN,
                 pay_method=pay_method,
@@ -558,7 +611,7 @@ class CafeProviderOrdersView(APIView):
                 except (TypeError, ValueError):
                     continue
                 menu_item = CafeMenuItem.objects.filter(
-                    pk=mid, category__provider=request.user, is_active=True, is_available=True
+                    pk=mid, category__provider=provider, is_active=True, is_available=True
                 ).prefetch_related("removable_ingredients").first()
                 if not menu_item:
                     continue
@@ -592,12 +645,20 @@ class CafeProviderOrdersView(APIView):
             if guests:
                 table.guest_count = guests
             table.save(update_fields=["is_occupied", "guest_count"])
+        try:
+            from .notify import notify_new_cafe_order
+
+            notify_new_cafe_order(order)
+        except Exception:
+            pass
         return Response(CafeOrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
     def patch(self, request, pk):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        order = get_object_or_404(CafeOrder, pk=pk, provider=request.user)
+        
+        provider, err = _cafe_auth(request, need_orders=True, need_kitchen=True, need_delivery=True)
+        if err:
+            return err
+        order = get_object_or_404(CafeOrder, pk=pk, provider=provider)
         new_status = (request.data.get("status") or "").strip()
         allowed = {c[0] for c in CafeOrder.Status.choices}
         if new_status not in allowed:
@@ -652,10 +713,12 @@ class CafeOrderReceiptView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pk):
-        if not _is_cafe_provider(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
+        
+        provider, err = _cafe_auth(request, need_orders=True, need_kitchen=True, need_delivery=True, need_seating=True)
+        if err:
+            return err
         order = (
-            CafeOrder.objects.filter(pk=pk, provider=request.user)
+            CafeOrder.objects.filter(pk=pk, provider=provider)
             .prefetch_related("items")
             .select_related("provider")
             .first()
@@ -686,6 +749,12 @@ class CafeGuestCallWaiterView(APIView):
             )
         table.waiter_called_at = timezone.now()
         table.save(update_fields=["waiter_called_at"])
+        try:
+            from .notify import notify_waiter_call
+
+            notify_waiter_call(table)
+        except Exception:
+            pass
         return Response(
             {
                 "ok": True,
@@ -1216,6 +1285,13 @@ class CafeGuestOrderCreateView(APIView):
                 order.status = CafeOrder.Status.ACCEPTED
                 order.save()
                 send_order_receipt_after_payment(order)
+
+        try:
+            from .notify import notify_new_cafe_order
+
+            notify_new_cafe_order(order)
+        except Exception:
+            pass
 
         return Response(CafeOrderSerializer(order).data, status=status.HTTP_201_CREATED)
 

@@ -99,6 +99,7 @@ class ProviderStaffSerializer(serializers.ModelSerializer):
             "first_name": p.first_name or "",
             "last_name": p.last_name or "",
             "organization_name": getattr(p, "organization_name", "") or "",
+            "provider_sphere": getattr(p, "provider_sphere", "") or "",
         }
 
     def get_staff_user(self, obj):

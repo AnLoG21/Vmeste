@@ -17,8 +17,19 @@ const emptyItemForm = {
   is_available: true,
 };
 
-export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab = "floor", onTabChange }) {
-  const [tab, setTab] = useState(initialTab === "orders" ? "floor" : initialTab || "floor");
+export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab = "floor", onTabChange, accessPerms = null }) {
+  const perms = accessPerms || {
+    cafe_menu: true,
+    cafe_settings: true,
+    cafe_seating: true,
+  };
+  const canFloor = Boolean(perms.cafe_seating || perms.cafe_settings);
+  const canMenu = Boolean(perms.cafe_menu);
+  const canSettings = Boolean(perms.cafe_settings);
+  const firstTab = canFloor ? "floor" : canMenu ? "menu" : "settings";
+  const [tab, setTab] = useState(
+    initialTab === "orders" ? firstTab : initialTab && (initialTab === "floor" ? canFloor : initialTab === "menu" ? canMenu : canSettings) ? initialTab : firstTab,
+  );
   const [settings, setSettings] = useState(null);
   const [floors, setFloors] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -435,10 +446,12 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
 
       <div className="cafe-provider-tabs">
         {[
-          ["floor", "Зал и столы"],
-          ["menu", "Меню"],
-          ["settings", "Режимы, доставка и оплата"],
-        ].map(([id, label]) => (
+          canFloor ? ["floor", "Зал и столы"] : null,
+          canMenu ? ["menu", "Меню"] : null,
+          canSettings ? ["settings", "Режимы, доставка и оплата"] : null,
+        ]
+          .filter(Boolean)
+          .map(([id, label]) => (
           <button
             key={id}
             type="button"

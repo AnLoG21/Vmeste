@@ -83,8 +83,20 @@ function PrintReceiptIcon() {
   );
 }
 
-export default function CafeOrdersPage({ authFetch, API_URL }) {
-  const [tab, setTab] = useState("orders");
+export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null }) {
+  const perms = accessPerms || {
+    cafe_orders: true,
+    cafe_kitchen: true,
+    cafe_seating: true,
+    cafe_delivery: true,
+  };
+  const canOrders = Boolean(perms.cafe_orders);
+  const canKitchen = Boolean(perms.cafe_kitchen);
+  const canSeating = Boolean(perms.cafe_seating);
+  const canDelivery = Boolean(perms.cafe_delivery);
+
+  const defaultTab = canOrders ? "orders" : canKitchen ? "kitchen" : canSeating ? "seating" : "orders";
+  const [tab, setTab] = useState(defaultTab);
   const [orders, setOrders] = useState([]);
   const [floors, setFloors] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -113,6 +125,14 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
 
   const floor = floors.find((f) => f.id === floorId) || floors[0] || null;
   const selectedTable = (floor?.tables || []).find((t) => t.id === selectedTableId) || null;
+
+  useEffect(() => {
+    const allowed = [];
+    if (canOrders) allowed.push("orders");
+    if (canKitchen) allowed.push("kitchen");
+    if (canSeating) allowed.push("seating");
+    if (allowed.length && !allowed.includes(tab)) setTab(allowed[0]);
+  }, [canOrders, canKitchen, canSeating, tab]);
 
   const loadOrders = useCallback(async () => {
     const res = await authFetch(`${API_URL}/cafe/orders/`);
@@ -526,7 +546,7 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                       courierLon={hasCoords(o.courier_lat, o.courier_lon) ? o.courier_lon : null}
                       height={220}
                       onPickCourier={
-                        o.status === "to_courier" || o.status === "delivering"
+                        canDelivery && (o.status === "to_courier" || o.status === "delivering")
                           ? ({ lat, lon }) => {
                               setGeoStatus("Сохраняем точку с карты…");
                               saveCourierCoords(o, lat, lon, "Точка курьера с карты");
@@ -534,7 +554,7 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                           : null
                       }
                       pickHint={
-                        o.status === "to_courier" || o.status === "delivering"
+                        canDelivery && (o.status === "to_courier" || o.status === "delivering")
                           ? "Клик по карте — поставить курьера вручную (если GPS не сработал)"
                           : ""
                       }
@@ -547,7 +567,7 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                     >
                       Открыть в Яндекс.Картах
                     </a>
-                    {(o.status === "to_courier" || o.status === "delivering") ? (
+                    {(o.status === "to_courier" || o.status === "delivering") && canDelivery ? (
                       <button
                         type="button"
                         className="ghost-btn"
@@ -599,10 +619,12 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
       <h2>Заказы и посадка</h2>
       <div className="cafe-provider-tabs">
         {[
-          ["orders", "Заказы"],
-          ["kitchen", "Кухня"],
-          ["seating", "Посадка"],
-        ].map(([id, label]) => (
+          canOrders ? ["orders", "Заказы"] : null,
+          canKitchen ? ["kitchen", "Кухня"] : null,
+          canSeating ? ["seating", "Посадка"] : null,
+        ]
+          .filter(Boolean)
+          .map(([id, label]) => (
           <button
             key={id}
             type="button"

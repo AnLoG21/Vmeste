@@ -244,8 +244,8 @@ const BOOKMARK_CATALOG = [
   { id: "subscriptions", label: "Подписки", roles: ["provider", "staff"] },
   { id: "staff", label: "Сотрудники", roles: ["provider"] },
   { id: "organization", label: "Организация", roles: ["provider"] },
-  { id: "cafe", label: "Зал и меню", roles: ["provider"] },
-  { id: "cafe_orders", label: "Заказы", roles: ["provider"] },
+  { id: "cafe", label: "Зал и меню", roles: ["provider", "staff"] },
+  { id: "cafe_orders", label: "Заказы", roles: ["provider", "staff"] },
   { id: "cafe_my_orders", label: "Заказы из ресторанов", roles: ["client"] },
   { id: "loyalty", label: "Лояльность", roles: ["client"] },
   { id: "inspections", label: "Приёмка", roles: ["provider", "staff"] },
@@ -258,6 +258,7 @@ const DEFAULT_SUBNAV_BOOKMARKS = {
   provider: ["bookings", "client_map", "my_bookings", "chats"],
   staff: ["bookings", "reviews", "chats"],
   provider_cafe: ["cafe_orders", "cafe", "analytics", "client_map", "chats"],
+  staff_cafe: ["cafe_orders", "cafe", "chats"],
   provider_service: ["bookings", "client_map", "my_bookings", "chats", "inspections"],
   provider_marketplaces: ["marketplaces", "chats"],
 };
@@ -265,6 +266,9 @@ const DEFAULT_SUBNAV_BOOKMARKS = {
 function defaultSubnavBookmarks(role, sphere) {
   if (role === "provider" && sphere === "cafe_restaurant") {
     return [...DEFAULT_SUBNAV_BOOKMARKS.provider_cafe];
+  }
+  if (role === "staff" && sphere === "cafe_restaurant") {
+    return [...DEFAULT_SUBNAV_BOOKMARKS.staff_cafe];
   }
   if (role === "provider" && sphere === "service_center") {
     return [...DEFAULT_SUBNAV_BOOKMARKS.provider_service];
@@ -307,6 +311,11 @@ function loadSubnavBookmarks(role, sphere) {
       }
       if (!next.includes("client_map")) next = [...next, "client_map"];
       if (!next.includes("my_bookings")) next = [...next, "my_bookings"];
+    }
+    if (role === "staff" && sphere === "cafe_restaurant") {
+      next = next.filter((id) => id !== "bookings" && id !== "intervals" && id !== "services");
+      if (!next.includes("cafe_orders")) next = ["cafe_orders", ...next];
+      else next = ["cafe_orders", ...next.filter((id) => id !== "cafe_orders")];
     }
     if (role === "provider" && sphere === "marketplaces") {
       next = next.filter(
@@ -1550,6 +1559,9 @@ function formatInAppNotificationText(n) {
   if (n?.kind === "review") return "Новый отзыв";
   if (n?.kind === "inspection") {
     return (n?.payload?.title || n?.payload?.body || "Согласование диагностики").trim();
+  }
+  if (n?.kind === "cafe_new_order" || n?.kind === "cafe_waiter_call") {
+    return [n?.payload?.title, n?.payload?.body].filter(Boolean).join(" · ") || "Кафе";
   }
   return "Уведомление";
 }
@@ -2855,11 +2867,54 @@ export default function App() {
       marketplace_view_keys: false,
       marketplace_manage_orders: true,
       marketplace_manage_catalog: false,
+      cafe_orders: true,
+      cafe_kitchen: false,
+      cafe_seating: true,
+      cafe_delivery: false,
+      cafe_menu: false,
+      cafe_settings: false,
     };
     if (!me || me.role !== "staff") return base;
+    const fromMe = me.staff_permissions && typeof me.staff_permissions === "object" ? me.staff_permissions : {};
     const link = orgStaff.find((l) => Number(l.staff) === Number(me.id));
-    return { ...base, ...(link?.permissions || {}) };
+    return { ...base, ...fromMe, ...(link?.permissions || {}) };
   }, [me, orgStaff]);
+
+  const cafeAccessPerms = useMemo(() => {
+    if (me?.role === "provider" && me?.provider_sphere === "cafe_restaurant") {
+      return {
+        cafe_orders: true,
+        cafe_kitchen: true,
+        cafe_seating: true,
+        cafe_delivery: true,
+        cafe_menu: true,
+        cafe_settings: true,
+      };
+    }
+    return {
+      cafe_orders: Boolean(staffEffectivePerms.cafe_orders),
+      cafe_kitchen: Boolean(staffEffectivePerms.cafe_kitchen),
+      cafe_seating: Boolean(staffEffectivePerms.cafe_seating),
+      cafe_delivery: Boolean(staffEffectivePerms.cafe_delivery),
+      cafe_menu: Boolean(staffEffectivePerms.cafe_menu),
+      cafe_settings: Boolean(staffEffectivePerms.cafe_settings),
+    };
+  }, [me, staffEffectivePerms]);
+
+  const isCafeOrgUser = useMemo(() => {
+    if (me?.role === "provider" && me?.provider_sphere === "cafe_restaurant") return true;
+    if (me?.role === "staff" && (me?.employer_sphere === "cafe_restaurant" || me?.provider_sphere === "cafe_restaurant")) {
+      return (
+        cafeAccessPerms.cafe_orders ||
+        cafeAccessPerms.cafe_kitchen ||
+        cafeAccessPerms.cafe_seating ||
+        cafeAccessPerms.cafe_delivery ||
+        cafeAccessPerms.cafe_menu ||
+        cafeAccessPerms.cafe_settings
+      );
+    }
+    return false;
+  }, [me, cafeAccessPerms]);
 
   useEffect(() => {
     if (!me) return;
@@ -3964,8 +4019,9 @@ export default function App() {
 
   useEffect(() => {
     if (!me?.role) return;
-    setSubnavBookmarks(loadSubnavBookmarks(me.role, me.provider_sphere));
-  }, [me?.role, me?.provider_sphere]);
+    const sphere = me.provider_sphere || me.employer_sphere || "";
+    setSubnavBookmarks(loadSubnavBookmarks(me.role, sphere));
+  }, [me?.role, me?.provider_sphere, me?.employer_sphere]);
 
   useEffect(() => {
     if (!me?.role) return;
@@ -4611,6 +4667,12 @@ export default function App() {
     setAuthStatus("");
     onboardingPrefillIdRef.current = null;
     if (data.role === "provider" && data.provider_sphere === "cafe_restaurant") setCurrentView("cafe_orders");
+    if (
+      data.role === "staff" &&
+      (data.employer_sphere === "cafe_restaurant" || data.provider_sphere === "cafe_restaurant")
+    ) {
+      setCurrentView("cafe_orders");
+    }
     else if (data.role === "provider" && data.provider_sphere === "marketplaces") setCurrentView("marketplaces");
     else if (data.role === "provider") setCurrentView("bookings");
   }
@@ -7023,7 +7085,7 @@ export default function App() {
       if (id === "chats" && !staffHasPerm("manage_chats") && !staffHasPerm("manage_client_chats")) return false;
     }
     if ((id === "staff" || id === "organization") && !canManageOrgSettings) return false;
-    if (me?.provider_sphere === "cafe_restaurant") {
+    if (me?.provider_sphere === "cafe_restaurant" || me?.employer_sphere === "cafe_restaurant") {
       if (
         id === "intervals" ||
         id === "bookings" ||
@@ -7034,7 +7096,20 @@ export default function App() {
       ) {
         return false;
       }
-      if ((id === "cafe" || id === "cafe_orders") && role !== "provider") return false;
+      if ((id === "cafe" || id === "cafe_orders") && !isCafeOrgUser) return false;
+      if (id === "cafe" && role === "staff" && !staffHasPerm("cafe_menu") && !staffHasPerm("cafe_settings") && !staffHasPerm("cafe_seating")) {
+        return false;
+      }
+      if (
+        id === "cafe_orders" &&
+        role === "staff" &&
+        !staffHasPerm("cafe_orders") &&
+        !staffHasPerm("cafe_kitchen") &&
+        !staffHasPerm("cafe_seating") &&
+        !staffHasPerm("cafe_delivery")
+      ) {
+        return false;
+      }
     } else if (id === "cafe" || id === "cafe_orders") {
       return false;
     }
@@ -11685,6 +11760,12 @@ export default function App() {
               marketplace_view_keys: false,
               marketplace_manage_orders: true,
               marketplace_manage_catalog: false,
+              cafe_orders: true,
+              cafe_kitchen: false,
+              cafe_seating: true,
+              cafe_delivery: false,
+              cafe_menu: false,
+              cafe_settings: false,
               ...(link.permissions || {}),
             };
             const permLabels = [
@@ -11698,14 +11779,23 @@ export default function App() {
               ["marketplace_view_keys", "Маркетплейсы: видеть/менять ключи"],
               ["marketplace_manage_orders", "Маркетплейсы: только заказы/отзывы"],
               ["marketplace_manage_catalog", "Маркетплейсы: каталог и выгрузка"],
+              ["cafe_orders", "Кафе: заказы зала"],
+              ["cafe_kitchen", "Кафе: кухня"],
+              ["cafe_seating", "Кафе: посадка / столы"],
+              ["cafe_delivery", "Кафе: доставка / курьер"],
+              ["cafe_menu", "Кафе: меню"],
+              ["cafe_settings", "Кафе: настройки и зоны"],
             ].filter(([key]) => {
               if (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces") {
-                return !["manage_bookings", "manage_intervals", "manage_services"].includes(key);
+                return !["manage_bookings", "manage_intervals", "manage_services"].includes(key) && !String(key).startsWith("cafe_");
               }
               if (me?.provider_sphere === "cafe_restaurant") {
-                return !["manage_bookings", "manage_intervals", "manage_services"].includes(key) && !String(key).startsWith("marketplace_");
+                return (
+                  !["manage_bookings", "manage_intervals", "manage_services"].includes(key) &&
+                  !String(key).startsWith("marketplace_")
+                );
               }
-              return !String(key).startsWith("marketplace_");
+              return !String(key).startsWith("marketplace_") && !String(key).startsWith("cafe_");
             });
             const rowName = formatStaffClientName(link.staff_user);
             const permsOpen = staffPermsOpenId === link.id;
@@ -12837,16 +12927,23 @@ export default function App() {
 
         {accessToken && currentView === "settings" && renderGeneralSettings()}
         {accessToken && currentView === "organization" && canManageOrgSettings && renderOrganizationSettings()}
-        {accessToken && currentView === "cafe" && me?.role === "provider" && me?.provider_sphere === "cafe_restaurant" && (
+        {accessToken && currentView === "cafe" && isCafeOrgUser && (cafeAccessPerms.cafe_menu || cafeAccessPerms.cafe_settings || cafeAccessPerms.cafe_seating) && (
           <CafeProviderWorkspace
             authFetch={authFetch}
             API_URL={API_URL}
             initialTab={cafeWorkspaceTab}
             onTabChange={setCafeWorkspaceTab}
+            accessPerms={cafeAccessPerms}
           />
         )}
-        {accessToken && currentView === "cafe_orders" && me?.role === "provider" && me?.provider_sphere === "cafe_restaurant" && (
-          <CafeOrdersPage authFetch={authFetch} API_URL={API_URL} />
+        {accessToken &&
+          currentView === "cafe_orders" &&
+          isCafeOrgUser &&
+          (cafeAccessPerms.cafe_orders ||
+            cafeAccessPerms.cafe_kitchen ||
+            cafeAccessPerms.cafe_seating ||
+            cafeAccessPerms.cafe_delivery) && (
+          <CafeOrdersPage authFetch={authFetch} API_URL={API_URL} accessPerms={cafeAccessPerms} />
         )}
         {accessToken &&
           currentView === "marketplaces" &&

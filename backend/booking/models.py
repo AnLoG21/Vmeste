@@ -14,6 +14,13 @@ def default_staff_permissions():
         "marketplace_view_keys": False,
         "marketplace_manage_orders": True,
         "marketplace_manage_catalog": False,
+        # Кафе / ресторан
+        "cafe_orders": True,
+        "cafe_kitchen": False,
+        "cafe_seating": True,
+        "cafe_delivery": False,
+        "cafe_menu": False,
+        "cafe_settings": False,
     }
 
 

@@ -180,6 +180,28 @@ class MeView(APIView):
         ).strip()
         data = UserSerializer(u).data
         data["full_name"] = full_name or u.username
+        if u.role == User.Role.STAFF:
+            from booking.models import ProviderStaff
+
+            link = (
+                ProviderStaff.objects.filter(
+                    staff=u,
+                    is_active=True,
+                    invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+                )
+                .select_related("provider")
+                .first()
+            )
+            if link:
+                data["employer_sphere"] = link.provider.provider_sphere or ""
+                data["employer_id"] = link.provider_id
+                data["employer_organization_name"] = (
+                    getattr(link.provider, "organization_name", None) or link.provider.username or ""
+                )
+                if isinstance(link.permissions, dict):
+                    data["staff_permissions"] = link.permissions
+            else:
+                data["employer_sphere"] = ""
         return Response(data)
 
     def patch(self, request):
