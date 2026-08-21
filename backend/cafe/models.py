@@ -21,6 +21,11 @@ class CafeSettings(models.Model):
     delivery_info = models.TextField(blank=True, default="")
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     delivery_min_order = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    delivery_zones = models.JSONField(
+        blank=True,
+        default=list,
+        help_text="Зоны доставки: [{id,name,color,fee,min_order,polygon:[[lat,lon],…]}]",
+    )
     accept_online_payment = models.BooleanField(default=True)
     accept_cash = models.BooleanField(default=True)
     accept_card_on_spot = models.BooleanField(default=True)

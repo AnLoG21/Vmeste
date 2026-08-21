@@ -5,6 +5,7 @@ import JsonLd from "./seo/JsonLd.jsx";
 import { SITE_ORIGIN, breadcrumbListJsonLd } from "./seo/schema.js";
 import { setPageMeta } from "./seo/setPageMeta.js";
 import { getOrgWorkingHoursStatus, isOrganizationOpenNow } from "./clientOrgFeatures.js";
+import CafeGuestDeliveryMap from "./CafeGuestDeliveryMap.jsx";
 import "./landing.css";
 import "./cafeGuest.css";
 
@@ -86,6 +87,8 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryPin, setDeliveryPin] = useState(null);
+  const [deliveryZone, setDeliveryZone] = useState(null);
   const [tipPercent, setTipPercent] = useState(20);
   const [tipCustomMode, setTipCustomMode] = useState(false);
   const [tipCustomAmount, setTipCustomAmount] = useState("");
@@ -258,7 +261,24 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
     ? Math.max(0, Number(tipCustomAmount) || 0)
     : Math.round(cartTotal * (tipPercent / 100));
   const serviceChargeAmount = includeServiceCharge ? Math.round(cartTotal * (SERVICE_CHARGE_PERCENT / 100)) : 0;
-  const deliveryAmount = modeOrder === "delivery" ? Number(unlock?.delivery_fee || 0) : 0;
+  const deliveryAmount =
+    modeOrder === "delivery"
+      ? Number(deliveryZone?.fee != null ? deliveryZone.fee : unlock?.delivery_fee || 0)
+      : 0;
+  const deliveryZones = unlock?.delivery_zones || [];
+  const needsDeliveryPin = modeOrder === "delivery" && deliveryZones.length > 0;
+  const onDeliveryPick = useCallback(
+    ({ lat, lon, zone }) => {
+      if (deliveryZones.length && !zone) {
+        setDeliveryPin(null);
+        setDeliveryZone(null);
+        return;
+      }
+      setDeliveryPin({ lat, lon });
+      setDeliveryZone(zone || null);
+    },
+    [deliveryZones.length],
+  );
   const grandTotal = cartTotal + tipAmount + deliveryAmount + serviceChargeAmount;
 
   function addToCart(menuItemId, delta = 1) {
@@ -395,6 +415,10 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
       setStatus("Для заказа за столом введите код стола");
       return;
     }
+    if (modeOrder === "delivery" && needsDeliveryPin && (!deliveryPin || !deliveryZone)) {
+      setStatus("Укажите точку доставки на карте внутри зоны.");
+      return;
+    }
     if (!cartLines.length) {
       setStatus("Корзина пуста");
       return;
@@ -414,6 +438,9 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
         tip_custom: tipCustomMode,
         include_service_charge: includeServiceCharge,
         delivery_address: deliveryAddress,
+        delivery_lat: deliveryPin?.lat,
+        delivery_lon: deliveryPin?.lon,
+        delivery_zone_id: deliveryZone?.id || "",
         items: cartLines.map((i) => ({
           menu_item: i.menuItemId,
           quantity: i.quantity,
@@ -743,13 +770,35 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                   onChange={(e) => setGuestEmail(e.target.value)}
                 />
                 {modeOrder === "delivery" ? (
-                  <textarea
-                    placeholder="Адрес доставки *"
-                    value={deliveryAddress}
-                    onChange={(e) => setDeliveryAddress(e.target.value)}
-                    required
-                    rows={2}
-                  />
+                  <>
+                    <textarea
+                      placeholder="Адрес доставки *"
+                      value={deliveryAddress}
+                      onChange={(e) => setDeliveryAddress(e.target.value)}
+                      required
+                      rows={2}
+                    />
+                    {deliveryZones.length ? (
+                      <CafeGuestDeliveryMap
+                        zones={deliveryZones}
+                        centerLat={unlock?.organization_latitude || 55.751244}
+                        centerLon={unlock?.organization_longitude || 37.618423}
+                        pin={deliveryPin}
+                        address={deliveryAddress}
+                        onPick={onDeliveryPick}
+                      />
+                    ) : (
+                      <p className="muted small">{unlock?.delivery_info || "Доставка по указанному адресу."}</p>
+                    )}
+                    {deliveryZone ? (
+                      <p className="muted small">
+                        Зона «{deliveryZone.name}»: {Number(deliveryZone.fee || 0).toLocaleString("ru-RU")} ₽
+                        {Number(deliveryZone.min_order) > 0
+                          ? ` · мин. заказ ${Number(deliveryZone.min_order).toLocaleString("ru-RU")} ₽`
+                          : ""}
+                      </p>
+                    ) : null}
+                  </>
                 ) : null}
                 <label>
                   Оплата

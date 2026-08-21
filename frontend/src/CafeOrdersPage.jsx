@@ -17,6 +17,7 @@ const statusLabels = {
 };
 
 const STATUS_ACTIONS = ["accepted", "cooking", "ready", "done", "cancelled"];
+const KITCHEN_STATUSES = new Set(["paid", "accepted", "cooking", "ready", "awaiting_payment"]);
 
 function formatGuestPhone(phone) {
   const raw = String(phone || "").trim();
@@ -30,23 +31,32 @@ function cartLineKey(menuItemId, removed = []) {
   return `${menuItemId}:${[...removed].sort().join("|")}`;
 }
 
-function playBeep() {
+function playBeep(times = 1) {
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;
     const ctx = new Ctx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = 880;
-    gain.gain.value = 0.05;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    setTimeout(() => {
-      osc.stop();
-      ctx.close();
-    }, 180);
+    let i = 0;
+    const hit = () => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.value = 880 + i * 120;
+      gain.gain.value = 0.07;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      setTimeout(() => {
+        osc.stop();
+        i += 1;
+        if (i < times) setTimeout(hit, 90);
+        else setTimeout(() => ctx.close().catch(() => {}), 50);
+      }, 160);
+    };
+    hit();
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      navigator.vibrate(times > 1 ? [120, 60, 120, 60, 180] : 120);
+    }
   } catch {
     /* ignore */
   }
@@ -75,6 +85,7 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
   const [draftLines, setDraftLines] = useState([]);
   const [orderOpen, setOrderOpen] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(false);
+  const [soundOn, setSoundOn] = useState(true);
   const knownIds = useRef(new Set());
   const primed = useRef(false);
 
@@ -91,14 +102,15 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
     const list = Array.isArray(data) ? data : [];
     if (primed.current) {
       const fresh = list.filter((o) => !knownIds.current.has(o.id));
-      if (fresh.length) playBeep();
+      const kitchenNew = fresh.filter((o) => KITCHEN_STATUSES.has(o.status) || o.status === "paid" || o.status === "accepted");
+      if (fresh.length && soundOn) playBeep(kitchenNew.length ? 3 : 1);
     } else {
       primed.current = true;
     }
     knownIds.current = new Set(list.map((o) => o.id));
     setOrders(list);
     setStatus("");
-  }, [API_URL, authFetch]);
+  }, [API_URL, authFetch, soundOn]);
 
   const loadFloorAndMenu = useCallback(async () => {
     const [fRes, mRes] = await Promise.all([
@@ -133,6 +145,15 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
       if (o.table && !["done", "cancelled", "draft"].includes(o.status)) set.add(o.table);
     }
     return set;
+  }, [orders]);
+
+  const kitchenOrders = useMemo(() => {
+    return orders
+      .filter((o) => KITCHEN_STATUSES.has(o.status))
+      .sort((a, b) => {
+        const rank = { cooking: 0, accepted: 1, paid: 2, awaiting_payment: 3, ready: 4 };
+        return (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || b.id - a.id;
+      });
   }, [orders]);
 
   const ticketOrders = useMemo(() => {
@@ -271,11 +292,11 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
     await loadFloorAndMenu();
   }
 
-  function renderOrderCard(o, compact = false) {
-    const open = expandedOrderId === o.id;
+  function renderOrderCard(o, compact = false, kitchen = false) {
+    const open = kitchen || expandedOrderId === o.id;
     const phone = formatGuestPhone(o.guest_phone);
     return (
-      <div key={o.id} className={`cafe-order-card cafe-order-status-${o.status}`}>
+      <div key={o.id} className={`cafe-order-card cafe-order-status-${o.status}${kitchen ? " cafe-kitchen-card" : ""}`}>
         <div className="cafe-order-card-top">
           <div className="cafe-order-card-summary">
             <strong>
@@ -286,7 +307,9 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
               {statusLabels[o.status] || o.status}
             </span>
           </div>
-          <OrderExpandButton open={open} onClick={() => setExpandedOrderId(open ? null : o.id)} />
+          {!kitchen ? (
+            <OrderExpandButton open={open} onClick={() => setExpandedOrderId(open ? null : o.id)} />
+          ) : null}
         </div>
         <p className="cafe-order-meta">
           {o.table_label ? `Стол: ${o.table_label} · ` : null}
@@ -305,15 +328,21 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                 </li>
               ))}
             </ul>
-            {!compact ? (
-              <div className="cafe-toolbar">
-                {STATUS_ACTIONS.map((st) => (
-                  <button key={st} type="button" className="ghost-btn" onClick={() => setOrderStatus(o.id, st)}>
-                    {statusLabels[st]}
-                  </button>
-                ))}
-              </div>
-            ) : null}
+            <div className="cafe-toolbar">
+              {(kitchen
+                ? ["accepted", "cooking", "ready", "done"]
+                : STATUS_ACTIONS
+              ).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  className={kitchen && st === "cooking" ? "landing-btn landing-btn--primary" : "ghost-btn"}
+                  onClick={() => setOrderStatus(o.id, st)}
+                >
+                  {statusLabels[st]}
+                </button>
+              ))}
+            </div>
           </>
         ) : null}
       </div>
@@ -326,6 +355,7 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
       <div className="cafe-provider-tabs">
         {[
           ["orders", "Заказы"],
+          ["kitchen", "Кухня"],
           ["seating", "Посадка"],
         ].map(([id, label]) => (
           <button
@@ -335,17 +365,59 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
             onClick={() => setTab(id)}
           >
             {label}
+            {id === "kitchen" && kitchenOrders.length ? ` (${kitchenOrders.length})` : ""}
           </button>
         ))}
       </div>
 
       {tab === "orders" ? (
         <>
-          <p className="muted">Новые заказы подхватываются автоматически (звук уведомления).</p>
+          <div className="cafe-kitchen-banner">
+            <p className="muted" style={{ margin: 0 }}>
+              Новые заказы подхватываются автоматически.
+            </p>
+            <label className="checkbox">
+              <input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} />
+              <span>Звук новых заказов</span>
+            </label>
+          </div>
           <div className="cafe-tables-list">
             {orders.length === 0 ? <p className="muted">Заказов пока нет.</p> : null}
             {orders.map((o) => renderOrderCard(o))}
           </div>
+        </>
+      ) : null}
+
+      {tab === "kitchen" ? (
+        <>
+          <div className="cafe-kitchen-banner">
+            <div>
+              <strong>Экран кухни</strong>
+              <p className="muted small" style={{ margin: "4px 0 0" }}>
+                Крупные карточки активных заказов. При новом заказе — тройной сигнал.
+              </p>
+            </div>
+            <div className="cafe-toolbar">
+              <label className="checkbox">
+                <input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} />
+                <span>Звук</span>
+              </label>
+              <button type="button" className="ghost-btn" onClick={() => playBeep(3)}>
+                Проверить звук
+              </button>
+              <button type="button" className="ghost-btn" onClick={() => loadOrders()}>
+                Обновить
+              </button>
+            </div>
+          </div>
+          {kitchenOrders.length === 0 ? (
+            <div className="cafe-kitchen-empty">
+              <p>Нет активных заказов на кухне.</p>
+              <p className="muted small">Появятся оплаченные / принятые / готовящиеся.</p>
+            </div>
+          ) : (
+            <div className="cafe-kitchen-grid">{kitchenOrders.map((o) => renderOrderCard(o, false, true))}</div>
+          )}
         </>
       ) : null}
 

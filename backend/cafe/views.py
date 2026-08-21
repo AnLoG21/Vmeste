@@ -59,6 +59,21 @@ def _provider_hours_payload(provider) -> dict:
     return provider_working_hours_payload(provider)
 
 
+def _guest_delivery_payload(settings_obj, provider=None) -> dict:
+    from .delivery_zones import normalize_delivery_zones
+
+    lat = getattr(provider, "organization_latitude", None) if provider else None
+    lon = getattr(provider, "organization_longitude", None) if provider else None
+    return {
+        "delivery_info": settings_obj.delivery_info,
+        "delivery_fee": str(settings_obj.delivery_fee),
+        "delivery_min_order": str(settings_obj.delivery_min_order),
+        "delivery_zones": normalize_delivery_zones(settings_obj.delivery_zones or []),
+        "organization_latitude": float(lat) if lat is not None else None,
+        "organization_longitude": float(lon) if lon is not None else None,
+    }
+
+
 def _reject_if_cafe_closed(provider):
     """Блокирует оформление заказа вне графика работы организации."""
     from users.org_profile import is_organization_open_now, organization_closed_order_detail, normalize_working_hours
@@ -562,9 +577,7 @@ class CafeTableUnlockView(APIView):
                     "delivery": settings_obj.enable_delivery,
                 },
                 "pay_methods": _guest_pay_methods(settings_obj),
-                "delivery_info": settings_obj.delivery_info,
-                "delivery_fee": str(settings_obj.delivery_fee),
-                "delivery_min_order": str(settings_obj.delivery_min_order),
+                **_guest_delivery_payload(settings_obj, provider),
                 **_provider_hours_payload(provider),
             }
         )
@@ -644,9 +657,7 @@ class CafeOrgPublicView(APIView):
                     "delivery": settings_obj.enable_delivery,
                 },
                 "pay_methods": _guest_pay_methods(settings_obj),
-                "delivery_info": settings_obj.delivery_info,
-                "delivery_fee": str(settings_obj.delivery_fee),
-                "delivery_min_order": str(settings_obj.delivery_min_order),
+                **_guest_delivery_payload(settings_obj, provider),
                 **_provider_hours_payload(provider),
             }
         )
@@ -701,9 +712,7 @@ class CafeOrgDineInAttachView(APIView):
                     "delivery": settings_obj.enable_delivery,
                 },
                 "pay_methods": _guest_pay_methods(settings_obj),
-                "delivery_info": settings_obj.delivery_info,
-                "delivery_fee": str(settings_obj.delivery_fee),
-                "delivery_min_order": str(settings_obj.delivery_min_order),
+                **_guest_delivery_payload(settings_obj, provider),
                 **_provider_hours_payload(provider),
             }
         )
@@ -862,15 +871,59 @@ class CafeGuestOrderCreateView(APIView):
 
             delivery_fee = Decimal("0")
             if mode == CafeOrder.Mode.DELIVERY:
-                if items_total < settings_obj.delivery_min_order and settings_obj.delivery_min_order > 0:
-                    order.delete()
-                    return Response(
-                        {
-                            "detail": f"Минимальная сумма для доставки: {settings_obj.delivery_min_order} ₽."
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-                delivery_fee = settings_obj.delivery_fee or Decimal("0")
+                from .delivery_zones import find_delivery_zone, normalize_delivery_zones
+
+                zones = normalize_delivery_zones(settings_obj.delivery_zones or [])
+                zone = None
+                if zones:
+                    try:
+                        d_lat = float(request.data.get("delivery_lat"))
+                        d_lon = float(request.data.get("delivery_lon"))
+                    except (TypeError, ValueError):
+                        order.delete()
+                        return Response(
+                            {
+                                "delivery_address": [
+                                    "Укажите точку доставки на карте — адрес должен попадать в зону."
+                                ]
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    zone = find_delivery_zone(d_lat, d_lon, zones)
+                    if not zone:
+                        order.delete()
+                        return Response(
+                            {
+                                "detail": "Адрес вне зон доставки. Выберите точку внутри выделенной области на карте."
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    zone_min = Decimal(str(zone.get("min_order") or 0))
+                    zone_fee = Decimal(str(zone.get("fee") or 0))
+                    if zone_min <= 0:
+                        zone_min = settings_obj.delivery_min_order or Decimal("0")
+                    if zone_fee < 0:
+                        zone_fee = settings_obj.delivery_fee or Decimal("0")
+                    if items_total < zone_min and zone_min > 0:
+                        order.delete()
+                        return Response(
+                            {"detail": f"Минимальная сумма для зоны «{zone.get('name')}»: {zone_min} ₽."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    delivery_fee = zone_fee
+                    note = f"[зона: {zone.get('name')}]"
+                    if note not in (order.delivery_address or ""):
+                        order.delivery_address = f"{delivery_address} {note}".strip()
+                else:
+                    if items_total < settings_obj.delivery_min_order and settings_obj.delivery_min_order > 0:
+                        order.delete()
+                        return Response(
+                            {
+                                "detail": f"Минимальная сумма для доставки: {settings_obj.delivery_min_order} ₽."
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    delivery_fee = settings_obj.delivery_fee or Decimal("0")
 
             if tip_custom:
                 tip_amount = tip_amount_raw.quantize(Decimal("0.01"))

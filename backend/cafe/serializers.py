@@ -34,6 +34,7 @@ class CafeSettingsSerializer(serializers.ModelSerializer):
             "delivery_info",
             "delivery_fee",
             "delivery_min_order",
+            "delivery_zones",
             "accept_online_payment",
             "accept_cash",
             "accept_card_on_spot",
@@ -112,6 +113,11 @@ class CafeSettingsSerializer(serializers.ModelSerializer):
             return ""
         request = self.context.get("request")
         return photo_urls(request, obj.logo)["thumb_url"]
+
+    def validate_delivery_zones(self, value):
+        from .delivery_zones import normalize_delivery_zones
+
+        return normalize_delivery_zones(value)
 
 
 class CafeTableSerializer(serializers.ModelSerializer):

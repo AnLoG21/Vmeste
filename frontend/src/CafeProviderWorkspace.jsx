@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import CafeFloorCanvas, { QrImg, GRID } from "./CafeFloorCanvas.jsx";
+import CafeQrPrintSheet from "./CafeQrPrintSheet.jsx";
+import CafeDeliveryZonesEditor from "./CafeDeliveryZonesEditor.jsx";
 import "./cafeGuest.css";
 import "./cafeProvider.css";
 
@@ -33,6 +35,13 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
   const [itemFormOpenFor, setItemFormOpenFor] = useState(null);
   const [itemForm, setItemForm] = useState(emptyItemForm);
   const [meSlug, setMeSlug] = useState("");
+  const [orgName, setOrgName] = useState("");
+  const [orgLat, setOrgLat] = useState(55.751244);
+  const [orgLon, setOrgLon] = useState(37.618423);
+  const [qrPrintOpen, setQrPrintOpen] = useState(false);
+  const [qrPrintTables, setQrPrintTables] = useState([]);
+  const [qrPrintIncludeMenu, setQrPrintIncludeMenu] = useState(true);
+  const [qrPrintFloorName, setQrPrintFloorName] = useState("");
 
   useEffect(() => {
     if (initialTab && initialTab !== "orders" && initialTab !== tab) setTab(initialTab);
@@ -60,6 +69,9 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
     if (meRes.ok) {
       const me = await meRes.json();
       setMeSlug(me.organization_slug || "");
+      setOrgName(me.organization_name || me.username || "Заведение");
+      if (me.organization_latitude != null) setOrgLat(Number(me.organization_latitude));
+      if (me.organization_longitude != null) setOrgLon(Number(me.organization_longitude));
     }
   }, [API_URL, authFetch]);
 
@@ -79,6 +91,13 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
   const publicOrigin = origin.includes("localhost") || origin.includes("127.0.0.1") ? "https://vsevmeste.space" : origin;
   const guestMenuUrl = meSlug ? `${publicOrigin}/m/${meSlug}` : "";
   const tableUrl = selectedTable?.public_token ? `${publicOrigin}/t/${selectedTable.public_token}` : "";
+
+  function openQrPrint({ tables, includeMenu = true, floorName = "" }) {
+    setQrPrintTables(tables || []);
+    setQrPrintIncludeMenu(includeMenu);
+    setQrPrintFloorName(floorName);
+    setQrPrintOpen(true);
+  }
 
   async function saveSettings(patch) {
     const res = await authFetch(`${API_URL}/cafe/settings/`, {
@@ -349,9 +368,18 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
             {guestMenuUrl}
           </a>
           <QrImg data={guestMenuUrl} size={180} alt="QR меню заведения" />
-          <a className="ghost-btn" href={guestMenuUrl} target="_blank" rel="noreferrer">
-            Превью меню гостя
-          </a>
+          <div className="cafe-toolbar">
+            <a className="ghost-btn" href={guestMenuUrl} target="_blank" rel="noreferrer">
+              Превью меню гостя
+            </a>
+            <button
+              type="button"
+              className="landing-btn landing-btn--outline"
+              onClick={() => openQrPrint({ tables: [], includeMenu: true, floorName: "" })}
+            >
+              Печать QR меню
+            </button>
+          </div>
         </div>
       ) : (
         <p className="muted">Сохраните профиль организации — появится ссылка и QR для меню без стола.</p>
@@ -452,6 +480,34 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
               onBlur={() => saveSettings({ delivery_min_order: settings.delivery_min_order })}
             />
           </label>
+          {settings.enable_delivery ? (
+            <CafeDeliveryZonesEditor
+              zones={Array.isArray(settings.delivery_zones) ? settings.delivery_zones : []}
+              centerLat={orgLat}
+              centerLon={orgLon}
+              defaultFee={settings.delivery_fee}
+              defaultMinOrder={settings.delivery_min_order}
+              onChange={(delivery_zones) => {
+                setSettings((prev) => ({ ...prev, delivery_zones }));
+              }}
+            />
+          ) : null}
+          {settings.enable_delivery ? (
+            <div className="cafe-form-span2 cafe-toolbar">
+              <button
+                type="button"
+                className="landing-btn landing-btn--primary"
+                onClick={() => saveSettings({ delivery_zones: settings.delivery_zones || [] })}
+              >
+                Сохранить зоны доставки
+              </button>
+              <span className="muted small">
+                {(settings.delivery_zones || []).length
+                  ? `Сохранено зон в форме: ${(settings.delivery_zones || []).length} — нажмите, чтобы записать на сервер`
+                  : "Без зон действует общая цена доставки"}
+              </span>
+            </div>
+          ) : null}
           <h3 className="cafe-form-span2">Онлайн-оплата организации</h3>
           <p className="muted small cafe-form-span2">
             Деньги за онлайн-заказы идут в магазин выбранного эквайера. Без ключей вариант «Онлайн» у гостя не
@@ -630,6 +686,21 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
             <button type="button" className="ghost-btn" onClick={() => setZoom((z) => Math.max(0.6, +(z - 0.1).toFixed(1)))}>
               Масштаб −
             </button>
+            <button
+              type="button"
+              className="landing-btn landing-btn--outline"
+              disabled={!floor || !(floor.tables || []).length}
+              title="Печать QR всех столов текущего зала"
+              onClick={() =>
+                openQrPrint({
+                  tables: floor?.tables || [],
+                  includeMenu: true,
+                  floorName: floor?.name || "",
+                })
+              }
+            >
+              Печать QR зала
+            </button>
             {selectedWallId ? (
               <button type="button" className="ghost-btn" onClick={deleteSelectedWall}>
                 Удалить стену
@@ -785,6 +856,19 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
                     <a className="ghost-btn" href={tableUrl} target="_blank" rel="noreferrer">
                       Превью меню гостя
                     </a>
+                    <button
+                      type="button"
+                      className="landing-btn landing-btn--outline"
+                      onClick={() =>
+                        openQrPrint({
+                          tables: selectedTable ? [selectedTable] : [],
+                          includeMenu: false,
+                          floorName: floor?.name || "",
+                        })
+                      }
+                    >
+                      Печать QR стола
+                    </button>
                     <div className="cafe-qr-large">
                       <QrImg data={tableUrl} size={320} alt={`QR крупно ${selectedTable.label}`} />
                     </div>
@@ -797,6 +881,18 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
           )}
         </div>
       )}
+
+      {qrPrintOpen ? (
+        <CafeQrPrintSheet
+          open={qrPrintOpen}
+          onClose={() => setQrPrintOpen(false)}
+          orgName={orgName}
+          floorName={qrPrintFloorName}
+          menuUrl={qrPrintIncludeMenu ? guestMenuUrl : ""}
+          tables={qrPrintTables}
+          publicOrigin={publicOrigin}
+        />
+      ) : null}
 
       {tab === "menu" && (
         <div>

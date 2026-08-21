@@ -771,3 +771,227 @@
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+.cafe-zones-map {
+  width: 100%;
+  height: 360px;
+  border-radius: 14px;
+  border: 1px solid #ffd9bd;
+  margin: 10px 0 12px;
+  overflow: hidden;
+  background: #f3e8d8;
+}
+
+.cafe-zones-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.cafe-zones-list-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #ffd9bd;
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.cafe-zones-list-item.is-active {
+  border-color: #c45c00;
+  background: #fff3e8;
+}
+
+.cafe-zones-list-item i {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+
+.cafe-zones-edit {
+  margin-top: 8px;
+  padding: 12px;
+  background: #fffaf5;
+  border-radius: 12px;
+  border: 1px solid #ffe4cc;
+}
+
+/* ——— Печать QR ——— */
+.cafe-qr-print-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  background: #f6efe7;
+  overflow: auto;
+  padding: 16px;
+}
+
+.cafe-qr-print-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #ffd9bd;
+  border-radius: 14px;
+}
+
+.cafe-qr-print-sheet {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.cafe-qr-print-header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.cafe-qr-print-header h1 {
+  margin: 0 0 4px;
+  font-size: 1.4rem;
+}
+
+.cafe-qr-print-header p {
+  margin: 0;
+  color: #5c3d1e;
+}
+
+.cafe-qr-print-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.cafe-qr-print-card {
+  background: #fff;
+  border: 2px solid #1a1a1a;
+  border-radius: 12px;
+  padding: 16px 12px;
+  text-align: center;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.cafe-qr-print-card h2 {
+  margin: 0 0 4px;
+  font-size: 1.35rem;
+}
+
+.cafe-qr-print-sub {
+  margin: 0 0 10px;
+  color: #5c3d1e;
+  font-size: 0.9rem;
+}
+
+.cafe-qr-print-card img {
+  display: block;
+  margin: 0 auto 8px;
+  width: 200px;
+  height: 200px;
+}
+
+.cafe-qr-print-pin {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.cafe-qr-print-url {
+  margin: 0 0 6px;
+  font-size: 0.65rem;
+  word-break: break-all;
+  color: #666;
+}
+
+.cafe-qr-print-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.cafe-kitchen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.cafe-kitchen-card {
+  padding: 16px !important;
+  border-width: 2px !important;
+  font-size: 1.05rem;
+}
+
+.cafe-kitchen-card .cafe-order-items {
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.cafe-kitchen-card .cafe-order-items strong {
+  font-size: 1.1rem;
+}
+
+.cafe-kitchen-empty {
+  padding: 28px;
+  text-align: center;
+  background: #fffaf5;
+  border: 1px dashed #ffd9bd;
+  border-radius: 14px;
+}
+
+.cafe-kitchen-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  background: #fff3e8;
+  border: 1px solid #ffd0a8;
+  border-radius: 12px;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .cafe-qr-print-overlay,
+  .cafe-qr-print-overlay * {
+    visibility: visible !important;
+  }
+  .cafe-qr-print-overlay {
+    position: static !important;
+    inset: auto !important;
+    background: #fff !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .cafe-qr-print-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12mm;
+  }
+  .cafe-qr-print-card {
+    border-color: #000;
+  }
+}
+
+@media (max-width: 640px) {
+  .cafe-qr-print-grid {
+    grid-template-columns: 1fr;
+  }
+}
