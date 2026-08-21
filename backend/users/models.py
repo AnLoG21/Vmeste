@@ -11,7 +11,7 @@ class User(AbstractUser):
 
     class ProviderSphere(models.TextChoices):
         HAIR_SALON = "hair_salon", "Салон красоты"
-        SERVICE_CENTER = "service_center", "Сервисный центр"
+        SERVICE_CENTER = "service_center", "Автосервис"
         CAFE_RESTAURANT = "cafe_restaurant", "Кафе и рестораны"
         MARKETPLACES = "marketplaces", "Маркетплейсы"
 

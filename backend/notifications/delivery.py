@@ -19,14 +19,17 @@ def get_or_create_messaging(provider):
     return obj
 
 
-def render_reminder_template(tpl: str, *, org: str, service: str, date: str, client: str = "") -> str:
-    return (
+def render_reminder_template(tpl: str, *, org: str = "", service: str = "", date: str = "", client: str = "", **extra) -> str:
+    text = (
         (tpl or "")
         .replace("{org}", org or "")
         .replace("{service}", service or "")
         .replace("{date}", date or "")
         .replace("{client}", client or "")
     )
+    for key, val in (extra or {}).items():
+        text = text.replace("{" + str(key) + "}", str(val if val is not None else ""))
+    return text
 
 
 def _sms_api_id(msg_settings) -> str:
@@ -236,3 +239,49 @@ def build_reminder_text(booking) -> str:
 def build_new_booking_text(booking) -> str:
     msg = get_or_create_messaging(booking.provider)
     return render_reminder_template(msg.new_booking_text(), **_booking_template_vars(booking))
+
+
+def deliver_winback_message(provider, client, text: str, *, title: str = "Мы скучаем") -> None:
+    """Client-only CRM message (no booking object)."""
+    from notifications.push import notify_users
+
+    msg = get_or_create_messaging(provider)
+    if not msg.remind_clients:
+        return
+    if not client or not getattr(client, "notify_booking_reminders", True):
+        return
+    body = (text or "").strip()
+    if not body:
+        return
+    try:
+        notify_users(
+            [client.pk],
+            kind=InAppNotification.Kind.BOOKING,
+            title=(title or "Напоминание")[:120],
+            body=body[:240],
+            payload={"provider_id": provider.pk, "event": "winback"},
+        )
+    except Exception:
+        logger.exception("winback push failed")
+
+    if msg.enable_sms:
+        api_id = _sms_api_id(msg)
+        phone = (getattr(client, "phone", None) or "").strip()
+        if api_id and phone:
+            _send_sms(client, phone, body, api_id)
+
+    tg_token = _telegram_bot_token(msg)
+    if msg.enable_telegram and (client.telegram_chat_id or "").strip() and tg_token:
+        send_telegram(bot_token=tg_token, chat_id=client.telegram_chat_id, text=body)
+    if msg.enable_max and (client.max_user_id or "").strip() and (msg.max_bot_token or "").strip():
+        send_max(bot_token=msg.max_bot_token, chat_id=client.max_user_id, text=body)
+    if msg.enable_whatsapp and msg.has_whatsapp():
+        phone = (getattr(client, "phone", None) or "").strip()
+        if phone:
+            send_whatsapp_greenapi(
+                api_url=msg.wa_api_url,
+                id_instance=msg.wa_id_instance,
+                api_token=msg.wa_api_token,
+                phone=phone,
+                text=body,
+            )

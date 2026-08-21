@@ -1,51 +1,13 @@
 /**
- * Подсказки адресов — тот же подход, что при регистрации организации:
- * Photon (komoot) + при наличии ключей Яндекс geocode/suggest.
+ * Подсказки адресов — как при регистрации организации:
+ * Photon + нормализация EN→RU; при наличии ключей — Яндекс.
  */
 
 import { loadYandexMaps } from "./yandexMapsLoader.js";
+import { mapPhotonFeatureToSuggestion, simplifyCommaAddressLine } from "./addressFormat.js";
 
 function trimSeg(s) {
   return String(s || "").trim();
-}
-
-function simplifyLine(text) {
-  if (!text || typeof text !== "string") return "";
-  const parts = text
-    .split(",")
-    .map((x) => trimSeg(x))
-    .filter(Boolean)
-    .filter((p) => {
-      const low = p.toLowerCase();
-      return low !== "россия" && low !== "russia" && low !== "ru";
-    });
-  const seen = new Set();
-  const out = [];
-  for (const p of parts) {
-    const k = p.toLowerCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push(p);
-  }
-  return out.join(", ");
-}
-
-function mapPhotonFeature(feature) {
-  const coords = feature?.geometry?.coordinates;
-  if (!Array.isArray(coords) || coords.length < 2) return null;
-  const lon = Number(coords[0]);
-  const lat = Number(coords[1]);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-  const p = feature.properties || {};
-  const city = trimSeg(p.city || p.town || p.village || p.municipality || p.locality || "");
-  const state = trimSeg(p.state || "");
-  const street = trimSeg(p.street || "");
-  const house = trimSeg(p.housenumber || "");
-  const name = trimSeg(p.name || "");
-  const ordered = [state, city, street || name, house].filter(Boolean);
-  const value = simplifyLine(ordered.join(", "));
-  if (!value) return null;
-  return { value, full: value, lat, lon, city: city || state || "" };
 }
 
 function buildQuery(trimmed, cityHint) {
@@ -78,7 +40,7 @@ export async function photonSuggestSearch(q, limit = 10) {
     const seen = new Set();
     const out = [];
     for (const f of features) {
-      const item = mapPhotonFeature(f);
+      const item = mapPhotonFeatureToSuggestion(f);
       if (!item || seen.has(item.value)) continue;
       seen.add(item.value);
       out.push(item);
@@ -105,9 +67,10 @@ async function yandexSuggestItems(trimmed, cityHint) {
         reject(e);
       }
     });
-    const q = cityHint && !trimmed.toLowerCase().includes(cityHint.toLowerCase())
-      ? `${cityHint}, ${trimmed}`
-      : trimmed;
+    const q =
+      cityHint && !trimmed.toLowerCase().includes(cityHint.toLowerCase())
+        ? `${cityHint}, ${trimmed}`
+        : trimmed;
     const items = [];
     const seen = new Set();
 
@@ -121,7 +84,7 @@ async function yandexSuggestItems(trimmed, cityHint) {
           const obj = res.geoObjects.get(0);
           if (!obj) continue;
           const coords = obj.geometry.getCoordinates();
-          const label = simplifyLine(
+          const label = simplifyCommaAddressLine(
             String(it.displayName || it.value || obj.getAddressLine?.() || geoQuery).trim(),
           );
           if (!label || seen.has(label.toLowerCase())) continue;
@@ -130,7 +93,7 @@ async function yandexSuggestItems(trimmed, cityHint) {
           if (items.length >= 8) break;
         }
       } catch {
-        /* fall through to geocode */
+        /* fall through */
       }
     }
 
@@ -138,7 +101,9 @@ async function yandexSuggestItems(trimmed, cityHint) {
       try {
         const res = await ymaps.geocode(q, { results: 6 });
         res.geoObjects.each((obj) => {
-          const label = simplifyLine(String(obj.getAddressLine?.() || obj.properties.get("text") || "").trim());
+          const label = simplifyCommaAddressLine(
+            String(obj.getAddressLine?.() || obj.properties.get("text") || "").trim(),
+          );
           if (!label || seen.has(label.toLowerCase())) return;
           const coords = obj.geometry.getCoordinates();
           seen.add(label.toLowerCase());
@@ -151,6 +116,41 @@ async function yandexSuggestItems(trimmed, cityHint) {
     return items;
   } catch {
     return [];
+  }
+}
+
+export async function reverseGeocodeLatLon(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return "";
+
+  try {
+    const ymaps = await loadYandexMaps();
+    if (ymaps) {
+      await new Promise((resolve) => ymaps.ready(resolve));
+      const res = await ymaps.geocode([lat, lon], { results: 1 });
+      const first = res.geoObjects.get(0);
+      const raw = String(first?.getAddressLine?.() || first?.properties?.get?.("text") || "").trim();
+      if (raw) return simplifyCommaAddressLine(raw) || raw;
+    }
+  } catch {
+    /* try photon */
+  }
+
+  try {
+    const params = new URLSearchParams({
+      lat: String(lat),
+      lon: String(lon),
+      limit: "1",
+    });
+    const res = await fetch(`https://photon.komoot.io/reverse?${params}`, {
+      headers: { Accept: "application/json", "Accept-Language": "ru-RU, ru;q=0.9" },
+    });
+    if (!res.ok) return "";
+    const data = await res.json();
+    const feature = data?.features?.[0];
+    const mapped = feature ? mapPhotonFeatureToSuggestion(feature) : null;
+    return mapped?.value || "";
+  } catch {
+    return "";
   }
 }
 
@@ -176,7 +176,6 @@ export async function fetchAddressSuggestions(query, { cityHint = "" } = {}) {
     photonItems = await photonSuggestSearch(trimmed, 10);
   }
 
-  // Как при регистрации: приоритет Photon, иначе Яндекс
   return photonItems.length ? photonItems : yaItems;
 }
 
@@ -186,22 +185,21 @@ export async function detectCityHint() {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
-          const { latitude, longitude } = pos.coords;
           const params = new URLSearchParams({
-            lat: String(latitude),
-            lon: String(longitude),
+            lat: String(pos.coords.latitude),
+            lon: String(pos.coords.longitude),
             limit: "1",
           });
           const res = await fetch(`https://photon.komoot.io/reverse?${params}`, {
-            headers: { Accept: "application/json", "Accept-Language": "ru" },
+            headers: { Accept: "application/json", "Accept-Language": "ru-RU, ru;q=0.9" },
           });
           if (!res.ok) {
             resolve("");
             return;
           }
           const data = await res.json();
-          const p = data?.features?.[0]?.properties || {};
-          resolve(trimSeg(p.city || p.town || p.village || p.state || ""));
+          const mapped = data?.features?.[0] ? mapPhotonFeatureToSuggestion(data.features[0]) : null;
+          resolve(mapped?.city || "");
         } catch {
           resolve("");
         }

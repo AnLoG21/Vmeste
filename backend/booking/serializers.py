@@ -6,7 +6,15 @@ from catalog.models import Service, ServiceCategory
 from common.media_urls import photo_urls
 
 from .booking_actions import client_display_name
-from .models import AvailabilitySlot, Booking, ProviderStaff
+from .models import (
+    AvailabilitySlot,
+    Booking,
+    ClientPackage,
+    LoyaltyAccount,
+    LoyaltySettings,
+    ProviderStaff,
+    VisitPackage,
+)
 
 User = get_user_model()
 
@@ -226,6 +234,7 @@ class BookingSerializer(serializers.ModelSerializer):
     slot_starts_at = serializers.SerializerMethodField()
     slot_ends_at = serializers.SerializerMethodField()
     review = serializers.SerializerMethodField()
+    inspection = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -255,6 +264,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "prepay_amount",
             "payment_url",
             "paid_at",
+            "inspection",
         ]
         read_only_fields = [
             "client",
@@ -275,6 +285,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "prepay_amount",
             "payment_url",
             "paid_at",
+            "inspection",
         ]
 
     def get_organization_name(self, obj):
@@ -340,6 +351,28 @@ class BookingSerializer(serializers.ModelSerializer):
             "reply": reply_data,
         }
 
+    def get_inspection(self, obj):
+        """Latest linked intake report for service_center E2E."""
+        prefetched = getattr(obj, "_prefetched_objects_cache", None)
+        if prefetched is not None and "inspection_reports" in prefetched:
+            reports = list(obj.inspection_reports.all())
+        else:
+            reports = list(obj.inspection_reports.order_by("-updated_at")[:5])
+        if not reports:
+            return None
+        # Prefer non-cancelled, then most recently updated
+        active = [r for r in reports if r.status != "cancelled"]
+        if not active:
+            return None
+        report = active[0]
+        return {
+            "id": report.id,
+            "status": report.status,
+            "repair_status": getattr(report, "repair_status", "none") or "none",
+            "vehicle_plate": report.vehicle_plate or "",
+            "vehicle_title": report.vehicle_title or "",
+        }
+
     def get_client_display_name(self, obj):
         from .booking_actions import client_display_name
 
@@ -381,3 +414,97 @@ class BookingSerializer(serializers.ModelSerializer):
     def get_slot_ends_at(self, obj):
         slot = getattr(obj, "slot", None)
         return getattr(slot, "ends_at", None)
+
+
+class VisitPackageSerializer(serializers.ModelSerializer):
+    service_ids = serializers.ListField(
+        child=serializers.IntegerField(), required=False, allow_empty=True
+    )
+
+    class Meta:
+        model = VisitPackage
+        fields = [
+            "id",
+            "provider",
+            "name",
+            "description",
+            "visits_count",
+            "price",
+            "validity_days",
+            "service_ids",
+            "is_active",
+            "created_at",
+        ]
+        read_only_fields = ["provider", "created_at"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["service_ids"] = list(instance.services.values_list("id", flat=True))
+        return data
+
+    def create(self, validated_data):
+        service_ids = validated_data.pop("service_ids", None)
+        obj = super().create(validated_data)
+        if service_ids is not None:
+            obj.services.set(Service.objects.filter(provider=obj.provider, id__in=service_ids))
+        return obj
+
+    def update(self, instance, validated_data):
+        service_ids = validated_data.pop("service_ids", None)
+        obj = super().update(instance, validated_data)
+        if service_ids is not None:
+            obj.services.set(Service.objects.filter(provider=obj.provider, id__in=service_ids))
+        return obj
+
+
+class ClientPackageSerializer(serializers.ModelSerializer):
+    package_name = serializers.CharField(source="package.name", read_only=True)
+    client_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ClientPackage
+        fields = [
+            "id",
+            "provider",
+            "client",
+            "package",
+            "package_name",
+            "client_name",
+            "visits_total",
+            "visits_remaining",
+            "purchased_at",
+            "expires_at",
+            "status",
+            "note",
+        ]
+        read_only_fields = fields
+
+    def get_client_name(self, obj):
+        return client_display_name(getattr(obj, "client", None))
+
+
+class LoyaltySettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LoyaltySettings
+        fields = [
+            "enabled",
+            "points_per_visit",
+            "points_per_100_rub",
+            "rub_per_point",
+            "welcome_bonus",
+            "updated_at",
+        ]
+        read_only_fields = ["updated_at"]
+
+
+class LoyaltyAccountSerializer(serializers.ModelSerializer):
+    client_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LoyaltyAccount
+        fields = ["id", "provider", "client", "client_name", "balance", "updated_at"]
+        read_only_fields = fields
+
+    def get_client_name(self, obj):
+        return client_display_name(getattr(obj, "client", None))
+

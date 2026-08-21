@@ -1,0 +1,136 @@
+.bw-page {
+  min-height: 100vh;
+  margin: 0;
+  padding: 1.25rem 1rem 2.5rem;
+  box-sizing: border-box;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background:
+    radial-gradient(120% 80% at 10% 0%, #f7ebe3 0%, transparent 55%),
+    radial-gradient(90% 70% at 100% 10%, #e8f0f4 0%, transparent 50%),
+    #f6f4f1;
+  color: #1c1917;
+}
+
+.bw-card {
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 1.25rem 1.15rem 1.5rem;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(28, 25, 23, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgba(28, 25, 23, 0.08);
+}
+
+.bw-head h1 {
+  margin: 0.15rem 0 0.35rem;
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.bw-brand {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #9a3412;
+}
+
+.bw-muted {
+  margin: 0.25rem 0;
+  color: #57534e;
+  font-size: 0.92rem;
+}
+
+.bw-muted.small {
+  font-size: 0.8rem;
+}
+
+.bw-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 1rem;
+}
+
+.bw-label {
+  margin-top: 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #78716c;
+}
+
+.bw-form select,
+.bw-form input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 10px;
+  font: inherit;
+  background: #fff;
+}
+
+.bw-staff-row,
+.bw-slots,
+.bw-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.bw-staff-chip,
+.bw-slot,
+.bw-opt {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+  color: inherit;
+}
+
+.bw-staff-chip.is-on,
+.bw-slot.is-on,
+.bw-opt.is-on {
+  border-color: #9a3412;
+  background: #fff7ed;
+  color: #7c2d12;
+}
+
+.bw-staff-job,
+.bw-slot-master {
+  font-size: 0.72rem;
+  color: #78716c;
+}
+
+.bw-submit {
+  margin-top: 0.85rem;
+  padding: 0.8rem 1rem;
+  border: 0;
+  border-radius: 12px;
+  background: #9a3412;
+  color: #fff;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.bw-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bw-status,
+.bw-error {
+  color: #b91c1c;
+  margin: 0.5rem 0 0;
+}

@@ -13,6 +13,7 @@ import InspectionWorkspace from "./InspectionWorkspace.jsx";
 import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
+import SalonLoyaltyPackagesPanel from "./SalonLoyaltyPackagesPanel.jsx";
 import "./landing.css";
 import {
   ORG_GALLERY_MAX_PHOTOS,
@@ -1776,8 +1777,10 @@ const BOOKING_TOKEN_DEFS = {
   org: { token: "{org}", label: "Организация", title: "Название организации" },
   service: { token: "{service}", label: "Услуга", title: "Название услуги" },
   date: { token: "{date}", label: "Дата и время записи", title: "Дата и время записи клиента" },
+  weeks: { token: "{weeks}", label: "Недель", title: "Сколько недель без визита" },
+  client: { token: "{client}", label: "Клиент", title: "Имя клиента" },
 };
-const BOOKING_TOKEN_SPLIT_RE = /(\{org\}|\{service\}|\{date\})/g;
+const BOOKING_TOKEN_SPLIT_RE = /(\{org\}|\{service\}|\{date\}|\{weeks\}|\{client\})/g;
 const BOOKING_MESSAGE_DATE_TOKEN = "{date}";
 const bookingTokenDragRef = { el: null };
 const bookingTokenPointerRef = { active: false, token: null, editorRoot: null, onComplete: null };
@@ -2716,6 +2719,9 @@ export default function App() {
     remind_clients: true,
     remind_org: true,
     notify_org_on_new: true,
+    winback_enabled: false,
+    winback_weeks: 4,
+    winback_template: "",
     enable_telegram: false,
     enable_max: false,
     enable_whatsapp: false,
@@ -2765,10 +2771,12 @@ export default function App() {
   const clientMyLocationWatchIdRef = useRef(null);
   const clientMeBootstrappedRef = useRef(false);
   const [providerServices, setProviderServices] = useState([]);
+  const [bookProviderStaff, setBookProviderStaff] = useState([]);
   const [clientBookWindows, setClientBookWindows] = useState([]);
   const [clientBookingForm, setClientBookingForm] = useState({
     locationId: "",
     provider: "",
+    staffId: "any",
     serviceId: "",
     optionIds: [],
     bookDate: "",
@@ -3168,7 +3176,7 @@ export default function App() {
     ? spheres
     : [
         { key: "hair_salon", value: "Салон красоты" },
-        { key: "service_center", value: "Сервисный центр" },
+        { key: "service_center", value: "Автосервис" },
         { key: "cafe_restaurant", value: "Кафе и рестораны" },
         { key: "marketplaces", value: "Маркетплейсы" },
       ];
@@ -3899,7 +3907,7 @@ export default function App() {
 
   useEffect(() => {
     if (me?.role !== "client" && me?.role !== "provider") return;
-    const { provider, serviceId, bookDate, optionIds } = clientBookingForm;
+    const { provider, serviceId, bookDate, optionIds, staffId } = clientBookingForm;
     if (!provider || !serviceId || !bookDate) {
       setClientBookWindows([]);
       return;
@@ -3908,10 +3916,12 @@ export default function App() {
     const extra = (selected?.options || [])
       .filter((o) => (optionIds || []).map(Number).includes(Number(o.id)))
       .reduce((sum, o) => sum + (Number(o.extra_minutes) || 0), 0);
+    const staffQ =
+      staffId && staffId !== "any" ? `&staff=${encodeURIComponent(staffId)}` : "";
     let cancelled = false;
     (async () => {
       const res = await authFetch(
-        `${API_URL}/booking/slots/available-windows/?provider=${encodeURIComponent(provider)}&service=${encodeURIComponent(serviceId)}&date=${encodeURIComponent(bookDate)}&extra_minutes=${extra}`,
+        `${API_URL}/booking/slots/available-windows/?provider=${encodeURIComponent(provider)}&service=${encodeURIComponent(serviceId)}&date=${encodeURIComponent(bookDate)}&extra_minutes=${extra}${staffQ}`,
       );
       if (cancelled) return;
       if (res.ok) {
@@ -3928,11 +3938,11 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [clientBookingForm.provider, clientBookingForm.serviceId, clientBookingForm.bookDate, clientBookingForm.optionIds, providerServices, me?.role]);
+  }, [clientBookingForm.provider, clientBookingForm.serviceId, clientBookingForm.bookDate, clientBookingForm.optionIds, clientBookingForm.staffId, providerServices, me?.role]);
 
   useEffect(() => {
     if ((me?.role !== "client" && me?.role !== "provider") || !clientBookModalOpen) return undefined;
-    const { provider, serviceId, optionIds } = clientBookingForm;
+    const { provider, serviceId, optionIds, staffId } = clientBookingForm;
     if (!provider || !serviceId) {
       setBookAvailableDates([]);
       return undefined;
@@ -3941,6 +3951,8 @@ export default function App() {
     const extra = (selected?.options || [])
       .filter((o) => (optionIds || []).map(Number).includes(Number(o.id)))
       .reduce((sum, o) => sum + (Number(o.extra_minutes) || 0), 0);
+    const staffQ =
+      staffId && staffId !== "any" ? `&staff=${encodeURIComponent(staffId)}` : "";
     let cancelled = false;
     const from = todayIsoDate();
     const toDate = new Date();
@@ -3948,7 +3960,7 @@ export default function App() {
     const to = `${toDate.getFullYear()}-${String(toDate.getMonth() + 1).padStart(2, "0")}-${String(toDate.getDate()).padStart(2, "0")}`;
     (async () => {
       const res = await authFetch(
-        `${API_URL}/booking/slots/available-dates/?provider=${encodeURIComponent(provider)}&service=${encodeURIComponent(serviceId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&extra_minutes=${extra}`,
+        `${API_URL}/booking/slots/available-dates/?provider=${encodeURIComponent(provider)}&service=${encodeURIComponent(serviceId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&extra_minutes=${extra}${staffQ}`,
       );
       if (cancelled || !res.ok) return;
       const data = await res.json();
@@ -3964,7 +3976,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [clientBookModalOpen, clientBookingForm.provider, clientBookingForm.serviceId, clientBookingForm.optionIds, providerServices, me?.role]);
+  }, [clientBookModalOpen, clientBookingForm.provider, clientBookingForm.serviceId, clientBookingForm.optionIds, clientBookingForm.staffId, providerServices, me?.role]);
 
   useEffect(() => {
     if (!clientFiltersOpen) return undefined;
@@ -8092,10 +8104,12 @@ export default function App() {
         ...p,
         locationId: "",
         provider: "",
+        staffId: "any",
         serviceId: "",
         windowKey: "",
       }));
       setProviderServices([]);
+      setBookProviderStaff([]);
       setClientBookWindows([]);
       return;
     }
@@ -8106,12 +8120,16 @@ export default function App() {
       ...p,
       locationId: String(loc.id),
       provider: pid,
+      staffId: "any",
       serviceId: "",
       optionIds: [],
       windowKey: "",
       bookDate,
     }));
-    const servicesRes = await authFetch(`${API_URL}/catalog/services/?provider=${encodeURIComponent(pid)}`);
+    const [servicesRes, staffRes] = await Promise.all([
+      authFetch(`${API_URL}/catalog/services/?provider=${encodeURIComponent(pid)}`),
+      authFetch(`${API_URL}/booking/staff/?provider=${encodeURIComponent(pid)}`),
+    ]);
     if (servicesRes.ok) {
       const list = (await servicesRes.json()).filter((s) => s.is_active);
       setProviderServices(list);
@@ -8128,6 +8146,12 @@ export default function App() {
       }
     } else {
       setProviderServices([]);
+    }
+    if (staffRes.ok) {
+      const staffList = await staffRes.json();
+      setBookProviderStaff(Array.isArray(staffList) ? staffList : []);
+    } else {
+      setBookProviderStaff([]);
     }
     setClientBookWindows([]);
   }
@@ -8301,6 +8325,13 @@ export default function App() {
       setClientStatus("У записи нет клиента.");
       return;
     }
+    // Reuse existing linked intake instead of creating duplicates.
+    if (booking.inspection?.id) {
+      setPendingInspectionId(Number(booking.inspection.id));
+      setCurrentView("inspections");
+      setClientStatus("Открыта приёмка по этой записи.");
+      return;
+    }
     const res = await authFetch(`${API_URL}/inspections/reports/`, {
       method: "POST",
       body: JSON.stringify({
@@ -8315,8 +8346,18 @@ export default function App() {
       setClientStatus(err.detail || err.client?.[0] || "Не удалось создать отчёт приёмки.");
       return;
     }
+    const created = await res.json();
+    setPendingInspectionId(Number(created.id));
     setCurrentView("inspections");
-    setClientStatus("Черновик приёмки создан — откройте раздел «Приёмка».");
+    setClientStatus("Черновик приёмки создан и открыт.");
+    await reloadBookingsList();
+  }
+
+  function openInspectionFromBooking(booking) {
+    const id = booking?.inspection?.id;
+    if (!id) return;
+    setPendingInspectionId(Number(id));
+    setCurrentView("inspections");
   }
 
   function bookingHasStarted(it) {
@@ -8523,6 +8564,9 @@ export default function App() {
       remind_clients: Boolean(orgMessagingForm.remind_clients),
       remind_org: Boolean(orgMessagingForm.remind_org),
       notify_org_on_new: Boolean(orgMessagingForm.notify_org_on_new),
+      winback_enabled: Boolean(orgMessagingForm.winback_enabled),
+      winback_weeks: Number(orgMessagingForm.winback_weeks) || 4,
+      winback_template: orgMessagingForm.winback_template || "",
       enable_telegram: Boolean(orgMessagingForm.enable_telegram),
       enable_max: Boolean(orgMessagingForm.enable_max),
       enable_whatsapp: Boolean(orgMessagingForm.enable_whatsapp),
@@ -9156,17 +9200,60 @@ export default function App() {
             ✓
           </button>
         )}
-        {isOrg && !cancelled && it.client && (me?.provider_sphere === "service_center" || me?.role === "staff") && (
+        {isOrg && !cancelled && it.client && (me?.provider_sphere === "service_center" || me?.employer_sphere === "service_center" || me?.role === "staff") && (
+          it.inspection?.id ? (
+            <button
+              type="button"
+              className="ghost-btn small"
+              title="Открыть приёмку по записи"
+              onClick={(e) => {
+                e.stopPropagation();
+                openInspectionFromBooking(it);
+              }}
+            >
+              Приёмка
+              {it.inspection.repair_status === "ready"
+                ? " · готов"
+                : it.inspection.repair_status === "in_progress"
+                  ? " · в работе"
+                  : it.inspection.status === "approved"
+                    ? " · утв."
+                    : it.inspection.status === "sent"
+                      ? " · ждёт"
+                      : ""}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="ghost-btn small"
+              title="Создать отчёт приёмки"
+              onClick={(e) => {
+                e.stopPropagation();
+                void startInspectionFromBooking(it);
+              }}
+            >
+              Приёмка
+            </button>
+          )
+        )}
+        {isClient && !cancelled && it.inspection?.id && (
           <button
             type="button"
             className="ghost-btn small"
-            title="Создать отчёт приёмки"
+            title="Открыть диагностику / статус ремонта"
             onClick={(e) => {
               e.stopPropagation();
-              void startInspectionFromBooking(it);
+              setPendingInspectionId(Number(it.inspection.id));
+              setCurrentView("inspections");
             }}
           >
-            Приёмка
+            {it.inspection.repair_status === "ready"
+              ? "Готов"
+              : it.inspection.repair_status === "in_progress"
+                ? "В работе"
+                : it.inspection.status === "sent"
+                  ? "Согласовать"
+                  : "Диагностика"}
           </button>
         )}
         {isOrg && !cancelled && (
@@ -9541,12 +9628,45 @@ export default function App() {
                     </button>
                   ) : null}
                   {!isClient && me?.provider_sphere === "service_center" && canManageBookings() && b.client && !isManualHold ? (
+                    b.inspection?.id ? (
+                      <button
+                        type="button"
+                        className="ghost-btn small"
+                        onClick={() => openInspectionFromBooking(b)}
+                      >
+                        Открыть приёмку
+                        {b.inspection.repair_status === "ready"
+                          ? " · готов"
+                          : b.inspection.repair_status === "in_progress"
+                            ? " · в работе"
+                            : ""}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="ghost-btn small"
+                        onClick={() => startInspectionFromBooking(b)}
+                      >
+                        Приёмка по записи
+                      </button>
+                    )
+                  ) : null}
+                  {isClient && b.inspection?.id ? (
                     <button
                       type="button"
                       className="ghost-btn small"
-                      onClick={() => startInspectionFromBooking(b)}
+                      onClick={() => {
+                        setPendingInspectionId(Number(b.inspection.id));
+                        setCurrentView("inspections");
+                      }}
                     >
-                      Приёмка по записи
+                      {b.inspection.repair_status === "ready"
+                        ? "Авто готово"
+                        : b.inspection.repair_status === "in_progress"
+                          ? "Ремонт в работе"
+                          : b.inspection.status === "sent"
+                            ? "Согласовать диагностику"
+                            : "Открыть диагностику"}
                     </button>
                   ) : null}
                   {renderBookingHistoryReview(b)}
@@ -10917,8 +11037,8 @@ export default function App() {
 
             <h3>Календарь записей</h3>
             <p className="muted small">
-              Скопируйте ссылку и добавьте её в Google Календарь, Яндекс Календарь или Apple Календарь как подписку по URL —
-              события будут обновляться автоматически.
+              Подпишите календарь записей по ссылке — события появятся в Google Календаре, Яндекс Календаре или Apple
+              Календаре и будут обновляться автоматически.
             </p>
             {orgCalendarLinks ? (
               <div className="form org-calendar-block">
@@ -10935,7 +11055,7 @@ export default function App() {
                   />
                   <button
                     type="button"
-                    className="landing-btn landing-btn--primary"
+                    className="ghost-btn"
                     onClick={async () => {
                       const url = orgCalendarLinks.ics_url || "";
                       try {
@@ -10949,13 +11069,22 @@ export default function App() {
                     Скопировать
                   </button>
                 </div>
+                <div className="org-calendar-actions">
+                  <a
+                    className="landing-btn landing-btn--outline"
+                    href={orgCalendarLinks.google_url || "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Google Календарь
+                  </a>
+                  <a className="landing-btn landing-btn--outline" href={orgCalendarLinks.webcal_url || "#"}>
+                    Яндекс / Apple
+                  </a>
+                </div>
                 {orgCalendarLinks.yandex_hint ? (
                   <p className="muted small">{orgCalendarLinks.yandex_hint}</p>
-                ) : (
-                  <p className="muted small">
-                    Google: Настройки → Добавить календарь → Из URL. Яндекс / Apple: новая подписка по ссылке.
-                  </p>
-                )}
+                ) : null}
                 <button type="button" className="ghost-btn" onClick={rotateOrgCalendarToken}>
                   Сменить ссылку
                 </button>
@@ -10969,6 +11098,7 @@ export default function App() {
             <p className="muted small">
               Напоминания за 24 ч и 2 ч до записи: клиентам и организации. Каналы — Telegram, MAX, WhatsApp (Green-API), SMS.
               SMS: ключ платформы или свой SMS.ru api_id. Клиент может отключить напоминания в своих настройках.
+              Для салона — отдельно «давно не был».
             </p>
             <form onSubmit={saveOrgMessaging} className="form">
               <label className="checkbox">
@@ -10995,6 +11125,38 @@ export default function App() {
                 />
                 Уведомлять о новой записи
               </label>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={Boolean(orgMessagingForm.winback_enabled)}
+                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, winback_enabled: e.target.checked }))}
+                />
+                Напоминать «давно не был»
+              </label>
+              {orgMessagingForm.winback_enabled ? (
+                <>
+                  <label>
+                    Через сколько недель без визита
+                    <input
+                      type="number"
+                      min="1"
+                      max="52"
+                      value={orgMessagingForm.winback_weeks || 4}
+                      onChange={(e) =>
+                        setOrgMessagingForm((p) => ({ ...p, winback_weeks: e.target.value }))
+                      }
+                    />
+                  </label>
+                  <BookingMessageField
+                    id="org-msg-winback"
+                    label="Текст «давно не был»"
+                    value={orgMessagingForm.winback_template || ""}
+                    onChange={(v) => setOrgMessagingForm((p) => ({ ...p, winback_template: v }))}
+                    placeholder="Давно не виделись в {org}! … {weeks} нед. назад."
+                    tokens={["org", "weeks", "client"]}
+                  />
+                </>
+              ) : null}
               {orgMessagingForm.notify_org_on_new ? (
                 <>
                   <BookingMessageField
@@ -11008,7 +11170,12 @@ export default function App() {
                   <button type="submit">Сохранить</button>
                   <p className="status">{orgMessagingSaveStatus}</p>
                 </>
-              ) : null}
+              ) : (
+                <>
+                  <button type="submit">Сохранить напоминания</button>
+                  <p className="status">{orgMessagingSaveStatus}</p>
+                </>
+              )}
               {renderOrgMessengerChannels()}
             </form>
               </>
@@ -11021,8 +11188,6 @@ export default function App() {
                 </p>
                 <form onSubmit={saveOrgMessaging} className="form">
                   {renderOrgMessengerChannels()}
-                  <button type="submit">Сохранить</button>
-                  <p className="status">{orgMessagingSaveStatus}</p>
                 </form>
               </>
             )}
@@ -11030,6 +11195,30 @@ export default function App() {
             <h3>Карточка для клиентов</h3>
 
             <p className="muted small">Режим работы, телефоны, фото и дополнительная информация отображаются при выборе организации на карте.</p>
+
+            {me?.role === "provider" && me?.provider_sphere !== "cafe_restaurant" && me?.organization_slug ? (
+              <div className="org-widget-embed card-inset">
+                <h3>Виджет записи на сайт</h3>
+                <p className="muted small">
+                  Ссылка для клиентов и iframe для встраивания на сайт салона. Сценарий: мастер → услуга → слоты, запись по телефону.
+                </p>
+                <p>
+                  <a href={`/w/${me.organization_slug}`} target="_blank" rel="noreferrer">
+                    {typeof window !== "undefined" ? window.location.origin : ""}/w/{me.organization_slug}
+                  </a>
+                </p>
+                <label className="field-label">
+                  Код для сайта
+                  <textarea
+                    readOnly
+                    rows={4}
+                    className="org-widget-code"
+                    value={`<iframe src="${typeof window !== "undefined" ? window.location.origin : "https://vsevmeste.space"}/w/${me.organization_slug}" width="100%" height="720" style="border:0;border-radius:12px;max-width:480px" title="Онлайн-запись"></iframe>`}
+                    onFocus={(e) => e.target.select()}
+                  />
+                </label>
+              </div>
+            ) : null}
 
             <form onSubmit={saveOrgProfileInfo} className="form org-profile-form">
 
@@ -14178,6 +14367,13 @@ export default function App() {
               )}
               <p className="status">{sellerStatus}</p>
             </section>
+            {(me?.provider_sphere === "hair_salon" || me?.provider_sphere === "service_center") && (
+              <SalonLoyaltyPackagesPanel
+                authFetch={authFetch}
+                API_URL={API_URL}
+                services={services.filter((s) => s.is_active !== false)}
+              />
+            )}
           </div>
         )}
 
@@ -15223,12 +15419,95 @@ export default function App() {
                 <p className="muted small">{bookingPrepayHint(mapOrgProfile.prepay)}</p>
               ) : null}
               <form onSubmit={createClientBooking} className="form">
-                <select value={clientBookingForm.serviceId} onChange={(e) => setClientBookingForm((p) => ({ ...p, serviceId: e.target.value, optionIds: [], windowKey: "" }))} required disabled={!clientBookingForm.provider || providerServices.length === 0}>
-                  <option value="">Услуга</option>
-                  {providerServices.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name} — {s.price} ₽</option>
-                  ))}
-                </select>
+                {(() => {
+                  const staffOptions = bookProviderStaff || [];
+                  const bookableServices = (() => {
+                    if (clientBookingForm.staffId === "any") return providerServices;
+                    const link = staffOptions.find(
+                      (l) => String(l.staff) === String(clientBookingForm.staffId),
+                    );
+                    if (!link) return providerServices;
+                    const svcIds = (link.assigned_service_ids || []).map(Number);
+                    const catIds = (link.assigned_category_ids || []).map(Number);
+                    if (!svcIds.length && !catIds.length) return providerServices;
+                    return providerServices.filter(
+                      (s) =>
+                        svcIds.includes(Number(s.id)) ||
+                        (s.category && catIds.includes(Number(s.category))),
+                    );
+                  })();
+                  return (
+                    <>
+                      <p className="field-label">Мастер</p>
+                      <div className="client-book-staff-pick">
+                        <button
+                          type="button"
+                          className={`client-book-staff-chip${clientBookingForm.staffId === "any" ? " is-on" : ""}`}
+                          onClick={() =>
+                            setClientBookingForm((p) => ({
+                              ...p,
+                              staffId: "any",
+                              serviceId: "",
+                              optionIds: [],
+                              windowKey: "",
+                            }))
+                          }
+                        >
+                          Любой
+                        </button>
+                        {staffOptions.map((link) => {
+                          const label =
+                            (link.display_name || "").trim() ||
+                            formatStaffFullName(link.staff_user) ||
+                            link.staff_username ||
+                            "Мастер";
+                          const on = String(clientBookingForm.staffId) === String(link.staff);
+                          return (
+                            <button
+                              key={link.id}
+                              type="button"
+                              className={`client-book-staff-chip${on ? " is-on" : ""}`}
+                              onClick={() =>
+                                setClientBookingForm((p) => ({
+                                  ...p,
+                                  staffId: String(link.staff),
+                                  serviceId: "",
+                                  optionIds: [],
+                                  windowKey: "",
+                                }))
+                              }
+                            >
+                              {label}
+                              {link.job_title ? (
+                                <span className="client-book-staff-job">{link.job_title}</span>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <select
+                        value={clientBookingForm.serviceId}
+                        onChange={(e) =>
+                          setClientBookingForm((p) => ({
+                            ...p,
+                            serviceId: e.target.value,
+                            optionIds: [],
+                            windowKey: "",
+                          }))
+                        }
+                        required
+                        disabled={!clientBookingForm.provider || bookableServices.length === 0}
+                      >
+                        <option value="">Услуга</option>
+                        {bookableServices.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} — {s.price} ₽
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  );
+                })()}
                 {(() => {
                   const selected = providerServices.find(
                     (s) => String(s.id) === String(clientBookingForm.serviceId),
@@ -15296,13 +15575,38 @@ export default function App() {
                   onChange={(iso) => setClientBookingForm((p) => ({ ...p, bookDate: iso, windowKey: "" }))}
                 />
                 {!clientBookingForm.serviceId ? (
-                  <p className="muted small">Выберите услугу — доступные даты подсветятся в календаре.</p>
+                  <p className="muted small">Выберите мастера и услугу — доступные даты подсветятся в календаре.</p>
                 ) : null}
                 {clientBookingForm.serviceId && clientBookingForm.bookDate && (
                   <>
                     <p className="field-label">Свободное время</p>
                     {clientBookWindows.length === 0 ? (
                       <p className="muted small">Нет свободных интервалов на эту дату.</p>
+                    ) : clientBookingForm.staffId !== "any" ? (
+                      <div
+                        className="client-slot-strip client-book-slot-strip"
+                        role="listbox"
+                        aria-label="Время"
+                      >
+                        {clientBookWindows.map((w) => {
+                          const key = clientWindowKey(w);
+                          const active = clientBookingForm.windowKey === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              role="option"
+                              aria-selected={active}
+                              className={["client-slot-chip", active && "client-slot-chip--active"].filter(Boolean).join(" ")}
+                              onClick={() => setClientBookingForm((p) => ({ ...p, windowKey: key }))}
+                            >
+                              <span className="client-slot-chip-time">
+                                {formatTimeHm(w.starts_at)} — {formatTimeHm(w.ends_at)}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     ) : (
                       <div className="client-staff-slots">
                         {groupClientWindowsByStaff(clientBookWindows).map((group) => (

@@ -301,7 +301,16 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
         book_date = parse_date(book_date_raw)
         if not book_date:
             return Response({"detail": "Некорректная дата."}, status=status.HTTP_400_BAD_REQUEST)
-        data = list_available_windows(int(provider), int(service), book_date, extra_minutes=extra_minutes)
+        staff_raw = (request.query_params.get("staff") or "").strip()
+        staff_id = None
+        if staff_raw and staff_raw not in ("any", "null", "none", ""):
+            try:
+                staff_id = int(staff_raw)
+            except ValueError:
+                staff_id = None
+        data = list_available_windows(
+            int(provider), int(service), book_date, extra_minutes=extra_minutes, staff_id=staff_id
+        )
         return Response(data)
 
     @action(detail=False, methods=["get"], url_path="available-dates")
@@ -325,7 +334,21 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
         today = timezone.localdate()
         date_from = parse_date(date_from_raw) or today
         date_to = parse_date(date_to_raw) or (today + timedelta(days=60))
-        dates = list_available_dates(int(provider), int(service), date_from, date_to, extra_minutes=extra_minutes)
+        staff_raw = (request.query_params.get("staff") or "").strip()
+        staff_id = None
+        if staff_raw and staff_raw not in ("any", "null", "none", ""):
+            try:
+                staff_id = int(staff_raw)
+            except ValueError:
+                staff_id = None
+        dates = list_available_dates(
+            int(provider),
+            int(service),
+            date_from,
+            date_to,
+            extra_minutes=extra_minutes,
+            staff_id=staff_id,
+        )
         return Response({"dates": dates})
 
     @action(detail=False, methods=["post"], url_path="manual-hold")
@@ -427,7 +450,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             queryset=Review.objects.select_related("reply").prefetch_related("photos").order_by("-created_at"),
         )
         return qs.select_related("client", "provider", "service", "slot", "staff").prefetch_related(
-            review_prefetch, "provider__gallery_photos"
+            review_prefetch, "provider__gallery_photos", "inspection_reports"
         )
 
     def get_queryset(self):
@@ -731,6 +754,9 @@ class MessagingSettingsView(APIView):
             "remind_clients": msg.remind_clients,
             "remind_org": msg.remind_org,
             "notify_org_on_new": msg.notify_org_on_new,
+            "winback_enabled": msg.winback_enabled,
+            "winback_weeks": msg.winback_weeks,
+            "winback_template": msg.winback_template or "",
             "enable_telegram": msg.enable_telegram,
             "enable_max": msg.enable_max,
             "enable_whatsapp": msg.enable_whatsapp,
@@ -768,6 +794,7 @@ class MessagingSettingsView(APIView):
             "remind_clients",
             "remind_org",
             "notify_org_on_new",
+            "winback_enabled",
             "enable_telegram",
             "enable_max",
             "enable_whatsapp",
@@ -776,6 +803,11 @@ class MessagingSettingsView(APIView):
         for f in bool_fields:
             if f in data:
                 setattr(msg, f, bool(data.get(f)))
+        if "winback_weeks" in data:
+            try:
+                msg.winback_weeks = max(1, min(52, int(data.get("winback_weeks"))))
+            except (TypeError, ValueError):
+                pass
         str_fields = [
             "telegram_notify_chat_id",
             "max_notify_chat_id",
@@ -783,6 +815,7 @@ class MessagingSettingsView(APIView):
             "wa_id_instance",
             "reminder_template",
             "new_booking_template",
+            "winback_template",
         ]
         for f in str_fields:
             if f in data:

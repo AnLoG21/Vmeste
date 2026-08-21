@@ -273,6 +273,8 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
   const deliveryZones = unlock?.delivery_zones || [];
   const needsDeliveryPin = modeOrder === "delivery" && deliveryZones.length > 0;
   const onDeliveryPick = useCallback(({ lat, lon, zone, address, outside }) => {
+    // Адрес с карты всегда подставляем в поле (даже если точка вне зоны)
+    if (address) setDeliveryAddress(address);
     if (outside) {
       setDeliveryPin(null);
       setDeliveryZone(null);
@@ -280,7 +282,6 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
     }
     setDeliveryPin({ lat, lon });
     setDeliveryZone(zone || null);
-    if (address) setDeliveryAddress(address);
   }, []);
 
   function applyDeliveryPlace({ address, lat, lon }) {

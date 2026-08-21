@@ -11,6 +11,11 @@ class InspectionReport(models.Model):
         APPROVED = "approved", "Утверждён"
         CANCELLED = "cancelled", "Отменён"
 
+    class RepairStatus(models.TextChoices):
+        NONE = "none", "—"
+        IN_PROGRESS = "in_progress", "В работе"
+        READY = "ready", "Готов"
+
     provider = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -45,12 +50,20 @@ class InspectionReport(models.Model):
         default=Status.DRAFT,
         db_index=True,
     )
+    repair_status = models.CharField(
+        max_length=20,
+        choices=RepairStatus.choices,
+        default=RepairStatus.NONE,
+        db_index=True,
+        help_text="Статус ремонта после утверждения клиентом.",
+    )
     share_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     parts_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     labor_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     sent_at = models.DateTimeField(null=True, blank=True)
     approved_at = models.DateTimeField(null=True, blank=True)
+    repair_status_updated_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

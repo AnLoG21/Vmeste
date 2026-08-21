@@ -14,6 +14,12 @@ const STATUS_LABELS = {
   cancelled: "Отменён",
 };
 
+const REPAIR_STATUS_LABELS = {
+  none: "",
+  in_progress: "В работе",
+  ready: "Готов",
+};
+
 function emptyItemForm() {
   return {
     title: "",
@@ -267,6 +273,24 @@ export default function InspectionWorkspace({
     loadList();
   }
 
+  async function setRepairStatus(value) {
+    if (!report) return;
+    setBusy(true);
+    const res = await authFetch(`${API_URL}/inspections/reports/${report.id}/repair-status/`, {
+      method: "POST",
+      body: JSON.stringify({ repair_status: value }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setStatus(err.detail || "Не удалось обновить статус ремонта.");
+      return;
+    }
+    setReport(await res.json());
+    setStatus(value === "ready" ? "Клиенту отправлено: авто готово." : "Клиенту отправлено: ремонт в работе.");
+    loadList();
+  }
+
   async function downloadPdf(kind) {
     if (!report) return;
     setBusy(true);
@@ -451,6 +475,9 @@ export default function InspectionWorkspace({
                     </strong>
                     <span className="muted small">
                       {r.client_display_name || "Клиент"} · {STATUS_LABELS[r.status] || r.status}
+                      {r.repair_status && r.repair_status !== "none"
+                        ? ` · ${REPAIR_STATUS_LABELS[r.repair_status] || r.repair_status}`
+                        : ""}
                     </span>
                   </button>
                 </li>
@@ -470,7 +497,26 @@ export default function InspectionWorkspace({
                   <span className={`inspection-badge inspection-badge--${report.status}`}>
                     {STATUS_LABELS[report.status] || report.status}
                   </span>
+                  {report.repair_status && report.repair_status !== "none" ? (
+                    <span className={`inspection-badge inspection-badge--repair-${report.repair_status}`}>
+                      {REPAIR_STATUS_LABELS[report.repair_status] || report.repair_status}
+                    </span>
+                  ) : null}
                 </h3>
+                {report.booking_summary ? (
+                  <p className="muted small">
+                    Связанная запись #{report.booking_summary.id}
+                    {report.booking_summary.service_name ? `: ${report.booking_summary.service_name}` : ""}
+                    {report.booking_summary.starts_at
+                      ? ` · ${new Date(report.booking_summary.starts_at).toLocaleString("ru-RU", {
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}`
+                      : ""}
+                  </p>
+                ) : null}
                 {report.public_url && report.status !== "draft" && (
                   <p className="muted small">
                     Ссылка клиенту:{" "}
@@ -635,6 +681,27 @@ export default function InspectionWorkspace({
                     <p className="inspection-total">
                       Итого утверждено: <strong>{money(report.grand_total)}</strong>
                     </p>
+                    <div className="inspection-repair-actions">
+                      <p className="field-label">Статус ремонта для клиента</p>
+                      <div className="row-2">
+                        <button
+                          type="button"
+                          className={report.repair_status === "in_progress" ? "primary-btn" : "ghost-btn"}
+                          disabled={busy}
+                          onClick={() => setRepairStatus("in_progress")}
+                        >
+                          В работе
+                        </button>
+                        <button
+                          type="button"
+                          className={report.repair_status === "ready" ? "primary-btn" : "ghost-btn"}
+                          disabled={busy}
+                          onClick={() => setRepairStatus("ready")}
+                        >
+                          Готов
+                        </button>
+                      </div>
+                    </div>
                     <button type="button" className="ghost-btn" disabled={busy} onClick={() => downloadPdf("agreement")}>
                       Акт согласования (PDF)
                     </button>

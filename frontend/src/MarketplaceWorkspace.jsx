@@ -17,9 +17,10 @@ import MarketplaceCategoryPicker from "./marketplaceCategoryPicker.jsx";
 import SearchableSelect from "./marketplaceSearchableSelect.jsx";
 
 const TABS = [
+  ["today", "Сегодня"],
   ["create", "Создать товар"],
   ["products", "Товары"],
-  ["manage", "Управление"],
+  ["manage", "Настройки"],
   ["orders", "Заказы"],
   ["supplies", "Поставки"],
   ["analytics", "Аналитика"],
@@ -27,6 +28,43 @@ const TABS = [
   ["reviews", "Отзывы и вопросы"],
   ["logs", "Логи"],
 ];
+
+const BEGINNER_TAB_IDS = new Set(["today", "create", "products", "manage"]);
+const MP_UI_MODE_KEY = "vmeste_mp_ui_mode";
+const MP_ONBOARD_DONE_KEY = "vmeste_mp_onboard_done";
+
+function readMpUiMode() {
+  try {
+    const v = localStorage.getItem(MP_UI_MODE_KEY);
+    return v === "advanced" ? "advanced" : "beginner";
+  } catch {
+    return "beginner";
+  }
+}
+
+function writeMpUiMode(mode) {
+  try {
+    localStorage.setItem(MP_UI_MODE_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+}
+
+function readOnboardDone() {
+  try {
+    return localStorage.getItem(MP_ONBOARD_DONE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeOnboardDone() {
+  try {
+    localStorage.setItem(MP_ONBOARD_DONE_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
 
 function warehouseStorageKey(marketplace) {
   return `vmeste_mp_warehouse_${marketplace === "wildberries" ? "wb" : "ozon"}`;
@@ -668,7 +706,11 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
   const canViewKeys = accessPerms?.marketplace_view_keys !== false;
   const canManageOrders = accessPerms?.marketplace_manage_orders !== false;
   const canManageCatalog = accessPerms?.marketplace_manage_catalog !== false;
-  const [tab, setTab] = useState(canManageCatalog ? "create" : canManageOrders ? "orders" : "manage");
+  const [uiMode, setUiMode] = useState(readMpUiMode);
+  const isBeginner = uiMode === "beginner";
+  const [onboardStep, setOnboardStep] = useState(1);
+  const [onboardDismissed, setOnboardDismissed] = useState(readOnboardDone);
+  const [tab, setTab] = useState(canManageOrders ? "today" : canManageCatalog ? "create" : "manage");
   const [menuOpen, setMenuOpen] = useState(false);
   const [mp, setMp] = useState("ozon");
   const [settings, setSettings] = useState(null);
@@ -791,14 +833,14 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
 
   useEffect(() => {
     if (!settings || settings.environment !== "prod") return;
-    if (!["manage", "orders", "supplies"].includes(tab)) return;
+    if (!["manage", "orders", "supplies", "today"].includes(tab)) return;
     if (warehouseOptions.length) return;
     loadWarehouses().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, mp, settings?.environment]);
 
   useEffect(() => {
-    if (tab !== "supplies" || mp !== "wildberries") return;
+    if ((tab !== "supplies" && tab !== "today") || mp !== "wildberries") return;
     if (!settings || settings.environment !== "prod") return;
     loadSupplies().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1098,6 +1140,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
       setAttributeMirrors([]);
       setAttributeDictOptions({});
       setAttributesHint("");
+      if (!onboardDismissed) finishOnboard();
     });
   }
 
@@ -1120,7 +1163,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
   async function loadCategoryOptions() {
     await withBusy("cats", async () => {
       if (settings?.environment !== "prod") {
-        throw new Error("Категории с площадки доступны в боевом режиме (Меню → Управление).");
+        throw new Error("Категории с площадки доступны в боевом режиме (Меню → Настройки).");
       }
       if (mp === "wildberries") {
         const data = await mpCall("categories.parents");
@@ -2409,17 +2452,58 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
     [history, search],
   );
   const tabLabel = TABS.find(([id]) => id === tab)?.[1] || "";
+  const hasMpKeys = Boolean(settings?.has_ozon_api_key || settings?.has_wb_api_key);
+  const showOnboard =
+    isBeginner &&
+    Boolean(settings) &&
+    !onboardDismissed &&
+    canViewKeys &&
+    (!hasMpKeys || (canManageCatalog && history.length === 0));
   const visibleTabs = useMemo(
     () =>
       TABS.filter(([id]) => {
+        if (isBeginner && !BEGINNER_TAB_IDS.has(id)) return false;
         if (["create", "products", "analytics"].includes(id)) return canManageCatalog;
         if (id === "manage") return canViewKeys || canManageCatalog;
-        if (["orders", "supplies", "reviews", "finance"].includes(id)) return canManageOrders || canManageCatalog;
+        if (["today", "orders", "supplies", "reviews", "finance"].includes(id)) return canManageOrders || canManageCatalog;
         if (id === "logs") return canViewKeys || canManageCatalog || canManageOrders;
         return true;
       }),
-    [canManageCatalog, canManageOrders, canViewKeys],
+    [canManageCatalog, canManageOrders, canViewKeys, isBeginner],
   );
+
+  useEffect(() => {
+    if (!visibleTabs.some(([id]) => id === tab) && visibleTabs.length) {
+      setTab(visibleTabs[0][0]);
+    }
+  }, [visibleTabs, tab]);
+
+  useEffect(() => {
+    if (!settings || onboardDismissed) return;
+    if (hasMpKeys && history.length > 0) {
+      writeOnboardDone();
+      setOnboardDismissed(true);
+    } else if (!hasMpKeys) {
+      setOnboardStep(1);
+    } else if (history.length === 0) {
+      setOnboardStep((s) => Math.max(s, 2));
+    }
+  }, [settings, hasMpKeys, history.length, onboardDismissed]);
+
+  function switchUiMode(mode) {
+    setUiMode(mode);
+    writeMpUiMode(mode);
+    setMenuOpen(false);
+    if (mode === "beginner" && tab !== "today" && BEGINNER_TAB_IDS.has("today") && canManageOrders) {
+      setTab("today");
+    }
+  }
+
+  function finishOnboard() {
+    writeOnboardDone();
+    setOnboardDismissed(true);
+    setTab(canManageCatalog ? "create" : canManageOrders ? "today" : "manage");
+  }
   const ozonCategoryValue = product.category && product.type ? `${product.category}:${product.type}` : "";
   const categoriesReady = mp === "wildberries" ? wbParents.length > 0 : ozonCategoryTree.length > 0;
   const requiredAttributeCount = attributeFields.filter((f) => f.required).length;
@@ -2442,7 +2526,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
   );
 
   return (
-    <section className={`card full-width cafe-provider mp-workspace ${mp === "wildberries" ? "mp-wb" : "mp-ozon"}`}>
+    <section
+      className={`card full-width cafe-provider mp-workspace ${mp === "wildberries" ? "mp-wb" : "mp-ozon"} ${isBeginner ? "mp-ui-beginner" : "mp-ui-advanced"}`}
+    >
       <div className="mp-head">
         <div className="mp-head-title">
           <h2>Маркетплейсы</h2>
@@ -2454,6 +2540,14 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
           </button>
           <button type="button" className={mp === "wildberries" ? "is-active" : ""} onClick={() => setMp("wildberries")}>
             WB
+          </button>
+        </div>
+        <div className="mp-ui-mode" role="group" aria-label="Режим интерфейса">
+          <button type="button" className={isBeginner ? "is-active" : ""} onClick={() => switchUiMode("beginner")}>
+            Простой
+          </button>
+          <button type="button" className={!isBeginner ? "is-active" : ""} onClick={() => switchUiMode("advanced")}>
+            Все функции
           </button>
         </div>
         <div className="mp-menu">
@@ -2480,11 +2574,174 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
         </div>
       </div>
 
+      {showOnboard ? (
+        <div className="mp-onboard" role="region" aria-label="Онбординг">
+          <div className="mp-onboard-head">
+            <div>
+              <strong>Старт за 3 шага</strong>
+              <p className="muted small">Ключи → фото → первая карточка. Потом откроется дневной путь «Сегодня».</p>
+            </div>
+            <button type="button" className="ghost-btn" onClick={finishOnboard}>
+              Пропустить
+            </button>
+          </div>
+          <div className="mp-onboard-steps" role="tablist">
+            {[
+              { n: 1, label: "Ключи" },
+              { n: 2, label: "Фото" },
+              { n: 3, label: "Карточка" },
+            ].map((s) => (
+              <button
+                key={s.n}
+                type="button"
+                role="tab"
+                aria-selected={onboardStep === s.n}
+                className={`mp-onboard-step${onboardStep === s.n ? " is-on" : ""}${onboardStep > s.n ? " is-done" : ""}`}
+                onClick={() => setOnboardStep(s.n)}
+              >
+                <span>{s.n}</span>
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          {onboardStep === 1 ? (
+            <form
+              className="cafe-form-panel mp-onboard-panel"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                await saveKeys(e);
+                setOnboardStep(2);
+              }}
+            >
+              <h3>1. Ключи площадки</h3>
+              <p className="muted small">Вставьте ключ Ozon и/или WB. Для реальных выгрузок выберите «Боевой».</p>
+              <div className="cafe-form-grid">
+                <label>
+                  Режим
+                  <select value={keysForm.environment} onChange={(e) => updateKeysForm({ environment: e.target.value })}>
+                    <option value="sandbox">Тестовый</option>
+                    <option value="prod">Боевой</option>
+                  </select>
+                </label>
+                <label>
+                  Ozon Client ID
+                  <input value={keysForm.ozon_client_id} onChange={(e) => updateKeysForm({ ozon_client_id: e.target.value })} />
+                </label>
+                <label>
+                  Ozon API Key
+                  <input type="password" autoComplete="off" value={keysForm.ozon_api_key} onChange={(e) => updateKeysForm({ ozon_api_key: e.target.value })} />
+                </label>
+                <label>
+                  Wildberries API Key
+                  <input type="password" autoComplete="off" value={keysForm.wb_api_key} onChange={(e) => updateKeysForm({ wb_api_key: e.target.value })} />
+                </label>
+              </div>
+              <div className="mp-actions">
+                <button type="submit" disabled={busy === "keys"}>
+                  {busy === "keys" ? "Сохранение…" : "Сохранить и дальше"}
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {onboardStep === 2 ? (
+            <div className="cafe-form-panel mp-onboard-panel">
+              <h3>2. Фото для карточки</h3>
+              <p className="muted small">
+                Загрузите хотя бы одно фото. Удобнее — через Яндекс Диск (публичные ссылки в карточку).
+              </p>
+              <div className="mp-actions">
+                {settings?.has_yandex_disk ? (
+                  <span className="muted small">Яндекс Диск подключён ✓</span>
+                ) : (
+                  <button type="button" disabled={busy === "disk" || !settings?.yandex_disk_oauth} onClick={connectYandexDisk}>
+                    {busy === "disk" ? "Подключение…" : "Подключить Яндекс Диск"}
+                  </button>
+                )}
+              </div>
+              <div className="mp-media">
+                <label className="mp-plus-btn">
+                  + Фото
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    hidden
+                    onChange={(e) => {
+                      const files = [...(e.target.files || [])];
+                      e.target.value = "";
+                      if (files.length) uploadMedia(files);
+                    }}
+                  />
+                </label>
+                {(product.images || []).length ? (
+                  <ul className="mp-media-list">
+                    {(product.images || []).slice(0, 8).map((item, idx) => {
+                      const src = typeof item === "string" ? item : item.previewUrl || item.url;
+                      return (
+                        <li key={idx}>
+                          <img src={src} alt="" />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="muted small">Пока нет фото — нажмите «+ Фото».</p>
+                )}
+              </div>
+              <div className="mp-actions">
+                <button type="button" className="ghost-btn" onClick={() => setOnboardStep(1)}>
+                  Назад
+                </button>
+                <button
+                  type="button"
+                  className="mp-btn mp-btn-primary"
+                  onClick={() => {
+                    setOnboardStep(3);
+                    setTab("create");
+                  }}
+                >
+                  Дальше к карточке
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {onboardStep === 3 ? (
+            <div className="cafe-form-panel mp-onboard-panel">
+              <h3>3. Первая карточка</h3>
+              <p className="muted small">
+                Ниже откройте форму: артикул, название, категория, цена, фото → «Выгрузить». После первой выгрузки онбординг закроется.
+              </p>
+              <div className="mp-actions">
+                <button type="button" className="ghost-btn" onClick={() => setOnboardStep(2)}>
+                  Назад
+                </button>
+                <button
+                  type="button"
+                  className="mp-btn mp-btn-primary"
+                  onClick={() => {
+                    setTab("create");
+                    if ((product.images || []).length > 0 || history.length > 0) finishOnboard();
+                  }}
+                >
+                  Открыть форму создания
+                </button>
+                <button type="button" className="ghost-btn" onClick={finishOnboard}>
+                  Готово
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {isSandbox ? (
         <div className="mp-mode-banner" role="status">
           <div>
             <strong>Тестовый режим</strong>
-            <p>Запросы на Ozon/WB не уходят. Чтобы выгружать товары и заказы — откройте Управление и выберите «Боевой».</p>
+            <p>Запросы на Ozon/WB не уходят. Чтобы выгружать товары и заказы — откройте Настройки и выберите «Боевой».</p>
           </div>
           <button
             type="button"
@@ -2792,12 +3049,16 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
               <button type="submit" disabled={busy === "create"}>
                 {busy === "create" ? "Выгрузка…" : editingHistoryId ? "Сохранить на площадке" : "Выгрузить"}
               </button>
-              <button type="button" className="mp-btn" disabled={!product.offer_id && !product.name} onClick={cloneProductToOtherMp}>
-                Клонировать на {mp === "ozon" ? "WB" : "Ozon"}
-              </button>
-              <button type="button" className="mp-btn" disabled={!product.name && !product.offer_id} onClick={saveCurrentAsTemplate}>
-                В шаблон
-              </button>
+              {!isBeginner ? (
+                <>
+                  <button type="button" className="mp-btn" disabled={!product.offer_id && !product.name} onClick={cloneProductToOtherMp}>
+                    Клонировать на {mp === "ozon" ? "WB" : "Ozon"}
+                  </button>
+                  <button type="button" className="mp-btn" disabled={!product.name && !product.offer_id} onClick={saveCurrentAsTemplate}>
+                    В шаблон
+                  </button>
+                </>
+              ) : null}
               {editingHistoryId ? (
                 <button
                   type="button"
@@ -2823,7 +3084,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
             ) : null}
           </form>
 
-          <div className="cafe-form-panel mp-panel">
+          {!isBeginner ? (
+          <div className="cafe-form-panel mp-panel mp-advanced-only">
             <div className="mp-media-head">
               <h3>Пакетная выгрузка</h3>
               <button type="button" className="mp-plus-btn" title="Добавить строку" onClick={() => setBatch((rows) => [...rows, emptyProduct()])}>
@@ -2883,6 +3145,11 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
               )}
             </div>
           </div>
+          ) : (
+            <p className="muted small mp-beginner-hint">
+              Пакетная выгрузка, CSV и шаблоны — в режиме «Все функции».
+            </p>
+          )}
         </div>
       )}
 
@@ -3145,6 +3412,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
             </div>
           )}
 
+          {!isBeginner ? (
+          <>
           <div className="cafe-form-panel">
             <h3>Контроль цены и алерты</h3>
             <p className="muted small">
@@ -3613,11 +3882,98 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
               ))}
             </div>
           </div>
+          </>
+          ) : (
+            <div className="cafe-form-panel">
+              <p className="muted small">
+                Цены, остатки, вебхуки, шаблоны ответов и пакетные операции — в режиме «Все функции».
+              </p>
+              <button type="button" className="mp-btn" onClick={() => switchUiMode("advanced")}>
+                Показать все функции
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {tab === "orders" && (
+      {(tab === "orders" || tab === "today") && (
         <div className="cafe-form-panel mp-panel">
+          {tab === "today" ? (
+            <div className="mp-today-intro">
+              <h3>Дневной путь</h3>
+              <ol className="mp-today-steps">
+                {mp === "ozon" ? (
+                  <>
+                    <li>
+                      <strong>Заказы</strong> — загрузите FBS-отправления
+                    </li>
+                    <li>
+                      <strong>Сборка</strong> — «Собрать», затем через ~1 мин
+                    </li>
+                    <li>
+                      <strong>Этикетки</strong> — печать PDF на отправление
+                    </li>
+                  </>
+                ) : (
+                  <>
+                    <li>
+                      <strong>Поставка</strong> — создайте или выберите ниже
+                    </li>
+                    <li>
+                      <strong>Заказы</strong> — «В поставку» по сборочным заданиям
+                    </li>
+                    <li>
+                      <strong>Отгрузка</strong> — «В доставку» у поставки
+                    </li>
+                  </>
+                )}
+              </ol>
+            </div>
+          ) : null}
+          {tab === "today" && mp === "wildberries" ? (
+            <div className="mp-today-supplies">
+              <h4>Поставки WB</h4>
+              <div className="mp-warehouse-bar">
+                <label>
+                  Новая поставка
+                  <input
+                    value={supplyName}
+                    onChange={(e) => setSupplyName(e.target.value)}
+                    placeholder={`Поставка ${new Date().toLocaleDateString("ru-RU")}`}
+                  />
+                </label>
+                <button type="button" className="mp-btn mp-btn-primary" disabled={busy === "supply-create"} onClick={createSupply}>
+                  {busy === "supply-create" ? "…" : "Создать"}
+                </button>
+                <button type="button" className="mp-btn" disabled={busy === "supplies"} onClick={loadSupplies}>
+                  Обновить
+                </button>
+              </div>
+              {supplyRows.filter((s) => !s.done).length ? (
+                <ul className="mp-today-supply-list">
+                  {supplyRows
+                    .filter((s) => !s.done)
+                    .slice(0, 6)
+                    .map((row) => (
+                      <li key={row.key}>
+                        <button
+                          type="button"
+                          className={`mp-btn${selectedSupplyId === row.id ? " mp-btn-primary" : ""}`}
+                          onClick={() => setSelectedSupplyId(row.id)}
+                        >
+                          {row.name || row.id}
+                        </button>
+                        <button type="button" className="mp-btn" disabled={busy === "supply-deliver"} onClick={() => deliverSupply(row.id)}>
+                          В доставку
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              ) : (
+                <p className="muted small">Открытых поставок нет — создайте первую.</p>
+              )}
+            </div>
+          ) : null}
           <div className="mp-warehouse-bar">
             <label>
               Склад
@@ -3657,10 +4013,12 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
             <button type="button" className="mp-btn mp-btn-primary" disabled={busy === "orders"} onClick={loadOrders}>
               Загрузить заказы
             </button>
-            <button type="button" className="mp-btn" disabled={!orderRows.length} onClick={exportOrdersCsv}>
-              Экспорт CSV
-            </button>
-            {mp === "wildberries" ? (
+            {!isBeginner ? (
+              <button type="button" className="mp-btn" disabled={!orderRows.length} onClick={exportOrdersCsv}>
+                Экспорт CSV
+              </button>
+            ) : null}
+            {mp === "wildberries" && !isBeginner ? (
               <button type="button" className="mp-btn" disabled={busy === "supplies"} onClick={loadSupplies}>
                 Обновить поставки
               </button>
@@ -3687,7 +4045,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
           <p className="muted small">
             {mp === "ozon"
               ? "FBS: «Собрать» → через ~1 мин «Этикетка». Склад фильтрует список отправлений."
-              : "WB: новые сборочные задания. Выберите поставку и нажмите «В поставку», затем закройте поставку во вкладке «Поставки»."}
+              : "WB: выберите поставку и нажмите «В поставку», затем «В доставку» у поставки выше."}
           </p>
           <div className="mp-table-wrap">
             <table className="mp-table">

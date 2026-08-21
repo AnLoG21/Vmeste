@@ -137,7 +137,13 @@ def _anon_busy_indexes(start, end, booked) -> set:
     return indexes
 
 
-def list_available_windows(provider_id: int, service_id: int, book_date, extra_minutes: int = 0) -> list[dict]:
+def list_available_windows(
+    provider_id: int,
+    service_id: int,
+    book_date,
+    extra_minutes: int = 0,
+    staff_id: int | None = None,
+) -> list[dict]:
     from .acquiring import expire_unpaid_bookings
 
     expire_unpaid_bookings(provider_id)
@@ -165,9 +171,15 @@ def list_available_windows(provider_id: int, service_id: int, book_date, extra_m
     windows = []
     now = timezone.now()
     allowed = _staff_ids_for_service(provider_id, service)
+    prefer_staff = int(staff_id) if staff_id not in (None, "", 0) else None
 
     named_slots = [s for s in slots if s.staff_id]
+    if prefer_staff is not None:
+        named_slots = [s for s in named_slots if int(s.staff_id) == prefer_staff]
     anon_slots = [s for s in slots if not s.staff_id]
+    if prefer_staff is not None:
+        # Master-first: only that master's named slots (no anonymous capacity).
+        anon_slots = []
 
     def _anon_allows_service(slot) -> bool:
         ids = getattr(slot, "service_ids", None) or []
@@ -235,7 +247,14 @@ def list_available_windows(provider_id: int, service_id: int, book_date, extra_m
     return windows
 
 
-def list_available_dates(provider_id: int, service_id: int, date_from, date_to, extra_minutes: int = 0) -> list[str]:
+def list_available_dates(
+    provider_id: int,
+    service_id: int,
+    date_from,
+    date_to,
+    extra_minutes: int = 0,
+    staff_id: int | None = None,
+) -> list[str]:
     """ISO dates in [date_from, date_to] that have at least one bookable window."""
     if date_from > date_to:
         date_from, date_to = date_to, date_from
@@ -250,7 +269,9 @@ def list_available_dates(provider_id: int, service_id: int, date_from, date_to, 
     )
     out = []
     for day in slot_days:
-        if list_available_windows(provider_id, service_id, day, extra_minutes=extra_minutes):
+        if list_available_windows(
+            provider_id, service_id, day, extra_minutes=extra_minutes, staff_id=staff_id
+        ):
             out.append(day.isoformat())
     return out
 

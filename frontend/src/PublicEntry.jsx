@@ -1,6 +1,7 @@
 import { Component, lazy, Suspense } from "react";
 import CookieConsentBanner from "./CookieConsentBanner.jsx";
 import CafeGuestPage from "./CafeGuestPage.jsx";
+import BookingWidgetPage from "./BookingWidgetPage.jsx";
 import { InspectionPublicPage } from "./InspectionApproveView.jsx";
 import BusinessesPage from "./legal/BusinessesPage.jsx";
 import CityPage from "./legal/CityPage.jsx";
@@ -87,6 +88,7 @@ export default function PublicEntry() {
   const path = normalizePath(window.location.pathname);
   const LegalPage = LEGAL_ROUTES[path];
   const orgMatch = path.match(/^\/o\/([^/]+)$/);
+  const widgetMatch = path.match(/^\/w\/([^/]+)$/);
   const tableMatch = path.match(/^\/t\/([^/]+)$/);
   const menuMatch = path.match(/^\/m\/([^/]+)$/);
   const inspectionMatch = path.match(/^\/i\/([^/]+)$/);
@@ -96,6 +98,7 @@ export default function PublicEntry() {
   let content;
   if (appView) content = <LazyApp />;
   else if (LegalPage) content = <LegalPage />;
+  else if (widgetMatch) content = <BookingWidgetPage slug={decodeURIComponent(widgetMatch[1])} />;
   else if (orgMatch) content = <PublicOrgPage slug={decodeURIComponent(orgMatch[1])} />;
   else if (inspectionMatch) content = <InspectionPublicPage token={decodeURIComponent(inspectionMatch[1])} />;
   else if (tableMatch) content = <CafeGuestPage mode="table" keyId={decodeURIComponent(tableMatch[1])} />;

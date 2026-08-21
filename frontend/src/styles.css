@@ -461,6 +461,17 @@ button:hover {
   min-width: 0;
 }
 
+.org-calendar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.org-calendar-actions .landing-btn {
+  text-decoration: none;
+}
+
 .org-calendar-block .ghost-btn {
   margin-top: 4px;
 }
@@ -8855,6 +8866,68 @@ body.theme-dark .password-eye-btn:hover {
   color: #3d1a00;
 }
 
+.client-book-staff-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.client-book-staff-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid #d6d3d1;
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+  color: inherit;
+}
+
+.client-book-staff-chip.is-on {
+  border-color: #9a3412;
+  background: #fff7ed;
+  color: #7c2d12;
+}
+
+.client-book-staff-job {
+  font-size: 0.72rem;
+  color: #78716c;
+}
+
+.org-widget-embed {
+  margin: 12px 0 20px;
+  padding: 12px 14px;
+  border: 1px dashed #d6d3d1;
+  border-radius: 12px;
+  background: #fafaf9;
+}
+
+.org-widget-code {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  resize: vertical;
+}
+
+.salon-loyalty-panel {
+  grid-column: 1 / -1;
+}
+
+.salon-package-list {
+  margin: 0 0 12px;
+  padding-left: 1.1rem;
+}
+
+.form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .interval-staff-groups {
   display: grid;
   gap: 14px;
@@ -9086,6 +9159,26 @@ body.theme-dark .password-eye-btn:hover {
 .inspection-badge--approved {
   background: rgba(46, 125, 50, 0.15);
   color: #2e7d32;
+}
+
+.inspection-badge--repair-in_progress {
+  background: rgba(25, 118, 210, 0.14);
+  color: #1565c0;
+  margin-left: 6px;
+}
+
+.inspection-badge--repair-ready {
+  background: rgba(46, 125, 50, 0.22);
+  color: #1b5e20;
+  margin-left: 6px;
+}
+
+.inspection-repair-actions {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .inspection-items {

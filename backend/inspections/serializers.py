@@ -63,6 +63,7 @@ class InspectionReportSerializer(serializers.ModelSerializer):
     organization_name = serializers.SerializerMethodField()
     public_url = serializers.SerializerMethodField()
     share_token = serializers.UUIDField(read_only=True)
+    booking_summary = serializers.SerializerMethodField()
 
     class Meta:
         model = InspectionReport
@@ -71,12 +72,14 @@ class InspectionReportSerializer(serializers.ModelSerializer):
             "provider",
             "client",
             "booking",
+            "booking_summary",
             "created_by",
             "vehicle_title",
             "vehicle_plate",
             "vehicle_vin",
             "notes",
             "status",
+            "repair_status",
             "share_token",
             "public_url",
             "parts_total",
@@ -84,6 +87,7 @@ class InspectionReportSerializer(serializers.ModelSerializer):
             "grand_total",
             "sent_at",
             "approved_at",
+            "repair_status_updated_at",
             "created_at",
             "updated_at",
             "client_display_name",
@@ -94,6 +98,7 @@ class InspectionReportSerializer(serializers.ModelSerializer):
             "provider",
             "created_by",
             "status",
+            "repair_status",
             "share_token",
             "public_url",
             "parts_total",
@@ -101,10 +106,12 @@ class InspectionReportSerializer(serializers.ModelSerializer):
             "grand_total",
             "sent_at",
             "approved_at",
+            "repair_status_updated_at",
             "created_at",
             "updated_at",
             "client_display_name",
             "organization_name",
+            "booking_summary",
             "items",
         ]
 
@@ -120,6 +127,19 @@ class InspectionReportSerializer(serializers.ModelSerializer):
         from .services import public_url_for
 
         return public_url_for(obj)
+
+    def get_booking_summary(self, obj):
+        booking = getattr(obj, "booking", None)
+        if not booking:
+            return None
+        slot = getattr(booking, "slot", None)
+        starts = getattr(slot, "starts_at", None)
+        return {
+            "id": booking.id,
+            "service_name": getattr(getattr(booking, "service", None), "name", None) or "",
+            "status": booking.status,
+            "starts_at": starts.isoformat() if starts else None,
+        }
 
 
 class InspectionReportCreateSerializer(serializers.Serializer):

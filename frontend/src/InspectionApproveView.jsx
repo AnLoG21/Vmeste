@@ -239,7 +239,11 @@ export default function InspectionApproveView({
     const data = await res.json();
     setReport(data);
     setSelected(new Set((data.items || []).filter((i) => i.client_selected).map((i) => i.id)));
-    setStatus("Ремонт утверждён. Сервис получил уведомление.");
+    setStatus(
+      data.repair_status === "in_progress"
+        ? "Ремонт утверждён. Статус: в работе."
+        : "Ремонт утверждён. Автосервис получил уведомление.",
+    );
     onApproved?.(data);
   }
 
@@ -322,13 +326,29 @@ export default function InspectionApproveView({
         </button>
       ) : null}
       <header className="inspection-approve-head">
-        <p className="muted small">{report.organization_name || "Сервисный центр"}</p>
+        <p className="muted small">{report.organization_name || "Автосервис"}</p>
         <h1>Согласование работ</h1>
         <p className="inspection-approve-vehicle">
-          {[report.vehicle_title, report.vehicle_plate].filter(Boolean).join(" · ") || "Автомобиль"}
+          {[report.vehicle_title, report.vehicle_plate, report.vehicle_vin ? `VIN ${report.vehicle_vin}` : ""]
+            .filter(Boolean)
+            .join(" · ") || "Автомобиль"}
         </p>
+        {report.booking_summary ? (
+          <p className="muted small">
+            По записи
+            {report.booking_summary.service_name ? `: ${report.booking_summary.service_name}` : ""}
+          </p>
+        ) : null}
         {report.status === "approved" && (
-          <p className="inspection-badge inspection-badge--approved">Утверждено</p>
+          <>
+            <p className="inspection-badge inspection-badge--approved">Утверждено</p>
+            {report.repair_status === "in_progress" ? (
+              <p className="inspection-badge inspection-badge--repair-in_progress">В работе</p>
+            ) : null}
+            {report.repair_status === "ready" ? (
+              <p className="inspection-badge inspection-badge--repair-ready">Готов</p>
+            ) : null}
+          </>
         )}
       </header>
 

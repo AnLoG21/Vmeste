@@ -88,6 +88,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "booking.widget_iframe.AllowWidgetIframeMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -208,6 +209,10 @@ CELERY_BEAT_SCHEDULE = {
     "booking-reminders-every-10-min": {
         "task": "booking.send_booking_reminders",
         "schedule": 600.0,
+    },
+    "booking-winback-daily": {
+        "task": "booking.send_winback_reminders",
+        "schedule": 3600.0 * 6,
     },
     "telegram-poll-every-8-sec": {
         "task": "notifications.poll_telegram",

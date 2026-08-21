@@ -7,6 +7,11 @@ const STATUS_LABELS = {
   cancelled: "Отменён",
 };
 
+const REPAIR_STATUS_LABELS = {
+  in_progress: "В работе",
+  ready: "Готов",
+};
+
 export default function ClientInspectionsPanel({
   authFetch,
   API_URL,
@@ -75,8 +80,10 @@ export default function ClientInspectionsPanel({
       <div className="inspection-workspace-head">
         {embedded ? null : (
         <div>
-          <h2>Согласование диагностики</h2>
-          <p className="muted small">Отчёты сервисных центров: отметьте работы и утвердите ремонт.</p>
+          <h2>Диагностика и ремонт</h2>
+          <p className="muted small">
+            Согласуйте работы по авто и следите за статусом: в работе / готов.
+          </p>
         </div>
         )}
         {onBackToChats && !embedded ? (
@@ -90,16 +97,26 @@ export default function ClientInspectionsPanel({
         <p className="muted">Пока нет отчётов на согласование.</p>
       ) : (
         <ul className="inspection-list">
-          {list.map((r) => (
-            <li key={r.id}>
-              <button type="button" className="inspection-list-item" onClick={() => setSelected(r)}>
-                <strong>
-                  {r.organization_name || "Сервис"} · {r.vehicle_title || r.vehicle_plate || `Отчёт #${r.id}`}
-                </strong>
-                <span className="muted small">{STATUS_LABELS[r.status] || r.status}</span>
-              </button>
-            </li>
-          ))}
+          {list.map((r) => {
+            const repair =
+              r.status === "approved" && r.repair_status && r.repair_status !== "none"
+                ? REPAIR_STATUS_LABELS[r.repair_status] || r.repair_status
+                : "";
+            return (
+              <li key={r.id}>
+                <button type="button" className="inspection-list-item" onClick={() => setSelected(r)}>
+                  <strong>
+                    {r.organization_name || "Автосервис"} · {r.vehicle_title || r.vehicle_plate || `Отчёт #${r.id}`}
+                  </strong>
+                  <span className="muted small">
+                    {STATUS_LABELS[r.status] || r.status}
+                    {repair ? ` · ${repair}` : ""}
+                    {r.booking ? " · по записи" : ""}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

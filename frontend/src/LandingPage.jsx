@@ -393,8 +393,8 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               <span className="landing-biz-emoji" aria-hidden="true">
                 🔧
               </span>
-              <strong>Сервисные центры</strong>
-              <span>Диагностика и ремонт</span>
+              <strong>Автосервисы</strong>
+              <span>VIN, приёмка, статусы ремонта</span>
               <span className="landing-biz-link">Подробнее →</span>
             </a>
             <a className="landing-biz-card" href="/businesses#cafe_restaurant">
@@ -448,8 +448,8 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
                   <strong>Уведомления в кабинете и push</strong> — статусы записей под рукой.
                 </li>
                 <li>
-                  <strong>Автонапоминания «не был 4 недели»</strong>, кэшбэк и бонусы — в планах и
-                  доступны как кастом при автоматизации.
+                  <strong>Автонапоминания «давно не был»</strong>, абонементы и баллы лояльности —
+                  в кабинете салона.
                 </li>
               </ul>
             </article>
@@ -694,8 +694,6 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
                 <li>Несколько филиалов у одной организации</li>
                 <li>Интеграции: 1С, CRM, телефония; двусторонняя переписка в мессенджерах</li>
                 <li>Новые сферы бизнеса и отраслевые шаблоны</li>
-                <li>Программа лояльности и абонементы для клиентов</li>
-                <li>Онлайн-запись через виджет на сайте организации</li>
                 <li>Расширенная автоматизация под ключ для крупного бизнеса</li>
               </ul>
             </article>

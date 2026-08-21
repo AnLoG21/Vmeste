@@ -88,6 +88,38 @@ def notify_inspection_approved(report: InspectionReport) -> None:
     )
 
 
+def notify_repair_status(report: InspectionReport) -> None:
+    from notifications.models import InAppNotification
+    from notifications.push import notify_users
+
+    if report.repair_status == InspectionReport.RepairStatus.IN_PROGRESS:
+        title = "Ремонт в работе"
+        body = "Автосервис приступил к согласованным работам."
+    elif report.repair_status == InspectionReport.RepairStatus.READY:
+        title = "Авто готово"
+        body = "Ремонт завершён — можно забирать автомобиль."
+    else:
+        return
+    org = (getattr(report.provider, "organization_name", None) or report.provider.username or "Автосервис").strip()
+    vehicle = (report.vehicle_title or report.vehicle_plate or "").strip()
+    if vehicle:
+        body = f"{org} · {vehicle}: {body}"
+    else:
+        body = f"{org}: {body}"
+    notify_users(
+        [report.client_id],
+        kind=InAppNotification.Kind.INSPECTION,
+        title=title,
+        body=body[:240],
+        payload={
+            "inspection_id": str(report.id),
+            "share_token": str(report.share_token),
+            "view": "inspections",
+            "repair_status": report.repair_status,
+        },
+    )
+
+
 @transaction.atomic
 def send_report(report: InspectionReport) -> InspectionReport:
     if report.status != InspectionReport.Status.DRAFT:
@@ -115,10 +147,16 @@ def approve_report(report: InspectionReport, selected_item_ids: list[int]) -> In
     recalculate_totals(report, selected_only=True)
     report.status = InspectionReport.Status.APPROVED
     report.approved_at = timezone.now()
+    # After approval, repair starts as «в работе» by default unless already set.
+    if report.repair_status == InspectionReport.RepairStatus.NONE:
+        report.repair_status = InspectionReport.RepairStatus.IN_PROGRESS
+        report.repair_status_updated_at = timezone.now()
     report.save(
         update_fields=[
             "status",
             "approved_at",
+            "repair_status",
+            "repair_status_updated_at",
             "parts_total",
             "labor_total",
             "grand_total",
@@ -126,4 +164,21 @@ def approve_report(report: InspectionReport, selected_item_ids: list[int]) -> In
         ]
     )
     notify_inspection_approved(report)
+    notify_repair_status(report)
+    return report
+
+
+@transaction.atomic
+def set_repair_status(report: InspectionReport, repair_status: str) -> InspectionReport:
+    if report.status != InspectionReport.Status.APPROVED:
+        raise ValueError("Статус ремонта можно менять только после утверждения клиентом.")
+    allowed = {c[0] for c in InspectionReport.RepairStatus.choices}
+    if repair_status not in allowed or repair_status == InspectionReport.RepairStatus.NONE:
+        raise ValueError("Укажите статус: в работе или готов.")
+    if report.repair_status == repair_status:
+        return report
+    report.repair_status = repair_status
+    report.repair_status_updated_at = timezone.now()
+    report.save(update_fields=["repair_status", "repair_status_updated_at", "updated_at"])
+    notify_repair_status(report)
     return report

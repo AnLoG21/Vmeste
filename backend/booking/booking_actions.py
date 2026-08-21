@@ -162,6 +162,13 @@ def mark_booking_done(booking, actor):
     text = msg_tpl.replace("{date}", format_booking_when(booking))
     post_booking_message(provider, booking.client, text, sender=actor)
     try:
+        from .loyalty import award_loyalty_for_visit, consume_package_visit
+
+        consume_package_visit(booking)
+        award_loyalty_for_visit(booking)
+    except Exception:
+        pass
+    try:
         from notifications.delivery import deliver_booking_event
 
         deliver_booking_event(

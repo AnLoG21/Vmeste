@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { loadYandexMaps } from "./yandexMapsLoader.js";
+import { reverseGeocodeLatLon } from "./addressSuggest.js";
 
 function pointInPolygon(lat, lon, polygon) {
   if (!polygon || polygon.length < 3) return false;
@@ -48,7 +49,9 @@ export default function CafeGuestDeliveryMap({
   const zonesRef = useRef(zones);
   const [error, setError] = useState("");
   const [hint, setHint] = useState(
-    (zones || []).length ? "Нажмите на карту внутри зоны доставки или выберите адрес выше" : "Укажите точку на карте или адрес выше",
+    (zones || []).length
+      ? "Нажмите на карту внутри зоны доставки или выберите адрес выше"
+      : "Укажите точку на карте или адрес выше",
   );
 
   useEffect(() => {
@@ -58,16 +61,21 @@ export default function CafeGuestDeliveryMap({
     zonesRef.current = zones;
   }, [zones]);
 
-  function emitPick(lat, lon, address) {
+  function emitPick(lat, lon, address, outside) {
     const zone = findZoneAt(lat, lon, zonesRef.current);
     const hasZones = (zonesRef.current || []).length > 0;
-    if (hasZones && !zone) {
+    const isOutside = Boolean(outside) || (hasZones && !zone);
+    if (isOutside) {
       setHint("Точка вне зоны доставки — выберите место внутри цветной области");
-      onPickRef.current?.({ lat, lon, zone: null, address, outside: true });
+      onPickRef.current?.({ lat, lon, zone: null, address: address || "", outside: true });
       return;
     }
-    setHint(zone ? `Зона «${zone.name}»: доставка ${Number(zone.fee || 0).toLocaleString("ru-RU")} ₽` : "Точка выбрана");
-    onPickRef.current?.({ lat, lon, zone: zone || null, address, outside: false });
+    setHint(
+      zone
+        ? `Зона «${zone.name}»: доставка ${Number(zone.fee || 0).toLocaleString("ru-RU")} ₽`
+        : "Точка выбрана",
+    );
+    onPickRef.current?.({ lat, lon, zone: zone || null, address: address || "", outside: false });
   }
 
   useEffect(() => {
@@ -102,14 +110,8 @@ export default function CafeGuestDeliveryMap({
           });
 
           async function handleCoords(lat, lon) {
-            let address = "";
-            try {
-              const res = await ymaps.geocode([lat, lon], { results: 1 });
-              const first = res.geoObjects.get(0);
-              address = String(first?.getAddressLine?.() || first?.properties?.get?.("text") || "").trim();
-            } catch {
-              /* ignore */
-            }
+            const address = await reverseGeocodeLatLon(lat, lon);
+            if (cancelled) return;
             setPinOnMap(ymaps, map, pinRef, lat, lon);
             pinRef.current.events.add("dragend", () => {
               const coords = pinRef.current.geometry.getCoordinates();
@@ -162,17 +164,9 @@ export default function CafeGuestDeliveryMap({
     map.setCenter([pin.lat, pin.lon], Math.max(map.getZoom(), 15));
     pinRef.current.events.add("dragend", () => {
       const coords = pinRef.current.geometry.getCoordinates();
-      (async () => {
-        let address = "";
-        try {
-          const res = await ymaps.geocode(coords, { results: 1 });
-          const first = res.geoObjects.get(0);
-          address = String(first?.getAddressLine?.() || "").trim();
-        } catch {
-          /* ignore */
-        }
+      reverseGeocodeLatLon(coords[0], coords[1]).then((address) => {
         emitPick(coords[0], coords[1], address);
-      })();
+      });
     });
     const zone = findZoneAt(pin.lat, pin.lon, zones);
     if (zone) setHint(`Зона «${zone.name}»: доставка ${Number(zone.fee || 0).toLocaleString("ru-RU")} ₽`);

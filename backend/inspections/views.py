@@ -20,7 +20,7 @@ from .serializers import (
     InspectionReportCreateSerializer,
     InspectionReportSerializer,
 )
-from .services import approve_report, send_report
+from .services import approve_report, send_report, set_repair_status
 
 
 def _provider_for_user(user):
@@ -62,7 +62,7 @@ def _can_manage_reports(user) -> bool:
 
 def _report_qs():
     return InspectionReport.objects.select_related(
-        "provider", "client", "booking", "created_by"
+        "provider", "client", "booking", "booking__slot", "booking__service", "created_by"
     ).prefetch_related(
         Prefetch(
             "items",
@@ -168,6 +168,19 @@ class InspectionReportViewSet(viewsets.ModelViewSet):
             return Response({"selected_item_ids": ["Некорректный список."]}, status=status.HTTP_400_BAD_REQUEST)
         try:
             approve_report(report, ids)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        report.refresh_from_db()
+        return Response(InspectionReportSerializer(report, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="repair-status")
+    def repair_status(self, request, pk=None):
+        report = self.get_object()
+        if not _can_manage_reports(request.user):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        value = (request.data.get("repair_status") or request.data.get("status") or "").strip()
+        try:
+            set_repair_status(report, value)
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         report.refresh_from_db()

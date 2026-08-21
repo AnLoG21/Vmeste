@@ -168,6 +168,10 @@ DEFAULT_REMINDER_TEMPLATE = (
     "Напоминание: запись в {org} на {service} — {date}. Ждём вас! Вместе"
 )
 DEFAULT_NEW_BOOKING_TEMPLATE = "Новая запись в {org}: {service} — {date}."
+DEFAULT_WINBACK_TEMPLATE = (
+    "Давно не виделись в {org}! Последний визит был {weeks} нед. назад. "
+    "Запишитесь снова — мы будем рады. Вместе"
+)
 
 
 class ProviderMessagingSettings(models.Model):
@@ -179,6 +183,15 @@ class ProviderMessagingSettings(models.Model):
     remind_clients = models.BooleanField(default=True)
     remind_org = models.BooleanField(default=True)
     notify_org_on_new = models.BooleanField(default=True)
+    winback_enabled = models.BooleanField(
+        default=False,
+        help_text="Напоминать клиентам, которые давно не были.",
+    )
+    winback_weeks = models.PositiveSmallIntegerField(
+        default=4,
+        help_text="Сколько недель без визита, чтобы отправить напоминание.",
+    )
+    winback_template = models.TextField(blank=True, default="")
     enable_telegram = models.BooleanField(default=False)
     enable_max = models.BooleanField(default=False)
     enable_whatsapp = models.BooleanField(default=False)
@@ -201,6 +214,9 @@ class ProviderMessagingSettings(models.Model):
 
     def new_booking_text(self) -> str:
         return (self.new_booking_template or "").strip() or DEFAULT_NEW_BOOKING_TEMPLATE
+
+    def winback_text(self) -> str:
+        return (self.winback_template or "").strip() or DEFAULT_WINBACK_TEMPLATE
 
     def resolved_telegram_bot_token(self) -> str:
         """Org token, else platform TELEGRAM_BOT_TOKEN from .env."""
@@ -270,3 +286,153 @@ class ProviderStaffPortfolioPhoto(models.Model):
     )
     image = models.ImageField(upload_to="staff_portfolio_photos/%Y/%m/")
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class WinbackReminderLog(models.Model):
+    """Last win-back reminder per (provider, client) to avoid spam."""
+
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="winback_logs",
+    )
+    client = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="winback_received",
+    )
+    last_sent_at = models.DateTimeField(auto_now=True)
+    weeks_at_send = models.PositiveSmallIntegerField(default=4)
+
+    class Meta:
+        unique_together = [("provider", "client")]
+
+
+class VisitPackage(models.Model):
+    """Абонемент / пакет визитов (шаблон, который продаёт салон)."""
+
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="visit_packages",
+    )
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True, default="")
+    visits_count = models.PositiveSmallIntegerField(default=5)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    validity_days = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Срок действия с покупки, дней. Пусто — без срока.",
+    )
+    services = models.ManyToManyField(
+        "catalog.Service",
+        blank=True,
+        related_name="visit_packages",
+        help_text="Пусто — любой визит к этой организации.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+
+class ClientPackage(models.Model):
+    """Купленный абонемент клиента."""
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Активен"
+        EXHAUSTED = "exhausted", "Израсходован"
+        EXPIRED = "expired", "Истёк"
+        CANCELLED = "cancelled", "Отменён"
+
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="client_packages",
+    )
+    client = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="owned_packages",
+    )
+    package = models.ForeignKey(
+        VisitPackage,
+        on_delete=models.PROTECT,
+        related_name="purchases",
+    )
+    visits_total = models.PositiveSmallIntegerField()
+    visits_remaining = models.PositiveSmallIntegerField()
+    purchased_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    note = models.CharField(max_length=250, blank=True, default="")
+
+    class Meta:
+        ordering = ["-purchased_at"]
+
+
+class LoyaltySettings(models.Model):
+    provider = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="loyalty_settings",
+    )
+    enabled = models.BooleanField(default=False)
+    points_per_visit = models.PositiveIntegerField(
+        default=1,
+        help_text="Баллы за каждый завершённый визит.",
+    )
+    points_per_100_rub = models.PositiveIntegerField(
+        default=0,
+        help_text="Доп. баллы за каждые 100 ₽ чека (0 — выкл).",
+    )
+    rub_per_point = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=1,
+        help_text="Сколько рублей скидки даёт 1 балл при списании.",
+    )
+    welcome_bonus = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class LoyaltyAccount(models.Model):
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="loyalty_accounts",
+    )
+    client = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="loyalty_balances",
+    )
+    balance = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("provider", "client")]
+
+
+class LoyaltyLedger(models.Model):
+    account = models.ForeignKey(
+        LoyaltyAccount,
+        on_delete=models.CASCADE,
+        related_name="entries",
+    )
+    delta = models.IntegerField()
+    reason = models.CharField(max_length=64)
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="loyalty_entries",
+    )
+    note = models.CharField(max_length=250, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]

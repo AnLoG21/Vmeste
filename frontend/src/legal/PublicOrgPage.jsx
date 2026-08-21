@@ -202,8 +202,8 @@ export default function PublicOrgPage({ slug }) {
               Открыть меню
             </a>
           ) : (
-            <a className="landing-btn landing-btn--primary" href="/businesses">
-              Онлайн-запись на Вместе
+            <a className="landing-btn landing-btn--primary" href={`/w/${org.slug}`}>
+              Онлайн-запись
             </a>
           )}
           <a className="landing-btn landing-btn--outline" href="/">
