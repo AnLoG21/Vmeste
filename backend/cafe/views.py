@@ -892,6 +892,10 @@ class CafeGuestOrderCreateView(APIView):
         guest_email = (request.data.get("guest_email") or "").strip().lower()
         guest_name = (request.data.get("guest_name") or "").strip()
         delivery_address = (request.data.get("delivery_address") or "").strip()
+        delivery_apartment = (request.data.get("delivery_apartment") or "").strip()[:32]
+        delivery_entrance = (request.data.get("delivery_entrance") or "").strip()[:32]
+        delivery_intercom = (request.data.get("delivery_intercom") or "").strip()[:64]
+        delivery_private_house = bool(request.data.get("delivery_private_house"))
         include_service_charge = bool(request.data.get("include_service_charge", True))
         tip_custom = bool(request.data.get("tip_custom"))
         try:
@@ -906,6 +910,11 @@ class CafeGuestOrderCreateView(APIView):
             tip_amount_raw = Decimal("0")
         if mode == CafeOrder.Mode.DELIVERY and not delivery_address:
             return Response({"delivery_address": ["Укажите адрес доставки."]}, status=status.HTTP_400_BAD_REQUEST)
+        if mode == CafeOrder.Mode.DELIVERY and not delivery_private_house and not delivery_apartment:
+            return Response(
+                {"delivery_apartment": ["Укажите квартиру или отметьте «частный дом»."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if mode in (CafeOrder.Mode.TAKEAWAY, CafeOrder.Mode.DELIVERY) and not guest_phone:
             return Response({"guest_phone": ["Укажите телефон."]}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -919,6 +928,10 @@ class CafeGuestOrderCreateView(APIView):
                 guest_phone=guest_phone,
                 guest_email=guest_email,
                 delivery_address=delivery_address,
+                delivery_apartment="" if delivery_private_house else delivery_apartment,
+                delivery_entrance="" if delivery_private_house else delivery_entrance,
+                delivery_intercom="" if delivery_private_house else delivery_intercom,
+                delivery_private_house=delivery_private_house,
                 comment=(request.data.get("comment") or "").strip()[:1000],
                 guest_session_token=sess.token,
                 include_service_charge=include_service_charge,

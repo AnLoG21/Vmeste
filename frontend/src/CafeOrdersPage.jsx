@@ -452,6 +452,19 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                 <p>
                   <strong>Адрес:</strong> {o.delivery_address}
                 </p>
+                {o.delivery_private_house ? (
+                  <p className="muted small">Частный дом</p>
+                ) : (
+                  <p className="muted small">
+                    {[
+                      o.delivery_apartment ? `кв. ${o.delivery_apartment}` : null,
+                      o.delivery_entrance ? `подъезд ${o.delivery_entrance}` : null,
+                      o.delivery_intercom ? `домофон ${o.delivery_intercom}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || null}
+                  </p>
+                )}
                 {o.delivery_fee != null ? (
                   <p className="muted small">Доставка: {Number(o.delivery_fee).toLocaleString("ru-RU")} ₽</p>
                 ) : null}

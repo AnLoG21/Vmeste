@@ -91,6 +91,10 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryPin, setDeliveryPin] = useState(null);
   const [deliveryZone, setDeliveryZone] = useState(null);
+  const [deliveryPrivateHouse, setDeliveryPrivateHouse] = useState(false);
+  const [deliveryApartment, setDeliveryApartment] = useState("");
+  const [deliveryEntrance, setDeliveryEntrance] = useState("");
+  const [deliveryIntercom, setDeliveryIntercom] = useState("");
   const [orderComment, setOrderComment] = useState("");
   const [tipPercent, setTipPercent] = useState(20);
   const [tipCustomMode, setTipCustomMode] = useState(false);
@@ -346,6 +350,10 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
     if (saved.guestEmail) setGuestEmail(saved.guestEmail);
     if (saved.deliveryAddress) setDeliveryAddress(saved.deliveryAddress);
     if (saved.deliveryPin) setDeliveryPin(saved.deliveryPin);
+    if (saved.deliveryPrivateHouse != null) setDeliveryPrivateHouse(Boolean(saved.deliveryPrivateHouse));
+    if (saved.deliveryApartment) setDeliveryApartment(saved.deliveryApartment);
+    if (saved.deliveryEntrance) setDeliveryEntrance(saved.deliveryEntrance);
+    if (saved.deliveryIntercom) setDeliveryIntercom(saved.deliveryIntercom);
     prefsLoadedRef.current = true;
   }, [prefsOrgKey]);
 
@@ -365,12 +373,27 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
         guestEmail,
         deliveryAddress,
         deliveryPin,
+        deliveryPrivateHouse,
+        deliveryApartment,
+        deliveryEntrance,
+        deliveryIntercom,
       });
     }, 400);
     return () => {
       if (prefsSaveTimer.current) clearTimeout(prefsSaveTimer.current);
     };
-  }, [prefsOrgKey, guestName, guestPhone, guestEmail, deliveryAddress, deliveryPin]);
+  }, [
+    prefsOrgKey,
+    guestName,
+    guestPhone,
+    guestEmail,
+    deliveryAddress,
+    deliveryPin,
+    deliveryPrivateHouse,
+    deliveryApartment,
+    deliveryEntrance,
+    deliveryIntercom,
+  ]);
 
   function addToCart(menuItemId, delta = 1) {
     setCart((prev) => {
@@ -532,6 +555,10 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
       setStatus(deliveryFeeError);
       return;
     }
+    if (modeOrder === "delivery" && !deliveryPrivateHouse && !String(deliveryApartment || "").trim()) {
+      setStatus("Укажите квартиру или отметьте «частный дом».");
+      return;
+    }
     if (!cartLines.length) {
       setStatus("Корзина пуста");
       return;
@@ -554,6 +581,10 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
         delivery_lat: deliveryPin?.lat,
         delivery_lon: deliveryPin?.lon,
         delivery_zone_id: deliveryZone?.id || "",
+        delivery_private_house: deliveryPrivateHouse,
+        delivery_apartment: deliveryPrivateHouse ? "" : deliveryApartment,
+        delivery_entrance: deliveryPrivateHouse ? "" : deliveryEntrance,
+        delivery_intercom: deliveryPrivateHouse ? "" : deliveryIntercom,
         comment: orderComment,
         items: cartLines.map((i) => ({
           menu_item: i.menuItemId,
@@ -564,7 +595,14 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setStatus(data.detail || data.items?.[0] || data.mode?.[0] || data.guest_email?.[0] || "Ошибка заказа");
+      setStatus(
+        data.detail ||
+          data.delivery_apartment?.[0] ||
+          data.items?.[0] ||
+          data.mode?.[0] ||
+          data.guest_email?.[0] ||
+          "Ошибка заказа",
+      );
       return;
     }
     setOrderResult(data);
@@ -575,6 +613,10 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
       guestEmail,
       deliveryAddress,
       deliveryPin,
+      deliveryPrivateHouse,
+      deliveryApartment,
+      deliveryEntrance,
+      deliveryIntercom,
     });
     if (data.confirmation_url) {
       window.location.href = data.confirmation_url;
@@ -979,8 +1021,37 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                         </p>
                       ) : null}
                     </div>
+                    <label className="checkbox cafe-delivery-house-toggle">
+                      <input
+                        type="checkbox"
+                        checked={deliveryPrivateHouse}
+                        onChange={(e) => setDeliveryPrivateHouse(e.target.checked)}
+                      />
+                      <span>Частный дом</span>
+                    </label>
+                    {!deliveryPrivateHouse ? (
+                      <div className="cafe-delivery-entry-fields">
+                        <input
+                          placeholder="Квартира *"
+                          value={deliveryApartment}
+                          onChange={(e) => setDeliveryApartment(e.target.value)}
+                          required={!deliveryPrivateHouse}
+                          autoComplete="address-line2"
+                        />
+                        <input
+                          placeholder="Подъезд"
+                          value={deliveryEntrance}
+                          onChange={(e) => setDeliveryEntrance(e.target.value)}
+                        />
+                        <input
+                          placeholder="Домофон"
+                          value={deliveryIntercom}
+                          onChange={(e) => setDeliveryIntercom(e.target.value)}
+                        />
+                      </div>
+                    ) : null}
                     <textarea
-                      placeholder="Комментарий к заказу (подъезд, домофон, пожелания…)"
+                      placeholder="Комментарий к заказу (пожелания…)"
                       value={orderComment}
                       onChange={(e) => setOrderComment(e.target.value)}
                       rows={2}

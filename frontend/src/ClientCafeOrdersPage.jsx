@@ -114,6 +114,19 @@ export default function ClientCafeOrdersPage({ authFetch, API_URL }) {
             <p>
               <strong>Адрес:</strong> {selected.delivery_address}
             </p>
+            {selected.delivery_private_house ? (
+              <p className="muted small">Частный дом</p>
+            ) : (
+              <p className="muted small">
+                {[
+                  selected.delivery_apartment ? `кв. ${selected.delivery_apartment}` : null,
+                  selected.delivery_entrance ? `подъезд ${selected.delivery_entrance}` : null,
+                  selected.delivery_intercom ? `домофон ${selected.delivery_intercom}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || null}
+              </p>
+            )}
             {selected.delivery_lat != null && selected.delivery_lon != null ? (
               <>
                 <CafeOrderMapPin
