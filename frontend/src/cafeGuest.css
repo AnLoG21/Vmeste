@@ -546,6 +546,40 @@
   overflow: hidden;
   background: #f3e8d8;
 }
+.cafe-guest-address {
+  position: relative;
+}
+.cafe-guest-suggest {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 4px;
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 220px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #ffd0a8;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(90, 40, 10, 0.12);
+}
+.cafe-guest-suggest-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font: inherit;
+  cursor: pointer;
+  color: #3d2412;
+}
+.cafe-guest-suggest-item:hover,
+.cafe-guest-suggest-item:focus {
+  background: #fff3e8;
+}
 .muted.small,
 .muted {
   font-size: 0.92rem;

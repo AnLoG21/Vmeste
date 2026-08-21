@@ -26,20 +26,49 @@ export function findZoneAt(lat, lon, zones) {
   return null;
 }
 
-/** Карта зон + выбор точки доставки для гостя. */
+function setPinOnMap(ymaps, map, pinRef, lat, lon) {
+  if (pinRef.current) map.geoObjects.remove(pinRef.current);
+  pinRef.current = new ymaps.Placemark([lat, lon], {}, { preset: "islands#orangeDotIcon", draggable: true });
+  map.geoObjects.add(pinRef.current);
+  return pinRef.current;
+}
+
+/** Карта зон + выбор точки доставки для гостя (клик / перенос метки). */
 export default function CafeGuestDeliveryMap({
   zones = [],
   centerLat = 55.751244,
   centerLon = 37.618423,
   pin,
   onPick,
-  address = "",
 }) {
   const hostRef = useRef(null);
   const mapRef = useRef(null);
   const pinRef = useRef(null);
+  const onPickRef = useRef(onPick);
+  const zonesRef = useRef(zones);
   const [error, setError] = useState("");
-  const [hint, setHint] = useState("Нажмите на карту внутри зоны доставки");
+  const [hint, setHint] = useState(
+    (zones || []).length ? "Нажмите на карту внутри зоны доставки или выберите адрес выше" : "Укажите точку на карте или адрес выше",
+  );
+
+  useEffect(() => {
+    onPickRef.current = onPick;
+  }, [onPick]);
+  useEffect(() => {
+    zonesRef.current = zones;
+  }, [zones]);
+
+  function emitPick(lat, lon, address) {
+    const zone = findZoneAt(lat, lon, zonesRef.current);
+    const hasZones = (zonesRef.current || []).length > 0;
+    if (hasZones && !zone) {
+      setHint("Точка вне зоны доставки — выберите место внутри цветной области");
+      onPickRef.current?.({ lat, lon, zone: null, address, outside: true });
+      return;
+    }
+    setHint(zone ? `Зона «${zone.name}»: доставка ${Number(zone.fee || 0).toLocaleString("ru-RU")} ₽` : "Точка выбрана");
+    onPickRef.current?.({ lat, lon, zone: zone || null, address, outside: false });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -49,8 +78,11 @@ export default function CafeGuestDeliveryMap({
         ymaps.ready(() => {
           if (cancelled || mapRef.current) return;
           const map = new ymaps.Map(hostRef.current, {
-            center: [Number(centerLat) || 55.751244, Number(centerLon) || 37.618423],
-            zoom: 13,
+            center: [
+              pin?.lat || Number(centerLat) || 55.751244,
+              pin?.lon || Number(centerLon) || 37.618423,
+            ],
+            zoom: pin ? 15 : 13,
             controls: ["zoomControl", "geolocationControl"],
           });
           (zones || []).forEach((z) => {
@@ -68,25 +100,41 @@ export default function CafeGuestDeliveryMap({
             );
             map.geoObjects.add(poly);
           });
+
+          async function handleCoords(lat, lon) {
+            let address = "";
+            try {
+              const res = await ymaps.geocode([lat, lon], { results: 1 });
+              const first = res.geoObjects.get(0);
+              address = String(first?.getAddressLine?.() || first?.properties?.get?.("text") || "").trim();
+            } catch {
+              /* ignore */
+            }
+            setPinOnMap(ymaps, map, pinRef, lat, lon);
+            pinRef.current.events.add("dragend", () => {
+              const coords = pinRef.current.geometry.getCoordinates();
+              handleCoords(coords[0], coords[1]);
+            });
+            emitPick(lat, lon, address);
+          }
+
           map.events.add("click", (e) => {
             const coords = e.get("coords");
-            const lat = coords[0];
-            const lon = coords[1];
-            const zone = findZoneAt(lat, lon, zones);
-            if (!zone && (zones || []).length) {
-              setHint("Точка вне зоны доставки — выберите место внутри цветной области");
-              return;
-            }
-            if (pinRef.current) map.geoObjects.remove(pinRef.current);
-            pinRef.current = new ymaps.Placemark([lat, lon], {}, { preset: "islands#orangeDotIcon" });
-            map.geoObjects.add(pinRef.current);
-            setHint(zone ? `Зона «${zone.name}»: доставка ${Number(zone.fee || 0).toLocaleString("ru-RU")} ₽` : "Точка выбрана");
-            onPick?.({ lat, lon, zone });
+            handleCoords(coords[0], coords[1]);
           });
+
+          if (pin?.lat != null && pin?.lon != null) {
+            setPinOnMap(ymaps, map, pinRef, pin.lat, pin.lon);
+            pinRef.current.events.add("dragend", () => {
+              const coords = pinRef.current.geometry.getCoordinates();
+              handleCoords(coords[0], coords[1]);
+            });
+          }
+
           mapRef.current = map;
         });
       })
-      .catch(() => setError("Карта недоступна — укажите адрес текстом, если зоны не обязательны."));
+      .catch(() => setError("Карта недоступна — укажите адрес текстом."));
     return () => {
       cancelled = true;
       if (mapRef.current) {
@@ -99,45 +147,38 @@ export default function CafeGuestDeliveryMap({
   }, []);
 
   useEffect(() => {
-    if (!mapRef.current || !window.ymaps || !pin) return;
-    const map = mapRef.current;
-    if (pinRef.current) map.geoObjects.remove(pinRef.current);
-    pinRef.current = new window.ymaps.Placemark([pin.lat, pin.lon], {}, { preset: "islands#orangeDotIcon" });
-    map.geoObjects.add(pinRef.current);
-  }, [pin]);
-
-  useEffect(() => {
     const ymaps = window.ymaps;
     const map = mapRef.current;
-    if (!ymaps || !map || !String(address || "").trim()) return undefined;
-    let cancelled = false;
-    const t = setTimeout(() => {
-      ymaps.geocode(String(address).trim(), { results: 1 }).then((res) => {
-        if (cancelled) return;
-        const first = res.geoObjects.get(0);
-        if (!first) return;
-        const coords = first.geometry.getCoordinates();
-        const lat = coords[0];
-        const lon = coords[1];
-        const zone = findZoneAt(lat, lon, zones);
-        if (!zone && (zones || []).length) {
-          setHint("Адрес вне зоны доставки");
-          onPick?.({ lat, lon, zone: null });
-          return;
+    if (!ymaps || !map || !pin || pin.lat == null || pin.lon == null) return;
+    const existing = pinRef.current?.geometry?.getCoordinates?.();
+    if (
+      existing &&
+      Math.abs(existing[0] - pin.lat) < 1e-6 &&
+      Math.abs(existing[1] - pin.lon) < 1e-6
+    ) {
+      return;
+    }
+    setPinOnMap(ymaps, map, pinRef, pin.lat, pin.lon);
+    map.setCenter([pin.lat, pin.lon], Math.max(map.getZoom(), 15));
+    pinRef.current.events.add("dragend", () => {
+      const coords = pinRef.current.geometry.getCoordinates();
+      (async () => {
+        let address = "";
+        try {
+          const res = await ymaps.geocode(coords, { results: 1 });
+          const first = res.geoObjects.get(0);
+          address = String(first?.getAddressLine?.() || "").trim();
+        } catch {
+          /* ignore */
         }
-        if (pinRef.current) map.geoObjects.remove(pinRef.current);
-        pinRef.current = new ymaps.Placemark([lat, lon], {}, { preset: "islands#orangeDotIcon" });
-        map.geoObjects.add(pinRef.current);
-        map.setCenter([lat, lon], 15);
-        setHint(zone ? `Зона «${zone.name}»` : "Адрес найден");
-        onPick?.({ lat, lon, zone });
-      });
-    }, 600);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [address, zones, onPick]);
+        emitPick(coords[0], coords[1], address);
+      })();
+    });
+    const zone = findZoneAt(pin.lat, pin.lon, zones);
+    if (zone) setHint(`Зона «${zone.name}»: доставка ${Number(zone.fee || 0).toLocaleString("ru-RU")} ₽`);
+    else if ((zones || []).length) setHint("Точка вне зоны доставки");
+    else setHint("Точка выбрана");
+  }, [pin, zones]);
 
   return (
     <div className="cafe-guest-delivery-map">

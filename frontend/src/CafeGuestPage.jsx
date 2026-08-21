@@ -1,11 +1,13 @@
 ﻿import logoMain from "./assets/logo-main.png";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_URL } from "./config.js";
 import JsonLd from "./seo/JsonLd.jsx";
 import { SITE_ORIGIN, breadcrumbListJsonLd } from "./seo/schema.js";
 import { setPageMeta } from "./seo/setPageMeta.js";
 import { getOrgWorkingHoursStatus, isOrganizationOpenNow } from "./clientOrgFeatures.js";
-import CafeGuestDeliveryMap from "./CafeGuestDeliveryMap.jsx";
+import CafeGuestDeliveryMap, { findZoneAt } from "./CafeGuestDeliveryMap.jsx";
+import CafeGuestAddressInput from "./CafeGuestAddressInput.jsx";
+import { loadGuestPrefs, saveGuestPrefs } from "./cafeGuestPrefs.js";
 import "./landing.css";
 import "./cafeGuest.css";
 
@@ -101,6 +103,8 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
   const [dinePin, setDinePin] = useState("");
   const [pendingDineIn, setPendingDineIn] = useState(false);
   const [waiterCallStatus, setWaiterCallStatus] = useState(""); // "", "sending", "ok", "err"
+  const prefsLoadedRef = useRef(false);
+  const prefsSaveTimer = useRef(null);
 
   const menuById = useMemo(() => {
     const map = {};
@@ -268,19 +272,81 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
       : 0;
   const deliveryZones = unlock?.delivery_zones || [];
   const needsDeliveryPin = modeOrder === "delivery" && deliveryZones.length > 0;
-  const onDeliveryPick = useCallback(
-    ({ lat, lon, zone }) => {
-      if (deliveryZones.length && !zone) {
-        setDeliveryPin(null);
-        setDeliveryZone(null);
-        return;
-      }
-      setDeliveryPin({ lat, lon });
-      setDeliveryZone(zone || null);
-    },
-    [deliveryZones.length],
-  );
+  const onDeliveryPick = useCallback(({ lat, lon, zone, address, outside }) => {
+    if (outside) {
+      setDeliveryPin(null);
+      setDeliveryZone(null);
+      return;
+    }
+    setDeliveryPin({ lat, lon });
+    setDeliveryZone(zone || null);
+    if (address) setDeliveryAddress(address);
+  }, []);
+
+  function applyDeliveryPlace({ address, lat, lon }) {
+    const zone = findZoneAt(lat, lon, deliveryZones);
+    if (deliveryZones.length && !zone) {
+      setDeliveryAddress(address || "");
+      setDeliveryPin(null);
+      setDeliveryZone(null);
+      setStatus("Адрес вне зоны доставки — выберите другой");
+      return;
+    }
+    setStatus("");
+    if (address) setDeliveryAddress(address);
+    setDeliveryPin({ lat, lon });
+    setDeliveryZone(zone || null);
+  }
+
   const grandTotal = cartTotal + tipAmount + deliveryAmount + serviceChargeAmount;
+
+  const prefsOrgKey = useMemo(() => {
+    return (
+      info?.provider_slug ||
+      unlock?.provider_slug ||
+      (mode === "org" ? keyId : "") ||
+      keyId ||
+      "cafe"
+    );
+  }, [info?.provider_slug, unlock?.provider_slug, mode, keyId]);
+
+  useEffect(() => {
+    if (prefsLoadedRef.current) return;
+    const saved = loadGuestPrefs(prefsOrgKey);
+    if (!saved) {
+      prefsLoadedRef.current = true;
+      return;
+    }
+    if (saved.guestName) setGuestName(saved.guestName);
+    if (saved.guestPhone) setGuestPhone(saved.guestPhone);
+    if (saved.guestEmail) setGuestEmail(saved.guestEmail);
+    if (saved.deliveryAddress) setDeliveryAddress(saved.deliveryAddress);
+    if (saved.deliveryPin) setDeliveryPin(saved.deliveryPin);
+    prefsLoadedRef.current = true;
+  }, [prefsOrgKey]);
+
+  useEffect(() => {
+    if (!deliveryPin || !deliveryZones.length) return;
+    const zone = findZoneAt(deliveryPin.lat, deliveryPin.lon, deliveryZones);
+    setDeliveryZone(zone || null);
+  }, [deliveryPin, deliveryZones]);
+
+  useEffect(() => {
+    if (!prefsLoadedRef.current) return;
+    if (prefsSaveTimer.current) clearTimeout(prefsSaveTimer.current);
+    prefsSaveTimer.current = setTimeout(() => {
+      saveGuestPrefs(prefsOrgKey, {
+        guestName,
+        guestPhone,
+        guestEmail,
+        deliveryAddress,
+        deliveryPin,
+      });
+    }, 400);
+    return () => {
+      if (prefsSaveTimer.current) clearTimeout(prefsSaveTimer.current);
+    };
+  }, [prefsOrgKey, guestName, guestPhone, guestEmail, deliveryAddress, deliveryPin]);
 
   function addToCart(menuItemId, delta = 1) {
     setCart((prev) => {
@@ -474,6 +540,13 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
     }
     setOrderResult(data);
     setStatus("");
+    saveGuestPrefs(prefsOrgKey, {
+      guestName,
+      guestPhone,
+      guestEmail,
+      deliveryAddress,
+      deliveryPin,
+    });
     if (data.confirmation_url) {
       window.location.href = data.confirmation_url;
       return;
@@ -796,8 +869,19 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                 </ul>
                 {(modeOrder === "takeaway" || modeOrder === "delivery") && (
                   <>
-                    <input placeholder="Имя" value={guestName} onChange={(e) => setGuestName(e.target.value)} />
-                    <input placeholder="Телефон *" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} required />
+                    <input
+                      placeholder="Имя"
+                      value={guestName}
+                      onChange={(e) => setGuestName(e.target.value)}
+                      autoComplete="name"
+                    />
+                    <input
+                      placeholder="Телефон *"
+                      value={guestPhone}
+                      onChange={(e) => setGuestPhone(e.target.value)}
+                      required
+                      autoComplete="tel"
+                    />
                   </>
                 )}
                 <input
@@ -805,26 +889,36 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                   type="email"
                   value={guestEmail}
                   onChange={(e) => setGuestEmail(e.target.value)}
+                  autoComplete="email"
                 />
                 {modeOrder === "delivery" ? (
                   <>
-                    <textarea
-                      placeholder="Адрес доставки *"
+                    <CafeGuestAddressInput
                       value={deliveryAddress}
-                      onChange={(e) => setDeliveryAddress(e.target.value)}
+                      onChange={setDeliveryAddress}
+                      onSelectPlace={applyDeliveryPlace}
+                      placeholder="Адрес доставки *"
                       required
-                      rows={2}
+                      cityHint=""
                     />
-                    {deliveryZones.length ? (
-                      <CafeGuestDeliveryMap
-                        zones={deliveryZones}
-                        centerLat={unlock?.organization_latitude || 55.751244}
-                        centerLon={unlock?.organization_longitude || 37.618423}
-                        pin={deliveryPin}
-                        address={deliveryAddress}
-                        onPick={onDeliveryPick}
-                      />
-                    ) : (
+                    <CafeGuestDeliveryMap
+                      zones={deliveryZones}
+                      centerLat={
+                        unlock?.organization_latitude ||
+                        info?.organization_latitude ||
+                        deliveryPin?.lat ||
+                        55.751244
+                      }
+                      centerLon={
+                        unlock?.organization_longitude ||
+                        info?.organization_longitude ||
+                        deliveryPin?.lon ||
+                        37.618423
+                      }
+                      pin={deliveryPin}
+                      onPick={onDeliveryPick}
+                    />
+                    {deliveryZones.length ? null : (
                       <p className="muted small">{unlock?.delivery_info || "Доставка по указанному адресу."}</p>
                     )}
                     {deliveryZone ? (
