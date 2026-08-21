@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import CafeFloorCanvas, { QrImg, GRID } from "./CafeFloorCanvas.jsx";
 import CafeQrPrintSheet from "./CafeQrPrintSheet.jsx";
 import CafeDeliveryZonesEditor from "./CafeDeliveryZonesEditor.jsx";
@@ -42,6 +42,9 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
   const [qrPrintTables, setQrPrintTables] = useState([]);
   const [qrPrintIncludeMenu, setQrPrintIncludeMenu] = useState(true);
   const [qrPrintFloorName, setQrPrintFloorName] = useState("");
+  const [zonesSaveHint, setZonesSaveHint] = useState("");
+  const zonesDraftRef = useRef([]);
+  const zonesSaveTimer = useRef(null);
 
   useEffect(() => {
     if (initialTab && initialTab !== "orders" && initialTab !== tab) setTab(initialTab);
@@ -59,7 +62,11 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
       authFetch(`${API_URL}/cafe/menu/categories/`),
       authFetch(`${API_URL}/users/me/`),
     ]);
-    if (s.ok) setSettings(await s.json());
+    if (s.ok) {
+      const settingsData = await s.json();
+      setSettings(settingsData);
+      zonesDraftRef.current = Array.isArray(settingsData.delivery_zones) ? settingsData.delivery_zones : [];
+    }
     if (f.ok) {
       const floorsData = await f.json();
       setFloors(floorsData);
@@ -105,7 +112,45 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
     });
-    if (res.ok) setSettings(await res.json());
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setSettings(data);
+      return data;
+    }
+    const detail =
+      data.detail ||
+      data.delivery_zones?.[0] ||
+      (typeof data === "object" ? Object.values(data).flat()?.[0] : null) ||
+      "Не удалось сохранить настройки";
+    setStatus(String(detail));
+    return null;
+  }
+
+  async function persistDeliveryZones(zones) {
+    const list = Array.isArray(zones) ? zones : zonesDraftRef.current || [];
+    zonesDraftRef.current = list;
+    setZonesSaveHint("Сохраняем зоны…");
+    const data = await saveSettings({ delivery_zones: list });
+    if (data) {
+      zonesDraftRef.current = Array.isArray(data.delivery_zones) ? data.delivery_zones : list;
+      setZonesSaveHint(
+        (data.delivery_zones || []).length
+          ? `Зоны сохранены: ${(data.delivery_zones || []).length}`
+          : "Зоны очищены",
+      );
+    } else {
+      setZonesSaveHint("Ошибка сохранения зон");
+    }
+  }
+
+  function onZonesChange(delivery_zones) {
+    const list = Array.isArray(delivery_zones) ? delivery_zones : [];
+    zonesDraftRef.current = list;
+    setSettings((prev) => (prev ? { ...prev, delivery_zones: list } : prev));
+    if (zonesSaveTimer.current) window.clearTimeout(zonesSaveTimer.current);
+    zonesSaveTimer.current = window.setTimeout(() => {
+      persistDeliveryZones(list);
+    }, 600);
   }
 
   async function addFloor() {
@@ -368,9 +413,12 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
             {guestMenuUrl}
           </a>
           <QrImg data={guestMenuUrl} size={180} alt="QR меню заведения" />
-          <div className="cafe-toolbar">
-            <a className="ghost-btn" href={guestMenuUrl} target="_blank" rel="noreferrer">
-              Превью меню гостя
+          <div className="cafe-toolbar cafe-menu-preview-row">
+            <a className="cafe-preview-btn" href={guestMenuUrl} target="_blank" rel="noreferrer">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="currentColor">
+                <path d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />
+              </svg>
+              <span>Превью меню гостя</span>
             </a>
             <button
               type="button"
@@ -389,7 +437,7 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
         {[
           ["floor", "Зал и столы"],
           ["menu", "Меню"],
-          ["settings", "Режимы и оплата"],
+          ["settings", "Режимы, доставка и оплата"],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -487,24 +535,23 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
               centerLon={orgLon}
               defaultFee={settings.delivery_fee}
               defaultMinOrder={settings.delivery_min_order}
-              onChange={(delivery_zones) => {
-                setSettings((prev) => ({ ...prev, delivery_zones }));
-              }}
+              onChange={onZonesChange}
             />
           ) : null}
           {settings.enable_delivery ? (
-            <div className="cafe-form-span2 cafe-toolbar">
+            <div className="cafe-form-span2 cafe-toolbar cafe-zones-save-row">
               <button
                 type="button"
                 className="landing-btn landing-btn--primary"
-                onClick={() => saveSettings({ delivery_zones: settings.delivery_zones || [] })}
+                onClick={() => persistDeliveryZones(zonesDraftRef.current || settings.delivery_zones || [])}
               >
                 Сохранить зоны доставки
               </button>
               <span className="muted small">
-                {(settings.delivery_zones || []).length
-                  ? `Сохранено зон в форме: ${(settings.delivery_zones || []).length} — нажмите, чтобы записать на сервер`
-                  : "Без зон действует общая цена доставки"}
+                {zonesSaveHint ||
+                  ((settings.delivery_zones || []).length
+                    ? `В форме ${(settings.delivery_zones || []).length} зон — сохраняются автоматически`
+                    : "Без зон действует общая цена доставки")}
               </span>
             </div>
           ) : null}
@@ -853,8 +900,11 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
                     </a>
                     <QrImg data={tableUrl} size={220} alt={`QR ${selectedTable.label}`} />
                     <p className="muted small">PIN для входа в заказ: {selectedTable.pin_code}</p>
-                    <a className="ghost-btn" href={tableUrl} target="_blank" rel="noreferrer">
-                      Превью меню гостя
+                    <a className="cafe-preview-btn" href={tableUrl} target="_blank" rel="noreferrer">
+                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="currentColor">
+                        <path d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />
+                      </svg>
+                      <span>Превью меню гостя</span>
                     </a>
                     <button
                       type="button"

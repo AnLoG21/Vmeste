@@ -640,6 +640,7 @@ export default function CafeFloorCanvas({
               "cafe-table-node",
               selectedTableId === t.id ? "is-selected" : "",
               showOccupancyColors ? (t.is_occupied ? "is-occupied" : "is-free") : t.is_occupied ? "is-occupied" : "",
+              t.waiter_called_at ? "is-waiter-call" : "",
             ]
               .filter(Boolean)
               .join(" ")}
@@ -653,6 +654,15 @@ export default function CafeFloorCanvas({
             onPointerDown={(e) => startTableDrag(e, t)}
           >
             <TableIcon seats={t.seats} label={t.label} shape={t.shape || "round"} selected={selectedTableId === t.id} />
+            {t.waiter_called_at ? (
+              <span
+                className="cafe-table-waiter-badge"
+                style={{ transform: `rotate(${-(t.rotation || 0)}deg)` }}
+                title="Вызов официанта"
+              >
+                !
+              </span>
+            ) : null}
             {selectOnly && onOpenTableTicket && (t.is_occupied || (tablesWithOrders && tablesWithOrders.has(t.id))) ? (
               <button
                 type="button"

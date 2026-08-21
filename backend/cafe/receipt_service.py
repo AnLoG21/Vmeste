@@ -53,19 +53,16 @@ def _order_receipt_text_lines(order: CafeOrder) -> list[str]:
     return text_lines
 
 
-def send_order_receipt_after_payment(order: CafeOrder) -> bool:
-    if not order.guest_email:
-        return False
+def build_order_receipt_pdf_bytes(order: CafeOrder):
     provider = order.provider
     paid_at = ""
     if order.paid_at:
         paid_at = timezone.localtime(order.paid_at).strftime("%d.%m.%Y %H:%M")
-    pdf_lines = _order_receipt_lines(order)
     try:
-        pdf_bytes = build_cafe_order_receipt_pdf(
+        return build_cafe_order_receipt_pdf(
             organization_name=provider.organization_name or provider.username,
             order_id=order.id,
-            lines=pdf_lines,
+            lines=_order_receipt_lines(order),
             items_total=order.items_total,
             delivery_fee=order.delivery_fee,
             tip_amount=order.tip_amount,
@@ -79,7 +76,14 @@ def send_order_receipt_after_payment(order: CafeOrder) -> bool:
         )
     except Exception:
         logger.exception("Не удалось сгенерировать PDF для заказа #%s", order.id)
-        pdf_bytes = None
+        return None
+
+
+def send_order_receipt_after_payment(order: CafeOrder) -> bool:
+    if not order.guest_email:
+        return False
+    provider = order.provider
+    pdf_bytes = build_order_receipt_pdf_bytes(order)
     try:
         return send_cafe_order_receipt_email(
             email=order.guest_email,

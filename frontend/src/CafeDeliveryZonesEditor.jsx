@@ -7,6 +7,19 @@ function newId() {
   return `z_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
+function ringFromPolygon(poly) {
+  const ring = poly?.geometry?.getCoordinates?.()?.[0] || [];
+  return ring
+    .map((p) => {
+      if (!p || p.length < 2) return null;
+      const a = Number(p[0]);
+      const b = Number(p[1]);
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+      return [a, b];
+    })
+    .filter(Boolean);
+}
+
 /**
  * Интерактивные зоны доставки на Яндекс.Карте (полигоны).
  * coords: [lat, lon] как в API Яндекс.Карт 2.1.
@@ -102,10 +115,14 @@ export default function CafeDeliveryZonesEditor({
         map.geoObjects.add(poly);
         polygonsRef.current[z.id] = poly;
       } else {
-        poly.geometry.setCoordinates([coords]);
-        poly.options.set("fillColor", `${z.color || "#ff6a00"}55`);
-        poly.options.set("strokeColor", z.color || "#ff6a00");
-        poly.properties.set("hintContent", z.name);
+        try {
+          poly.geometry.setCoordinates([coords]);
+          poly.options.set("fillColor", `${z.color || "#ff6a00"}55`);
+          poly.options.set("strokeColor", z.color || "#ff6a00");
+          poly.properties.set("hintContent", z.name);
+        } catch {
+          /* ignore while editor active */
+        }
       }
     });
   }
@@ -135,6 +152,37 @@ export default function CafeDeliveryZonesEditor({
     emit(next);
   }
 
+  function finishDrawnPolygon(poly) {
+    const map = mapRef.current;
+    const ring = ringFromPolygon(poly);
+    if (ring.length < 3) {
+      if (map) map.geoObjects.remove(poly);
+      setDrawing(false);
+      return;
+    }
+    const color = COLORS[(zonesRef.current || []).length % COLORS.length];
+    const id = newId();
+    polygonsRef.current[id] = poly;
+    poly.events.add("click", () => setSelectedId(id));
+    try {
+      poly.options.set("fillColor", `${color}55`);
+      poly.options.set("strokeColor", color);
+    } catch {
+      /* ignore */
+    }
+    const zone = {
+      id,
+      name: `Зона ${(zonesRef.current || []).length + 1}`,
+      color,
+      fee: String(defaultFee ?? "0"),
+      min_order: String(defaultMinOrder ?? "0"),
+      polygon: ring,
+    };
+    setSelectedId(id);
+    setDrawing(false);
+    emit([...(zonesRef.current || []), zone]);
+  }
+
   function startDraw() {
     const ymaps = window.ymaps;
     const map = mapRef.current;
@@ -154,30 +202,24 @@ export default function CafeDeliveryZonesEditor({
     );
     map.geoObjects.add(poly);
     poly.editor.startDrawing();
-    poly.editor.events.add("statechange", () => {
-      if (poly.editor.state !== "drawing") {
-        const ring = poly.geometry.getCoordinates()?.[0] || [];
-        if (ring.length < 3) {
-          map.geoObjects.remove(poly);
-          setDrawing(false);
-          return;
-        }
-        const id = newId();
-        polygonsRef.current[id] = poly;
-        poly.events.add("click", () => setSelectedId(id));
-        const zone = {
-          id,
-          name: `Зона ${(zonesRef.current || []).length + 1}`,
-          color,
-          fee: String(defaultFee ?? "0"),
-          min_order: String(defaultMinOrder ?? "0"),
-          polygon: ring.map((p) => [Number(p[0]), Number(p[1])]),
-        };
-        setSelectedId(id);
-        setDrawing(false);
-        emit([...(zonesRef.current || []), zone]);
+
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      try {
+        poly.editor.events.remove("drawingstop", finish);
+        poly.editor.events.remove("statechange", onState);
+      } catch {
+        /* ignore */
       }
-    });
+      finishDrawnPolygon(poly);
+    };
+    const onState = () => {
+      if (poly.editor.state !== "drawing") finish();
+    };
+    poly.editor.events.add("drawingstop", finish);
+    poly.editor.events.add("statechange", onState);
   }
 
   function editSelectedShape() {
@@ -186,12 +228,17 @@ export default function CafeDeliveryZonesEditor({
     if (!poly) return;
     poly.editor.startEditing();
     const stop = () => {
-      const ring = poly.geometry.getCoordinates()?.[0] || [];
+      if (poly.editor.state === "editing") return;
+      const ring = ringFromPolygon(poly);
       if (ring.length >= 3) {
-        updateZone(id, { polygon: ring.map((p) => [Number(p[0]), Number(p[1])]) });
+        updateZone(id, { polygon: ring });
       }
-      poly.editor.stopEditing();
-      poly.editor.events.remove("statechange", stop);
+      try {
+        poly.editor.stopEditing();
+        poly.editor.events.remove("statechange", stop);
+      } catch {
+        /* ignore */
+      }
     };
     poly.editor.events.add("statechange", stop);
   }
@@ -203,10 +250,10 @@ export default function CafeDeliveryZonesEditor({
       <h3>Зоны доставки на карте</h3>
       <p className="muted small">
         Нарисуйте полигоны районов. Если зоны заданы, гость сможет заказать доставку только внутрь них —
-        стоимость и минимум берутся из зоны.
+        стоимость и минимум берутся из зоны. После рисования зоны сохраняются автоматически.
       </p>
       {mapError ? <p className="status">{mapError}</p> : null}
-      <div className="cafe-toolbar">
+      <div className="cafe-toolbar cafe-zones-toolbar">
         <button type="button" className="landing-btn landing-btn--primary" onClick={startDraw} disabled={!mapReady || drawing}>
           {drawing ? "Кликайте по карте…" : "+ Зона на карте"}
         </button>

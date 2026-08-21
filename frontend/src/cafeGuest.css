@@ -212,6 +212,39 @@
   gap: 8px;
   margin: 12px 0 20px;
 }
+.cafe-guest-waiter {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #ffd0a8;
+  background: #fff7ef;
+  text-align: center;
+}
+.cafe-guest-waiter p {
+  margin: 8px 0 0;
+}
+.cafe-waiter-call-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 220px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  border: 1px solid #c45c00;
+  background: #ff6a00;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cafe-waiter-call-btn:disabled {
+  opacity: 0.85;
+  cursor: default;
+}
+.cafe-waiter-call-btn.is-sent {
+  background: #2f5d50;
+  border-color: #2f5d50;
+}
 .cafe-mode-btn {
   display: flex;
   flex-direction: column;

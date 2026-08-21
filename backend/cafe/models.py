@@ -133,6 +133,11 @@ class CafeTable(models.Model):
     is_active = models.BooleanField(default=True)
     is_occupied = models.BooleanField(default=False)
     guest_count = models.PositiveSmallIntegerField(default=0, validators=[MaxValueValidator(30)])
+    waiter_called_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Гость вызвал официанта — показывается на карте зала.",
+    )
     sort_order = models.PositiveIntegerField(default=0)
 
     class Meta:

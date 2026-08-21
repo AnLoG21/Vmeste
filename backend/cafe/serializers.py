@@ -140,10 +140,11 @@ class CafeTableSerializer(serializers.ModelSerializer):
             "is_active",
             "is_occupied",
             "guest_count",
+            "waiter_called_at",
             "sort_order",
             "qr_path",
         ]
-        read_only_fields = ["public_token", "qr_path"]
+        read_only_fields = ["public_token", "qr_path", "waiter_called_at"]
 
     def get_qr_path(self, obj):
         return f"/t/{obj.public_token}"

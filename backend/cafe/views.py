@@ -1,7 +1,9 @@
 from decimal import Decimal
+import json
 
 from django.conf import settings
 from django.db import transaction
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import permissions, status
@@ -22,7 +24,7 @@ from .models import (
     CafeSettings,
     CafeTable,
 )
-from .receipt_service import SERVICE_CHARGE_PERCENT, send_order_receipt_after_payment
+from .receipt_service import SERVICE_CHARGE_PERCENT, build_order_receipt_pdf_bytes, send_order_receipt_after_payment
 from .serializers import (
     CafeFloorPlanSerializer,
     CafeMenuCategorySerializer,
@@ -141,7 +143,12 @@ class CafeSettingsView(APIView):
         if not _is_cafe_provider(request.user):
             return Response(status=status.HTTP_403_FORBIDDEN)
         obj = _get_or_create_settings(request.user)
-        data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        raw = request.data
+        if hasattr(raw, "lists"):
+            # QueryDict: JSON-поля могут прийти строкой
+            data = {k: raw.get(k) for k in raw.keys()}
+        else:
+            data = dict(raw)
         for secret_key in (
             "yookassa_secret_key",
             "tbank_password",
@@ -157,6 +164,19 @@ class CafeSettingsView(APIView):
             obj.logo = None
             obj.save(update_fields=["logo", "updated_at"])
             return Response(CafeSettingsSerializer(obj, context={"request": request}).data)
+        if "delivery_zones" in data:
+            zones_val = data.get("delivery_zones")
+            if isinstance(zones_val, str):
+                try:
+                    zones_val = json.loads(zones_val)
+                except json.JSONDecodeError:
+                    return Response(
+                        {"delivery_zones": ["Некорректный JSON зон."]},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            from .delivery_zones import normalize_delivery_zones
+
+            data["delivery_zones"] = normalize_delivery_zones(zones_val)
         ser = CafeSettingsSerializer(obj, data=data, partial=True, context={"request": request})
         ser.is_valid(raise_exception=True)
         ser.save()
@@ -221,6 +241,10 @@ class CafeTableDetailView(APIView):
         if not _is_cafe_provider(request.user):
             return Response(status=status.HTTP_403_FORBIDDEN)
         table = get_object_or_404(CafeTable, pk=pk, floor_plan__provider=request.user)
+        if request.data.get("clear_waiter_call") in ("1", "true", True):
+            table.waiter_called_at = None
+            table.save(update_fields=["waiter_called_at"])
+            return Response(CafeTableSerializer(table).data)
         ser = CafeTableSerializer(table, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         ser.save()
@@ -503,6 +527,56 @@ class CafeProviderOrdersView(APIView):
             if not active:
                 CafeTable.objects.filter(pk=order.table_id).update(is_occupied=False, guest_count=0)
         return Response(CafeOrderSerializer(order).data)
+
+
+class CafeOrderReceiptView(APIView):
+    """PDF-чек заказа для печати (браузер / термопринтер)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        if not _is_cafe_provider(request.user):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        order = (
+            CafeOrder.objects.filter(pk=pk, provider=request.user)
+            .prefetch_related("items")
+            .select_related("provider")
+            .first()
+        )
+        if not order:
+            return Response({"detail": "Заказ не найден."}, status=status.HTTP_404_NOT_FOUND)
+        pdf_bytes = build_order_receipt_pdf_bytes(order)
+        if not pdf_bytes:
+            return Response({"detail": "Не удалось сформировать чек."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+        resp["Content-Disposition"] = f'inline; filename="cafe-order-{order.id}.pdf"'
+        return resp
+
+
+class CafeGuestCallWaiterView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        sess = _session_from_request(request)
+        if not sess:
+            return Response({"detail": "Нужна авторизация меню."}, status=status.HTTP_401_UNAUTHORIZED)
+        table = sess.table
+        if not table:
+            return Response(
+                {"detail": "Вызов официанта доступен только за столом."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        table.waiter_called_at = timezone.now()
+        table.save(update_fields=["waiter_called_at"])
+        return Response(
+            {
+                "ok": True,
+                "table_id": table.id,
+                "table_label": table.label,
+                "waiter_called_at": table.waiter_called_at.isoformat(),
+            }
+        )
 
 
 # ——— Guest / QR flow ———

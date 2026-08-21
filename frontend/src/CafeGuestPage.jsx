@@ -100,6 +100,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
   const [dinePinOpen, setDinePinOpen] = useState(false);
   const [dinePin, setDinePin] = useState("");
   const [pendingDineIn, setPendingDineIn] = useState(false);
+  const [waiterCallStatus, setWaiterCallStatus] = useState(""); // "", "sending", "ok", "err"
 
   const menuById = useMemo(() => {
     const map = {};
@@ -398,6 +399,24 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
     setModeOrder(key);
   }
 
+  async function callWaiter() {
+    if (!session || waiterCallStatus === "sending" || waiterCallStatus === "ok") return;
+    setWaiterCallStatus("sending");
+    const res = await fetch(`${API_URL}/cafe/guest/call-waiter/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Cafe-Session": session },
+      body: "{}",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setWaiterCallStatus("err");
+      setStatus(data.detail || "Не удалось вызвать официанта");
+      return;
+    }
+    setWaiterCallStatus("ok");
+    setStatus("Официант вызван — скоро подойдёт");
+  }
+
   async function submitOrder(e) {
     e.preventDefault();
     if (!isOpenNow) {
@@ -512,6 +531,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
     "Сейчас нерабочее время. Заказы недоступны.";
   const ready = Boolean(session) && !booting;
   const needsPin = mode === "table" && !session;
+  const canCallWaiter = Boolean(ready && (mode === "table" || unlock?.table_label));
   const ratedIds = new Set((completedOrder?.item_ratings || []).map((r) => r.menu_item));
   const orgName = info?.organization_name || unlock?.organization_name || "Кафе";
   const orgSlug = info?.provider_slug || unlock?.provider_slug || (mode === "org" ? keyId : "");
@@ -613,6 +633,23 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
 
       {ready ? (
         <>
+          {canCallWaiter ? (
+            <div className="cafe-guest-waiter">
+              <button
+                type="button"
+                className={`cafe-waiter-call-btn${waiterCallStatus === "ok" ? " is-sent" : ""}`}
+                onClick={callWaiter}
+                disabled={waiterCallStatus === "sending" || waiterCallStatus === "ok"}
+              >
+                {waiterCallStatus === "ok"
+                  ? "Официант вызван"
+                  : waiterCallStatus === "sending"
+                    ? "Вызываем…"
+                    : "Вызвать официанта"}
+              </button>
+              <p className="muted small">Сигнал появится на карте зала у персонала</p>
+            </div>
+          ) : null}
           <section className="cafe-guest-modes">
             {Object.entries(MODE_META).map(([key, meta]) =>
               modes[key] ? (

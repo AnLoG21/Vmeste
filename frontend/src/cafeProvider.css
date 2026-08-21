@@ -469,6 +469,38 @@
   font-size: 1.05rem;
 }
 
+.cafe-menu-preview-row {
+  margin-top: 12px;
+}
+
+.cafe-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #e8b07a;
+  background: linear-gradient(180deg, #fff8f0 0%, #ffe8d2 100%);
+  color: #7a3d0e;
+  font-weight: 700;
+  font-size: 0.92rem;
+  text-decoration: none;
+  box-shadow: 0 1px 0 rgba(196, 92, 0, 0.12);
+}
+
+.cafe-preview-btn:hover {
+  background: linear-gradient(180deg, #fff 0%, #ffd9b8 100%);
+  border-color: #c45c00;
+}
+
+.cafe-zones-toolbar {
+  margin: 14px 0 12px !important;
+}
+
+.cafe-zones-save-row {
+  margin-top: 4px;
+}
+
 .cafe-qr-open {
   font-size: 0.82rem;
   word-break: break-all;
@@ -777,7 +809,7 @@
   height: 360px;
   border-radius: 14px;
   border: 1px solid #ffd9bd;
-  margin: 10px 0 12px;
+  margin: 4px 0 14px;
   overflow: hidden;
   background: #f3e8d8;
 }
@@ -838,13 +870,42 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
+  gap: 12px 16px;
+  align-items: center;
   margin-bottom: 16px;
   padding: 12px 14px;
   background: #fff;
   border: 1px solid #ffd9bd;
   border-radius: 14px;
+}
+
+.cafe-qr-print-toolbar-copy {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.cafe-qr-print-toolbar-copy p {
+  margin: 4px 0 0;
+}
+
+.cafe-qr-print-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.cafe-qr-print-btn {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.cafe-qr-print-close {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .cafe-qr-print-sheet {
@@ -963,6 +1024,161 @@
   border-radius: 12px;
 }
 
+.cafe-kitchen-banner.is-collapsed {
+  margin-bottom: 10px;
+}
+
+.cafe-kitchen-banner-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cafe-kitchen-banner-arrow {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  font-size: 0.75rem;
+}
+
+.cafe-kitchen-banner-arrow.is-open {
+  transform: rotate(180deg);
+}
+
+.cafe-kitchen-banner-body {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.cafe-status-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 108px;
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.cafe-status-btn--accepted,
+.cafe-status-btn--paid,
+.cafe-status-btn--awaiting_payment,
+.cafe-status-btn--draft {
+  background: #e8e8e8;
+  color: #444;
+  border-color: #cfcfcf;
+}
+
+.cafe-status-btn--cooking,
+.cafe-status-btn--delivering {
+  background: #ffe566;
+  color: #5c4a00;
+  border-color: #f0c400;
+}
+
+.cafe-status-btn--ready {
+  background: #c8f5a8;
+  color: #2d5a12;
+  border-color: #8bc34a;
+}
+
+.cafe-status-btn--done {
+  background: #4caf50;
+  color: #fff;
+  border-color: #2e7d32;
+}
+
+.cafe-status-btn--cancelled {
+  background: #e53935;
+  color: #fff;
+  border-color: #c62828;
+}
+
+.cafe-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.cafe-receipt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cafe-waiter-alert {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #ffb4a8;
+  background: #ffe8e4;
+  color: #8b1e12;
+  font-weight: 700;
+  animation: cafe-waiter-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes cafe-waiter-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(229, 57, 53, 0);
+  }
+}
+
+.cafe-table-node.is-waiter-call {
+  outline: 3px solid #e53935;
+  outline-offset: 2px;
+  z-index: 3;
+}
+
+.cafe-table-waiter-badge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  z-index: 4;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  background: #e53935;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(180, 30, 20, 0.35);
+  pointer-events: none;
+}
+
 @media print {
   body * {
     visibility: hidden !important;
@@ -993,5 +1209,17 @@
 @media (max-width: 640px) {
   .cafe-qr-print-grid {
     grid-template-columns: 1fr;
+  }
+  .cafe-qr-print-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .cafe-qr-print-btn,
+  .cafe-qr-print-close {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .cafe-status-btn {
+    min-width: calc(50% - 4px);
   }
 }

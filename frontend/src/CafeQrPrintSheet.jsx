@@ -2,6 +2,14 @@ import { useMemo } from "react";
 import { createPortal } from "react-dom";
 import { QrImg } from "./qrUtils.jsx";
 
+function PrintIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor">
+      <path d="M19 8H5a3 3 0 0 0-3 3v6h4v4h12v-4h4v-6a3 3 0 0 0-3-3zm-3 11H8v-5h8v5zm3-7.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2zM17 3H7v4h10V3z" />
+    </svg>
+  );
+}
+
 /**
  * Печать карточек QR: меню заведения и/или столы зала.
  * Открывается оверлеем → window.print() → только .cafe-qr-print-* в печати.
@@ -50,7 +58,7 @@ export default function CafeQrPrintSheet({
   return createPortal(
     <div className="cafe-qr-print-overlay" role="dialog" aria-modal="true" aria-label="Печать QR">
       <div className="cafe-qr-print-toolbar no-print">
-        <div>
+        <div className="cafe-qr-print-toolbar-copy">
           <strong>Печать QR</strong>
           <p className="muted small">
             {cards.length
@@ -58,11 +66,17 @@ export default function CafeQrPrintSheet({
               : "Нет столов с токеном — сначала сохраните столы"}
           </p>
         </div>
-        <div className="cafe-toolbar">
-          <button type="button" className="landing-btn landing-btn--primary" onClick={doPrint} disabled={!cards.length}>
-            Печать
+        <div className="cafe-qr-print-actions">
+          <button
+            type="button"
+            className="landing-btn landing-btn--primary cafe-qr-print-btn"
+            onClick={doPrint}
+            disabled={!cards.length}
+          >
+            <PrintIcon />
+            <span>Печать</span>
           </button>
-          <button type="button" className="ghost-btn" onClick={onClose}>
+          <button type="button" className="ghost-btn cafe-qr-print-close" onClick={onClose}>
             Закрыть
           </button>
         </div>

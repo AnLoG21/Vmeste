@@ -27,12 +27,28 @@ def normalize_delivery_zones(raw) -> list[dict]:
             continue
         points = []
         for p in poly[:80]:
-            if not isinstance(p, (list, tuple)) or len(p) < 2:
+            lat = lon = None
+            if isinstance(p, dict):
+                try:
+                    lat = float(p.get("lat", p.get("latitude")))
+                    lon = float(p.get("lon", p.get("lng", p.get("longitude"))))
+                except (TypeError, ValueError):
+                    continue
+            elif isinstance(p, (list, tuple)) and len(p) >= 2:
+                try:
+                    a, b = float(p[0]), float(p[1])
+                except (TypeError, ValueError):
+                    continue
+                # Яндекс: [lat, lon]; GeoJSON иногда [lon, lat]
+                if abs(a) <= 90 and abs(b) <= 180:
+                    lat, lon = a, b
+                elif abs(b) <= 90 and abs(a) <= 180:
+                    lat, lon = b, a
+                else:
+                    continue
+            else:
                 continue
-            try:
-                lat = float(p[0])
-                lon = float(p[1])
-            except (TypeError, ValueError):
+            if lat is None or lon is None:
                 continue
             if not (-90 <= lat <= 90 and -180 <= lon <= 180):
                 continue

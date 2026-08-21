@@ -72,6 +72,14 @@ function OrderExpandButton({ open, onClick }) {
   );
 }
 
+function PrintReceiptIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="currentColor">
+      <path d="M19 8H5a3 3 0 0 0-3 3v6h4v4h12v-4h4v-6a3 3 0 0 0-3-3zm-3 11H8v-5h8v5zm3-7.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2zM17 3H7v4h10V3z" />
+    </svg>
+  );
+}
+
 export default function CafeOrdersPage({ authFetch, API_URL }) {
   const [tab, setTab] = useState("orders");
   const [orders, setOrders] = useState([]);
@@ -86,8 +94,17 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
   const [orderOpen, setOrderOpen] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
+  const [kitchenBannerOpen, setKitchenBannerOpen] = useState(() => {
+    try {
+      return window.sessionStorage.getItem("cafe_kitchen_banner_open") !== "0";
+    } catch {
+      return true;
+    }
+  });
   const knownIds = useRef(new Set());
+  const knownWaiterCalls = useRef(new Set());
   const primed = useRef(false);
+  const primedWaiter = useRef(false);
 
   const floor = floors.find((f) => f.id === floorId) || floors[0] || null;
   const selectedTable = (floor?.tables || []).find((t) => t.id === selectedTableId) || null;
@@ -119,18 +136,97 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
     ]);
     if (fRes.ok) {
       const floorsData = await fRes.json();
+      const activeCalls = [];
+      for (const f of floorsData || []) {
+        for (const t of f.tables || []) {
+          if (t.waiter_called_at) activeCalls.push(`${t.id}:${t.waiter_called_at}`);
+        }
+      }
+      if (primedWaiter.current) {
+        const fresh = activeCalls.filter((k) => !knownWaiterCalls.current.has(k));
+        if (fresh.length && soundOn) {
+          playBeep(2);
+          try {
+            if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+              const table = (floorsData || [])
+                .flatMap((f) => f.tables || [])
+                .find((t) => t.waiter_called_at && fresh.some((k) => k.startsWith(`${t.id}:`)));
+              new Notification("Вызов официанта", {
+                body: table ? `Стол «${table.label}»` : "Гость вызывает официанта",
+              });
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      } else {
+        primedWaiter.current = true;
+      }
+      knownWaiterCalls.current = new Set(activeCalls);
       setFloors(floorsData);
       setFloorId((prev) => prev || floorsData[0]?.id || null);
     }
     if (mRes.ok) setCategories(await mRes.json());
-  }, [API_URL, authFetch]);
+  }, [API_URL, authFetch, soundOn]);
 
   useEffect(() => {
     loadOrders();
     loadFloorAndMenu();
-    const t = setInterval(loadOrders, 8000);
-    return () => clearInterval(t);
+    const tOrders = setInterval(loadOrders, 8000);
+    const tFloor = setInterval(loadFloorAndMenu, 5000);
+    return () => {
+      clearInterval(tOrders);
+      clearInterval(tFloor);
+    };
   }, [loadOrders, loadFloorAndMenu]);
+
+  function toggleKitchenBanner() {
+    setKitchenBannerOpen((prev) => {
+      const next = !prev;
+      try {
+        window.sessionStorage.setItem("cafe_kitchen_banner_open", next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
+  async function printOrderReceipt(orderId) {
+    const res = await authFetch(`${API_URL}/cafe/orders/${orderId}/receipt/`);
+    if (!res.ok) {
+      setStatus("Не удалось получить чек");
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, "_blank", "noopener,noreferrer");
+    if (!win) {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cafe-order-${orderId}.pdf`;
+      a.click();
+    } else {
+      window.setTimeout(() => {
+        try {
+          win.focus();
+          win.print();
+        } catch {
+          /* ignore */
+        }
+      }, 400);
+    }
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
+  async function ackWaiterCall(tableId) {
+    const res = await authFetch(`${API_URL}/cafe/tables/${tableId}/`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clear_waiter_call: true }),
+    });
+    if (res.ok) await loadFloorAndMenu();
+  }
 
   const tableOrders = useMemo(() => {
     if (!selectedTableId) return [];
@@ -155,6 +251,26 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
         return (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || b.id - a.id;
       });
   }, [orders]);
+
+  const waiterCalls = useMemo(() => {
+    const list = [];
+    for (const f of floors || []) {
+      for (const t of f.tables || []) {
+        if (t.waiter_called_at) list.push({ ...t, floorName: f.name });
+      }
+    }
+    return list.sort((a, b) => String(b.waiter_called_at).localeCompare(String(a.waiter_called_at)));
+  }, [floors]);
+
+  useEffect(() => {
+    try {
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        Notification.requestPermission().catch(() => {});
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const ticketOrders = useMemo(() => {
     if (!ticketOpen || !selectedTableId) return [];
@@ -328,7 +444,7 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                 </li>
               ))}
             </ul>
-            <div className="cafe-toolbar">
+            <div className="cafe-status-actions">
               {(kitchen
                 ? ["accepted", "cooking", "ready", "done"]
                 : STATUS_ACTIONS
@@ -336,12 +452,21 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                 <button
                   key={st}
                   type="button"
-                  className={kitchen && st === "cooking" ? "landing-btn landing-btn--primary" : "ghost-btn"}
+                  className={`cafe-status-btn cafe-status-btn--${st}`}
                   onClick={() => setOrderStatus(o.id, st)}
                 >
                   {statusLabels[st]}
                 </button>
               ))}
+              <button
+                type="button"
+                className="ghost-btn cafe-receipt-btn"
+                onClick={() => printOrderReceipt(o.id)}
+                title="Печать чека (PDF). Можно отправить на термопринтер или кассу через драйвер печати."
+              >
+                <PrintReceiptIcon />
+                <span>Чек</span>
+              </button>
             </div>
           </>
         ) : null}
@@ -390,25 +515,32 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
 
       {tab === "kitchen" ? (
         <>
-          <div className="cafe-kitchen-banner">
-            <div>
-              <strong>Экран кухни</strong>
-              <p className="muted small" style={{ margin: "4px 0 0" }}>
-                Крупные карточки активных заказов. При новом заказе — тройной сигнал.
-              </p>
-            </div>
-            <div className="cafe-toolbar">
-              <label className="checkbox">
-                <input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} />
-                <span>Звук</span>
-              </label>
-              <button type="button" className="ghost-btn" onClick={() => playBeep(3)}>
-                Проверить звук
-              </button>
-              <button type="button" className="ghost-btn" onClick={() => loadOrders()}>
-                Обновить
-              </button>
-            </div>
+          <div className={`cafe-kitchen-banner${kitchenBannerOpen ? "" : " is-collapsed"}`}>
+            <button type="button" className="cafe-kitchen-banner-toggle" onClick={toggleKitchenBanner}>
+              <span className={`cafe-kitchen-banner-arrow${kitchenBannerOpen ? " is-open" : ""}`} aria-hidden>
+                ▼
+              </span>
+              <span>Экран кухни{kitchenOrders.length ? ` · ${kitchenOrders.length}` : ""}</span>
+            </button>
+            {kitchenBannerOpen ? (
+              <div className="cafe-kitchen-banner-body">
+                <p className="muted small" style={{ margin: 0 }}>
+                  Крупные карточки активных заказов. При новом заказе — тройной сигнал.
+                </p>
+                <div className="cafe-toolbar" style={{ margin: 0 }}>
+                  <label className="checkbox">
+                    <input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} />
+                    <span>Звук</span>
+                  </label>
+                  <button type="button" className="ghost-btn" onClick={() => playBeep(3)}>
+                    Проверить звук
+                  </button>
+                  <button type="button" className="ghost-btn" onClick={() => loadOrders()}>
+                    Обновить
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
           {kitchenOrders.length === 0 ? (
             <div className="cafe-kitchen-empty">
@@ -441,6 +573,21 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
             ))}
           </div>
           {!floor ? <p className="muted">Сначала создайте зал во вкладке «Зал и меню».</p> : null}
+          {waiterCalls.length ? (
+            <div className="cafe-waiter-alerts">
+              {waiterCalls.map((t) => (
+                <div key={t.id} className="cafe-waiter-alert" role="status">
+                  <span>
+                    Вызов официанта · {t.floorName ? `${t.floorName} · ` : ""}
+                    {t.label}
+                  </span>
+                  <button type="button" className="landing-btn landing-btn--primary" onClick={() => ackWaiterCall(t.id)}>
+                    Принято
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
           {floor ? (
             <>
               <div className="cafe-seat-legend" aria-label="Легенда занятости">
@@ -450,7 +597,7 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                 <span>
                   <i className="cafe-seat-dot is-busy" aria-hidden /> Занят
                 </span>
-                <span className="muted small">Иконка блокнота — заказ по позициям</span>
+                <span className="muted small">Красный «!» — вызов официанта</span>
               </div>
               <CafeFloorCanvas
                 floor={floor}
@@ -513,6 +660,11 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                 </label>
               </div>
               <div className="cafe-toolbar">
+                {selectedTable.waiter_called_at ? (
+                  <button type="button" className="landing-btn landing-btn--primary" onClick={() => ackWaiterCall(selectedTable.id)}>
+                    Снять вызов официанта
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="ghost-btn"
