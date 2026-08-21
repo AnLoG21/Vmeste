@@ -40,6 +40,96 @@ from .serializers import (
 MENU_ITEM_MAX_PHOTOS = 5
 
 
+def _phone_digits(raw: str) -> str:
+    """Normalize RU phone to last 10 digits (without country code)."""
+    digits = "".join(ch for ch in str(raw or "") if ch.isdigit())
+    if len(digits) >= 11 and digits[0] in "78":
+        return digits[-10:]
+    if len(digits) > 10:
+        return digits[-10:]
+    return digits if len(digits) >= 10 else ""
+
+
+def _find_client_by_phone(phone: str):
+    needle = _phone_digits(phone)
+    if not needle:
+        return None
+    for u in User.objects.filter(role=User.Role.CLIENT).exclude(phone="").iterator(chunk_size=200):
+        if _phone_digits(u.phone) == needle:
+            return u
+    return None
+
+
+def _find_client_by_email(email: str):
+    em = (email or "").strip().lower()
+    if not em or "@" not in em:
+        return None
+    return User.objects.filter(role=User.Role.CLIENT, email__iexact=em).first()
+
+
+def _client_orders_queryset(user):
+    """Orders linked to client account or matching phone/email on guest fields."""
+    from django.db.models import Q
+
+    q = Q(client=user)
+    phone = _phone_digits(getattr(user, "phone", "") or "")
+    email = (getattr(user, "email", "") or "").strip().lower()
+    if phone:
+        # Broad SQL filter, exact digit match applied after
+        q |= Q(guest_phone__icontains=phone[-10:])
+    if email:
+        q |= Q(guest_email__iexact=email)
+    qs = (
+        CafeOrder.objects.filter(q)
+        .select_related("provider")
+        .prefetch_related("items", "item_ratings")
+        .order_by("-id")
+    )
+    # Exact phone match filter for safety when phone used
+    if phone:
+        filtered = []
+        for o in qs[:200]:
+            if o.client_id == user.id:
+                filtered.append(o)
+                continue
+            if phone and _phone_digits(o.guest_phone) == phone:
+                filtered.append(o)
+                continue
+            if email and (o.guest_email or "").strip().lower() == email:
+                filtered.append(o)
+        return filtered[:100]
+    return list(qs[:100])
+
+
+def _claim_orders_for_user(user, orders, phone_hint: str = ""):
+    """Attach unlinked orders to the authenticated client when identity matches."""
+    phone = _phone_digits(getattr(user, "phone", "") or "") or _phone_digits(phone_hint)
+    email = (getattr(user, "email", "") or "").strip().lower()
+    claimed = []
+    for order in orders:
+        if order.client_id and order.client_id != user.id:
+            continue
+        if order.client_id == user.id:
+            continue
+        match = False
+        if phone and _phone_digits(order.guest_phone) == phone:
+            match = True
+        elif email and (order.guest_email or "").strip().lower() == email:
+            match = True
+        elif phone_hint and _phone_digits(order.guest_phone) == _phone_digits(phone_hint):
+            match = True
+        if match:
+            order.client = user
+            order.save(update_fields=["client", "updated_at"])
+            claimed.append(order.id)
+            # Fill empty profile phone so future lists match
+            if not _phone_digits(getattr(user, "phone", "") or "") and _phone_digits(order.guest_phone):
+                user.phone = (order.guest_phone or "")[:30]
+                user.save(update_fields=["phone"])
+                phone = _phone_digits(user.phone)
+    return claimed
+
+
 def _is_cafe_provider(user):
     from users.models import User
 
@@ -837,7 +927,7 @@ class CafeGuestMenuView(APIView):
 
 class CafeGuestOrderCreateView(APIView):
     permission_classes = [permissions.AllowAny]
-    authentication_classes = []
+    # JWT optional: if client is logged in, order is linked to their account
 
     def post(self, request):
         sess = _session_from_request(request)
@@ -1051,15 +1141,14 @@ class CafeGuestOrderCreateView(APIView):
                 order.delivery_lon = d_lon
             except (TypeError, ValueError):
                 pass
-            if request.user and getattr(request.user, "is_authenticated", False) and request.user.role == User.Role.CLIENT:
+            if request.user and getattr(request.user, "is_authenticated", False) and getattr(
+                request.user, "role", None
+            ) == User.Role.CLIENT:
                 order.client = request.user
-            elif guest_phone:
-                # Link to existing client account by phone when possible
-                phone_digits = "".join(ch for ch in guest_phone if ch.isdigit())
-                if len(phone_digits) >= 10:
-                    twin = User.objects.filter(role=User.Role.CLIENT, phone__icontains=phone_digits[-10:]).first()
-                    if twin:
-                        order.client = twin
+            else:
+                twin = _find_client_by_phone(guest_phone) or _find_client_by_email(guest_email)
+                if twin:
+                    order.client = twin
 
             org_shop_id = (settings_obj.yookassa_shop_id or "").strip()
             org_secret = (settings_obj.yookassa_secret_key or "").strip()
@@ -1191,29 +1280,42 @@ class CafeClientOrdersView(APIView):
 
     def get(self, request):
         user = request.user
-        qs = (
-            CafeOrder.objects.filter(client=user)
-            .select_related("provider")
-            .prefetch_related("items", "item_ratings")
-            .order_by("-id")[:100]
-        )
-        if not qs.exists() and getattr(user, "phone", None):
-            digits = "".join(ch for ch in str(user.phone) if ch.isdigit())
-            if len(digits) >= 10:
-                qs = (
-                    CafeOrder.objects.filter(guest_phone__icontains=digits[-10:])
-                    .select_related("provider")
-                    .prefetch_related("items", "item_ratings")
-                    .order_by("-id")[:100]
+        if getattr(user, "role", None) != User.Role.CLIENT and getattr(user, "role", None) != User.Role.PROVIDER:
+            # staff etc. — only own client-side orders if any
+            pass
+        orders = _client_orders_queryset(user)
+        # Auto-claim matching unlinked guest orders so they stay under client=
+        _claim_orders_for_user(user, [o for o in orders if not o.client_id])
+        orders = _client_orders_queryset(user)
+        return Response(CafeOrderSerializer(orders, many=True).data)
+
+    def post(self, request):
+        """Привязать заказы по id (из localStorage гостевого меню), если телефон/email совпали."""
+        user = request.user
+        raw_ids = request.data.get("order_ids") or []
+        phone_hint = (request.data.get("guest_phone") or request.data.get("phone") or "").strip()
+        if not isinstance(raw_ids, list):
+            return Response({"order_ids": ["Ожидается список id."]}, status=status.HTTP_400_BAD_REQUEST)
+        ids = []
+        for x in raw_ids[:50]:
+            try:
+                ids.append(int(x))
+            except (TypeError, ValueError):
+                continue
+        orders = list(CafeOrder.objects.filter(pk__in=ids)) if ids else []
+        claimed = _claim_orders_for_user(user, orders, phone_hint=phone_hint)
+        # Also claim other phone/email matches
+        more = _client_orders_queryset(user)
+        claimed += _claim_orders_for_user(user, [o for o in more if not o.client_id], phone_hint=phone_hint)
+        if phone_hint and not ids:
+            # Claim all guest orders with this phone for the logged-in user
+            needle = _phone_digits(phone_hint)
+            if needle:
+                candidates = list(
+                    CafeOrder.objects.filter(client__isnull=True, guest_phone__icontains=needle[-10:])[:100]
                 )
-        return Response(CafeOrderSerializer(qs, many=True).data)
-
-    def get_object_detail(self, request, pk):
-        pass
-
-    def patch(self, request, pk):
-        """Клиент не меняет статус; endpoint для расширения (резерв)."""
-        return Response({"detail": "Недоступно."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+                claimed += _claim_orders_for_user(user, candidates, phone_hint=phone_hint)
+        return Response({"claimed": list(dict.fromkeys(claimed))})
 
 
 class CafeClientOrderDetailView(APIView):
@@ -1229,9 +1331,16 @@ class CafeClientOrderDetailView(APIView):
         if not order:
             return Response({"detail": "Не найдено."}, status=status.HTTP_404_NOT_FOUND)
         ok = order.client_id == request.user.id
-        if not ok and getattr(request.user, "phone", None):
-            digits = "".join(ch for ch in str(request.user.phone) if ch.isdigit())
-            ok = bool(digits and digits[-10:] in (order.guest_phone or ""))
+        if not ok:
+            phone = _phone_digits(getattr(request.user, "phone", "") or "")
+            email = (getattr(request.user, "email", "") or "").strip().lower()
+            if phone and _phone_digits(order.guest_phone) == phone:
+                ok = True
+            elif email and (order.guest_email or "").strip().lower() == email:
+                ok = True
         if not ok:
             return Response({"detail": "Не найдено."}, status=status.HTTP_404_NOT_FOUND)
+        if not order.client_id:
+            order.client = request.user
+            order.save(update_fields=["client", "updated_at"])
         return Response(CafeOrderSerializer(order).data)

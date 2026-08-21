@@ -43,6 +43,36 @@ export default function ClientCafeOrdersPage({ authFetch, API_URL }) {
   const [ratingBusy, setRatingBusy] = useState(null);
 
   const load = useCallback(async () => {
+    try {
+      const orderIds = JSON.parse(localStorage.getItem("vmeste_cafe_order_ids") || "[]");
+      let guestPhone = localStorage.getItem("vmeste_cafe_guest_phone") || "";
+      if (!guestPhone) {
+        try {
+          for (let i = 0; i < localStorage.length; i += 1) {
+            const k = localStorage.key(i);
+            if (!k || !k.startsWith("cafe_guest_prefs_")) continue;
+            const data = JSON.parse(localStorage.getItem(k) || "null");
+            if (data?.guestPhone && String(data.guestPhone).replace(/\D/g, "").length >= 10) {
+              guestPhone = data.guestPhone;
+              break;
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      if ((Array.isArray(orderIds) && orderIds.length) || guestPhone) {
+        await authFetch(`${API_URL}/cafe/my-orders/`, {
+          method: "POST",
+          body: JSON.stringify({
+            order_ids: Array.isArray(orderIds) ? orderIds : [],
+            guest_phone: guestPhone,
+          }),
+        });
+      }
+    } catch {
+      /* ignore claim errors */
+    }
     const res = await authFetch(`${API_URL}/cafe/my-orders/`);
     if (!res.ok) {
       setStatus("Не удалось загрузить заказы.");
@@ -184,7 +214,10 @@ export default function ClientCafeOrdersPage({ authFetch, API_URL }) {
   return (
     <section className="card full-width client-cafe-orders">
       <h2>Заказы из ресторанов</h2>
-      <p className="muted small">Статусы и доставка по вашим заказам кафе.</p>
+      <p className="muted small">
+        Статусы и доставка по вашим заказам. Чтобы увидеть прошлые заказы, укажите в профиле тот же телефон,
+        что при оформлении, или оформите заказ будучи в аккаунте.
+      </p>
       {orders.length === 0 ? <p className="muted">Пока нет заказов.</p> : null}
       <ul className="client-cafe-order-list">
         {orders.map((o) => (

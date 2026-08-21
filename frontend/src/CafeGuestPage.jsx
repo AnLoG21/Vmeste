@@ -564,9 +564,16 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
       return;
     }
     setStatus("Оформляем…");
+    const headers = { "Content-Type": "application/json", "X-Cafe-Session": session };
+    try {
+      const token = localStorage.getItem("vmeste_access");
+      if (token) headers.Authorization = `Bearer ${token}`;
+    } catch {
+      /* ignore */
+    }
     const res = await fetch(`${API_URL}/cafe/guest/order/`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Cafe-Session": session },
+      headers,
       body: JSON.stringify({
         mode: modeOrder,
         pay_method: payMethod,
@@ -607,6 +614,15 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
     }
     setOrderResult(data);
     setStatus("");
+    try {
+      const key = "vmeste_cafe_order_ids";
+      const prev = JSON.parse(localStorage.getItem(key) || "[]");
+      const next = [data.id, ...(Array.isArray(prev) ? prev : [])].filter(Boolean).slice(0, 50);
+      localStorage.setItem(key, JSON.stringify([...new Set(next)]));
+      if (guestPhone) localStorage.setItem("vmeste_cafe_guest_phone", guestPhone);
+    } catch {
+      /* ignore */
+    }
     saveGuestPrefs(prefsOrgKey, {
       guestName,
       guestPhone,
