@@ -29,6 +29,12 @@ function formatGuestPhone(phone) {
   return raw;
 }
 
+function hasCoords(lat, lon) {
+  const a = Number(lat);
+  const b = Number(lon);
+  return Number.isFinite(a) && Number.isFinite(b);
+}
+
 function cartLineKey(menuItemId, removed = []) {
   return `${menuItemId}:${[...removed].sort().join("|")}`;
 }
@@ -468,13 +474,15 @@ export default function CafeOrdersPage({ authFetch, API_URL }) {
                 {o.delivery_fee != null ? (
                   <p className="muted small">Доставка: {Number(o.delivery_fee).toLocaleString("ru-RU")} ₽</p>
                 ) : null}
-                {o.delivery_lat != null && o.delivery_lon != null ? (
+                {hasCoords(o.delivery_lat, o.delivery_lon) ? (
                   <>
                     <CafeOrderMapPin
+                      mapKey={`org-order-${o.id}-${o.courier_updated_at || ""}-${o.courier_lat}-${o.courier_lon}`}
                       lat={o.delivery_lat}
                       lon={o.delivery_lon}
                       courierLat={o.courier_lat}
                       courierLon={o.courier_lon}
+                      height={220}
                     />
                     <a
                       className="landing-btn landing-btn--ghost cafe-yandex-maps-btn"

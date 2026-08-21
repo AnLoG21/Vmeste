@@ -49,6 +49,7 @@ class ReviewSerializer(serializers.ModelSerializer):
             "provider",
             "client",
             "booking",
+            "cafe_order",
             "staff",
             "rating",
             "staff_rating",
@@ -115,9 +116,21 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = ["provider", "booking", "staff", "staff_user", "rating", "staff_rating", "text", "staff_text"]
+        fields = [
+            "provider",
+            "booking",
+            "cafe_order",
+            "staff",
+            "staff_user",
+            "rating",
+            "staff_rating",
+            "text",
+            "staff_text",
+        ]
         extra_kwargs = {
             "staff": {"required": False, "allow_null": True},
+            "booking": {"required": False, "allow_null": True},
+            "cafe_order": {"required": False, "allow_null": True},
             "staff_rating": {"required": False, "allow_null": True},
             "staff_text": {"required": False, "allow_blank": True},
         }
@@ -135,11 +148,38 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        from cafe.models import CafeOrder
+
         booking = attrs.get("booking")
+        cafe_order = attrs.get("cafe_order")
+        user = self.context["request"].user
+
         if booking and booking.status != Booking.Status.DONE:
             raise serializers.ValidationError({"booking": "Отзыв можно оставить только после оказания услуги."})
-        if booking and booking.client_id != self.context["request"].user.id:
+        if booking and booking.client_id != user.id:
             raise serializers.ValidationError({"booking": "Это не ваша запись."})
+
+        if cafe_order:
+            if cafe_order.status != CafeOrder.Status.DONE:
+                raise serializers.ValidationError(
+                    {"cafe_order": "Отзыв можно оставить только после завершения заказа."}
+                )
+            owns = cafe_order.client_id == user.id
+            if not owns:
+                def _digits(raw):
+                    return "".join(ch for ch in str(raw or "") if ch.isdigit())[-10:]
+
+                up = _digits(getattr(user, "phone", "") or "")
+                op = _digits(cafe_order.guest_phone or "")
+                owns = bool(up and up == op)
+            if not owns:
+                raise serializers.ValidationError({"cafe_order": "Это не ваш заказ."})
+            if Review.objects.filter(cafe_order=cafe_order, client=user).exists():
+                raise serializers.ValidationError({"cafe_order": "Вы уже оставили отзыв на этот заказ."})
+            attrs["provider"] = cafe_order.provider
+            if not cafe_order.client_id:
+                cafe_order.client = user
+                cafe_order.save(update_fields=["client", "updated_at"])
 
         staff_user_id = attrs.pop("staff_user", None)
         provider = attrs["provider"]
@@ -154,7 +194,6 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
             if link:
                 attrs["staff"] = link
 
-        # После услуги привязываем отзыв к мастеру записи, если не указан явно.
         if not attrs.get("staff") and booking and booking.staff_id:
             link = ProviderStaff.objects.filter(
                 provider_id=provider_id,
@@ -164,8 +203,7 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
             if link:
                 attrs["staff"] = link
 
-        # Отзыв только на сотрудника (без записи): staff_rating = rating.
-        if attrs.get("staff") and attrs.get("staff_rating") is None and not booking:
+        if attrs.get("staff") and attrs.get("staff_rating") is None and not booking and not cafe_order:
             attrs["staff_rating"] = attrs.get("rating")
 
         return attrs

@@ -247,6 +247,9 @@ class CafeOrderSerializer(serializers.ModelSerializer):
     table_label = serializers.CharField(source="table.label", read_only=True, default="")
     can_rate = serializers.SerializerMethodField()
     organization_name = serializers.SerializerMethodField()
+    delivery_address = serializers.SerializerMethodField()
+    has_review = serializers.SerializerMethodField()
+    review = serializers.SerializerMethodField()
 
     class Meta:
         model = CafeOrder
@@ -285,6 +288,8 @@ class CafeOrderSerializer(serializers.ModelSerializer):
             "items",
             "item_ratings",
             "can_rate",
+            "has_review",
+            "review",
             "created_at",
             "paid_at",
             "organization_name",
@@ -303,6 +308,9 @@ class CafeOrderSerializer(serializers.ModelSerializer):
             "items",
             "item_ratings",
             "can_rate",
+            "has_review",
+            "review",
+            "delivery_address",
             "table_label",
             "service_charge_amount",
             "provider_payout_amount",
@@ -315,13 +323,41 @@ class CafeOrderSerializer(serializers.ModelSerializer):
             return ""
         return (getattr(prov, "organization_name", None) or "").strip() or (prov.username or "")
 
+    def get_delivery_address(self, obj):
+        import re
+
+        raw = (obj.delivery_address or "").strip()
+        # убрать хвост вида «[зона: …]»
+        return re.sub(r"\s*\[зона:[^\]]*\]\s*", " ", raw, flags=re.IGNORECASE).strip()
+
     def get_can_rate(self, obj):
-        return obj.status in {
-            CafeOrder.Status.PAID,
-            CafeOrder.Status.ACCEPTED,
-            CafeOrder.Status.COOKING,
-            CafeOrder.Status.READY,
-            CafeOrder.Status.TO_COURIER,
-            CafeOrder.Status.DELIVERING,
-            CafeOrder.Status.DONE,
+        return obj.status == CafeOrder.Status.DONE
+
+    def get_has_review(self, obj):
+        try:
+            return len(list(obj.reviews.all()[:1])) > 0
+        except Exception:
+            return False
+
+    def get_review(self, obj):
+        from common.media_urls import photo_urls
+
+        rev = None
+        try:
+            rev = obj.reviews.order_by("-id").first()
+        except Exception:
+            rev = None
+        if not rev:
+            return None
+        request = self.context.get("request")
+        photos = []
+        for p in rev.photos.all()[:8]:
+            urls = photo_urls(request, p.image) if p.image else {"url": "", "thumb_url": ""}
+            photos.append({"id": p.id, "image": urls.get("url") or "", "thumb_url": urls.get("thumb_url") or ""})
+        return {
+            "id": rev.id,
+            "rating": rev.rating,
+            "text": rev.text or "",
+            "created_at": rev.created_at,
+            "photos": photos,
         }

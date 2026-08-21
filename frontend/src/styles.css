@@ -9067,6 +9067,69 @@ body.theme-dark .password-eye-btn:hover {
 
 .cafe-order-map-pin {
   width: 100%;
+  min-height: 180px;
+}
+
+.cafe-order-review-block {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  display: grid;
+  gap: 10px;
+}
+
+.cafe-order-review-form {
+  display: grid;
+  gap: 8px;
+}
+
+.cafe-order-review-form textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.cafe-rate-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+.client-cafe-order-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.client-cafe-order-row {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #fff;
+  cursor: pointer;
+}
+
+.client-cafe-order-row:hover {
+  border-color: rgba(239, 108, 0, 0.45);
+}
+
+.cafe-order-review-done .review-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cafe-order-review-done .review-photos img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
 }
 
 .salon-package-list {

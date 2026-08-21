@@ -58,7 +58,7 @@ function drawZones(ymaps, map, zonesLayerRef, zones) {
     collection.add(
       new ymaps.Polygon(
         [ring],
-        { hintContent: `${z.name || "Зона"}: ${feeLabel}` },
+        { hintContent: `Доставка ${feeLabel}` },
         {
           fillColor: `${z.color || "#ff6a00"}44`,
           strokeColor: z.color || "#ff6a00",
@@ -72,7 +72,7 @@ function drawZones(ymaps, map, zonesLayerRef, zones) {
       collection.add(
         new ymaps.Placemark(
           center,
-          { iconContent: feeLabel, hintContent: `${z.name || "Зона"}: ${feeLabel}` },
+          { iconContent: feeLabel, hintContent: `Доставка ${feeLabel}` },
           { preset: "islands#darkOrangeStretchyIcon", cursor: "pointer" },
         ),
       );
@@ -127,7 +127,7 @@ export default function CafeGuestDeliveryMap({
     }
     setHint(
       zone
-        ? `Зона «${zone.name}»: доставка ${Number(zone.fee || 0).toLocaleString("ru-RU")} ₽`
+        ? `Доставка ${Number(zone.fee || 0).toLocaleString("ru-RU")} ₽`
         : "Точка выбрана",
     );
     onPickRef.current?.({ lat, lon, zone: zone || null, address: address || "", outside: false });
@@ -226,7 +226,7 @@ export default function CafeGuestDeliveryMap({
       });
     });
     const zone = findZoneAt(pin.lat, pin.lon, zones);
-    if (zone) setHint(`Зона «${zone.name}»: доставка ${Number(zone.fee || 0).toLocaleString("ru-RU")} ₽`);
+    if (zone) setHint(`Доставка ${Number(zone.fee || 0).toLocaleString("ru-RU")} ₽`);
     else if ((zones || []).length) setHint("Точка вне зоны доставки");
     else setHint("Точка выбрана");
   }, [pin, zones]);

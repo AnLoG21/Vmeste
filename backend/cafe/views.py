@@ -82,7 +82,7 @@ def _client_orders_queryset(user):
     qs = (
         CafeOrder.objects.filter(q)
         .select_related("provider")
-        .prefetch_related("items", "item_ratings")
+        .prefetch_related("items", "item_ratings", "reviews__photos")
         .order_by("-id")
     )
     # Exact phone match filter for safety when phone used
@@ -1096,13 +1096,12 @@ class CafeGuestOrderCreateView(APIView):
                     if items_total < zone_min and zone_min > 0:
                         order.delete()
                         return Response(
-                            {"detail": f"Минимальная сумма для зоны «{zone.get('name')}»: {zone_min} ₽."},
+                            {"detail": f"Минимальная сумма заказа для доставки: {zone_min} ₽."},
                             status=status.HTTP_400_BAD_REQUEST,
                         )
                     delivery_fee = zone_fee
-                    note = f"[зона: {zone.get('name')}]"
-                    if note not in (order.delivery_address or ""):
-                        order.delivery_address = f"{delivery_address} {note}".strip()
+                    # зону в адрес не пишем — клиенту не нужна
+                    order.delivery_address = delivery_address
                 else:
                     if items_total < settings_obj.delivery_min_order and settings_obj.delivery_min_order > 0:
                         order.delete()
@@ -1245,16 +1244,11 @@ class CafeMenuItemRateView(APIView):
         order = CafeOrder.objects.filter(pk=order_id, guest_session_token=sess.token).first()
         if not order:
             return Response({"order_id": ["Заказ не найден."]}, status=status.HTTP_404_NOT_FOUND)
-        if order.status not in {
-            CafeOrder.Status.PAID,
-            CafeOrder.Status.ACCEPTED,
-            CafeOrder.Status.COOKING,
-            CafeOrder.Status.READY,
-            CafeOrder.Status.TO_COURIER,
-            CafeOrder.Status.DELIVERING,
-            CafeOrder.Status.DONE,
-        }:
-            return Response({"order_id": ["Оценить блюда можно после оформления заказа."]}, status=status.HTTP_400_BAD_REQUEST)
+        if order.status != CafeOrder.Status.DONE:
+            return Response(
+                {"order_id": ["Оценить блюда можно после завершения заказа."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         item = get_object_or_404(CafeMenuItem, pk=pk, is_active=True)
         if not order.items.filter(menu_item_id=item.id).exists():
             return Response({"detail": ["Это блюдо не входило в заказ."]}, status=status.HTTP_400_BAD_REQUEST)
@@ -1287,7 +1281,7 @@ class CafeClientOrdersView(APIView):
         # Auto-claim matching unlinked guest orders so they stay under client=
         _claim_orders_for_user(user, [o for o in orders if not o.client_id])
         orders = _client_orders_queryset(user)
-        return Response(CafeOrderSerializer(orders, many=True).data)
+        return Response(CafeOrderSerializer(orders, many=True, context={"request": request}).data)
 
     def post(self, request):
         """Привязать заказы по id (из localStorage гостевого меню), если телефон/email совпали."""
@@ -1325,7 +1319,7 @@ class CafeClientOrderDetailView(APIView):
         order = (
             CafeOrder.objects.filter(pk=pk)
             .select_related("provider")
-            .prefetch_related("items", "item_ratings")
+            .prefetch_related("items", "item_ratings", "reviews__photos")
             .first()
         )
         if not order:
@@ -1343,4 +1337,43 @@ class CafeClientOrderDetailView(APIView):
         if not order.client_id:
             order.client = request.user
             order.save(update_fields=["client", "updated_at"])
-        return Response(CafeOrderSerializer(order).data)
+        return Response(CafeOrderSerializer(order, context={"request": request}).data)
+
+    def post(self, request, pk):
+        """Оценить блюдо из завершённого заказа (звёзды 1–5)."""
+        order = CafeOrder.objects.filter(pk=pk).prefetch_related("items").first()
+        if not order:
+            return Response({"detail": "Не найдено."}, status=status.HTTP_404_NOT_FOUND)
+        ok = order.client_id == request.user.id
+        if not ok:
+            phone = _phone_digits(getattr(request.user, "phone", "") or "")
+            ok = bool(phone and _phone_digits(order.guest_phone) == phone)
+        if not ok:
+            return Response({"detail": "Не найдено."}, status=status.HTTP_404_NOT_FOUND)
+        if order.status != CafeOrder.Status.DONE:
+            return Response({"detail": "Оценить можно только завершённый заказ."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            rating = int(request.data.get("rating") or 0)
+            menu_item_id = int(request.data.get("menu_item") or 0)
+        except (TypeError, ValueError):
+            return Response({"detail": "Укажите menu_item и rating."}, status=status.HTTP_400_BAD_REQUEST)
+        if rating < 1 or rating > 5:
+            return Response({"rating": ["Оценка от 1 до 5."]}, status=status.HTTP_400_BAD_REQUEST)
+        if not order.items.filter(menu_item_id=menu_item_id).exists():
+            return Response({"detail": "Это блюдо не входило в заказ."}, status=status.HTTP_400_BAD_REQUEST)
+        item = CafeMenuItem.objects.filter(pk=menu_item_id, is_active=True).first()
+        if not item:
+            return Response({"detail": "Блюдо не найдено."}, status=status.HTTP_404_NOT_FOUND)
+        if CafeOrderItemRating.objects.filter(order=order, menu_item=item).exists():
+            return Response({"detail": "Вы уже оценили это блюдо."}, status=status.HTTP_400_BAD_REQUEST)
+        CafeOrderItemRating.objects.create(order=order, menu_item=item, rating=rating)
+        item.rating_sum += rating
+        item.rating_count += 1
+        item.save(update_fields=["rating_sum", "rating_count", "updated_at"])
+        return Response(
+            {
+                "id": item.id,
+                "rating_avg": round(item.rating_sum / item.rating_count, 1),
+                "rating_count": item.rating_count,
+            }
+        )

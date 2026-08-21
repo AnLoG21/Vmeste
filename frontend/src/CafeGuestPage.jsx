@@ -240,9 +240,9 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || cancelled) return;
       setCompletedOrder(data);
-      if (data.status === "awaiting_payment" && attempts < 12) {
+      if (!["done", "cancelled"].includes(data.status) && attempts < 48) {
         attempts += 1;
-        window.setTimeout(loadOrder, 2500);
+        window.setTimeout(loadOrder, data.status === "awaiting_payment" ? 2500 : 8000);
       }
     }
 
@@ -843,7 +843,7 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
           {completedOrder?.can_rate ? (
             <section className="cafe-guest-card cafe-rating-panel">
               <h2>Оцените блюда из заказа #{completedOrder.id}</h2>
-              <p className="muted small">Оценку можно поставить только после оформления заказа.</p>
+              <p className="muted small">Оценку можно поставить после завершения заказа.</p>
               <ul className="cafe-rating-list">
                 {(completedOrder.items || []).map((line) => {
                   const rated = ratedIds.has(line.menu_item);
@@ -1027,7 +1027,6 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                               ? `${Number(deliveryAmount).toLocaleString("ru-RU")} ₽`
                               : "—"}
                           </strong>
-                          {deliveryZone?.name ? ` · зона «${deliveryZone.name}»` : ""}
                         </p>
                       ) : null}
                       {deliveryFeeError ? <p className="cafe-delivery-fee-error">{deliveryFeeError}</p> : null}
