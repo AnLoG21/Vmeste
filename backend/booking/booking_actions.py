@@ -121,6 +121,26 @@ def confirm_booking(booking, actor):
     return True, None
 
 
+def mark_client_arrived(booking, actor):
+    if booking.status not in (Booking.Status.NEW, Booking.Status.CONFIRMED):
+        return False, "invalid_status"
+    booking.status = Booking.Status.ARRIVED
+    booking.save(update_fields=["status"])
+    try:
+        from notifications.delivery import deliver_booking_event
+
+        deliver_booking_event(
+            booking,
+            "arrived",
+            f"Клиент пришёл · {format_booking_when(booking)}",
+            audience="org",
+            title_org="Клиент пришёл",
+        )
+    except Exception:
+        pass
+    return True, None
+
+
 def cancel_booking_by_org(booking, actor):
     provider = booking.provider
     msg_tpl = (getattr(provider, "booking_cancel_message_default", None) or "").strip()

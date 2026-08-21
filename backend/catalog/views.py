@@ -8,11 +8,32 @@ from rest_framework.views import APIView
 from users.models import User
 
 from booking.booking_windows import filter_services_bookable_by_staff
+from booking.models import ProviderStaff
 
 from .catalog_seed import provider_catalog_status, seed_provider_catalog
 from .models import Service, ServiceCategory, ServiceOption, ServicePhoto
 from .serializers import ServiceCategorySerializer, ServiceOptionSerializer, ServicePhotoSerializer, ServiceSerializer
 from .sphere_templates import get_sphere_catalog, list_sphere_catalogs
+
+
+def _staff_org_provider(user):
+    return (
+        ProviderStaff.objects.filter(
+            staff=user,
+            is_active=True,
+            invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+        )
+        .select_related("provider")
+        .first()
+    )
+
+
+def _staff_can_manage_services(user) -> bool:
+    link = _staff_org_provider(user)
+    if not link:
+        return False
+    perms = link.permissions if isinstance(link.permissions, dict) else {}
+    return bool(perms.get("manage_services"))
 
 
 class ServiceCategoryViewSet(viewsets.ModelViewSet):
@@ -28,7 +49,7 @@ class ServiceCategoryViewSet(viewsets.ModelViewSet):
             return ServiceCategory.objects.filter(provider_id=provider).prefetch_related("subcategories")
         if user.role == "staff":
             return (
-                ServiceCategory.objects.filter(Q(provider=user) | Q(provider__staff_links__staff=user))
+                ServiceCategory.objects.filter(provider__staff_links__staff=user)
                 .prefetch_related("subcategories")
                 .distinct()
             )
@@ -36,6 +57,14 @@ class ServiceCategoryViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
+        if user.role == User.Role.STAFF:
+            if not _staff_can_manage_services(user):
+                from rest_framework.exceptions import PermissionDenied
+
+                raise PermissionDenied("Нет права управлять услугами.")
+            link = _staff_org_provider(user)
+            serializer.save(provider=link.provider)
+            return
         if user.role == User.Role.PROVIDER and not serializer.validated_data.get("template_slug"):
             from rest_framework.exceptions import PermissionDenied
 
@@ -64,7 +93,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
                 return filter_services_bookable_by_staff(int(provider), qs)
             return qs.filter(provider=self.request.user)
         if self.request.user.role == "staff":
-            return qs.filter(Q(provider=self.request.user) | Q(provider__staff_links__staff=self.request.user)).distinct()
+            return qs.filter(provider__staff_links__staff=self.request.user).distinct()
         if self.request.user.role == "client" and provider:
             qs = qs.filter(provider_id=provider, is_active=True)
             return filter_services_bookable_by_staff(int(provider), qs)
@@ -72,6 +101,14 @@ class ServiceViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
+        if user.role == User.Role.STAFF:
+            if not _staff_can_manage_services(user):
+                from rest_framework.exceptions import PermissionDenied
+
+                raise PermissionDenied("Нет права управлять услугами.")
+            link = _staff_org_provider(user)
+            serializer.save(provider=link.provider)
+            return
         if user.role == User.Role.PROVIDER and not serializer.validated_data.get("template_slug"):
             from rest_framework.exceptions import PermissionDenied
 

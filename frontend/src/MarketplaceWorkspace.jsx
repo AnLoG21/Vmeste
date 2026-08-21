@@ -702,7 +702,7 @@ function marketplaceIdsFromRow(row) {
   };
 }
 
-export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }) {
+export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, initialTab = null, onInitialTabConsumed }) {
   const canViewKeys = accessPerms?.marketplace_view_keys !== false;
   const canManageOrders = accessPerms?.marketplace_manage_orders !== false;
   const canManageCatalog = accessPerms?.marketplace_manage_catalog !== false;
@@ -711,6 +711,12 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms }
   const [onboardStep, setOnboardStep] = useState(1);
   const [onboardDismissed, setOnboardDismissed] = useState(readOnboardDone);
   const [tab, setTab] = useState(canManageOrders ? "today" : canManageCatalog ? "create" : "manage");
+
+  useEffect(() => {
+    if (!initialTab) return;
+    setTab(initialTab);
+    onInitialTabConsumed?.();
+  }, [initialTab, onInitialTabConsumed]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mp, setMp] = useState("ozon");
   const [settings, setSettings] = useState(null);

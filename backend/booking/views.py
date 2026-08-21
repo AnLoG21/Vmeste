@@ -273,13 +273,54 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
         if self.request.user.role == "provider":
             qs = qs.filter(provider=self.request.user)
         elif self.request.user.role == "staff":
-            qs = qs.filter(
-                Q(provider=self.request.user) | Q(provider__staff_links__staff=self.request.user)
-            ).distinct()
+            links = list(
+                ProviderStaff.objects.filter(
+                    staff=self.request.user,
+                    is_active=True,
+                    invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+                )
+            )
+            provider_ids = [l.provider_id for l in links]
+            qs = qs.filter(provider_id__in=provider_ids)
+            sees_all = any(
+                bool((l.permissions or {}).get("manage_staff"))
+                or bool((l.permissions or {}).get("can_delegate_permissions"))
+                or bool((l.permissions or {}).get("manage_intervals"))
+                for l in links
+            )
+            if not sees_all:
+                qs = qs.filter(Q(staff_id=self.request.user.id) | Q(staff__isnull=True))
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(provider=self.request.user)
+        user = self.request.user
+        if user.role == "provider":
+            serializer.save(provider=user)
+            return
+        if user.role == "staff":
+            link = (
+                ProviderStaff.objects.filter(
+                    staff=user,
+                    is_active=True,
+                    invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+                )
+                .select_related("provider")
+                .first()
+            )
+            if not link:
+                from rest_framework.exceptions import PermissionDenied
+
+                raise PermissionDenied("Нет привязки к организации.")
+            perms = link.permissions if isinstance(link.permissions, dict) else {}
+            if not perms.get("manage_intervals"):
+                from rest_framework.exceptions import PermissionDenied
+
+                raise PermissionDenied("Нет права управлять интервалами.")
+            serializer.save(provider=link.provider, staff=serializer.validated_data.get("staff") or user)
+            return
+        from rest_framework.exceptions import PermissionDenied
+
+        raise PermissionDenied()
 
     @action(detail=False, methods=["get"], url_path="available-windows")
     def available_windows(self, request):
@@ -464,12 +505,24 @@ class BookingViewSet(viewsets.ModelViewSet):
         if user.role == "provider":
             return self._booking_queryset(Booking.objects.filter(provider=user))
         if user.role == "staff":
-            provider_ids = ProviderStaff.objects.filter(
-                staff=user,
-                is_active=True,
-                invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
-            ).values_list("provider_id", flat=True)
-            return self._booking_queryset(Booking.objects.filter(provider_id__in=provider_ids))
+            links = list(
+                ProviderStaff.objects.filter(
+                    staff=user,
+                    is_active=True,
+                    invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+                )
+            )
+            provider_ids = [l.provider_id for l in links]
+            qs = self._booking_queryset(Booking.objects.filter(provider_id__in=provider_ids))
+            # Мастер без права управлять сотрудниками видит только свои записи
+            sees_all = any(
+                bool((l.permissions or {}).get("manage_staff"))
+                or bool((l.permissions or {}).get("can_delegate_permissions"))
+                for l in links
+            )
+            if not sees_all:
+                qs = qs.filter(staff_id=user.id)
+            return qs
         return self._booking_queryset(Booking.objects.filter(client=user))
 
     def _respond_created_booking(self, booking):
@@ -654,6 +707,20 @@ class BookingViewSet(viewsets.ModelViewSet):
             if err == "prepay_required":
                 payload["detail"] = "Клиент ещё не внёс предоплату — подтвердить запись нельзя."
             return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.get_serializer(booking).data)
+
+    @action(detail=True, methods=["post"], url_path="mark-arrived")
+    def mark_arrived(self, request, pk=None):
+        from .booking_actions import mark_client_arrived
+
+        booking = self.get_object()
+        if not self._booking_for_actor(booking) or not self._staff_has_booking_perm(booking):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if request.user.role == "client":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        ok, err = mark_client_arrived(booking, request.user)
+        if not ok:
+            return Response({"code": err}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(booking).data)
 
     @action(detail=True, methods=["post"], url_path="cancel-by-org")

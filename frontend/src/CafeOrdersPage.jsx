@@ -83,7 +83,7 @@ function PrintReceiptIcon() {
   );
 }
 
-export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null }) {
+export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null, orgStaff = [], providerId = null }) {
   const perms = accessPerms || {
     cafe_orders: true,
     cafe_kitchen: true,
@@ -94,6 +94,24 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null 
   const canKitchen = Boolean(perms.cafe_kitchen);
   const canSeating = Boolean(perms.cafe_seating);
   const canDelivery = Boolean(perms.cafe_delivery);
+  const courierOptions = useMemo(() => {
+    const list = (orgStaff || []).filter((l) => l.is_active && l.invitation_status !== "pending");
+    return list.map((l) => ({
+      id: Number(l.staff || l.staff_user?.id),
+      name:
+        [l.staff_user?.first_name, l.staff_user?.last_name].filter(Boolean).join(" ").trim() ||
+        l.display_name ||
+        l.staff_username ||
+        `#${l.staff}`,
+    })).filter((x) => Number.isFinite(x.id));
+  }, [orgStaff]);
+
+  async function assignCourier(order, courierUserId) {
+    const updated = await setOrderStatus(order.id, order.status, {
+      courier_user: courierUserId === "" || courierUserId == null ? null : Number(courierUserId),
+    });
+    if (updated) setGeoStatus(courierUserId ? "Курьер назначен" : "Назначение курьера снято");
+  }
 
   const defaultTab = canOrders ? "orders" : canKitchen ? "kitchen" : canSeating ? "seating" : "orders";
   const [tab, setTab] = useState(defaultTab);
@@ -535,6 +553,26 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null 
                 )}
                 {o.delivery_fee != null ? (
                   <p className="muted small">Доставка: {Number(o.delivery_fee).toLocaleString("ru-RU")} ₽</p>
+                ) : null}
+                {o.mode === "delivery" && canDelivery ? (
+                  <label className="field-label cafe-courier-assign">
+                    Курьер
+                    <select
+                      value={o.courier_user || ""}
+                      onChange={(e) => assignCourier(o, e.target.value)}
+                    >
+                      <option value="">Не назначен</option>
+                      {providerId ? <option value={String(providerId)}>Владелец / я</option> : null}
+                      {courierOptions.map((c) => (
+                        <option key={c.id} value={String(c.id)}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    {o.courier_user_name ? (
+                      <span className="muted small"> Сейчас: {o.courier_user_name}</span>
+                    ) : null}
+                  </label>
                 ) : null}
                 {hasCoords(o.delivery_lat, o.delivery_lon) ? (
                   <>

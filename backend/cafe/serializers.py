@@ -254,6 +254,7 @@ class CafeOrderSerializer(serializers.ModelSerializer):
     delivery_lon = serializers.SerializerMethodField()
     courier_lat = serializers.SerializerMethodField()
     courier_lon = serializers.SerializerMethodField()
+    courier_user_name = serializers.SerializerMethodField()
 
     class Meta:
         model = CafeOrder
@@ -276,6 +277,8 @@ class CafeOrderSerializer(serializers.ModelSerializer):
             "courier_lat",
             "courier_lon",
             "courier_updated_at",
+            "courier_user",
+            "courier_user_name",
             "comment",
             "items_total",
             "tip_percent",
@@ -349,6 +352,13 @@ class CafeOrderSerializer(serializers.ModelSerializer):
 
     def get_courier_lon(self, obj):
         return self._coord(obj.courier_lon)
+
+    def get_courier_user_name(self, obj):
+        u = getattr(obj, "courier_user", None)
+        if not u:
+            return ""
+        name = " ".join(p for p in (u.first_name, u.last_name) if p).strip()
+        return name or u.username or ""
 
     def get_delivery_address(self, obj):
         import re

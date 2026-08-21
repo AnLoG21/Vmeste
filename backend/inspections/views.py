@@ -56,6 +56,8 @@ def _can_manage_reports(user) -> bool:
         if not link:
             return False
         perms = link.permissions or {}
+        if "manage_inspections" in perms:
+            return bool(perms.get("manage_inspections"))
         return bool(perms.get("manage_bookings", True))
     return False
 

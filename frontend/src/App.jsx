@@ -235,8 +235,8 @@ const BOOKMARK_CATALOG = [
   { id: "bookings", label: "Записи", labelClient: "Мои записи", roles: ["client", "provider", "staff"] },
   { id: "my_bookings", label: "Мои записи", roles: ["provider"] },
   { id: "reviews", label: "Отзывы", roles: ["provider", "staff"] },
-  { id: "intervals", label: "Календарь интервалов", roles: ["provider"], menuIcon: "calendar" },
-  { id: "services", label: "Услуги и категории", roles: ["provider"], menuIcon: "services" },
+  { id: "intervals", label: "Календарь интервалов", roles: ["provider", "staff"], menuIcon: "calendar" },
+  { id: "services", label: "Услуги и категории", roles: ["provider", "staff"], menuIcon: "services" },
   { id: "chats", label: "Чаты", roles: ["client", "provider", "staff"] },
   { id: "settings", label: "Настройки", roles: ["client", "provider", "staff"] },
   { id: "profile", label: "Личный кабинет", roles: ["client", "provider", "staff"] },
@@ -257,10 +257,10 @@ const DEFAULT_SUBNAV_BOOKMARKS = {
   client: ["client_map", "bookings", "cafe_my_orders", "loyalty", "chats"],
   provider: ["bookings", "client_map", "my_bookings", "chats"],
   staff: ["bookings", "reviews", "chats"],
-  provider_cafe: ["cafe_orders", "cafe", "analytics", "client_map", "chats"],
+  provider_cafe: ["cafe_orders", "cafe", "reviews", "analytics", "client_map", "chats"],
   staff_cafe: ["cafe_orders", "cafe", "chats"],
   provider_service: ["bookings", "client_map", "my_bookings", "chats", "inspections"],
-  provider_marketplaces: ["marketplaces", "chats"],
+  provider_marketplaces: ["marketplaces", "analytics", "reviews", "chats"],
 };
 
 function defaultSubnavBookmarks(role, sphere) {
@@ -323,9 +323,7 @@ function loadSubnavBookmarks(role, sphere) {
           id !== "bookings" &&
           id !== "intervals" &&
           id !== "services" &&
-          id !== "my_bookings" &&
-          id !== "analytics" &&
-          id !== "reviews",
+          id !== "my_bookings",
       );
       if (!next.includes("marketplaces")) next = ["marketplaces", ...next];
       else next = ["marketplaces", ...next.filter((id) => id !== "marketplaces")];
@@ -1510,6 +1508,7 @@ function bookingSlotCompactIcon(statusModifier) {
 const BOOKING_STATUS_LABELS = {
   new: "Новая",
   confirmed: "Подтверждена",
+  arrived: "Клиент пришёл",
   cancelled: "Отменена",
   done: "Оказана",
   manual_hold: "Ручная бронь",
@@ -2423,6 +2422,7 @@ export default function App() {
     navigateView(view);
   }, []);
   const [cafeWorkspaceTab, setCafeWorkspaceTab] = useState("floor");
+  const [marketplaceInitialTab, setMarketplaceInitialTab] = useState(null);
   const [historyTab, setHistoryTab] = useState("bookings");
   const [authProviders, setAuthProviders] = useState({ telegram: "" });
   const telegramLoginHostRef = useRef(null);
@@ -2864,6 +2864,7 @@ export default function App() {
       manage_client_chats: true,
       manage_staff: false,
       can_delegate_permissions: false,
+      manage_inspections: false,
       marketplace_view_keys: false,
       marketplace_manage_orders: true,
       marketplace_manage_catalog: false,
@@ -3013,7 +3014,6 @@ export default function App() {
   }
 
   function canViewOrgReviews() {
-    if (me?.provider_sphere === "cafe_restaurant" || me?.employer_sphere === "cafe_restaurant") return false;
     if (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces") return false;
     return me?.role === "provider" || (me?.role === "staff" && staffHasPerm("manage_bookings"));
   }
@@ -7082,6 +7082,8 @@ export default function App() {
     if (id === "analytics" && role === "staff" && !staffHasPerm("manage_bookings")) return false;
     if (role === "staff") {
       if (id === "bookings" && !staffHasPerm("manage_bookings")) return false;
+      if (id === "intervals" && !staffHasPerm("manage_intervals")) return false;
+      if (id === "services" && !staffHasPerm("manage_services")) return false;
       if (id === "chats" && !staffHasPerm("manage_chats") && !staffHasPerm("manage_client_chats")) return false;
     }
     if ((id === "staff" || id === "organization") && !canManageOrgSettings) return false;
@@ -7091,8 +7093,7 @@ export default function App() {
         id === "bookings" ||
         id === "services" ||
         id === "my_bookings" ||
-        id === "booking_history" ||
-        id === "reviews"
+        id === "booking_history"
       ) {
         return false;
       }
@@ -7118,7 +7119,10 @@ export default function App() {
     }
     if (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces") {
       if (id === "intervals" || id === "bookings" || id === "services" || id === "my_bookings") return false;
-      if (id === "analytics" || id === "reviews") return false;
+      if (id === "analytics" || id === "reviews") {
+        // Маркетплейсы: открываем внутренние вкладки кабинета
+        return role === "provider" || role === "staff";
+      }
       if (id === "marketplaces") {
         if (role === "provider") return me?.provider_sphere === "marketplaces";
         if (role === "staff") {
@@ -7136,7 +7140,12 @@ export default function App() {
     if (id === "inspections") {
       if (role === "client") return false;
       if (role === "provider") return me?.provider_sphere === "service_center";
-      if (role === "staff") return staffHasPerm("manage_bookings") && (me?.provider_sphere === "service_center" || me?.employer_sphere === "service_center");
+      if (role === "staff") {
+        return (
+          (staffHasPerm("manage_inspections") || staffHasPerm("manage_bookings")) &&
+          (me?.provider_sphere === "service_center" || me?.employer_sphere === "service_center")
+        );
+      }
       return false;
     }
     return true;
@@ -7146,7 +7155,17 @@ export default function App() {
     setMenuOpen(false);
     if (id === "chats" && isMobileChatLayout()) setSelectedChatId(null);
     if (id === "reviews") {
+      if (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces") {
+        setMarketplaceInitialTab("reviews");
+        setCurrentView("marketplaces");
+        return;
+      }
       openProviderReviews();
+      return;
+    }
+    if (id === "analytics" && (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces")) {
+      setMarketplaceInitialTab("analytics");
+      setCurrentView("marketplaces");
       return;
     }
     if (id === "cafe") setCafeWorkspaceTab("floor");
@@ -9174,6 +9193,16 @@ export default function App() {
         {isOrg && !cancelled && it.status === "new" && it.payment_status !== "pending" && (
           <button type="button" className="booking-action-btn booking-action-btn--confirm" title="Подтвердить" onClick={(e) => orgBookingAction(it.id, "confirm", e)}>
             ✓
+          </button>
+        )}
+        {isOrg && !cancelled && (it.status === "confirmed" || it.status === "new") && it.payment_status !== "pending" && (
+          <button
+            type="button"
+            className="booking-action-btn"
+            title="Клиент пришёл"
+            onClick={(e) => orgBookingAction(it.id, "mark-arrived", e)}
+          >
+            ↓
           </button>
         )}
         {isOrg && !cancelled && it.client && (me?.provider_sphere === "service_center" || me?.employer_sphere === "service_center" || me?.role === "staff") && (
@@ -11776,6 +11805,7 @@ export default function App() {
               ["manage_client_chats", "Чаты с клиентами"],
               ["manage_staff", "Добавление сотрудников"],
               ["can_delegate_permissions", "Может настраивать права других"],
+              ["manage_inspections", "Автосервис: приёмка / заказ-наряды"],
               ["marketplace_view_keys", "Маркетплейсы: видеть/менять ключи"],
               ["marketplace_manage_orders", "Маркетплейсы: только заказы/отзывы"],
               ["marketplace_manage_catalog", "Маркетплейсы: каталог и выгрузка"],
@@ -11787,12 +11817,22 @@ export default function App() {
               ["cafe_settings", "Кафе: настройки и зоны"],
             ].filter(([key]) => {
               if (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces") {
-                return !["manage_bookings", "manage_intervals", "manage_services"].includes(key) && !String(key).startsWith("cafe_");
+                return !["manage_bookings", "manage_intervals", "manage_services", "manage_inspections"].includes(key) && !String(key).startsWith("cafe_");
               }
               if (me?.provider_sphere === "cafe_restaurant") {
                 return (
-                  !["manage_bookings", "manage_intervals", "manage_services"].includes(key) &&
+                  !["manage_bookings", "manage_intervals", "manage_services", "manage_inspections"].includes(key) &&
                   !String(key).startsWith("marketplace_")
+                );
+              }
+              if (me?.provider_sphere === "service_center") {
+                return !String(key).startsWith("marketplace_") && !String(key).startsWith("cafe_");
+              }
+              if (me?.provider_sphere === "hair_salon") {
+                return (
+                  !String(key).startsWith("marketplace_") &&
+                  !String(key).startsWith("cafe_") &&
+                  key !== "manage_inspections"
                 );
               }
               return !String(key).startsWith("marketplace_") && !String(key).startsWith("cafe_");
@@ -12745,10 +12785,24 @@ export default function App() {
                           setCurrentView("inspections");
                           return;
                         }
+                        if (
+                          n.kind === "cafe_new_order" ||
+                          n.kind === "cafe_waiter_call" ||
+                          n.payload?.view === "cafe_orders" ||
+                          n.payload?.sphere === "cafe_restaurant"
+                        ) {
+                          markInAppNotificationsRead([n.id]);
+                          setCurrentView("cafe_orders");
+                          return;
+                        }
                         markInAppNotificationsRead([n.id]);
                       }}
                     >
-                      {n.kind === "inspection" ? "Открыть" : "Понятно"}
+                      {n.kind === "inspection" ||
+                      n.kind === "cafe_new_order" ||
+                      n.kind === "cafe_waiter_call"
+                        ? "Открыть"
+                        : "Понятно"}
                     </button>
                   </div>
                 ))}
@@ -12943,7 +12997,13 @@ export default function App() {
             cafeAccessPerms.cafe_kitchen ||
             cafeAccessPerms.cafe_seating ||
             cafeAccessPerms.cafe_delivery) && (
-          <CafeOrdersPage authFetch={authFetch} API_URL={API_URL} accessPerms={cafeAccessPerms} />
+          <CafeOrdersPage
+            authFetch={authFetch}
+            API_URL={API_URL}
+            accessPerms={cafeAccessPerms}
+            orgStaff={orgStaff}
+            providerId={me?.role === "provider" ? me.id : me?.employer_id}
+          />
         )}
         {accessToken &&
           currentView === "marketplaces" &&
@@ -12955,6 +13015,8 @@ export default function App() {
           <MarketplaceWorkspace
             authFetch={authFetch}
             API_URL={API_URL}
+            initialTab={marketplaceInitialTab}
+            onInitialTabConsumed={() => setMarketplaceInitialTab(null)}
             accessPerms={
               me?.role === "staff"
                 ? {
@@ -12996,6 +13058,13 @@ export default function App() {
         {accessToken && canViewOrgReviews() && currentView === "reviews" && renderProviderReviewsBlock()}
         {accessToken && me?.role === "provider" && currentView === "bookings" && me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" && renderBookingsBlock("Записи клиентов")}
         {accessToken && me?.role === "provider" && currentView === "intervals" && me?.provider_sphere !== "cafe_restaurant" && renderSlotCalendar(true)}
+        {accessToken &&
+          me?.role === "staff" &&
+          currentView === "intervals" &&
+          staffHasPerm("manage_intervals") &&
+          me?.employer_sphere !== "cafe_restaurant" &&
+          me?.provider_sphere !== "cafe_restaurant" &&
+          renderSlotCalendar(true)}
         {accessToken && me?.role === "staff" && currentView === "bookings" && staffHasPerm("manage_bookings") && me?.provider_sphere !== "cafe_restaurant" && me?.employer_sphere !== "cafe_restaurant" && renderBookingsBlock("Записи")}
         {accessToken && currentView === "chats" && (me?.role === "client" || me?.role === "provider" || me?.role === "staff") && (
           <section className="card full-width tg-chats-card">
@@ -14336,7 +14405,13 @@ export default function App() {
           </section>
         )}
 
-        {accessToken && me?.role === "provider" && currentView === "services" && me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" && (
+        {accessToken &&
+          currentView === "services" &&
+          me?.provider_sphere !== "cafe_restaurant" &&
+          me?.provider_sphere !== "marketplaces" &&
+          me?.employer_sphere !== "cafe_restaurant" &&
+          me?.employer_sphere !== "marketplaces" &&
+          (me?.role === "provider" || (me?.role === "staff" && staffHasPerm("manage_services"))) && (
           <div className="services-layout">
             <section className="card">
               {renderServiceTree()}
@@ -14365,13 +14440,18 @@ export default function App() {
               )}
               <p className="status">{sellerStatus}</p>
             </section>
-            {(me?.provider_sphere === "hair_salon" || me?.provider_sphere === "service_center") && (
+            {(me?.provider_sphere === "hair_salon") && (
               <SalonLoyaltyPackagesPanel
                 authFetch={authFetch}
                 API_URL={API_URL}
                 services={services.filter((s) => s.is_active !== false)}
               />
             )}
+            {me?.provider_sphere === "service_center" ? (
+              <p className="muted small">
+                Абонементы и баллы — для салонов. В автосервисе используйте приёмку и заказ-наряды.
+              </p>
+            ) : null}
           </div>
         )}
 

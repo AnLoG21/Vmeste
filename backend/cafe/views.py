@@ -565,7 +565,7 @@ class CafeProviderOrdersView(APIView):
         provider, err = _cafe_auth(request, need_orders=True, need_kitchen=True, need_delivery=True, need_seating=True)
         if err:
             return err
-        qs = CafeOrder.objects.filter(provider=provider).prefetch_related("items")[:100]
+        qs = CafeOrder.objects.filter(provider=provider).select_related("courier_user").prefetch_related("items")[:100]
         return Response(CafeOrderSerializer(qs, many=True).data)
 
     def post(self, request):
@@ -665,6 +665,31 @@ class CafeProviderOrdersView(APIView):
             return Response({"status": ["Некорректный статус."]}, status=status.HTTP_400_BAD_REQUEST)
         order.status = new_status
         update_fields = ["status", "updated_at"]
+        if "courier_user" in request.data or "courier_user_id" in request.data:
+            raw_c = request.data.get("courier_user", request.data.get("courier_user_id"))
+            if raw_c in (None, "", "null"):
+                order.courier_user_id = None
+                update_fields.append("courier_user")
+            else:
+                try:
+                    cid = int(raw_c)
+                except (TypeError, ValueError):
+                    return Response({"courier_user": ["Некорректный сотрудник."]}, status=status.HTTP_400_BAD_REQUEST)
+                from booking.models import ProviderStaff
+
+                ok = ProviderStaff.objects.filter(
+                    provider=provider,
+                    staff_id=cid,
+                    is_active=True,
+                    invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+                ).exists()
+                if not ok and cid != provider.id:
+                    return Response(
+                        {"courier_user": ["Сотрудник не найден в организации."]},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                order.courier_user_id = cid
+                update_fields.append("courier_user")
         if "courier_lat" in request.data and "courier_lon" in request.data:
             try:
                 clat = float(request.data.get("courier_lat"))

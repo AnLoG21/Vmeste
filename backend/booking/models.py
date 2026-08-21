@@ -11,6 +11,7 @@ def default_staff_permissions():
         "manage_client_chats": True,
         "manage_staff": False,
         "can_delegate_permissions": False,
+        "manage_inspections": False,
         "marketplace_view_keys": False,
         "marketplace_manage_orders": True,
         "marketplace_manage_catalog": False,
@@ -56,6 +57,7 @@ class Booking(models.Model):
     class Status(models.TextChoices):
         NEW = "new", "New"
         CONFIRMED = "confirmed", "Confirmed"
+        ARRIVED = "arrived", "Клиент пришёл"
         CANCELLED = "cancelled", "Cancelled"
         DONE = "done", "Done"
 

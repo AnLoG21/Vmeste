@@ -343,6 +343,14 @@ class CafeOrder(models.Model):
     courier_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     courier_lon = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     courier_updated_at = models.DateTimeField(null=True, blank=True)
+    courier_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cafe_courier_orders",
+        help_text="Сотрудник-курьер, назначенный на доставку.",
+    )
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     yookassa_payment_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     confirmation_url = models.URLField(blank=True, default="")
