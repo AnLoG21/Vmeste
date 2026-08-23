@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     "cafe",
     "inspections",
     "marketplaces",
+    "voice",
 ]
 
 MIDDLEWARE = [
@@ -239,6 +240,9 @@ TELEGRAM_HTTP_PROXY = os.environ.get("TELEGRAM_HTTP_PROXY", "")
 
 YANDEX_OAUTH_CLIENT_ID = os.environ.get("YANDEX_OAUTH_CLIENT_ID", "").strip()
 YANDEX_OAUTH_CLIENT_SECRET = os.environ.get("YANDEX_OAUTH_CLIENT_SECRET", "").strip()
+YANDEX_CLOUD_FOLDER_ID = os.environ.get("YANDEX_CLOUD_FOLDER_ID", "").strip()
+YANDEX_GPT_API_KEY = os.environ.get("YANDEX_GPT_API_KEY", "").strip()
+YANDEX_SPEECHKIT_API_KEY = os.environ.get("YANDEX_SPEECHKIT_API_KEY", "").strip()
 VK_OAUTH_CLIENT_ID = os.environ.get("VK_OAUTH_CLIENT_ID", "").strip()
 VK_OAUTH_CLIENT_SECRET = os.environ.get("VK_OAUTH_CLIENT_SECRET", "").strip()
 

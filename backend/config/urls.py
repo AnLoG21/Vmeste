@@ -21,6 +21,7 @@ urlpatterns = [
     path("api/cafe/", include("cafe.urls")),
     path("api/inspections/", include("inspections.urls")),
     path("api/marketplaces/", include("marketplaces.urls")),
+    path("api/voice/", include("voice.urls")),
 ]
 
 # Media must be reachable in production too (Caddy proxies /media/* here as fallback).
