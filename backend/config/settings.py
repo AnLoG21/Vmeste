@@ -227,6 +227,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "marketplaces.poll_new_orders",
         "schedule": 600.0,
     },
+    "voice-outbound-confirm-daily-10am": {
+        "task": "voice.run_all_outbound_confirmations",
+        "schedule": 3600.0 * 24,
+    },
 }
 
 # SMS.ru platform key (org can override via ProviderMessagingSettings.sms_api_id)

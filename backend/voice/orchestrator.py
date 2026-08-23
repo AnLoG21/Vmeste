@@ -10,6 +10,7 @@ from django.utils import timezone
 from .booking_adapter import execute_tool, find_windows_for_voice, get_voice_catalog, match_service, match_staff, parse_after_time, parse_relative_date
 from .llm import llm_plan_turn
 from .models import ProviderVoiceSettings, VoiceCallSession, VoiceCallTurn
+from .outbound import process_confirmation_response
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,21 @@ def process_turn(session: VoiceCallSession, user_text: str, *, greeting: str = "
     provider = session.provider
     settings_obj = ProviderVoiceSettings.objects.filter(provider=provider).first()
     transfer_phone = (settings_obj.transfer_phone if settings_obj else "") or ""
+
+    if ctx.get("mode") == "confirm":
+        if user_text:
+            _append_turn(session, VoiceCallTurn.Role.USER, user_text)
+        confirm = process_confirmation_response(session, user_text)
+        if confirm:
+            say = confirm.get("say") or ""
+            _append_turn(session, VoiceCallTurn.Role.ASSISTANT, say)
+            return {
+                "say": say,
+                "action": confirm.get("action") or "continue",
+                "session_id": session.id,
+                "booking_id": confirm.get("booking_id") or session.booking_id,
+                "transfer_phone": transfer_phone or None,
+            }
 
     if not user_text:
         say = greeting or (settings_obj.greeting_text if settings_obj else "") or "Здравствуйте! Чем могу помочь?"

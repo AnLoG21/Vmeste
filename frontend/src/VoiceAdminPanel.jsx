@@ -17,6 +17,11 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
     greeting_text: "",
     ats_provider: "generic",
     confirm_outbound_enabled: false,
+    mango_api_key: "",
+    mango_api_salt: "",
+    mango_line_number: "",
+    mango_extension: "",
+    has_mango: false,
     webhook_token: "",
   });
   const [status, setStatus] = useState("");
@@ -65,6 +70,8 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
         greeting_text: form.greeting_text || "",
         ats_provider: form.ats_provider || "generic",
         confirm_outbound_enabled: Boolean(form.confirm_outbound_enabled),
+        mango_line_number: form.mango_line_number || "",
+        mango_extension: form.mango_extension || "",
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -72,8 +79,43 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
       setStatus(data.detail || "Не удалось сохранить.");
       return;
     }
-    setForm((p) => ({ ...p, ...data }));
+    const mangoPatch = {};
+    if ((form.mango_api_key || "").trim()) mangoPatch.mango_api_key = form.mango_api_key.trim();
+    if ((form.mango_api_salt || "").trim()) mangoPatch.mango_api_salt = form.mango_api_salt.trim();
+    if (Object.keys(mangoPatch).length) {
+      const res2 = await authFetch(`${API_URL}/voice/settings/`, {
+        method: "PATCH",
+        body: JSON.stringify(mangoPatch),
+      });
+      if (res2.ok) {
+        const d2 = await res2.json();
+        setForm((p) => ({ ...p, ...d2, mango_api_key: "", mango_api_salt: "" }));
+      }
+    } else {
+      setForm((p) => ({ ...p, ...data, mango_api_key: "", mango_api_salt: "" }));
+    }
     setStatus("Сохранено.");
+    load();
+  }
+
+  async function runOutbound(bookingId = null) {
+    setStatus("Запускаем обзвон…");
+    const body = bookingId ? { booking_id: bookingId } : { limit: 10 };
+    const res = await authFetch(`${API_URL}/voice/outbound/run/`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus(data.error || data.detail || "Не удалось запустить обзвон.");
+      return;
+    }
+    setStatus(
+      bookingId
+        ? `Звонок поставлен в очередь (запись #${bookingId}).`
+        : `Обзвон: ${data.dialed || 0} звонков.${data.errors?.length ? ` Ошибок: ${data.errors.length}.` : ""}`,
+    );
+    load();
   }
 
   async function copyToken() {
@@ -198,8 +240,49 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
             checked={Boolean(form.confirm_outbound_enabled)}
             onChange={(e) => setForm((p) => ({ ...p, confirm_outbound_enabled: e.target.checked }))}
           />
-          Исходящие звонки для подтверждения записи (скоро)
+          Исходящие звонки для подтверждения записи
         </label>
+        {form.ats_provider === "mango" || form.confirm_outbound_enabled ? (
+          <>
+            <h4 className="voice-mango-head">Mango Office (исходящие)</h4>
+            <label className="field-label">
+              API key (vpbx_api_key)
+              <input
+                type="password"
+                autoComplete="off"
+                value={form.mango_api_key}
+                onChange={(e) => setForm((p) => ({ ...p, mango_api_key: e.target.value }))}
+                placeholder={form.has_mango ? "••••••••" : ""}
+              />
+            </label>
+            <label className="field-label">
+              API salt (vpbx_api_salt)
+              <input
+                type="password"
+                autoComplete="off"
+                value={form.mango_api_salt}
+                onChange={(e) => setForm((p) => ({ ...p, mango_api_salt: e.target.value }))}
+                placeholder={form.has_mango ? "••••••••" : ""}
+              />
+            </label>
+            <label className="field-label">
+              Исходящая линия (номер салона)
+              <input
+                value={form.mango_line_number}
+                onChange={(e) => setForm((p) => ({ ...p, mango_line_number: e.target.value }))}
+                placeholder="+7495…"
+              />
+            </label>
+            <label className="field-label">
+              Добавочный (опционально)
+              <input
+                value={form.mango_extension}
+                onChange={(e) => setForm((p) => ({ ...p, mango_extension: e.target.value }))}
+                placeholder="101"
+              />
+            </label>
+          </>
+        ) : null}
         <button type="submit">Сохранить</button>
         <p className="status">{status}</p>
       </form>
@@ -250,17 +333,31 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
         ) : null}
       </div>
 
-      {form.confirm_outbound_enabled && pendingOutbound.length > 0 ? (
+      {form.confirm_outbound_enabled ? (
         <div className="voice-outbound-block">
-          <h4>Подтверждение на завтра</h4>
-          <ul className="list">
-            {pendingOutbound.map((b) => (
-              <li key={b.id}>
-                #{b.id} · {b.client_phone || "—"} · {b.service_name} · {b.starts_at_label}
-              </li>
-            ))}
-          </ul>
-          <p className="muted small">Исходящий обзвон подключается через API вашей АТС (фаза 2).</p>
+          <h4>Подтверждение записей</h4>
+          {pendingOutbound.length > 0 ? (
+            <ul className="list">
+              {pendingOutbound.map((b) => (
+                <li key={b.id} className="voice-outbound-row">
+                  <span>
+                    #{b.id} · {b.client_phone || "—"} · {b.service_name} · {b.starts_at_label}
+                  </span>
+                  <button type="button" className="ghost-btn" onClick={() => runOutbound(b.id)}>
+                    Позвонить
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted small">Нет записей с телефоном на ближайшие сутки.</p>
+          )}
+          <button type="button" className="ghost-btn" onClick={() => runOutbound()} disabled={!form.has_mango}>
+            Обзвонить всех
+          </button>
+          {!form.has_mango ? (
+            <p className="muted small">Сохраните ключи Mango для исходящих звонков.</p>
+          ) : null}
         </div>
       ) : null}
 

@@ -9809,10 +9809,20 @@ body.theme-dark .password-eye-btn:hover {
   flex: 1;
   min-width: 220px;
 }
-.voice-sessions-list li,
-.voice-outbound-block li {
+.voice-sessions-list li {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+}
+.voice-outbound-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.voice-mango-head {
+  margin: 16px 0 8px;
+  font-size: 1rem;
 }

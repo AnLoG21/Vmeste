@@ -11259,6 +11259,14 @@ export default function App() {
               )}
               {renderOrgMessengerChannels()}
             </form>
+
+            {(me?.provider_sphere === "hair_salon" || me?.provider_sphere === "service_center") && (
+              <VoiceAdminPanel
+                authFetch={authFetch}
+                API_URL={API_URL}
+                apiOrigin={String(API_URL || "").replace(/\/api\/?$/, "")}
+              />
+            )}
               </>
             ) : (
               <>

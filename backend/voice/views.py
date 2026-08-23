@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from users.models import User
 
 from .models import ProviderVoiceSettings, VoiceCallSession, VoiceCallTurn
-from .outbound import pending_confirmation_bookings
+from .outbound import dial_booking_confirmation, pending_confirmation_bookings, run_outbound_confirmations
 from .orchestrator import close_session, get_or_create_session, process_turn
 from .telephony import normalize_inbound
 
@@ -38,11 +38,25 @@ class ProviderVoiceSettingsSerializer(serializers.ModelSerializer):
             "greeting_text",
             "ats_provider",
             "confirm_outbound_enabled",
+            "mango_api_key",
+            "mango_api_salt",
+            "mango_line_number",
+            "mango_extension",
             "webhook_token",
             "webhook_url_hint",
+            "has_mango",
             "updated_at",
         ]
-        read_only_fields = ["webhook_token", "webhook_url_hint", "updated_at"]
+        read_only_fields = ["webhook_token", "webhook_url_hint", "has_mango", "updated_at"]
+        extra_kwargs = {
+            "mango_api_key": {"write_only": True},
+            "mango_api_salt": {"write_only": True},
+        }
+
+    has_mango = serializers.SerializerMethodField()
+
+    def get_has_mango(self, obj):
+        return obj.has_mango()
 
     def get_webhook_url_hint(self, obj):
         return "/api/voice/webhook/inbound/"
@@ -109,6 +123,29 @@ class VoiceOutboundPendingView(APIView):
             return Response({"bookings": [], "enabled": False})
         rows = pending_confirmation_bookings(request.user.id)
         return Response({"bookings": rows, "enabled": True})
+
+
+class VoiceOutboundRunView(APIView):
+    """Запустить исходящий обзвон подтверждений (все pending или одна запись)."""
+
+    def post(self, request):
+        if request.user.role != User.Role.PROVIDER:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        vs = ProviderVoiceSettings.objects.filter(provider=request.user).first()
+        if not vs or not vs.confirm_outbound_enabled:
+            return Response(
+                {"detail": "Включите исходящие звонки в настройках голоса."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        data = request.data if isinstance(request.data, dict) else {}
+        booking_id = data.get("booking_id")
+        if booking_id:
+            result = dial_booking_confirmation(vs, int(booking_id))
+            if not result.get("ok"):
+                return Response(result, status=status.HTTP_400_BAD_REQUEST)
+            return Response(result)
+        result = run_outbound_confirmations(request.user.id, limit=int(data.get("limit") or 10))
+        return Response(result)
 
 
 class VoiceInboundWebhookView(APIView):

@@ -46,7 +46,24 @@ class ProviderVoiceSettings(models.Model):
         default=False,
         help_text="Исходящие звонки для подтверждения записи (фаза 2).",
     )
+    mango_api_key = models.CharField(max_length=128, blank=True, default="")
+    mango_api_salt = models.CharField(max_length=128, blank=True, default="")
+    mango_line_number = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        help_text="Исходящая линия Mango (номер салона).",
+    )
+    mango_extension = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        help_text="Внутренний добавочный (опционально).",
+    )
     updated_at = models.DateTimeField(auto_now=True)
+
+    def has_mango(self) -> bool:
+        return bool((self.mango_api_key or "").strip() and (self.mango_api_salt or "").strip())
 
     def save(self, *args, **kwargs):
         if not (self.webhook_token or "").strip():
@@ -106,3 +123,37 @@ class VoiceCallTurn(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+
+
+class VoiceOutboundLog(models.Model):
+    class Status(models.TextChoices):
+        QUEUED = "queued", "В очереди"
+        DIALING = "dialing", "Набор"
+        DONE = "done", "Завершён"
+        FAILED = "failed", "Ошибка"
+
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="voice_outbound_logs",
+    )
+    booking = models.ForeignKey(
+        "booking.Booking",
+        on_delete=models.CASCADE,
+        related_name="voice_outbound_logs",
+    )
+    phone = models.CharField(max_length=32, blank=True, default="")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.QUEUED)
+    external_command_id = models.CharField(max_length=64, blank=True, default="")
+    session = models.ForeignKey(
+        VoiceCallSession,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="outbound_logs",
+    )
+    error = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
