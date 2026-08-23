@@ -46,6 +46,10 @@ class ProviderVoiceSettings(models.Model):
         default=False,
         help_text="Исходящие звонки для подтверждения записи (фаза 2).",
     )
+    tts_enabled = models.BooleanField(
+        default=False,
+        help_text="Озвучивать ответы через Yandex SpeechKit (поле say_audio_base64 в webhook).",
+    )
     mango_api_key = models.CharField(max_length=128, blank=True, default="")
     mango_api_salt = models.CharField(max_length=128, blank=True, default="")
     mango_line_number = models.CharField(

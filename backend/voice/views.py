@@ -9,6 +9,7 @@ from users.models import User
 from .models import ProviderVoiceSettings, VoiceCallSession, VoiceCallTurn
 from .outbound import dial_booking_confirmation, pending_confirmation_bookings, run_outbound_confirmations
 from .orchestrator import close_session, get_or_create_session, process_turn
+from .speechkit import attach_tts_to_response, speechkit_ready
 from .telephony import normalize_inbound
 
 
@@ -28,6 +29,7 @@ def _resolve_voice_settings(request) -> ProviderVoiceSettings | None:
 
 class ProviderVoiceSettingsSerializer(serializers.ModelSerializer):
     webhook_url_hint = serializers.SerializerMethodField()
+    speechkit_ready = serializers.SerializerMethodField()
 
     class Meta:
         model = ProviderVoiceSettings
@@ -38,6 +40,7 @@ class ProviderVoiceSettingsSerializer(serializers.ModelSerializer):
             "greeting_text",
             "ats_provider",
             "confirm_outbound_enabled",
+            "tts_enabled",
             "mango_api_key",
             "mango_api_salt",
             "mango_line_number",
@@ -45,9 +48,10 @@ class ProviderVoiceSettingsSerializer(serializers.ModelSerializer):
             "webhook_token",
             "webhook_url_hint",
             "has_mango",
+            "speechkit_ready",
             "updated_at",
         ]
-        read_only_fields = ["webhook_token", "webhook_url_hint", "has_mango", "updated_at"]
+        read_only_fields = ["webhook_token", "webhook_url_hint", "has_mango", "speechkit_ready", "updated_at"]
         extra_kwargs = {
             "mango_api_key": {"write_only": True},
             "mango_api_salt": {"write_only": True},
@@ -60,6 +64,13 @@ class ProviderVoiceSettingsSerializer(serializers.ModelSerializer):
 
     def get_webhook_url_hint(self, obj):
         return "/api/voice/webhook/inbound/"
+
+    def get_speechkit_ready(self, obj):
+        return speechkit_ready()
+
+
+def _voice_response(result: dict, vs: ProviderVoiceSettings) -> dict:
+    return attach_tts_to_response(result, enabled=bool(vs.tts_enabled))
 
 
 class VoiceCallTurnSerializer(serializers.ModelSerializer):
@@ -191,7 +202,7 @@ class VoiceInboundWebhookView(APIView):
         else:
             result = process_turn(session, user_text, greeting=vs.greeting_text)
 
-        return Response(result)
+        return Response(_voice_response(result, vs))
 
 
 class VoiceSessionTurnView(APIView):
@@ -208,7 +219,8 @@ class VoiceSessionTurnView(APIView):
         if not session:
             return Response({"detail": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
         text = (request.data.get("text") if isinstance(request.data, dict) else "") or ""
-        return Response(process_turn(session, str(text).strip(), greeting=vs.greeting_text))
+        result = process_turn(session, str(text).strip(), greeting=vs.greeting_text)
+        return Response(_voice_response(result, vs))
 
 
 class VoiceSimulateCallView(APIView):
@@ -231,4 +243,4 @@ class VoiceSimulateCallView(APIView):
         first_text = (data.get("text") or "").strip()
         result = process_turn(session, first_text, greeting=vs.greeting_text)
         result["session_id"] = session.id
-        return Response(result, status=status.HTTP_201_CREATED)
+        return Response(_voice_response(result, vs), status=status.HTTP_201_CREATED)

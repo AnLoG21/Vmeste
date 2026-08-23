@@ -17,11 +17,13 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
     greeting_text: "",
     ats_provider: "generic",
     confirm_outbound_enabled: false,
+    tts_enabled: false,
     mango_api_key: "",
     mango_api_salt: "",
     mango_line_number: "",
     mango_extension: "",
     has_mango: false,
+    speechkit_ready: false,
     webhook_token: "",
   });
   const [status, setStatus] = useState("");
@@ -70,6 +72,7 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
         greeting_text: form.greeting_text || "",
         ats_provider: form.ats_provider || "generic",
         confirm_outbound_enabled: Boolean(form.confirm_outbound_enabled),
+        tts_enabled: Boolean(form.tts_enabled),
         mango_line_number: form.mango_line_number || "",
         mango_extension: form.mango_extension || "",
       }),
@@ -234,6 +237,18 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
             </option>
           ))}
         </select>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={Boolean(form.tts_enabled)}
+            onChange={(e) => setForm((p) => ({ ...p, tts_enabled: e.target.checked }))}
+            disabled={!form.speechkit_ready}
+          />
+          Озвучивать ответы (Yandex SpeechKit → say_audio_base64 в webhook)
+        </label>
+        {!form.speechkit_ready ? (
+          <p className="muted small">TTS: добавьте YANDEX_SPEECHKIT_API_KEY на сервере.</p>
+        ) : null}
         <label className="checkbox">
           <input
             type="checkbox"

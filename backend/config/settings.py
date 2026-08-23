@@ -2,6 +2,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from celery.schedules import crontab
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -202,6 +203,7 @@ CELERY_TASK_ALWAYS_EAGER = os.environ.get("CELERY_TASK_ALWAYS_EAGER", "1" if DEB
     "true",
     "True",
 )
+CELERY_TIMEZONE = "Europe/Moscow"
 CELERY_BEAT_SCHEDULE = {
     "subscription-expiry-reminders-hourly": {
         "task": "subscriptions.send_expiry_reminders",
@@ -229,7 +231,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     "voice-outbound-confirm-daily-10am": {
         "task": "voice.run_all_outbound_confirmations",
-        "schedule": 3600.0 * 24,
+        "schedule": crontab(hour=10, minute=0),
     },
 }
 
