@@ -17,13 +17,33 @@ def normalize_inbound(payload: dict, *, ats: str = "generic") -> dict[str, Any]:
         # Mango Office: json with json, call_id, from, to, dtmf, etc.
         inner = p.get("json") if isinstance(p.get("json"), dict) else p
         event = str(inner.get("call_state") or inner.get("event") or p.get("event") or "incoming").lower()
+        direction = str(inner.get("call_direction") or inner.get("direction") or "").lower()
+        from_num = str(inner.get("from") or inner.get("caller") or inner.get("from_number") or "")
+        to_num = str(inner.get("to") or inner.get("called") or inner.get("to_number") or "")
+        if direction in ("outbound", "outgoing", "2", "out"):
+            client_phone, salon_phone = to_num, from_num
+        else:
+            client_phone, salon_phone = from_num, to_num
+        speech = inner.get("speech")
+        text = ""
+        if isinstance(speech, str):
+            text = speech.strip()
+        elif isinstance(speech, dict):
+            text = str(speech.get("text") or speech.get("result") or "").strip()
+        if not text:
+            text = str(inner.get("text") or inner.get("speech_result") or p.get("text") or "").strip()
         return {
             "event": _map_event(event),
             "call_id": str(inner.get("call_id") or inner.get("entry_id") or p.get("call_id") or ""),
-            "caller_phone": str(inner.get("from") or inner.get("caller") or inner.get("from_number") or ""),
-            "called_phone": str(inner.get("to") or inner.get("called") or inner.get("to_number") or ""),
-            "text": str(inner.get("text") or inner.get("speech") or p.get("text") or "").strip(),
+            "caller_phone": client_phone,
+            "called_phone": salon_phone,
+            "text": text,
+            "audio_base64": str(
+                inner.get("speech_base64") or inner.get("audio_base64") or p.get("audio_base64") or ""
+            ).strip(),
+            "audio_format": str(inner.get("audio_format") or p.get("audio_format") or "oggopus").strip(),
             "hangup": event in ("disconnected", "hangup", "end"),
+            "direction": direction or "inbound",
         }
 
     if ats in ("novofon", "uis"):
@@ -33,6 +53,8 @@ def normalize_inbound(payload: dict, *, ats: str = "generic") -> dict[str, Any]:
             "caller_phone": str(p.get("caller_id") or p.get("from") or p.get("phone") or ""),
             "called_phone": str(p.get("called_number") or p.get("to") or ""),
             "text": str(p.get("text") or p.get("speech_result") or "").strip(),
+            "audio_base64": str(p.get("audio_base64") or p.get("speech_audio_base64") or "").strip(),
+            "audio_format": str(p.get("audio_format") or "oggopus").strip(),
             "hangup": str(p.get("event") or "").lower() in ("hangup", "end", "completed"),
         }
 
@@ -42,6 +64,8 @@ def normalize_inbound(payload: dict, *, ats: str = "generic") -> dict[str, Any]:
         "caller_phone": str(p.get("caller_phone") or p.get("from") or p.get("phone") or ""),
         "called_phone": str(p.get("called_phone") or p.get("to") or ""),
         "text": str(p.get("text") or p.get("speech") or "").strip(),
+        "audio_base64": str(p.get("audio_base64") or p.get("speech_audio_base64") or "").strip(),
+        "audio_format": str(p.get("audio_format") or "oggopus").strip(),
         "hangup": bool(p.get("hangup")) or str(p.get("event") or "").lower() in ("hangup", "end"),
     }
 

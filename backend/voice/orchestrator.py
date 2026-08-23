@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from django.utils import timezone
@@ -232,11 +233,34 @@ def process_turn(session: VoiceCallSession, user_text: str, *, greeting: str = "
     }
 
 
+def _phone_tail(phone: str) -> str:
+    digits = re.sub(r"\D+", "", phone or "")
+    return digits[-10:] if len(digits) >= 10 else digits
+
+
+def _find_outbound_confirm_session(provider, *, caller_phone: str, called_phone: str) -> VoiceCallSession | None:
+    tails = {_phone_tail(caller_phone), _phone_tail(called_phone)} - {""}
+    if not tails:
+        return None
+    for sess in (
+        VoiceCallSession.objects.filter(
+            provider=provider,
+            status=VoiceCallSession.Status.ACTIVE,
+            context__mode="confirm",
+        )
+        .order_by("-started_at")[:8]
+    ):
+        if _phone_tail(sess.caller_phone) in tails:
+            return sess
+    return None
+
+
 def get_or_create_session(
     *,
     provider,
     call_id: str,
     caller_phone: str,
+    called_phone: str = "",
 ) -> VoiceCallSession:
     if call_id:
         existing = VoiceCallSession.objects.filter(
@@ -246,6 +270,21 @@ def get_or_create_session(
         ).first()
         if existing:
             return existing
+
+    outbound = _find_outbound_confirm_session(
+        provider,
+        caller_phone=caller_phone,
+        called_phone=called_phone,
+    )
+    if outbound:
+        if call_id and outbound.external_call_id != call_id:
+            outbound.external_call_id = call_id
+            outbound.save(update_fields=["external_call_id"])
+        if caller_phone and not outbound.caller_phone:
+            outbound.caller_phone = caller_phone
+            outbound.save(update_fields=["caller_phone"])
+        return outbound
+
     return VoiceCallSession.objects.create(
         provider=provider,
         external_call_id=call_id or "",

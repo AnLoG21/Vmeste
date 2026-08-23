@@ -9,7 +9,7 @@ from users.models import User
 
 from .booking_adapter import match_service, parse_relative_date
 from .models import ProviderVoiceSettings, VoiceCallSession
-from .orchestrator import process_turn
+from .orchestrator import get_or_create_session, process_turn
 from .telephony import normalize_inbound
 
 
@@ -21,6 +21,29 @@ class VoiceTelephonyTests(TestCase):
         )
         self.assertEqual(ev["call_id"], "abc")
         self.assertIn("9001234567", ev["caller_phone"])
+
+    def test_mango_outbound_client_phone(self):
+        ev = normalize_inbound(
+            {
+                "json": {
+                    "call_id": "out-1",
+                    "from": "+74951112233",
+                    "to": "+79005556677",
+                    "call_direction": "outbound",
+                    "call_state": "Connected",
+                }
+            },
+            ats="mango",
+        )
+        self.assertIn("9005556677", ev["caller_phone"])
+        self.assertIn("4951112233", ev["called_phone"])
+
+    def test_generic_audio_fields(self):
+        ev = normalize_inbound(
+            {"event": "speech", "text": "", "audio_base64": "aGVsbG8=", "audio_format": "oggopus"},
+            ats="generic",
+        )
+        self.assertEqual(ev["audio_base64"], "aGVsbG8=")
 
 
 class VoiceBookingAdapterTests(TestCase):
@@ -117,3 +140,20 @@ class VoiceOrchestratorTests(TestCase):
         )
         self.assertEqual(res.status_code, 201)
         self.assertTrue(res.data.get("say"))
+
+    def test_outbound_session_reuse_by_phone(self):
+        confirm = VoiceCallSession.objects.create(
+            provider=self.provider,
+            caller_phone="+79005556677",
+            external_call_id="vmeste-cmd-1",
+            context={"mode": "confirm", "booking_id": 1, "confirm_script": "Подтверждаете?"},
+        )
+        session = get_or_create_session(
+            provider=self.provider,
+            call_id="mango-real-call-id",
+            caller_phone="+79005556677",
+            called_phone="+74951112233",
+        )
+        self.assertEqual(session.id, confirm.id)
+        session.refresh_from_db()
+        self.assertEqual(session.external_call_id, "mango-real-call-id")

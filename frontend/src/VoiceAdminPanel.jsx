@@ -247,8 +247,12 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
           Озвучивать ответы (Yandex SpeechKit → say_audio_base64 в webhook)
         </label>
         {!form.speechkit_ready ? (
-          <p className="muted small">TTS: добавьте YANDEX_SPEECHKIT_API_KEY на сервере.</p>
-        ) : null}
+          <p className="muted small">SpeechKit: добавьте YANDEX_SPEECHKIT_API_KEY на сервере (TTS и распознавание речи).</p>
+        ) : (
+          <p className="muted small">
+            SpeechKit: TTS в ответе webhook; если АТС присылает audio_base64 без text — распознаём автоматически.
+          </p>
+        )}
         <label className="checkbox">
           <input
             type="checkbox"

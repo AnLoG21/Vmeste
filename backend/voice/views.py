@@ -9,7 +9,7 @@ from users.models import User
 from .models import ProviderVoiceSettings, VoiceCallSession, VoiceCallTurn
 from .outbound import dial_booking_confirmation, pending_confirmation_bookings, run_outbound_confirmations
 from .orchestrator import close_session, get_or_create_session, process_turn
-from .speechkit import attach_tts_to_response, speechkit_ready
+from .speechkit import attach_tts_to_response, speechkit_ready, transcribe_event_text
 from .telephony import normalize_inbound
 
 
@@ -190,13 +190,15 @@ class VoiceInboundWebhookView(APIView):
             return Response({"action": "hangup"})
 
         caller = ev.get("caller_phone") or data.get("caller_phone") or ""
+        called = ev.get("called_phone") or data.get("called_phone") or ""
         session = get_or_create_session(
             provider=vs.provider,
             call_id=ev.get("call_id") or "",
             caller_phone=caller,
+            called_phone=called,
         )
 
-        user_text = ev.get("text") or ""
+        user_text = transcribe_event_text(data, ev)
         if ev.get("event") == "incoming" and not user_text:
             result = process_turn(session, "", greeting=vs.greeting_text)
         else:
