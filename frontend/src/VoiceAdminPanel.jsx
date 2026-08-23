@@ -245,92 +245,21 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
     <section className="voice-admin-panel">
       <h3>Голосовой администратор</h3>
       <p className="muted small voice-lead">
-        Робот отвечает на звонки, подбирает свободное время в вашем календаре и создаёт запись. Сначала настройте и
-        проверьте в браузере — затем подключите телефонию (Mango / Novofon).
+        Робот помогает записывать клиентов по телефону. Сначала проверьте работу в тесте ниже — для этого телефония не
+        нужна. Подключение Mango или Novofon — только если хотите принимать реальные звонки на номер салона.
       </p>
 
       <ol className="voice-steps muted small">
         <li className={step1Done ? "voice-steps__done" : ""}>
-          <strong>Шаг 1.</strong> Включите администратора и сохраните настройки.
+          <strong>Шаг 1.</strong> Включите администратора, заполните приветствие и сохраните.
         </li>
         <li className={step2Done ? "voice-steps__done" : ""}>
-          <strong>Шаг 2.</strong> Пройдите тест без телефона ниже.
+          <strong>Шаг 2.</strong> Пройдите тест без телефона — как будто клиент пишет в чат.
         </li>
         <li className={step3Ready ? "voice-steps__done" : ""}>
-          <strong>Шаг 3.</strong> Скопируйте webhook и токен в настройки АТС.
-        </li>
-        <li>
-          <strong>Шаг 4 (по желанию).</strong> Подключите Yandex GPT + SpeechKit на сервере для «живого» диалога и голоса.
+          <strong>Шаг 3 (если есть телефония).</strong> Передайте адрес и токен в Mango / Novofon или интегратору.
         </li>
       </ol>
-
-      <details className="voice-guide-block">
-        <summary>Как получить ключи Yandex Cloud (подробная инструкция)</summary>
-        <div className="voice-guide-body muted small">
-          <p>
-            Ключи добавляются <strong>на сервере</strong> (файл <code>/opt/vmeste/.env</code>), не в этом кабинете. Без
-            них робот работает в упрощённом режиме; с ключами — понимает сложные фразы и может озвучивать ответы.
-          </p>
-          <ol>
-            <li>
-              Откройте{" "}
-              <a href="https://console.cloud.yandex.ru/" target="_blank" rel="noreferrer">
-                console.cloud.yandex.ru
-              </a>{" "}
-              и войдите под Яндекс ID.
-            </li>
-            <li>
-              Слева <strong>Каталоги</strong> → выберите каталог или нажмите <strong>Создать каталог</strong> (например
-              «Vmeste»). Скопируйте <strong>ID каталога</strong> — это <code>YANDEX_CLOUD_FOLDER_ID</code> (начинается с{" "}
-              <code>b1...</code>).
-            </li>
-            <li>
-              В каталоге: <strong>Сервисные аккаунты</strong> → <strong>Создать сервисный аккаунт</strong> (имя любое, напр.
-              <code>vmeste-voice</code>).
-            </li>
-            <li>
-              Откройте аккаунт → вкладка <strong>Роли</strong> → <strong>Назначить роли</strong>:
-              <ul>
-                <li>
-                  <code>ai.languageModels.user</code> — для YandexGPT
-                </li>
-                <li>
-                  <code>ai.speechkit-stt.user</code> и <code>ai.speechkit-tts.user</code> — для SpeechKit
-                </li>
-              </ul>
-              (Если роли не находятся — в поиске ролей введите «languageModels» и «speechkit».)
-            </li>
-            <li>
-              Вкладка <strong>API-ключи</strong> → <strong>Создать API-ключ</strong> → скопируйте ключ (показывается один
-              раз). Его можно использовать и для GPT, и для SpeechKit:
-              <ul>
-                <li>
-                  <code>YANDEX_GPT_API_KEY=AQVN...</code>
-                </li>
-                <li>
-                  <code>YANDEX_SPEECHKIT_API_KEY=AQVN...</code> (тот же ключ)
-                </li>
-              </ul>
-            </li>
-            <li>
-              На VPS по SSH откройте <code>/opt/vmeste/.env</code>, добавьте три строки и перезапустите backend:
-              <pre className="voice-guide-pre">{`YANDEX_CLOUD_FOLDER_ID=b1gxxxxxxxxxx
-YANDEX_GPT_API_KEY=AQVNxxxxxxxx
-YANDEX_SPEECHKIT_API_KEY=AQVNxxxxxxxx
-
-docker compose -f docker-compose.prod.yml up -d --force-recreate web celery_worker celery_beat`}</pre>
-            </li>
-            <li>
-              Обновите эту страницу. Если всё верно, ниже появится зелёная подсказка «SpeechKit на сервере подключён» и
-              станет доступен переключатель озвучки ответов.
-            </li>
-          </ol>
-          <p>
-            Оплата: Yandex Cloud — pay-as-you-go; для тестов обычно хватает гранта. Следите за расходом в разделе{" "}
-            <strong>Биллинг</strong> консоли.
-          </p>
-        </div>
-      </details>
 
       {loading ? <p className="muted small">Загружаем настройки…</p> : null}
 
@@ -397,27 +326,27 @@ docker compose -f docker-compose.prod.yml up -d --force-recreate web celery_work
           ))}
         </select>
 
-        <h4 className="voice-section-head">Голос и речь (Yandex SpeechKit)</h4>
-
         {form.speechkit_ready ? (
-          <p className="voice-status-ok small">SpeechKit на сервере подключён — доступны озвучка и распознавание речи.</p>
-        ) : (
-          <p className="muted small">
-            SpeechKit пока не настроен на сервере. Раскройте инструкцию «Как получить ключи Yandex Cloud» выше.
-          </p>
-        )}
+          <>
+            <h4 className="voice-section-head">Голосовые ответы по телефону</h4>
+            <p className="voice-status-ok small">
+              На платформе включена озвучка — робот может отвечать голосом через телефонию.
+            </p>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={Boolean(form.tts_enabled)}
+                onChange={(e) => patchForm((p) => ({ ...p, tts_enabled: e.target.checked }))}
+              />
+              Озвучивать ответы робота при звонках
+            </label>
+          </>
+        ) : null}
 
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={Boolean(form.tts_enabled)}
-            onChange={(e) => patchForm((p) => ({ ...p, tts_enabled: e.target.checked }))}
-            disabled={!form.speechkit_ready}
-          />
-          Озвучивать ответы робота (для интеграции с АТС)
-        </label>
-
-        <h4 className="voice-section-head">Исходящие звонки (подтверждение записи)</h4>
+        <h4 className="voice-section-head">Напоминания по телефону</h4>
+        <p className="muted small field-hint">
+          Робот может сам звонить клиентам и спрашивать, подтверждают ли визит. Нужна телефония Mango.
+        </p>
 
         <label className="checkbox">
           <input
@@ -431,11 +360,11 @@ docker compose -f docker-compose.prod.yml up -d --force-recreate web celery_work
         {(form.ats_provider === "mango" || form.confirm_outbound_enabled) && (
           <>
             <p className="muted small">
-              Для исходящих нужен{" "}
+              Ключи Mango — в личном кабинете{" "}
               <a href="https://www.mango-office.ru/products/virtualnaya-ats/" target="_blank" rel="noreferrer">
                 Mango Office
-              </a>
-              : ключи берутся в личном кабинете → <strong>Интеграции → API</strong>.
+              </a>{" "}
+              → <strong>Интеграции → API</strong>.
             </p>
             <label className="field-label">
               Mango API key
@@ -459,7 +388,7 @@ docker compose -f docker-compose.prod.yml up -d --force-recreate web celery_work
             </label>
             <label className="field-label">
               Номер линии для исходящих
-              <span className="field-hint">Тот же номер салона, с которого Mango звонит клиентам</span>
+              <span className="field-hint">Номер салона, с которого Mango звонит клиентам</span>
               <input
                 type="tel"
                 value={form.mango_line_number ?? ""}
@@ -483,33 +412,6 @@ docker compose -f docker-compose.prod.yml up -d --force-recreate web celery_work
         </button>
         <p className="status">{status}</p>
       </form>
-
-      {form.webhook_token ? (
-        <div className="voice-webhook-block">
-          <h4 className="voice-section-head">Подключение АТС (webhook)</h4>
-          <p className="muted small">
-            В Mango / Novofon создайте HTTP-запрос на этот адрес при звонке и после распознавания речи клиента.
-          </p>
-          <p className="muted small">
-            <strong>Адрес:</strong>
-          </p>
-          <div className="voice-token-row">
-            <input readOnly value={webhookUrl} aria-label="Voice webhook URL" />
-            <button type="button" className="ghost-btn" onClick={() => copyText(webhookUrl, "Адрес webhook скопирован.")}>
-              Копировать URL
-            </button>
-          </div>
-          <p className="muted small">
-            <strong>Заголовок запроса:</strong> <code>X-Voice-Token</code>
-          </p>
-          <div className="voice-token-row">
-            <input readOnly value={form.webhook_token} aria-label="Voice webhook token" />
-            <button type="button" className="ghost-btn" onClick={() => copyText(form.webhook_token, "Токен скопирован.")}>
-              Копировать токен
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       <div className="voice-sim-block">
         <h4 className="voice-section-head">Тест без телефона</h4>
@@ -543,6 +445,35 @@ docker compose -f docker-compose.prod.yml up -d --force-recreate web celery_work
           </form>
         ) : null}
       </div>
+
+      {form.webhook_token && form.ats_provider !== "generic" ? (
+        <div className="voice-webhook-block">
+          <h4 className="voice-section-head">Данные для подключения телефонии</h4>
+          <p className="muted small">
+            Передайте эти данные в Mango / Novofon или специалисту, который настраивает телефонию. Без телефонии тест
+            выше уже работает.
+          </p>
+          <p className="muted small">
+            <strong>Адрес:</strong>
+          </p>
+          <div className="voice-token-row">
+            <input readOnly value={webhookUrl} aria-label="Voice webhook URL" />
+            <button type="button" className="ghost-btn" onClick={() => copyText(webhookUrl, "Адрес скопирован.")}>
+              Копировать URL
+            </button>
+          </div>
+          <p className="muted small">
+            <strong>Код доступа (заголовок</strong> <code>X-Voice-Token</code>
+            <strong>):</strong>
+          </p>
+          <div className="voice-token-row">
+            <input readOnly value={form.webhook_token} aria-label="Voice webhook token" />
+            <button type="button" className="ghost-btn" onClick={() => copyText(form.webhook_token, "Код скопирован.")}>
+              Копировать код
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {form.confirm_outbound_enabled ? (
         <div className="voice-outbound-block">
