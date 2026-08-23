@@ -9758,3 +9758,61 @@ body.theme-dark .password-eye-btn:hover {
   flex-direction: column;
   gap: 8px;
 }
+
+/* Voice AI administrator (organization settings) */
+.voice-admin-panel {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+.voice-webhook-block {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 10px;
+}
+.voice-token-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.voice-token-row input {
+  flex: 1;
+  min-width: 200px;
+}
+.voice-sim-block {
+  margin-top: 20px;
+}
+.voice-sim-log {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.voice-sim-line {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f3f4f6;
+}
+.voice-sim-line--user {
+  background: #e3f2fd;
+}
+.voice-sim-input-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.voice-sim-input-row input {
+  flex: 1;
+  min-width: 220px;
+}
+.voice-sessions-list li,
+.voice-outbound-block li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}

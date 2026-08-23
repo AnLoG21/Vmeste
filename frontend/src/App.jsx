@@ -17,6 +17,7 @@ import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
 import SalonLoyaltyPackagesPanel from "./SalonLoyaltyPackagesPanel.jsx";
+import VoiceAdminPanel from "./VoiceAdminPanel.jsx";
 import MiniDatePicker from "./MiniDatePicker.jsx";
 import {
   orgSphereOf,

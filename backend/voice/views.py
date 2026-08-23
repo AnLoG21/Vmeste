@@ -98,6 +98,19 @@ class VoiceSessionsListView(APIView):
         return Response(VoiceCallSessionSerializer(qs, many=True).data)
 
 
+class VoiceOutboundPendingView(APIView):
+    """Записи на ближайшие сутки для исходящего подтверждения."""
+
+    def get(self, request):
+        if request.user.role != User.Role.PROVIDER:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        vs = ProviderVoiceSettings.objects.filter(provider=request.user).first()
+        if not vs or not vs.confirm_outbound_enabled:
+            return Response({"bookings": [], "enabled": False})
+        rows = pending_confirmation_bookings(request.user.id)
+        return Response({"bookings": rows, "enabled": True})
+
+
 class VoiceInboundWebhookView(APIView):
     """
     Webhook для Mango / Novofon / generic.
