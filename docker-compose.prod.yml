@@ -33,12 +33,14 @@ services:
     restart: unless-stopped
     command: >
       sh -c "python manage.py migrate --noinput &&
+             python manage.py sync_voice_asterisk || true &&
              python manage.py collectstatic --noinput &&
              python manage.py seed_demo --no-reset || true &&
              gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 1 --timeout 120"
     volumes:
       - vmeste_media:/app/media
       - ./firebase-credentials:/app/firebase-credentials:ro
+      - ./asterisk/conf/generated:/app/asterisk/conf/generated
     env_file:
       - .env
     environment:
@@ -46,6 +48,7 @@ services:
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
       CELERY_TASK_ALWAYS_EAGER: "0"
+      ASTERISK_CONF_DIR: /app/asterisk/conf/generated
       FIREBASE_CREDENTIALS: ${FIREBASE_CREDENTIALS:-/app/firebase-credentials/service-account.json}
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-vmeste-32513}
     depends_on:
@@ -135,6 +138,26 @@ services:
       - tunnel
     depends_on:
       - caddy
+
+  # SIP-телефония (Asterisk). Запуск: docker compose --profile telephony up -d
+  # Требует ASTERISK_INTERNAL_SECRET в .env и sync: python manage.py sync_voice_asterisk
+  asterisk:
+    build:
+      context: ./asterisk
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    profiles:
+      - telephony
+    ports:
+      - "5060:5060/udp"
+      - "10000-10050:10000-10050/udp"
+    volumes:
+      - ./asterisk/conf/generated:/etc/asterisk/generated:ro
+    environment:
+      VOICE_PUBLIC_BASE_URL: ${VOICE_PUBLIC_BASE_URL:-http://web:8000/api}
+      ASTERISK_INTERNAL_SECRET: ${ASTERISK_INTERNAL_SECRET}
+    depends_on:
+      - web
 
 volumes:
   vmeste_pgdata:

@@ -104,19 +104,35 @@ def extract_audio_from_payload(data: dict, ev: dict | None = None) -> tuple[byte
         return None, fmt
 
 
+def _prepare_stt_audio(audio: bytes, fmt: str) -> tuple[bytes, str, int | None]:
+    """Return payload bytes, stt format, optional sample rate."""
+    fmt = (fmt or "oggopus").lower()
+    if fmt in ("wav", "wave"):
+        import io
+        import wave
+
+        with wave.open(io.BytesIO(audio), "rb") as wf:
+            frames = wf.readframes(wf.getnframes())
+            return frames, "lpcm", wf.getframerate()
+    return audio, fmt, None
+
+
 def recognize_speech(audio: bytes, *, audio_format: str = "oggopus", lang: str = "ru-RU") -> str | None:
     """Return recognized text or None."""
     api_key = (getattr(settings, "YANDEX_SPEECHKIT_API_KEY", "") or "").strip()
     if not api_key or not audio:
         return None
-    fmt = (audio_format or "oggopus").lower()
+    payload, fmt, sample_rate = _prepare_stt_audio(audio, audio_format)
     if fmt in ("ogg", "opus"):
         fmt = "oggopus"
-    query = urllib.parse.urlencode({"lang": lang, "format": fmt})
+    params = {"lang": lang, "format": fmt}
+    if fmt == "lpcm":
+        params["sampleRateHertz"] = str(sample_rate or 8000)
+    query = urllib.parse.urlencode(params)
     url = f"{STT_URL}?{query}"
     req = urllib.request.Request(
         url,
-        data=audio,
+        data=payload,
         headers={"Authorization": f"Api-Key {api_key}"},
         method="POST",
     )

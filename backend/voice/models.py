@@ -11,6 +11,7 @@ def _voice_webhook_token() -> str:
 class ProviderVoiceSettings(models.Model):
     class AtsProvider(models.TextChoices):
         GENERIC = "generic", "Generic JSON"
+        ASTERISK = "asterisk", "SIP / Asterisk (Вместе)"
         MANGO = "mango", "Mango Office"
         NOVOFON = "novofon", "Novofon / UIS"
 
@@ -64,10 +65,38 @@ class ProviderVoiceSettings(models.Model):
         default="",
         help_text="Внутренний добавочный (опционально).",
     )
+    sip_server = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        help_text="SIP-сервер оператора (host или sip:host:port).",
+    )
+    sip_username = models.CharField(max_length=128, blank=True, default="")
+    sip_password = models.CharField(max_length=128, blank=True, default="")
+    sip_auth_user = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        help_text="Логин для регистрации, если отличается от username.",
+    )
+    sip_did = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        help_text="Купленный SIP-номер (DID), на который звонят клиенты.",
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     def has_mango(self) -> bool:
         return bool((self.mango_api_key or "").strip() and (self.mango_api_salt or "").strip())
+
+    def has_sip(self) -> bool:
+        return bool(
+            (self.sip_server or "").strip()
+            and (self.sip_username or "").strip()
+            and (self.sip_password or "").strip()
+            and (self.sip_did or self.inbound_phone or "").strip()
+        )
 
     def save(self, *args, **kwargs):
         if not (self.webhook_token or "").strip():

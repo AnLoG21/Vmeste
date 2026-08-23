@@ -73,6 +73,33 @@ class VoiceBookingAdapterTests(TestCase):
         self.assertEqual(parse_relative_date("завтра", today), today + timedelta(days=1))
 
 
+class VoiceAsteriskSyncTests(TestCase):
+    def setUp(self):
+        self.provider = User.objects.create_user(
+            username="sip-salon",
+            password="x",
+            role=User.Role.PROVIDER,
+            provider_sphere=User.ProviderSphere.HAIR_SALON,
+            organization_name="SIP Salon",
+        )
+
+    def test_find_settings_by_did(self):
+        from .asterisk_sync import find_settings_by_did
+
+        ProviderVoiceSettings.objects.create(
+            provider=self.provider,
+            enabled=True,
+            ats_provider=ProviderVoiceSettings.AtsProvider.ASTERISK,
+            sip_server="sip.test.ru",
+            sip_username="u1",
+            sip_password="p1",
+            sip_did="+74951112233",
+        )
+        hit = find_settings_by_did("74951112233")
+        self.assertIsNotNone(hit)
+        self.assertEqual(hit.provider_id, self.provider.id)
+
+
 class VoiceOrchestratorTests(TestCase):
     def setUp(self):
         self.provider = User.objects.create_user(

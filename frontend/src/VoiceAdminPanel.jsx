@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const ATS_OPTIONS = [
-  ["generic", "Пока без АТС (только тест в браузере)"],
-  ["mango", "Mango Office"],
-  ["novofon", "Novofon / UIS"],
+  ["asterisk", "SIP-номер (рекомендуется, ~200–300 ₽/мес у оператора)"],
+  ["generic", "Пока без телефона (только тест в браузере)"],
+  ["mango", "Mango Office (платная АТС)"],
+  ["novofon", "Novofon / UIS (платная АТС)"],
 ];
+
+const SIP_OPERATORS_HINT = "Телфин, МТТ, Мегафон Бизнес, Билайн Бизнес и др.";
 
 const EMPTY_FORM = {
   enabled: false,
   inbound_phone: "",
   transfer_phone: "",
   greeting_text: "",
-  ats_provider: "generic",
+  ats_provider: "asterisk",
   confirm_outbound_enabled: false,
   tts_enabled: false,
   mango_api_key: "",
@@ -19,8 +22,14 @@ const EMPTY_FORM = {
   mango_line_number: "",
   mango_extension: "",
   has_mango: false,
+  has_sip: false,
   speechkit_ready: false,
   webhook_token: "",
+  sip_server: "",
+  sip_username: "",
+  sip_password: "",
+  sip_auth_user: "",
+  sip_did: "",
 };
 
 function mergeSettings(prev, data) {
@@ -30,21 +39,27 @@ function mergeSettings(prev, data) {
     inbound_phone: data.inbound_phone ?? "",
     transfer_phone: data.transfer_phone ?? "",
     greeting_text: data.greeting_text ?? "",
-    ats_provider: data.ats_provider || "generic",
+    ats_provider: data.ats_provider || "asterisk",
     confirm_outbound_enabled: Boolean(data.confirm_outbound_enabled),
     tts_enabled: Boolean(data.tts_enabled),
     mango_line_number: data.mango_line_number ?? "",
     mango_extension: data.mango_extension ?? "",
     has_mango: Boolean(data.has_mango),
+    has_sip: Boolean(data.has_sip),
     speechkit_ready: Boolean(data.speechkit_ready),
     webhook_token: data.webhook_token ?? "",
+    sip_server: data.sip_server ?? "",
+    sip_username: data.sip_username ?? "",
+    sip_auth_user: data.sip_auth_user ?? "",
+    sip_did: data.sip_did ?? "",
     mango_api_key: "",
     mango_api_salt: "",
+    sip_password: "",
   };
 }
 
 /**
- * Кабинет салона: голосовой администратор — настройки, webhook, тест диалога, журнал звонков.
+ * Кабинет салона: голосовой администратор — SIP/Asterisk, тест, журнал.
  */
 export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -64,8 +79,6 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
 
   authFetchRef.current = authFetch;
   apiUrlRef.current = API_URL;
-
-  const webhookUrl = `${(apiOrigin || API_URL.replace(/\/api\/?$/, "")).replace(/\/$/, "")}/api/voice/webhook/inbound/`;
 
   const patchForm = useCallback((updater) => {
     formDirtyRef.current = true;
@@ -120,25 +133,33 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
     try {
       const fetchAuth = authFetchRef.current;
       const api = apiUrlRef.current;
+      const body = {
+        enabled: Boolean(form.enabled),
+        inbound_phone: form.inbound_phone || "",
+        transfer_phone: form.transfer_phone || "",
+        greeting_text: form.greeting_text || "",
+        ats_provider: form.ats_provider || "asterisk",
+        confirm_outbound_enabled: Boolean(form.confirm_outbound_enabled),
+        tts_enabled: Boolean(form.tts_enabled),
+        mango_line_number: form.mango_line_number || "",
+        mango_extension: form.mango_extension || "",
+        sip_server: form.sip_server || "",
+        sip_username: form.sip_username || "",
+        sip_auth_user: form.sip_auth_user || "",
+        sip_did: form.sip_did || form.inbound_phone || "",
+      };
+      if ((form.sip_password || "").trim()) body.sip_password = form.sip_password.trim();
+
       const res = await fetchAuth(`${api}/voice/settings/`, {
         method: "PATCH",
-        body: JSON.stringify({
-          enabled: Boolean(form.enabled),
-          inbound_phone: form.inbound_phone || "",
-          transfer_phone: form.transfer_phone || "",
-          greeting_text: form.greeting_text || "",
-          ats_provider: form.ats_provider || "generic",
-          confirm_outbound_enabled: Boolean(form.confirm_outbound_enabled),
-          tts_enabled: Boolean(form.tts_enabled),
-          mango_line_number: form.mango_line_number || "",
-          mango_extension: form.mango_extension || "",
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setStatus(data.detail || "Не удалось сохранить.");
         return;
       }
+
       const mangoPatch = {};
       if ((form.mango_api_key || "").trim()) mangoPatch.mango_api_key = form.mango_api_key.trim();
       if ((form.mango_api_salt || "").trim()) mangoPatch.mango_api_salt = form.mango_api_salt.trim();
@@ -150,9 +171,14 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
         });
         if (res2.ok) merged = await res2.json();
       }
+
       formDirtyRef.current = false;
       setForm((p) => mergeSettings(p, merged));
-      setStatus("Настройки сохранены.");
+      if (form.ats_provider === "asterisk" && merged.has_sip) {
+        setStatus("SIP привязан. Звонки на ваш номер будут принимать робота (после включения телефонии на сервере).");
+      } else {
+        setStatus("Настройки сохранены.");
+      }
     } finally {
       setSaving(false);
     }
@@ -176,15 +202,6 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
         : `Обзвон: ${data.dialed || 0} звонков.${data.errors?.length ? ` Ошибок: ${data.errors.length}.` : ""}`,
     );
     await loadSessionsAndOutbound();
-  }
-
-  async function copyText(text, okMessage) {
-    try {
-      await navigator.clipboard.writeText(text || "");
-      setStatus(okMessage);
-    } catch {
-      setStatus("Не удалось скопировать — выделите текст вручную.");
-    }
   }
 
   async function startSimulation() {
@@ -237,28 +254,58 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
     }
   }
 
+  const isAsterisk = form.ats_provider === "asterisk";
   const step1Done = Boolean(form.enabled);
   const step2Done = step1Done && Boolean((form.greeting_text || "").trim());
-  const step3Ready = step2Done && Boolean(form.webhook_token);
+  const step3Done = isAsterisk ? form.has_sip : step2Done && form.ats_provider !== "generic";
 
   return (
     <section className="voice-admin-panel">
       <h3>Голосовой администратор</h3>
       <p className="muted small voice-lead">
-        Робот помогает записывать клиентов по телефону. Сначала проверьте работу в тесте ниже — для этого телефония не
-        нужна. Подключение Mango или Novofon — только если хотите принимать реальные звонки на номер салона.
+        Робот записывает клиентов по телефону. Mango и Novofon не нужны: достаточно недорогого SIP-номера у любого
+        оператора. Сначала проверьте робота в тесте — это бесплатно.
       </p>
+
+      {isAsterisk ? (
+        <div className="voice-onboard-box">
+          <h4 className="voice-section-head">Как подключить телефон</h4>
+          <ol className="voice-onboard-steps">
+            <li>
+              <strong>Купите SIP-номер</strong> у оператора ({SIP_OPERATORS_HINT}) — обычно{" "}
+              <strong>200–300 ₽/мес</strong> за номер (без дорогой АТС).
+            </li>
+            <li>
+              Получите от оператора <strong>SIP-реквизиты</strong>: сервер, логин, пароль и сам номер.
+            </li>
+            <li>
+              Введите их ниже и нажмите <strong>«Сохранить»</strong> — платформа привяжет номер к роботу.
+            </li>
+            <li>Клиенты звонят на ваш номер → отвечает голосовой администратор.</li>
+          </ol>
+          <p className="muted small voice-wallet-hint">
+            Стоимость распознавания речи и ИИ (SpeechKit) пока оплачивает платформа. Позже можно включить в подписку
+            или списывать с кошелька салона.
+          </p>
+        </div>
+      ) : null}
 
       <ol className="voice-steps muted small">
         <li className={step1Done ? "voice-steps__done" : ""}>
-          <strong>Шаг 1.</strong> Включите администратора, заполните приветствие и сохраните.
+          <strong>Шаг 1.</strong> Включите администратора и сохраните приветствие.
         </li>
         <li className={step2Done ? "voice-steps__done" : ""}>
-          <strong>Шаг 2.</strong> Пройдите тест без телефона — как будто клиент пишет в чат.
+          <strong>Шаг 2.</strong> Пройдите тест без телефона ниже.
         </li>
-        <li className={step3Ready ? "voice-steps__done" : ""}>
-          <strong>Шаг 3 (если есть телефония).</strong> Передайте адрес и токен в Mango / Novofon или интегратору.
-        </li>
+        {isAsterisk ? (
+          <li className={step3Done ? "voice-steps__done" : ""}>
+            <strong>Шаг 3.</strong> Купите SIP-номер и привяжите реквизиты в форме ниже.
+          </li>
+        ) : form.ats_provider !== "generic" ? (
+          <li>
+            <strong>Шаг 3.</strong> Настройте интеграцию с выбранной АТС (Mango / Novofon).
+          </li>
+        ) : null}
       </ol>
 
       {loading ? <p className="muted small">Загружаем настройки…</p> : null}
@@ -276,8 +323,8 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
         </label>
 
         <label className="field-label">
-          Телефон салона
-          <span className="field-hint">Ваш городской или мобильный номер, на который звонят клиенты</span>
+          Телефон салона (для справки)
+          <span className="field-hint">Тот же номер, который укажете в SIP-поле ниже</span>
           <input
             type="tel"
             autoComplete="tel"
@@ -289,30 +336,28 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
 
         <label className="field-label">
           Перевод на живого администратора
-          <span className="field-hint">Куда переводить звонок, если клиент просит человека</span>
+          <span className="field-hint">Если клиент просит человека</span>
           <input
             type="tel"
             autoComplete="tel"
             value={form.transfer_phone ?? ""}
             onChange={(e) => patchForm((p) => ({ ...p, transfer_phone: e.target.value }))}
-            placeholder="+7 495 … или добавочный 101"
+            placeholder="+7 495 …"
           />
         </label>
 
         <label className="field-label">
           Первая фраза при звонке
-          <span className="field-hint">Робот произнесёт это, когда клиент дозвонится</span>
           <textarea
             rows={3}
             value={form.greeting_text ?? ""}
             onChange={(e) => patchForm((p) => ({ ...p, greeting_text: e.target.value }))}
-            placeholder="Здравствуйте! Это салон … Помогу записаться. Скажите, какая услуга и когда вам удобно."
+            placeholder="Здравствуйте! Это салон … Помогу записаться."
           />
         </label>
 
         <label className="field-label" htmlFor="voice-ats">
-          Телефония (АТС)
-          <span className="field-hint">Выберите провайдера или оставьте «только тест», пока не подключили АТС</span>
+          Способ подключения телефона
         </label>
         <select
           id="voice-ats"
@@ -326,46 +371,77 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
           ))}
         </select>
 
-        {form.speechkit_ready ? (
+        {isAsterisk ? (
           <>
-            <h4 className="voice-section-head">Голосовые ответы по телефону</h4>
-            <p className="voice-status-ok small">
-              На платформе включена озвучка — робот может отвечать голосом через телефонию.
-            </p>
-            <label className="checkbox">
+            <h4 className="voice-section-head">SIP-номер (от оператора связи)</h4>
+            {form.has_sip ? (
+              <p className="voice-status-ok small">SIP привязан — робот готов принимать звонки на ваш номер.</p>
+            ) : (
+              <p className="voice-status-warn small">Заполните реквизиты после покупки SIP-номера.</p>
+            )}
+            <label className="field-label">
+              SIP-сервер
+              <span className="field-hint">Например sip.telphin.ru или sip.mtt.ru</span>
               <input
-                type="checkbox"
-                checked={Boolean(form.tts_enabled)}
-                onChange={(e) => patchForm((p) => ({ ...p, tts_enabled: e.target.checked }))}
+                value={form.sip_server ?? ""}
+                onChange={(e) => patchForm((p) => ({ ...p, sip_server: e.target.value }))}
+                placeholder="sip.example.ru"
               />
-              Озвучивать ответы робота при звонках
+            </label>
+            <label className="field-label">
+              SIP-логин
+              <input
+                value={form.sip_username ?? ""}
+                onChange={(e) => patchForm((p) => ({ ...p, sip_username: e.target.value }))}
+                placeholder="логин из кабинета оператора"
+              />
+            </label>
+            <label className="field-label">
+              SIP-пароль
+              <input
+                type="password"
+                autoComplete="off"
+                value={form.sip_password ?? ""}
+                onChange={(e) => patchForm((p) => ({ ...p, sip_password: e.target.value }))}
+                placeholder={form.has_sip ? "Уже сохранён — введите только чтобы заменить" : ""}
+              />
+            </label>
+            <label className="field-label">
+              Логин авторизации (если отличается)
+              <input
+                value={form.sip_auth_user ?? ""}
+                onChange={(e) => patchForm((p) => ({ ...p, sip_auth_user: e.target.value }))}
+                placeholder="необязательно"
+              />
+            </label>
+            <label className="field-label">
+              Купленный номер (DID)
+              <span className="field-hint">На этот номер звонят клиенты</span>
+              <input
+                type="tel"
+                value={form.sip_did ?? ""}
+                onChange={(e) => patchForm((p) => ({ ...p, sip_did: e.target.value }))}
+                placeholder="+7 495 …"
+              />
             </label>
           </>
         ) : null}
 
-        <h4 className="voice-section-head">Напоминания по телефону</h4>
-        <p className="muted small field-hint">
-          Робот может сам звонить клиентам и спрашивать, подтверждают ли визит. Нужна телефония Mango.
-        </p>
+        {form.speechkit_ready && form.ats_provider !== "generic" ? (
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={Boolean(form.tts_enabled)}
+              onChange={(e) => patchForm((p) => ({ ...p, tts_enabled: e.target.checked }))}
+            />
+            Озвучивать ответы робота голосом
+          </label>
+        ) : null}
 
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={Boolean(form.confirm_outbound_enabled)}
-            onChange={(e) => patchForm((p) => ({ ...p, confirm_outbound_enabled: e.target.checked }))}
-          />
-          Звонить клиентам накануне и спрашивать «подтверждаете визит?»
-        </label>
-
-        {(form.ats_provider === "mango" || form.confirm_outbound_enabled) && (
+        {form.ats_provider === "mango" ? (
           <>
-            <p className="muted small">
-              Ключи Mango — в личном кабинете{" "}
-              <a href="https://www.mango-office.ru/products/virtualnaya-ats/" target="_blank" rel="noreferrer">
-                Mango Office
-              </a>{" "}
-              → <strong>Интеграции → API</strong>.
-            </p>
+            <h4 className="voice-section-head">Mango Office (опционально)</h4>
+            <p className="muted small">Платная облачная АТС. Для экономии используйте SIP-номер выше.</p>
             <label className="field-label">
               Mango API key
               <input
@@ -373,7 +449,7 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
                 autoComplete="off"
                 value={form.mango_api_key}
                 onChange={(e) => patchForm((p) => ({ ...p, mango_api_key: e.target.value }))}
-                placeholder={form.has_mango ? "Уже сохранён — введите только чтобы заменить" : "vpbx_api_key из Mango"}
+                placeholder={form.has_mango ? "••••••••" : ""}
               />
             </label>
             <label className="field-label">
@@ -383,29 +459,26 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
                 autoComplete="off"
                 value={form.mango_api_salt}
                 onChange={(e) => patchForm((p) => ({ ...p, mango_api_salt: e.target.value }))}
-                placeholder={form.has_mango ? "Уже сохранён — введите только чтобы заменить" : "vpbx_api_salt из Mango"}
-              />
-            </label>
-            <label className="field-label">
-              Номер линии для исходящих
-              <span className="field-hint">Номер салона, с которого Mango звонит клиентам</span>
-              <input
-                type="tel"
-                value={form.mango_line_number ?? ""}
-                onChange={(e) => patchForm((p) => ({ ...p, mango_line_number: e.target.value }))}
-                placeholder="+7 495 …"
-              />
-            </label>
-            <label className="field-label">
-              Добавочный Mango (необязательно)
-              <input
-                value={form.mango_extension ?? ""}
-                onChange={(e) => patchForm((p) => ({ ...p, mango_extension: e.target.value }))}
-                placeholder="101"
+                placeholder={form.has_mango ? "••••••••" : ""}
               />
             </label>
           </>
-        )}
+        ) : null}
+
+        {form.ats_provider === "mango" ? (
+          <>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={Boolean(form.confirm_outbound_enabled)}
+                onChange={(e) => patchForm((p) => ({ ...p, confirm_outbound_enabled: e.target.checked }))}
+              />
+              Исходящие звонки «подтверждаете визит?» (только Mango)
+            </label>
+          </>
+        ) : isAsterisk ? (
+          <p className="muted small">Исходящие напоминания по SIP — в следующих обновлениях.</p>
+        ) : null}
 
         <button type="submit" disabled={saving}>
           {saving ? "Сохраняем…" : "Сохранить настройки"}
@@ -414,11 +487,8 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
       </form>
 
       <div className="voice-sim-block">
-        <h4 className="voice-section-head">Тест без телефона</h4>
-        <p className="muted small">
-          Проверьте, что в календаре есть услуги и свободные окна. Напишите фразу как клиент — робот должен предложить
-          время и записать на «да».
-        </p>
+        <h4 className="voice-section-head">Тест без телефона (бесплатно)</h4>
+        <p className="muted small">Проверьте услуги и календарь до покупки SIP-номера.</p>
         <button type="button" className="ghost-btn" onClick={startSimulation} disabled={simBusy || !form.webhook_token}>
           Начать тестовый диалог
         </button>
@@ -436,7 +506,7 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
             <input
               value={simInput}
               onChange={(e) => setSimInput(e.target.value)}
-              placeholder="Например: маникюр завтра к Лене после шести"
+              placeholder="Например: маникюр завтра к Лене"
               disabled={simBusy}
             />
             <button type="submit" disabled={simBusy || !simInput.trim()}>
@@ -446,39 +516,9 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
         ) : null}
       </div>
 
-      {form.webhook_token && form.ats_provider !== "generic" ? (
-        <div className="voice-webhook-block">
-          <h4 className="voice-section-head">Данные для подключения телефонии</h4>
-          <p className="muted small">
-            Передайте эти данные в Mango / Novofon или специалисту, который настраивает телефонию. Без телефонии тест
-            выше уже работает.
-          </p>
-          <p className="muted small">
-            <strong>Адрес:</strong>
-          </p>
-          <div className="voice-token-row">
-            <input readOnly value={webhookUrl} aria-label="Voice webhook URL" />
-            <button type="button" className="ghost-btn" onClick={() => copyText(webhookUrl, "Адрес скопирован.")}>
-              Копировать URL
-            </button>
-          </div>
-          <p className="muted small">
-            <strong>Код доступа (заголовок</strong> <code>X-Voice-Token</code>
-            <strong>):</strong>
-          </p>
-          <div className="voice-token-row">
-            <input readOnly value={form.webhook_token} aria-label="Voice webhook token" />
-            <button type="button" className="ghost-btn" onClick={() => copyText(form.webhook_token, "Код скопирован.")}>
-              Копировать код
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {form.confirm_outbound_enabled ? (
+      {form.confirm_outbound_enabled && form.ats_provider === "mango" ? (
         <div className="voice-outbound-block">
           <h4 className="voice-section-head">Записи для обзвона</h4>
-          <p className="muted small">Клиенты с телефоном на ближайшие 36 часов. Нужны ключи Mango и сохранённые настройки.</p>
           {pendingOutbound.length > 0 ? (
             <ul className="list">
               {pendingOutbound.map((b) => (
@@ -493,12 +533,11 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
               ))}
             </ul>
           ) : (
-            <p className="muted small">Пока нет подходящих записей (нужен телефон клиента и дата в ближайшие сутки).</p>
+            <p className="muted small">Нет записей с телефоном на ближайшие сутки.</p>
           )}
           <button type="button" className="ghost-btn" onClick={() => runOutbound()} disabled={!form.has_mango}>
             Обзвонить всех
           </button>
-          {!form.has_mango ? <p className="muted small">Сначала сохраните ключи Mango выше.</p> : null}
         </div>
       ) : null}
 

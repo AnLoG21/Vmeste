@@ -1,16 +1,21 @@
+import logging
 import re
 
+from django.conf import settings
 from rest_framework import permissions, serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from users.models import User
 
+from .asterisk_sync import find_settings_by_did, sync_asterisk_configs
 from .models import ProviderVoiceSettings, VoiceCallSession, VoiceCallTurn
 from .outbound import dial_booking_confirmation, pending_confirmation_bookings, run_outbound_confirmations
 from .orchestrator import close_session, get_or_create_session, process_turn
 from .speechkit import attach_tts_to_response, speechkit_ready, transcribe_event_text
 from .telephony import normalize_inbound
+
+logger = logging.getLogger(__name__)
 
 
 def _digits(phone: str) -> str:
@@ -45,22 +50,40 @@ class ProviderVoiceSettingsSerializer(serializers.ModelSerializer):
             "mango_api_salt",
             "mango_line_number",
             "mango_extension",
+            "sip_server",
+            "sip_username",
+            "sip_password",
+            "sip_auth_user",
+            "sip_did",
             "webhook_token",
             "webhook_url_hint",
             "has_mango",
+            "has_sip",
             "speechkit_ready",
             "updated_at",
         ]
-        read_only_fields = ["webhook_token", "webhook_url_hint", "has_mango", "speechkit_ready", "updated_at"]
+        read_only_fields = [
+            "webhook_token",
+            "webhook_url_hint",
+            "has_mango",
+            "has_sip",
+            "speechkit_ready",
+            "updated_at",
+        ]
         extra_kwargs = {
             "mango_api_key": {"write_only": True},
             "mango_api_salt": {"write_only": True},
+            "sip_password": {"write_only": True, "required": False, "allow_blank": True},
         }
 
     has_mango = serializers.SerializerMethodField()
+    has_sip = serializers.SerializerMethodField()
 
     def get_has_mango(self, obj):
         return obj.has_mango()
+
+    def get_has_sip(self, obj):
+        return obj.has_sip()
 
     def get_webhook_url_hint(self, obj):
         return "/api/voice/webhook/inbound/"
@@ -109,9 +132,21 @@ class VoiceSettingsView(APIView):
         if request.user.role != User.Role.PROVIDER:
             return Response(status=status.HTTP_403_FORBIDDEN)
         obj, _ = ProviderVoiceSettings.objects.get_or_create(provider=request.user)
-        ser = ProviderVoiceSettingsSerializer(obj, data=request.data, partial=True)
+        data = request.data if isinstance(request.data, dict) else {}
+        ser = ProviderVoiceSettingsSerializer(obj, data=data, partial=True)
         ser.is_valid(raise_exception=True)
-        ser.save()
+        validated = dict(ser.validated_data)
+        validated.pop("sip_password", None)
+        for key, val in validated.items():
+            setattr(obj, key, val)
+        obj.save()
+        if (data.get("sip_password") or "").strip():
+            obj.sip_password = str(data["sip_password"]).strip()
+            obj.save(update_fields=["sip_password"])
+        try:
+            sync_asterisk_configs()
+        except Exception:
+            logger.exception("voice asterisk sync failed")
         return Response(ProviderVoiceSettingsSerializer(obj).data)
 
 
@@ -246,3 +281,27 @@ class VoiceSimulateCallView(APIView):
         result = process_turn(session, first_text, greeting=vs.greeting_text)
         result["session_id"] = session.id
         return Response(_voice_response(result, vs), status=status.HTTP_201_CREATED)
+
+
+class VoiceAsteriskResolveView(APIView):
+    """Internal: Asterisk AGI resolves salon by DID → webhook token."""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        secret = (request.headers.get("X-Asterisk-Secret") or "").strip()
+        expected = (getattr(settings, "ASTERISK_INTERNAL_SECRET", "") or "").strip()
+        if not expected or secret != expected:
+            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+        did = (request.query_params.get("did") or "").strip()
+        vs = find_settings_by_did(did)
+        if not vs:
+            return Response({"detail": "Salon not found for this number."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {
+                "provider_id": vs.provider_id,
+                "webhook_token": vs.webhook_token,
+                "organization_name": getattr(vs.provider, "organization_name", "") or "",
+            }
+        )

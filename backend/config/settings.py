@@ -249,6 +249,9 @@ YANDEX_OAUTH_CLIENT_SECRET = os.environ.get("YANDEX_OAUTH_CLIENT_SECRET", "").st
 YANDEX_CLOUD_FOLDER_ID = os.environ.get("YANDEX_CLOUD_FOLDER_ID", "").strip()
 YANDEX_GPT_API_KEY = os.environ.get("YANDEX_GPT_API_KEY", "").strip()
 YANDEX_SPEECHKIT_API_KEY = os.environ.get("YANDEX_SPEECHKIT_API_KEY", "").strip()
+ASTERISK_INTERNAL_SECRET = os.environ.get("ASTERISK_INTERNAL_SECRET", "").strip()
+ASTERISK_CONF_DIR = os.environ.get("ASTERISK_CONF_DIR", str(BASE_DIR.parent / "asterisk" / "conf" / "generated"))
+VOICE_PUBLIC_BASE_URL = os.environ.get("VOICE_PUBLIC_BASE_URL", os.environ.get("VITE_API_URL", FRONTEND_URL + "/api")).strip()
 VK_OAUTH_CLIENT_ID = os.environ.get("VK_OAUTH_CLIENT_ID", "").strip()
 VK_OAUTH_CLIENT_SECRET = os.environ.get("VK_OAUTH_CLIENT_SECRET", "").strip()
 

@@ -13,6 +13,18 @@ def normalize_inbound(payload: dict, *, ats: str = "generic") -> dict[str, Any]:
     p = payload or {}
     ats = (ats or p.get("ats") or "generic").lower()
 
+    if ats == "asterisk":
+        return {
+            "event": _map_event(str(p.get("event") or "incoming").lower()),
+            "call_id": str(p.get("call_id") or p.get("session_id") or ""),
+            "caller_phone": str(p.get("caller_phone") or p.get("from") or ""),
+            "called_phone": str(p.get("called_phone") or p.get("to") or p.get("did") or ""),
+            "text": str(p.get("text") or "").strip(),
+            "audio_base64": str(p.get("audio_base64") or "").strip(),
+            "audio_format": str(p.get("audio_format") or "wav").strip(),
+            "hangup": str(p.get("event") or "").lower() in ("hangup", "end"),
+        }
+
     if ats == "mango":
         # Mango Office: json with json, call_id, from, to, dtmf, etc.
         inner = p.get("json") if isinstance(p.get("json"), dict) else p
