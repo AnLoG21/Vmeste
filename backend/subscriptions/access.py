@@ -18,9 +18,11 @@ def provider_can_manage_staff(user) -> bool:
     """Staff seats are a paid feature; bookings stay on the free plan."""
     if not user or not getattr(user, "pk", None):
         return False
-    qs = UserSubscription.objects.filter(user=user, status=UserSubscription.Status.ACTIVE).select_related(
-        "plan"
-    )
+    qs = UserSubscription.objects.filter(
+        user=user,
+        status=UserSubscription.Status.ACTIVE,
+        plan__product_kind=SubscriptionPlan.ProductKind.PLATFORM,
+    ).select_related("plan")
     for sub in qs:
         if not _is_live(sub):
             continue
@@ -36,9 +38,11 @@ def ensure_free_subscription(user) -> Optional[UserSubscription]:
     """Give providers an unlimited free plan so bookings work without a trial."""
     if not user or getattr(user, "role", None) != "provider":
         return None
-    live = UserSubscription.objects.filter(user=user, status=UserSubscription.Status.ACTIVE).filter(
-        Q(period_end__isnull=True) | Q(period_end__gt=timezone.now())
-    )
+    live = UserSubscription.objects.filter(
+        user=user,
+        status=UserSubscription.Status.ACTIVE,
+        plan__product_kind=SubscriptionPlan.ProductKind.PLATFORM,
+    ).filter(Q(period_end__isnull=True) | Q(period_end__gt=timezone.now()))
     if live.exists():
         return live.first()
     plan = SubscriptionPlan.objects.filter(slug="starter", is_active=True).first()

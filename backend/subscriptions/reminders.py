@@ -26,10 +26,33 @@ def _send_subscription_telegram(user, text: str) -> None:
 
 def _mark_expired():
     now = timezone.now()
-    UserSubscription.objects.filter(
-        status=UserSubscription.Status.ACTIVE,
-        period_end__lt=now,
-    ).update(status=UserSubscription.Status.EXPIRED, updated_at=now)
+    expired = list(
+        UserSubscription.objects.filter(
+            status=UserSubscription.Status.ACTIVE,
+            period_end__lt=now,
+        ).select_related("plan")
+    )
+    if not expired:
+        return
+    UserSubscription.objects.filter(pk__in=[s.pk for s in expired]).update(
+        status=UserSubscription.Status.EXPIRED,
+        updated_at=now,
+    )
+    voice_user_ids = [
+        s.user_id
+        for s in expired
+        if s.plan_id and getattr(s.plan, "product_kind", "") == "voice"
+    ]
+    if voice_user_ids:
+        from django.contrib.auth import get_user_model
+
+        from .voice_entitlement import on_voice_subscription_ended
+
+        User = get_user_model()
+        for uid in set(voice_user_ids):
+            user = User.objects.filter(pk=uid).first()
+            if user:
+                on_voice_subscription_ended(user)
 
 
 def send_subscription_expiry_reminders() -> dict:

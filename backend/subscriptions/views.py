@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from .models import Payment, PromoRedemption, SubscriptionPlan, UserSubscription
 from .promos import PROMO_CODES, normalize_promo_code
 from .serializers import PaymentSerializer, SubscriptionPlanSerializer, UserSubscriptionSerializer
+from .voice_entitlement import is_voice_plan, on_subscription_activated, on_voice_subscription_ended
 from .yookassa_client import create_payment, create_refund, get_payment
 
 
@@ -17,9 +18,16 @@ def _activate_subscription(subscription: UserSubscription, *, days: int | None =
     now = timezone.now()
     plan = subscription.plan
     unlimited = (
-        plan.plan_type == SubscriptionPlan.PlanType.FREE
-        or plan.slug == "starter"
-        or (plan.price_monthly <= 0 and plan.plan_type not in (SubscriptionPlan.PlanType.CUSTOM, SubscriptionPlan.PlanType.PAID))
+        not is_voice_plan(plan)
+        and (
+            plan.plan_type == SubscriptionPlan.PlanType.FREE
+            or plan.slug == "starter"
+            or (
+                plan.price_monthly <= 0
+                and plan.plan_type
+                not in (SubscriptionPlan.PlanType.CUSTOM, SubscriptionPlan.PlanType.PAID)
+            )
+        )
     )
     if days is None:
         if unlimited:
@@ -43,6 +51,7 @@ def _activate_subscription(subscription: UserSubscription, *, days: int | None =
             "updated_at",
         ]
     )
+    on_subscription_activated(subscription)
 
 
 def _user_has_trial(user) -> bool:
@@ -76,11 +85,16 @@ def _create_payment_for_plan(user, plan):
     )
 
     return_url = f"{settings.FRONTEND_URL}?payment=success&payment_id={payment.id}"
+    desc_prefix = "Голосовые минуты Vmeste" if is_voice_plan(plan) else "Подписка Vmeste"
     yk = create_payment(
         amount=str(plan.price_monthly),
-        description=f"Подписка Vmeste: {plan.name}",
+        description=f"{desc_prefix}: {plan.name}",
         return_url=return_url,
-        metadata={"payment_id": str(payment.id), "user_id": str(user.id)},
+        metadata={
+            "payment_id": str(payment.id),
+            "user_id": str(user.id),
+            "product_kind": plan.product_kind,
+        },
     )
 
     if not yk:
@@ -228,12 +242,19 @@ class ActivateTrialView(APIView):
 
         from django.db.models import Q
 
-        active = UserSubscription.objects.filter(
-            user=request.user, status=UserSubscription.Status.ACTIVE
-        ).filter(Q(period_end__isnull=True) | Q(period_end__gt=timezone.now())).exists()
+        # Free platform plan can coexist with a voice-minutes tariff.
+        active = (
+            UserSubscription.objects.filter(
+                user=request.user,
+                status=UserSubscription.Status.ACTIVE,
+                plan__product_kind=SubscriptionPlan.ProductKind.PLATFORM,
+            )
+            .filter(Q(period_end__isnull=True) | Q(period_end__gt=timezone.now()))
+            .exists()
+        )
         if active:
             return Response(
-                {"detail": "У вас уже есть активная подписка."},
+                {"detail": "У вас уже есть активная подписка платформы."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -276,10 +297,11 @@ class ApplyPromoView(APIView):
             return Response({"detail": "Тариф для промокода не найден."}, status=status.HTTP_404_NOT_FOUND)
 
         with transaction.atomic():
-            # End other active paid/trial periods when applying promo month
+            # Promo applies to platform plans only — keep voice-minute tariffs.
             UserSubscription.objects.filter(
                 user=request.user,
                 status=UserSubscription.Status.ACTIVE,
+                plan__product_kind=SubscriptionPlan.ProductKind.PLATFORM,
             ).update(
                 status=UserSubscription.Status.CANCELLED,
                 auto_renew=False,
@@ -425,6 +447,8 @@ class CancelSubscriptionView(APIView):
             if sub.refunded_at:
                 update_fields.append("refunded_at")
             sub.save(update_fields=update_fields)
+            if is_voice_plan(sub.plan):
+                on_voice_subscription_ended(request.user)
         else:
             sub.cancel_at_period_end = True
             end = sub.period_end.strftime("%d.%m.%Y") if sub.period_end else "окончания оплаченного периода"

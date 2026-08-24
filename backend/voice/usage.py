@@ -10,6 +10,10 @@ from django.utils import timezone
 
 def _maybe_reset_period(vs) -> None:
     now = timezone.now()
+    from subscriptions.voice_entitlement import live_voice_subscription
+
+    if live_voice_subscription(getattr(vs, "provider", None)):
+        return
     start = vs.voice_minutes_period_start
     if not start or start + timedelta(days=31) < now:
         vs.voice_minutes_used = Decimal("0")

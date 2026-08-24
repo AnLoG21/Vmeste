@@ -11266,6 +11266,7 @@ export default function App() {
                 authFetch={authFetch}
                 API_URL={API_URL}
                 apiOrigin={String(API_URL || "").replace(/\/api\/?$/, "")}
+                onOpenSubscriptions={() => setCurrentView("subscriptions")}
               />
             )}
               </>

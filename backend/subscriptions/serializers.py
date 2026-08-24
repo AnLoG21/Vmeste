@@ -14,6 +14,8 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
             "price_monthly",
             "features",
             "plan_type",
+            "product_kind",
+            "voice_minutes_monthly",
             "trial_days",
         ]
 

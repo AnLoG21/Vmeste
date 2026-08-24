@@ -67,7 +67,7 @@ function mergeSettings(prev, data) {
 /**
  * Кабинет салона: голосовой администратор — SIP/Asterisk, тест, журнал.
  */
-export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) {
+export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "", onOpenSubscriptions }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [status, setStatus] = useState("");
   const [sessions, setSessions] = useState([]);
@@ -290,9 +290,17 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
             <li>Клиенты звонят на ваш номер → отвечает голосовой администратор.</li>
           </ol>
           <p className="muted small voice-wallet-hint">
-            Распознавание речи (SpeechKit) списывается с лимита минут организации. Сейчас на тарифе{" "}
-            <strong>{form.voice_minutes_left}</strong> мин из {form.voice_minutes_quota} в месяц. Позже лимит можно
-            включить в подписку или кошелёк.
+            Распознавание речи (SpeechKit) списывается с лимита минут. Сейчас{" "}
+            <strong>{form.voice_minutes_left}</strong> мин из {form.voice_minutes_quota} в месяц. Купить, продлить или
+            сменить тариф — в разделе «Подписки».
+            {typeof onOpenSubscriptions === "function" ? (
+              <>
+                {" "}
+                <button type="button" className="linkish-btn" onClick={onOpenSubscriptions}>
+                  Открыть тарифы минут
+                </button>
+              </>
+            ) : null}
           </p>
         </div>
       ) : null}

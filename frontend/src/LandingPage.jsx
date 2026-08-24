@@ -530,7 +530,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
             сотрудники и приоритетная поддержка. Перед оплатой можно ввести промокод.
           </p>
           <div className="subscriptions-plans landing-pricing-grid">
-            {plans.map((plan) => (
+            {plans.filter((plan) => plan.product_kind !== "voice").map((plan) => (
               <article key={plan.id} className="subscriptions-plan-card">
                 <h3>
                   {(plan.plan_type === "trial" || plan.plan_type === "free" || plan.slug === "starter") && "🎁 "}
@@ -563,6 +563,35 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </article>
             ))}
           </div>
+          {plans.some((plan) => plan.product_kind === "voice") ? (
+            <>
+              <h3 className="landing-pricing-subhead">Голосовой ассистент — минуты</h3>
+              <p className="landing-section-lead">
+                Отдельные тарифы SpeechKit: купить, продлить или сменить пакет минут в разделе «Подписки».
+              </p>
+              <div className="subscriptions-plans landing-pricing-grid">
+                {plans
+                  .filter((plan) => plan.product_kind === "voice")
+                  .map((plan) => (
+                    <article key={plan.id} className="subscriptions-plan-card">
+                      <h3>🎙 {plan.name}</h3>
+                      <p className="subscriptions-plan-desc">{plan.description}</p>
+                      <p className="subscriptions-plan-price">{formatPlanPrice(plan)}</p>
+                      {Array.isArray(plan.features) && plan.features.length > 0 && (
+                        <ul className="subscriptions-plan-features">
+                          {plan.features.map((feature) => (
+                            <li key={feature}>{feature}</li>
+                          ))}
+                        </ul>
+                      )}
+                      <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
+                        Выбрать пакет минут
+                      </button>
+                    </article>
+                  ))}
+              </div>
+            </>
+          ) : null}
           <p className="landing-note">
             Оплачивая подписку, вы принимаете условия{" "}
             <a href="/offer">публичной оферты</a>. При досрочной отмене в день оплаты (не пробный

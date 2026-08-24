@@ -5,7 +5,18 @@ from .models import Payment, PromoRedemption, SubscriptionPlan, UserSubscription
 
 @admin.register(SubscriptionPlan)
 class SubscriptionPlanAdmin(admin.ModelAdmin):
-    list_display = ["name", "slug", "plan_type", "price_monthly", "trial_days", "is_active", "sort_order"]
+    list_display = [
+        "name",
+        "slug",
+        "product_kind",
+        "plan_type",
+        "price_monthly",
+        "voice_minutes_monthly",
+        "trial_days",
+        "is_active",
+        "sort_order",
+    ]
+    list_filter = ["product_kind", "plan_type", "is_active"]
 
 
 @admin.register(UserSubscription)

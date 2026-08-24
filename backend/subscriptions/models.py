@@ -10,6 +10,10 @@ class SubscriptionPlan(models.Model):
         PAID = "paid", "Платный"
         CUSTOM = "custom", "Индивидуальный"
 
+    class ProductKind(models.TextChoices):
+        PLATFORM = "platform", "Платформа"
+        VOICE = "voice", "Голосовой ассистент"
+
     slug = models.SlugField(unique=True)
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
@@ -22,10 +26,25 @@ class SubscriptionPlan(models.Model):
         choices=PlanType.choices,
         default=PlanType.PAID,
     )
+    product_kind = models.CharField(
+        max_length=16,
+        choices=ProductKind.choices,
+        default=ProductKind.PLATFORM,
+        db_index=True,
+        help_text="platform — кабинет/сотрудники; voice — минуты SpeechKit для голосового ассистента.",
+    )
+    voice_minutes_monthly = models.PositiveIntegerField(
+        default=0,
+        help_text="Минут SpeechKit в месяц для product_kind=voice (0 = не голосовой тариф).",
+    )
     trial_days = models.PositiveIntegerField(
         default=0,
         help_text="Длительность пробного периода в днях (для plan_type=trial).",
     )
+
+    @property
+    def is_voice(self) -> bool:
+        return self.product_kind == self.ProductKind.VOICE
 
     class Meta:
         ordering = ["sort_order", "price_monthly"]

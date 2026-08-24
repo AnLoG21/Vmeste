@@ -22,6 +22,10 @@ const SOURCE_LABELS = {
 
 const emptyRequestForm = { name: "", email: "", phone: "", telegram: "", message: "" };
 
+function isVoicePlan(plan) {
+  return plan?.product_kind === "voice";
+}
+
 export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
   const [plans, setPlans] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
@@ -99,6 +103,27 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
     loadAll();
   }
 
+  async function payPlan(plan) {
+    if (!plan) return;
+    setPromoModalPlan(null);
+    setStatus("Создаём платёж...");
+    const response = await authFetch(`${apiUrl}/subscriptions/pay/`, {
+      method: "POST",
+      body: JSON.stringify({ plan_id: plan.id }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setStatus(data.detail || "Ошибка оплаты.");
+      return;
+    }
+    if (data.confirmation_url) {
+      window.location.href = data.confirmation_url;
+      return;
+    }
+    setStatus(data.detail || (isVoicePlan(plan) ? "Тариф минут активирован." : "Подписка активирована."));
+    loadAll();
+  }
+
   function openPayFlow(plan) {
     if (plan.plan_type === "trial" || plan.plan_type === "free" || plan.slug === "starter") {
       activateTrial(plan);
@@ -106,6 +131,10 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
     }
     if (Number(plan.price_monthly) <= 0 || plan.plan_type === "custom") {
       setShowRequestForm(true);
+      return;
+    }
+    if (isVoicePlan(plan)) {
+      payPlan(plan);
       return;
     }
     setPromoCode("");
@@ -136,32 +165,15 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
     loadAll();
   }
 
-  async function skipPromoAndPay() {
-    const plan = promoModalPlan;
-    if (!plan) return;
-    setPromoModalPlan(null);
-    setStatus("Создаём платёж...");
-    const response = await authFetch(`${apiUrl}/subscriptions/pay/`, {
-      method: "POST",
-      body: JSON.stringify({ plan_id: plan.id }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      setStatus(data.detail || "Ошибка оплаты.");
-      return;
-    }
-    if (data.confirmation_url) {
-      window.location.href = data.confirmation_url;
-      return;
-    }
-    setStatus(data.detail || "Подписка активирована.");
-    loadAll();
-  }
-
   async function renewSubscription(sub) {
     setStatus("Продлеваем...");
     setPromoCode("");
     setPromoError("");
+    if (isVoicePlan(sub.plan)) {
+      setStatus("");
+      payPlan(sub.plan);
+      return;
+    }
     const plan = sub.plan?.plan_type === "trial"
       ? plans.find((p) => p.slug === "business") || sub.plan
       : sub.plan;
@@ -216,7 +228,7 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
   }
 
   function formatDate(iso) {
-    if (!iso) return "—";
+    if (!iso) return "бессрочно";
     return new Date(iso).toLocaleDateString("ru-RU", {
       day: "numeric",
       month: "long",
@@ -224,7 +236,12 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
     });
   }
 
-  function planActionLabel(plan) {
+  function planActionLabel(plan, { currentVoicePlanId } = {}) {
+    if (isVoicePlan(plan)) {
+      if (currentVoicePlanId && plan.id === currentVoicePlanId) return "Текущий тариф";
+      if (currentVoicePlanId) return "Сменить тариф";
+      return `Купить ${plan.voice_minutes_monthly || ""} мин`.trim();
+    }
     if (plan.plan_type === "trial" || plan.plan_type === "free" || plan.slug === "starter") return "Подключить бесплатно";
     if (Number(plan.price_monthly) <= 0 || plan.plan_type === "custom") return "Оставить заявку";
     return "Оплатить";
@@ -238,19 +255,133 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
     );
   }
 
-  const activeSub = subscriptions.find((s) => s.is_active_now);
-  const pendingSub = subscriptions.find((s) => s.status === "pending");
-  const expiringSoon =
-    activeSub?.period_end &&
-    (new Date(activeSub.period_end) - Date.now()) / (1000 * 60 * 60 * 24) <= 3 &&
-    (new Date(activeSub.period_end) - Date.now()) > 0;
+  const liveSubs = subscriptions.filter((s) => s.is_active_now);
+  const activePlatform = liveSubs.find((s) => !isVoicePlan(s.plan));
+  const activeVoice = liveSubs.find((s) => isVoicePlan(s.plan));
+  const pendingSubs = subscriptions.filter((s) => s.status === "pending");
+  const platformPlans = plans.filter((p) => !isVoicePlan(p));
+  const voicePlans = plans.filter((p) => isVoicePlan(p));
+  const currentVoicePlanId = activeVoice?.plan?.id;
+
+  function expiringSoon(sub) {
+    if (!sub?.period_end) return false;
+    const ms = new Date(sub.period_end) - Date.now();
+    return ms > 0 && ms / (1000 * 60 * 60 * 24) <= 3;
+  }
+
+  function renderActiveBlock(sub, title) {
+    if (!sub) return null;
+    const voice = isVoicePlan(sub.plan);
+    const minutes = sub.plan?.voice_minutes_monthly;
+    return (
+      <div className={`subscriptions-active${voice ? " subscriptions-active--voice" : ""}`}>
+        <h3>{title}</h3>
+        <p>
+          <strong>{sub.plan?.name}</strong>
+          {voice && minutes ? ` · ${minutes} мин / мес` : ""}
+          {" — "}
+          активна до {formatDate(sub.period_end)}
+          {sub.source ? ` · ${SOURCE_LABELS[sub.source] || sub.source}` : ""}
+          {sub.promo_code ? ` (${sub.promo_code})` : ""}
+        </p>
+        {sub.cancel_at_period_end && (
+          <p className="subscriptions-cancel-note">
+            Автопродление отключено. После {formatDate(sub.period_end)} подписка не продлится.
+          </p>
+        )}
+        {sub.source === "paid" && !sub.cancel_at_period_end && (
+          <label className="subscriptions-auto-renew">
+            <input
+              type="checkbox"
+              checked={sub.auto_renew}
+              onChange={() => toggleAutoRenew(sub)}
+            />
+            Автопродление
+          </label>
+        )}
+        <div className="subscriptions-active-actions">
+          {sub.source === "paid" && (
+            <button type="button" onClick={() => renewSubscription(sub)}>
+              Продлить сейчас
+            </button>
+          )}
+          {!voice && (sub.source === "trial" || sub.source === "promo" || sub.cancel_at_period_end) && (
+            <button type="button" onClick={() => renewSubscription(sub)}>
+              Перейти на «Бизнес»
+            </button>
+          )}
+          <button
+            type="button"
+            className="ghost-btn subscriptions-cancel-btn"
+            onClick={() => cancelSubscription(sub, !!sub.cancel_at_period_end || sub.source !== "paid")}
+          >
+            {sub.cancel_at_period_end || sub.source !== "paid" ? "Отключить досрочно" : "Отключить подписку"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderPlanCards(list, { voice = false } = {}) {
+    return (
+      <div className="subscriptions-plans">
+        {list.map((plan) => {
+          const isCurrent = voice && plan.id === currentVoicePlanId;
+          return (
+            <article
+              key={plan.id}
+              className={`subscriptions-plan-card${isCurrent ? " is-current" : ""}${voice ? " subscriptions-plan-card--voice" : ""}`}
+            >
+              <h4>
+                {voice ? "" : plan.plan_type === "trial" || plan.slug === "starter" ? "🎁 " : ""}
+                {!voice && plan.slug === "business" ? "💼 " : ""}
+                {!voice && plan.plan_type === "custom" ? "🛠️ " : ""}
+                {voice ? "🎙 " : ""}
+                {plan.name}
+              </h4>
+              <p className="subscriptions-plan-desc">{plan.description}</p>
+              {voice && plan.voice_minutes_monthly ? (
+                <p className="subscriptions-plan-minutes">{plan.voice_minutes_monthly} минут / месяц</p>
+              ) : null}
+              {plan.plan_type === "trial" || plan.plan_type === "free" || plan.slug === "starter" ? (
+                <p className="subscriptions-plan-price">Бесплатно</p>
+              ) : Number(plan.price_monthly) > 0 ? (
+                <p className="subscriptions-plan-price">
+                  {Number(plan.price_monthly).toLocaleString("ru-RU")} ₽ / мес
+                </p>
+              ) : (
+                <p className="subscriptions-plan-price">По договорённости</p>
+              )}
+              <ul className="subscriptions-plan-features">
+                {(plan.features || []).map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className={
+                  isCurrent || (Number(plan.price_monthly) <= 0 && plan.plan_type !== "trial" && plan.plan_type !== "free")
+                    ? "ghost-btn"
+                    : ""
+                }
+                disabled={isCurrent}
+                onClick={() => openPayFlow(plan)}
+              >
+                {planActionLabel(plan, { currentVoicePlanId })}
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <section className="card profile-card subscriptions-page full-width">
       <h2>Подписки</h2>
       <p className="subscriptions-lead">
-        Управляйте тарифом, оплачивайте и продлевайте подписку. Оплата проходит через ЮKassa.
-        Оплачивая подписку, вы принимаете условия{" "}
+        Управляйте тарифом платформы и минутами голосового ассистента. Оплата проходит через ЮKassa.
+        Оплачивая, вы принимаете условия{" "}
         <a href="/offer" target="_blank" rel="noreferrer">
           публичной оферты
         </a>
@@ -262,76 +393,39 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
         <ul>
           <li>
             <strong>Бесплатный</strong> — онлайн-запись, каталог, чаты и карта без ограничения по
-            сроку. Оплата картой не нужна.
+            сроку.
           </li>
           <li>
-            <strong>Бизнес</strong> — 990 ₽/мес: сотрудники, аналитика и приоритетная поддержка. Перед
-            оплатой можно ввести промокод или пропустить и перейти к оплате.
+            <strong>Бизнес</strong> — сотрудники, аналитика и приоритетная поддержка. Перед оплатой
+            можно ввести промокод.
+          </li>
+          <li>
+            <strong>Голосовой ассистент</strong> — отдельные тарифы по минутам SpeechKit. Можно купить,
+            продлить или сменить пакет; при смене лимит обновляется сразу.
           </li>
           <li>
             Если отключить оплаченную подписку <strong>досрочно в тот же день</strong>, когда была
             оплата (не пробный период и не промокод), деньги возвращаются автоматически.
           </li>
-          <li>За 3 дня и за 1 день до окончания подписки придёт напоминание в кабинет и на email.</li>
         </ul>
       </div>
 
-      {expiringSoon && activeSub && (
+      {(expiringSoon(activePlatform) || expiringSoon(activeVoice)) && (
         <div className="subscriptions-reminder-banner" role="status">
-          ⏰ Подписка «{activeSub.plan?.name}» истекает {formatDate(activeSub.period_end)}. Продлите
-          тариф, чтобы не потерять доступ.
+          {expiringSoon(activePlatform)
+            ? `Подписка «${activePlatform.plan?.name}» истекает ${formatDate(activePlatform.period_end)}. `
+            : ""}
+          {expiringSoon(activeVoice)
+            ? `Тариф минут «${activeVoice.plan?.name}» истекает ${formatDate(activeVoice.period_end)}.`
+            : ""}
         </div>
       )}
 
-      {activeSub && (
-        <div className="subscriptions-active">
-          <h3>Текущая подписка</h3>
-          <p>
-            <strong>{activeSub.plan?.name}</strong> — активна до {formatDate(activeSub.period_end)}
-            {activeSub.source ? ` · ${SOURCE_LABELS[activeSub.source] || activeSub.source}` : ""}
-            {activeSub.promo_code ? ` (${activeSub.promo_code})` : ""}
-          </p>
-          {activeSub.cancel_at_period_end && (
-            <p className="subscriptions-cancel-note">
-              Автопродление отключено. После {formatDate(activeSub.period_end)} подписка не продлится.
-            </p>
-          )}
-          {activeSub.source === "paid" && !activeSub.cancel_at_period_end && (
-            <label className="subscriptions-auto-renew">
-              <input
-                type="checkbox"
-                checked={activeSub.auto_renew}
-                onChange={() => toggleAutoRenew(activeSub)}
-              />
-              Автопродление
-            </label>
-          )}
-          <div className="subscriptions-active-actions">
-            {activeSub.source === "paid" && !activeSub.cancel_at_period_end && (
-              <button type="button" onClick={() => renewSubscription(activeSub)}>
-                Продлить сейчас
-              </button>
-            )}
-            {(activeSub.source === "trial" || activeSub.source === "promo" || activeSub.cancel_at_period_end) && (
-              <button type="button" onClick={() => renewSubscription(activeSub)}>
-                Перейти на «Бизнес»
-              </button>
-            )}
-            <button
-              type="button"
-              className="ghost-btn subscriptions-cancel-btn"
-              onClick={() => cancelSubscription(activeSub, !!activeSub.cancel_at_period_end || activeSub.source !== "paid")}
-            >
-              {activeSub.cancel_at_period_end || activeSub.source !== "paid"
-                ? "Отключить досрочно"
-                : "Отключить подписку"}
-            </button>
-          </div>
-        </div>
-      )}
+      {renderActiveBlock(activePlatform, "Текущая подписка")}
+      {renderActiveBlock(activeVoice, "Тариф голосового ассистента")}
 
-      {pendingSub && (
-        <div className="subscriptions-active subscriptions-pending">
+      {pendingSubs.map((pendingSub) => (
+        <div key={pendingSub.id} className="subscriptions-active subscriptions-pending">
           <h3>Ожидает оплаты</h3>
           <p>
             <strong>{pendingSub.plan?.name}</strong> — оплата не завершена
@@ -344,46 +438,24 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
             Отменить
           </button>
         </div>
-      )}
+      ))}
 
-      <h3>Тарифы</h3>
+      <h3>Тарифы платформы</h3>
       {trialUsed && (
         <p className="muted">Ранее активированный пробный период больше не используется — действует бессрочный бесплатный тариф.</p>
       )}
-      <div className="subscriptions-plans">
-        {plans.map((plan) => (
-          <article key={plan.id} className="subscriptions-plan-card">
-            <h4>
-              {plan.plan_type === "trial" || plan.slug === "starter" ? "🎁 " : ""}
-              {plan.slug === "business" ? "💼 " : ""}
-              {plan.plan_type === "custom" ? "🛠️ " : ""}
-              {plan.name}
-            </h4>
-            <p className="subscriptions-plan-desc">{plan.description}</p>
-            {plan.plan_type === "trial" || plan.plan_type === "free" || plan.slug === "starter" ? (
-              <p className="subscriptions-plan-price">Бесплатно</p>
-            ) : Number(plan.price_monthly) > 0 ? (
-              <p className="subscriptions-plan-price">
-                {Number(plan.price_monthly).toLocaleString("ru-RU")} ₽ / мес
-              </p>
-            ) : (
-              <p className="subscriptions-plan-price">По договорённости</p>
-            )}
-            <ul className="subscriptions-plan-features">
-              {(plan.features || []).map((f) => (
-                <li key={f}>{f}</li>
-              ))}
-            </ul>
-            <button
-              type="button"
-              className={Number(plan.price_monthly) <= 0 && plan.plan_type !== "trial" ? "ghost-btn" : ""}
-              onClick={() => openPayFlow(plan)}
-            >
-              {planActionLabel(plan)}
-            </button>
-          </article>
-        ))}
-      </div>
+      {renderPlanCards(platformPlans)}
+
+      {voicePlans.length > 0 && (
+        <>
+          <h3 id="voice-minutes">Минуты голосового ассистента</h3>
+          <p className="subscriptions-lead subscriptions-voice-lead">
+            Пакеты минут для SpeechKit. Цены и объём можно менять в админке. Без оплаченного тарифа
+            действует демо-лимит 30 минут в месяц.
+          </p>
+          {renderPlanCards(voicePlans, { voice: true })}
+        </>
+      )}
 
       {subscriptions.length > 0 && (
         <>
@@ -453,7 +525,7 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
             />
             {promoError ? <p className="status subscriptions-promo-error">{promoError}</p> : null}
             <div className="subscriptions-promo-actions">
-              <button type="button" className="ghost-btn" disabled={promoBusy} onClick={skipPromoAndPay}>
+              <button type="button" className="ghost-btn" disabled={promoBusy} onClick={() => payPlan(promoModalPlan)}>
                 Пропустить и оплатить
               </button>
               <button type="button" disabled={promoBusy} onClick={applyPromoAndClose}>
