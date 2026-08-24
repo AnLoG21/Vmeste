@@ -18,6 +18,7 @@ import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
 import SalonLoyaltyPackagesPanel from "./SalonLoyaltyPackagesPanel.jsx";
 import OrgReviewComposer from "./OrgReviewComposer.jsx";
+import VoiceAdminPanel from "./VoiceAdminPanel.jsx";
 import MiniDatePicker from "./MiniDatePicker.jsx";
 import {
   orgSphereOf,
