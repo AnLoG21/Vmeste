@@ -58,6 +58,7 @@ class Booking(models.Model):
         NEW = "new", "New"
         CONFIRMED = "confirmed", "Confirmed"
         ARRIVED = "arrived", "Клиент пришёл"
+        NO_SHOW = "no_show", "Не пришёл"
         CANCELLED = "cancelled", "Cancelled"
         DONE = "done", "Done"
 
@@ -459,3 +460,44 @@ class LoyaltyLedger(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class WaitlistEntry(models.Model):
+    """Лист ожидания: клиент ждёт освобождения слота по услуге."""
+
+    class Status(models.TextChoices):
+        WAITING = "waiting", "Ждёт"
+        NOTIFIED = "notified", "Уведомлён"
+        BOOKED = "booked", "Записался"
+        CANCELLED = "cancelled", "Отменён"
+
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="waitlist_entries",
+    )
+    client = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="client_waitlist",
+    )
+    service = models.ForeignKey(
+        "catalog.Service",
+        on_delete=models.CASCADE,
+        related_name="waitlist_entries",
+    )
+    staff = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="staff_waitlist",
+    )
+    preferred_date = models.DateField(null=True, blank=True)
+    comment = models.CharField(max_length=250, blank=True, default="")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.WAITING, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    notified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]

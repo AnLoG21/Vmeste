@@ -537,6 +537,8 @@ class LoyaltySettingsSerializer(serializers.ModelSerializer):
 class LoyaltyAccountSerializer(serializers.ModelSerializer):
     client_name = serializers.SerializerMethodField()
     provider_name = serializers.SerializerMethodField()
+    level = serializers.SerializerMethodField()
+    level_label = serializers.SerializerMethodField()
 
     class Meta:
         model = LoyaltyAccount
@@ -547,6 +549,8 @@ class LoyaltyAccountSerializer(serializers.ModelSerializer):
             "client",
             "client_name",
             "balance",
+            "level",
+            "level_label",
             "updated_at",
         ]
         read_only_fields = fields
@@ -559,4 +563,14 @@ class LoyaltyAccountSerializer(serializers.ModelSerializer):
         if not prov:
             return ""
         return (getattr(prov, "organization_name", None) or "").strip() or (prov.username or "")
+
+    def get_level(self, obj):
+        from .loyalty import loyalty_level
+
+        return loyalty_level(obj.balance)["level"]
+
+    def get_level_label(self, obj):
+        from .loyalty import loyalty_level
+
+        return loyalty_level(obj.balance)["level_label"]
 

@@ -53,6 +53,15 @@ def humanize_api_error(detail: str, status_code: int | None = None) -> str:
         return "Ключ API отклонён. Проверьте Client ID / API Key в Управлении и боевой режим."
     if code == 403 or "forbidden" in low:
         return "Нет доступа к методу API. Проверьте права ключа и тариф площадки."
+    if "sku" in low or "barcode" in low or "штрихкод" in low:
+        return (
+            "Остатки WB принимают sku = штрихкод карточки, не артикул. "
+            "Укажите barcode в карточке или в таблице остатков."
+        )
+    if "warehouse" in low or "склад" in low:
+        return "Неверный склад. Проверьте ID склада в Управлении и повторите."
+    if "nmid" in low or "nm_id" in low or "nm id" in low:
+        return "Неверный nmID Wildberries. Подставьте nmID из истории карточек."
     if code >= 500:
         return f"Площадка временно недоступна ({code}). Повторите позже."
     # Prefer the useful tail of protobuf-style messages

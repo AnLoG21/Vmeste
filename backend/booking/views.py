@@ -826,6 +826,20 @@ class BookingViewSet(viewsets.ModelViewSet):
             return Response({"code": err}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(booking).data)
 
+    @action(detail=True, methods=["post"], url_path="mark-no-show")
+    def mark_no_show(self, request, pk=None):
+        from .booking_actions import mark_booking_no_show
+
+        booking = self.get_object()
+        if not self._booking_for_actor(booking) or not self._staff_has_booking_perm(booking):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if request.user.role == "client":
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        ok, err = mark_booking_no_show(booking, request.user)
+        if not ok:
+            return Response({"code": err}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.get_serializer(booking).data)
+
     @action(detail=True, methods=["post"], url_path="cancel-by-org")
     def cancel_by_org(self, request, pk=None):
         from .booking_actions import cancel_booking_by_org

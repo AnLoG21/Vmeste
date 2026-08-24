@@ -152,6 +152,18 @@ export default function SalonLoyaltyPackagesPanel({ authFetch, API_URL, services
             onChange={(e) => setLoyalty((p) => ({ ...p, rub_per_point: e.target.value }))}
           />
         </label>
+        <label>
+          Приветственные баллы (новым клиентам)
+          <input
+            type="number"
+            min="0"
+            value={loyalty.welcome_bonus}
+            onChange={(e) => setLoyalty((p) => ({ ...p, welcome_bonus: e.target.value }))}
+          />
+        </label>
+        <p className="muted small">
+          Уровни клиента по баллам: Старт → Серебро (50) → Золото (200) → Платина (500).
+        </p>
         <button type="submit">Сохранить лояльность</button>
       </form>
 

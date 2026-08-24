@@ -81,6 +81,18 @@ export default function ClientLoyaltyPage({ authFetch, API_URL }) {
         <h2>{selectedProvider.name || "Организация"}</h2>
         <p>
           Баллы: <strong>{Number(balance?.balance || 0).toLocaleString("ru-RU")}</strong>
+          {" · "}
+          уровень:{" "}
+          <strong>
+            {balance?.level_label ||
+              (Number(balance?.balance || 0) >= 500
+                ? "Платина"
+                : Number(balance?.balance || 0) >= 200
+                  ? "Золото"
+                  : Number(balance?.balance || 0) >= 50
+                    ? "Серебро"
+                    : "Старт")}
+          </strong>
           {balance?.enabled === false ? <span className="muted"> (программа выключена)</span> : null}
         </p>
         {balance?.rub_per_point ? (

@@ -39,9 +39,9 @@ def _sms_api_id(msg_settings) -> str:
     return (getattr(settings, "SMSRU_API_ID", None) or "").strip()
 
 
-def _send_sms(user, phone: str, text: str, api_id: str) -> None:
+def _send_sms(user, phone: str, text: str, api_id: str) -> bool:
     if not phone or not text or not api_id:
-        return
+        return False
     ok, status = send_sms_ru(api_id=api_id, phone=phone, text=text)
     try:
         SmsLog.objects.create(
@@ -52,6 +52,7 @@ def _send_sms(user, phone: str, text: str, api_id: str) -> None:
         )
     except Exception:
         logger.exception("SmsLog create failed")
+    return bool(ok)
 
 
 def _org_recipients(booking) -> list[int]:
@@ -174,15 +175,23 @@ def deliver_booking_event(
             except Exception:
                 logger.exception("client push failed")
 
+            channel_ok = False
+            sms_wanted = False
+            tg_wanted = False
+
             if msg.enable_sms:
                 api_id = _sms_api_id(msg)
                 phone = (getattr(client, "phone", None) or "").strip()
                 if api_id and phone:
-                    _send_sms(client, phone, body, api_id)
+                    sms_wanted = True
+                    if _send_sms(client, phone, body, api_id):
+                        channel_ok = True
 
             tg_token = _telegram_bot_token(msg)
             if msg.enable_telegram and (client.telegram_chat_id or "").strip() and tg_token:
-                send_telegram(bot_token=tg_token, chat_id=client.telegram_chat_id, text=body)
+                tg_wanted = True
+                if send_telegram(bot_token=tg_token, chat_id=client.telegram_chat_id, text=body):
+                    channel_ok = True
             if msg.enable_max and (client.max_user_id or "").strip() and (msg.max_bot_token or "").strip():
                 send_max(bot_token=msg.max_bot_token, chat_id=client.max_user_id, text=body)
             if msg.enable_whatsapp and msg.has_whatsapp():
@@ -195,6 +204,10 @@ def deliver_booking_event(
                         phone=phone,
                         text=body,
                     )
+
+            # SMS/TG — стабильный канал: не помечаем reminder sent, если канал включён, но не ушёл.
+            if is_reminder and (sms_wanted or tg_wanted) and not channel_ok:
+                raise RuntimeError("reminder SMS/Telegram delivery failed")
 
     # ——— Organization ———
     if audience not in ("org", "both"):

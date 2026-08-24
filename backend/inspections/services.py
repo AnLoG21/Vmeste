@@ -92,12 +92,18 @@ def notify_repair_status(report: InspectionReport) -> None:
     from notifications.models import InAppNotification
     from notifications.push import notify_users
 
-    if report.repair_status == InspectionReport.RepairStatus.IN_PROGRESS:
+    if report.repair_status == InspectionReport.RepairStatus.WAITING_PARTS:
+        title = "Ждём запчасти"
+        body = "Автосервис заказал детали — сообщим, когда ремонт продолжится."
+    elif report.repair_status == InspectionReport.RepairStatus.IN_PROGRESS:
         title = "Ремонт в работе"
         body = "Автосервис приступил к согласованным работам."
     elif report.repair_status == InspectionReport.RepairStatus.READY:
         title = "Авто готово"
         body = "Ремонт завершён — можно забирать автомобиль."
+    elif report.repair_status == InspectionReport.RepairStatus.HANDED_OVER:
+        title = "Авто выдано"
+        body = "Автомобиль передан клиенту. Спасибо, что выбрали нас."
     else:
         return
     org = (getattr(report.provider, "organization_name", None) or report.provider.username or "Автосервис").strip()
@@ -174,7 +180,7 @@ def set_repair_status(report: InspectionReport, repair_status: str) -> Inspectio
         raise ValueError("Статус ремонта можно менять только после утверждения клиентом.")
     allowed = {c[0] for c in InspectionReport.RepairStatus.choices}
     if repair_status not in allowed or repair_status == InspectionReport.RepairStatus.NONE:
-        raise ValueError("Укажите статус: в работе или готов.")
+        raise ValueError("Укажите статус: ждём запчасти / в работе / готов / выдан.")
     if report.repair_status == repair_status:
         return report
     report.repair_status = repair_status

@@ -913,6 +913,17 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
                     </a>
                     <QrImg data={tableUrl} size={220} alt={`QR ${selectedTable.label}`} />
                     <p className="muted small">PIN для входа в заказ: {selectedTable.pin_code}</p>
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      onClick={() =>
+                        patchTable(selectedTable.id, {
+                          pin_code: String(Math.floor(100000 + Math.random() * 900000)).padStart(6, "0"),
+                        })
+                      }
+                    >
+                      Сменить PIN
+                    </button>
                     <a className="cafe-preview-btn" href={tableUrl} target="_blank" rel="noreferrer">
                       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="currentColor">
                         <path d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />

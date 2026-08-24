@@ -76,6 +76,11 @@ export default function CityPage({ cityKey }) {
         </a>
         <h1>Вместе · {meta.title}</h1>
         <p className="muted">Организации с адресом в этом городе.</p>
+        <p>
+          <a className="landing-btn landing-btn--primary" href={`/map?city=${cityKey}`}>
+            Открыть на карте
+          </a>
+        </p>
       </header>
       <article className="legal-page-body">
         {status ? <p>{status}</p> : null}

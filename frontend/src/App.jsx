@@ -11,6 +11,7 @@ import CafeProviderWorkspace from "./CafeProviderWorkspace.jsx";
 import ClientCafeOrdersPage from "./ClientCafeOrdersPage.jsx";
 import ClientLoyaltyPage from "./ClientLoyaltyPage.jsx";
 import ClientActivityFeed from "./ClientActivityFeed.jsx";
+import WaitlistPanel, { JoinWaitlistButton } from "./WaitlistPanel.jsx";
 import MarketplaceWorkspace from "./MarketplaceWorkspace.jsx";
 import InspectionWorkspace from "./InspectionWorkspace.jsx";
 import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
@@ -25,6 +26,8 @@ import {
   staffPermLabelsForSphere,
   sphereUsesServiceAssignment,
   STAFF_PERM_DEFAULTS,
+  CAFE_STAFF_ROLE_PRESETS,
+  applyCafeRolePreset,
 } from "./staffPermissions.js";
 import { getDevicePosition } from "./geoPosition.js";
 import "./landing.css";
@@ -3368,6 +3371,40 @@ export default function App() {
   }, [accessToken, me?.id]);
 
   useEffect(() => {
+    const onCafe = () => {
+      if (me?.role === "provider" || me?.role === "staff") setCurrentView("cafe_orders");
+    };
+    const onInspections = () => {
+      if (me?.role === "provider" || me?.role === "staff" || me?.role === "client") {
+        setCurrentView("inspections");
+      }
+    };
+    const onBookings = () => {
+      if (me?.role === "client") setCurrentView("bookings");
+      else setCurrentView("bookings");
+    };
+    const onMap = (ev) => {
+      if (me?.role !== "client" && me?.role !== "provider") return;
+      setCurrentView("client_map");
+      const providerId = ev?.detail?.providerId;
+      if (providerId) {
+        const loc = allLocations.find((l) => Number(l.provider) === Number(providerId));
+        if (loc) void openOrgOnMap(loc);
+      }
+    };
+    window.addEventListener("vmeste:open-cafe-orders", onCafe);
+    window.addEventListener("vmeste:open-inspections", onInspections);
+    window.addEventListener("vmeste:open-bookings", onBookings);
+    window.addEventListener("vmeste:open-map", onMap);
+    return () => {
+      window.removeEventListener("vmeste:open-cafe-orders", onCafe);
+      window.removeEventListener("vmeste:open-inspections", onInspections);
+      window.removeEventListener("vmeste:open-bookings", onBookings);
+      window.removeEventListener("vmeste:open-map", onMap);
+    };
+  }, [me?.role, allLocations]);
+
+  useEffect(() => {
     if (!accessToken || !me?.role) return;
     const refresh = () => {
       if (me.role === "client" || me.role === "provider") loadChats();
@@ -3990,9 +4027,16 @@ export default function App() {
           if (!document.getElementById("client-discover-map")) return;
           ymaps.ready(() => {
             if (clientDiscoverMapRef.current) return;
+            const cityKey = (new URLSearchParams(window.location.search).get("city") || "").toLowerCase();
+            const cityCenters = {
+              moscow: { center: [55.751244, 37.618423], zoom: 11, name: "Москва" },
+              spb: { center: [59.9342802, 30.3350986], zoom: 11, name: "Санкт-Петербург" },
+            };
+            const city = cityCenters[cityKey];
+            if (city?.name) setDetectedCity(city.name);
             const map = new ymaps.Map("client-discover-map", {
-              center: [55.751244, 37.618423],
-              zoom: 10,
+              center: city ? city.center : [55.751244, 37.618423],
+              zoom: city ? city.zoom : 10,
               controls: ["zoomControl", "fullscreenControl", "geolocationControl"],
             });
             clientDiscoverMapRef.current = map;
@@ -4009,7 +4053,14 @@ export default function App() {
                 }, 160);
               });
             }
-            paintClientDiscoverMapMarkers(allLocationsRef.current, { fitView: true });
+            paintClientDiscoverMapMarkers(allLocationsRef.current, { fitView: !city });
+            if (city) {
+              try {
+                map.setCenter(city.center, city.zoom);
+              } catch {
+                /* ignore */
+              }
+            }
             startClientMyLocationTracking();
           });
         })
@@ -8844,6 +8895,18 @@ export default function App() {
     setCurrentView("client_map");
     await waitForClientDiscoverMap();
     await openOrgOnMap(loc);
+    const serviceId = booking.service || booking.service_id;
+    const staffId = booking.staff || booking.staff_id;
+    await onClientLocationSelect(String(loc.id), todayIsoDate());
+    setClientBookingForm((p) => ({
+      ...p,
+      provider: String(booking.provider || loc.provider || p.provider),
+      locationId: String(loc.id),
+      serviceId: serviceId ? String(serviceId) : p.serviceId,
+      staffId: staffId ? String(staffId) : "any",
+      windowKey: "",
+    }));
+    setClientBookModalOpen(true);
   }
 
   function patchReviewInLists(updated) {
@@ -9282,6 +9345,16 @@ export default function App() {
             ↓
           </button>
         )}
+        {isOrg && !cancelled && !done && it.status !== "no_show" && (it.status === "confirmed" || it.status === "new" || it.status === "arrived") && (
+          <button
+            type="button"
+            className="booking-action-btn booking-action-btn--cancel"
+            title="Не пришёл (no-show)"
+            onClick={(e) => orgBookingAction(it.id, "mark-no-show", e)}
+          >
+            ∅
+          </button>
+        )}
         {isOrg && !cancelled && it.client && (me?.provider_sphere === "service_center" || me?.employer_sphere === "service_center" || me?.role === "staff") && (
           it.inspection?.id ? (
             <button
@@ -9657,20 +9730,31 @@ export default function App() {
                       <p className="booking-history-price">{formatBookingPrice(b.service_price)}</p>
                       <p className="booking-history-counterparty">
                         {isClient ? (
-                          <button
-                            type="button"
-                            className="booking-history-org"
-                            onClick={() => openOrgCardFromHistory(b)}
-                          >
-                            {orgAvatar ? (
-                              <img src={orgAvatar} alt="" className="booking-history-org-avatar" />
-                            ) : (
-                              <span className="booking-history-org-avatar booking-history-org-avatar--fallback" aria-hidden>
-                                {(counterpartyLabel || "О").slice(0, 1).toUpperCase()}
-                              </span>
+                          <>
+                            <button
+                              type="button"
+                              className="booking-history-org"
+                              onClick={() => openOrgCardFromHistory(b)}
+                            >
+                              {orgAvatar ? (
+                                <img src={orgAvatar} alt="" className="booking-history-org-avatar" />
+                              ) : (
+                                <span className="booking-history-org-avatar booking-history-org-avatar--fallback" aria-hidden>
+                                  {(counterpartyLabel || "О").slice(0, 1).toUpperCase()}
+                                </span>
+                              )}
+                              <span>{counterpartyLabel}</span>
+                            </button>
+                            {(b.status === "done" || b.status === "cancelled" || b.status === "no_show") && (
+                              <button
+                                type="button"
+                                className="ghost-btn small booking-history-rebook"
+                                onClick={() => openOrgCardFromHistory(b)}
+                              >
+                                Повторить
+                              </button>
                             )}
-                            <span>{counterpartyLabel}</span>
-                          </button>
+                          </>
                         ) : (
                           isManualHold || !b.client ? (
                             <span className="booking-history-link" role="note">
@@ -11919,6 +12003,27 @@ export default function App() {
                     </button>
                     {permsOpen && (
                       <div className="perm-grid">
+                        {orgSphere === "cafe_restaurant" && (
+                          <div className="staff-cafe-presets">
+                            <p className="muted small-label">Быстрый пресет</p>
+                            <div className="row-2">
+                              {CAFE_STAFF_ROLE_PRESETS.map((preset) => (
+                                <button
+                                  key={preset.id}
+                                  type="button"
+                                  className="ghost-btn"
+                                  title={preset.hint}
+                                  onClick={() => {
+                                    const next = applyCafeRolePreset(permBase, preset.id);
+                                    void patchStaffMeta(link.id, { permissions: next });
+                                  }}
+                                >
+                                  {preset.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         {permLabels.map(([key, label]) => (
                           <label key={key} className="checkbox perm-item">
                             <input
@@ -13092,7 +13197,14 @@ export default function App() {
         {accessToken && currentView === "staff" && canAccessStaffPage && renderStaffManagement()}
 
         {accessToken && canViewOrgReviews() && currentView === "reviews" && renderProviderReviewsBlock()}
-        {accessToken && me?.role === "provider" && currentView === "bookings" && me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" && renderBookingsBlock("Записи клиентов")}
+        {accessToken && me?.role === "provider" && currentView === "bookings" && me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" && (
+          <>
+            {renderBookingsBlock("Записи клиентов")}
+            {me?.provider_sphere === "hair_salon" ? (
+              <WaitlistPanel authFetch={authFetch} API_URL={API_URL} mode="org" />
+            ) : null}
+          </>
+        )}
         {accessToken && me?.role === "provider" && currentView === "intervals" && me?.provider_sphere !== "cafe_restaurant" && renderSlotCalendar(true)}
         {accessToken &&
           me?.role === "staff" &&
@@ -13101,7 +13213,14 @@ export default function App() {
           me?.employer_sphere !== "cafe_restaurant" &&
           me?.provider_sphere !== "cafe_restaurant" &&
           renderSlotCalendar(true)}
-        {accessToken && me?.role === "staff" && currentView === "bookings" && staffHasPerm("manage_bookings") && me?.provider_sphere !== "cafe_restaurant" && me?.employer_sphere !== "cafe_restaurant" && renderBookingsBlock("Записи")}
+        {accessToken && me?.role === "staff" && currentView === "bookings" && staffHasPerm("manage_bookings") && me?.provider_sphere !== "cafe_restaurant" && me?.employer_sphere !== "cafe_restaurant" && (
+          <>
+            {renderBookingsBlock("Записи")}
+            {(me?.employer_sphere === "hair_salon" || me?.provider_sphere === "hair_salon") ? (
+              <WaitlistPanel authFetch={authFetch} API_URL={API_URL} mode="org" />
+            ) : null}
+          </>
+        )}
         {accessToken && currentView === "chats" && (me?.role === "client" || me?.role === "provider" || me?.role === "staff") && (
           <section className="card full-width tg-chats-card">
             <div
@@ -15042,7 +15161,17 @@ export default function App() {
                 <>
                   <p className="field-label">Свободное время</p>
                   {clientBookWindows.length === 0 ? (
-                    <p className="muted small">Нет свободных интервалов на эту дату.</p>
+                    <div>
+                      <p className="muted small">Нет свободных интервалов на эту дату.</p>
+                      <JoinWaitlistButton
+                        authFetch={authFetch}
+                        API_URL={API_URL}
+                        providerId={clientBookingForm.provider}
+                        serviceId={clientBookingForm.serviceId}
+                        staffId={clientBookingForm.staffId}
+                        preferredDate={clientBookingForm.bookDate}
+                      />
+                    </div>
                   ) : (
                     <div className="client-slot-strip" role="listbox" aria-label="Доступное время">
                       {clientBookWindows.map((w) => {
@@ -15086,6 +15215,7 @@ export default function App() {
             authFetch={authFetch}
             API_URL={API_URL}
             onNavigate={(view) => setCurrentView(view)}
+            onRebook={(booking) => openOrgCardFromHistory(booking)}
           />
         )}
         {accessToken && me?.role === "client" && currentView === "bookings" && renderBookingsBlock("Мои записи")}
@@ -15741,7 +15871,17 @@ export default function App() {
                   <>
                     <p className="field-label">Свободное время</p>
                     {clientBookWindows.length === 0 ? (
-                      <p className="muted small">Нет свободных интервалов на эту дату.</p>
+                      <div>
+                        <p className="muted small">Нет свободных интервалов на эту дату.</p>
+                        <JoinWaitlistButton
+                          authFetch={authFetch}
+                          API_URL={API_URL}
+                          providerId={clientBookingForm.provider}
+                          serviceId={clientBookingForm.serviceId}
+                          staffId={clientBookingForm.staffId}
+                          preferredDate={clientBookingForm.bookDate}
+                        />
+                      </div>
                     ) : clientBookingForm.staffId !== "any" ? (
                       <div
                         className="client-slot-strip client-book-slot-strip"

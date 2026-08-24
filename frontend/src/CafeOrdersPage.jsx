@@ -19,7 +19,8 @@ const statusLabels = {
   cancelled: "Отменён",
 };
 
-const STATUS_ACTIONS = ["accepted", "cooking", "ready", "to_courier", "delivering", "done", "cancelled"];
+const KITCHEN_STATUS_ACTIONS = ["cooking", "ready"];
+const HALL_STATUS_ACTIONS = ["accepted", "ready", "to_courier", "delivering", "done", "cancelled"];
 const KITCHEN_STATUSES = new Set(["paid", "accepted", "cooking", "ready", "awaiting_payment", "to_courier"]);
 
 function formatGuestPhone(phone) {
@@ -230,13 +231,30 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
   useEffect(() => {
     loadOrders();
     loadFloorAndMenu();
-    const tOrders = setInterval(loadOrders, 8000);
-    const tFloor = setInterval(loadFloorAndMenu, 5000);
+    const tickOrders = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      loadOrders();
+    };
+    const tickFloor = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      if (!canSeating && !canOrders) return;
+      loadFloorAndMenu();
+    };
+    const tOrders = setInterval(tickOrders, 20000);
+    const tFloor = setInterval(tickFloor, 15000);
+    const onVis = () => {
+      if (!document.hidden) {
+        loadOrders();
+        if (canSeating || canOrders) loadFloorAndMenu();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       clearInterval(tOrders);
       clearInterval(tFloor);
+      document.removeEventListener("visibilitychange", onVis);
     };
-  }, [loadOrders, loadFloorAndMenu]);
+  }, [loadOrders, loadFloorAndMenu, canSeating, canOrders]);
 
   function toggleKitchenBanner() {
     setKitchenBannerOpen((prev) => {
@@ -638,10 +656,10 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
             ) : null}
             <div className="cafe-status-actions">
               {(kitchen
-                ? ["accepted", "cooking", "ready", "done"]
+                ? KITCHEN_STATUS_ACTIONS
                 : o.mode === "delivery"
-                  ? STATUS_ACTIONS
-                  : STATUS_ACTIONS.filter((st) => st !== "to_courier" && st !== "delivering")
+                  ? HALL_STATUS_ACTIONS
+                  : HALL_STATUS_ACTIONS.filter((st) => st !== "to_courier" && st !== "delivering")
               ).map((st) => (
                 <button
                   key={st}
@@ -875,6 +893,8 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
                     setOrderOpen(true);
                     setDraftLines([]);
                   }}
+                  disabled={!canOrders}
+                  title={canOrders ? "Новый заказ за столом" : "Нужно право «Кафе: заказы зала»"}
                 >
                   Записать заказ
                 </button>

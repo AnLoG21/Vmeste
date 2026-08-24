@@ -12,12 +12,12 @@ export const STAFF_PERM_DEFS = [
   ["marketplace_view_keys", "Маркетплейсы: ключи API"],
   ["marketplace_manage_orders", "Маркетплейсы: заказы и отзывы"],
   ["marketplace_manage_catalog", "Маркетплейсы: каталог и выгрузка"],
-  ["cafe_orders", "Кафе: заказы зала"],
-  ["cafe_kitchen", "Кафе: кухня"],
-  ["cafe_seating", "Кафе: посадка / столы"],
+  ["cafe_orders", "Кафе: заказы и статусы зала"],
+  ["cafe_kitchen", "Кафе: кухня (готовка)"],
+  ["cafe_seating", "Кафе: посадка / карта столов"],
   ["cafe_delivery", "Кафе: доставка / курьер"],
   ["cafe_menu", "Кафе: меню"],
-  ["cafe_settings", "Кафе: настройки и зоны"],
+  ["cafe_settings", "Кафе: настройки зала и QR"],
 ];
 
 const BOOKING_KEYS = new Set([
@@ -78,3 +78,37 @@ export const STAFF_PERM_DEFAULTS = {
   cafe_menu: false,
   cafe_settings: false,
 };
+
+/** Пресеты прав для кафе — меньше путаницы кухня / зал / хостес. */
+export const CAFE_STAFF_ROLE_PRESETS = [
+  {
+    id: "hall",
+    label: "Зал (официант)",
+    hint: "Заказы, статусы зала, посадка. Без кухни и меню.",
+    perms: { cafe_orders: true, cafe_kitchen: false, cafe_seating: true, cafe_delivery: false, cafe_menu: false, cafe_settings: false },
+  },
+  {
+    id: "kitchen",
+    label: "Кухня",
+    hint: "Только кухня: готовится / готов. Без записи заказов за столом.",
+    perms: { cafe_orders: false, cafe_kitchen: true, cafe_seating: false, cafe_delivery: false, cafe_menu: false, cafe_settings: false },
+  },
+  {
+    id: "hostess",
+    label: "Хостес",
+    hint: "Посадка и карта столов. Заказы — у официанта.",
+    perms: { cafe_orders: false, cafe_kitchen: false, cafe_seating: true, cafe_delivery: false, cafe_menu: false, cafe_settings: false },
+  },
+  {
+    id: "courier",
+    label: "Курьер",
+    hint: "Доставка: статусы курьера.",
+    perms: { cafe_orders: false, cafe_kitchen: false, cafe_seating: false, cafe_delivery: true, cafe_menu: false, cafe_settings: false },
+  },
+];
+
+export function applyCafeRolePreset(basePerms, presetId) {
+  const preset = CAFE_STAFF_ROLE_PRESETS.find((p) => p.id === presetId);
+  if (!preset) return basePerms;
+  return { ...basePerms, ...preset.perms };
+}

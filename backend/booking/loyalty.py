@@ -18,13 +18,40 @@ from .models import (
 )
 
 
+def loyalty_level(points: int) -> dict:
+    """Fixed tiers: Старт → Серебро (50) → Золото (200) → Платина (500)."""
+    n = int(points or 0)
+    if n >= 500:
+        return {"level": "platinum", "level_label": "Платина"}
+    if n >= 200:
+        return {"level": "gold", "level_label": "Золото"}
+    if n >= 50:
+        return {"level": "silver", "level_label": "Серебро"}
+    return {"level": "start", "level_label": "Старт"}
+
+
 def get_or_create_loyalty_settings(provider) -> LoyaltySettings:
     obj, _ = LoyaltySettings.objects.get_or_create(provider=provider)
     return obj
 
 
 def get_or_create_loyalty_account(provider, client) -> LoyaltyAccount:
-    obj, _ = LoyaltyAccount.objects.get_or_create(provider=provider, client=client)
+    obj, created = LoyaltyAccount.objects.get_or_create(provider=provider, client=client)
+    if created:
+        try:
+            settings_obj = LoyaltySettings.objects.filter(provider=provider, enabled=True).first()
+            bonus = int(getattr(settings_obj, "welcome_bonus", 0) or 0) if settings_obj else 0
+            if bonus > 0:
+                obj.balance = bonus
+                obj.save(update_fields=["balance", "updated_at"])
+                LoyaltyLedger.objects.create(
+                    account=obj,
+                    delta=bonus,
+                    reason="welcome",
+                    note="Приветственный бонус",
+                )
+        except Exception:
+            pass
     return obj
 
 

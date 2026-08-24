@@ -10,6 +10,7 @@ from .loyalty_views import (
     MyLoyaltyView,
     VisitPackageViewSet,
 )
+from .waitlist_views import WaitlistViewSet
 from .public_widget import (
     PublicWidgetBookView,
     PublicWidgetCatalogView,
@@ -30,6 +31,7 @@ router.register(r"slots", AvailabilitySlotViewSet, basename="booking-slots")
 router.register(r"staff", ProviderStaffViewSet, basename="booking-staff")
 router.register(r"packages", VisitPackageViewSet, basename="booking-packages")
 router.register(r"client-packages", ClientPackageViewSet, basename="booking-client-packages")
+router.register(r"waitlist", WaitlistViewSet, basename="booking-waitlist")
 router.register(r"", BookingViewSet, basename="booking")
 
 urlpatterns = [

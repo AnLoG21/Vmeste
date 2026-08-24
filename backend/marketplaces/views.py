@@ -1004,7 +1004,6 @@ class MarketplaceProductFetchView(APIView):
                     "name": variant.get("title") or card.get("title") or "",
                     "brand": variant.get("brand") or card.get("brand") or "",
                     "price": str((variant.get("sizes") or [{}])[0].get("price") or ""),
-                    "stock": 0,
                     "description": variant.get("description") or "",
                     "barcode": str((variant.get("sizes") or [{}])[0].get("skus") or [""])[0] or "",
                     "category": str(card.get("subjectID") or card.get("subjectId") or ""),
@@ -1081,13 +1080,12 @@ class MarketplaceCatalogSyncView(APIView):
                             "vendor_code": offer,
                             "name": variant.get("title") or card.get("title") or offer,
                             "brand": variant.get("brand") or card.get("brand") or "",
-                            "price": str((variant.get("sizes") or [{}])[0].get("price") or ""),
-                            "stock": 0,
-                            "description": variant.get("description") or "",
-                            "barcode": str(((variant.get("sizes") or [{}])[0].get("skus") or [""])[0] or ""),
-                            "category": str(card.get("subjectID") or card.get("subjectId") or ""),
-                            "images": images,
-                            "nm_id": card.get("nmID") or card.get("nmId"),
+                    "price": str((variant.get("sizes") or [{}])[0].get("price") or ""),
+                    "description": variant.get("description") or "",
+                    "barcode": str(((variant.get("sizes") or [{}])[0].get("skus") or [""])[0] or ""),
+                    "category": str(card.get("subjectID") or card.get("subjectId") or ""),
+                    "images": images,
+                    "nm_id": card.get("nmID") or card.get("nmId"),
                         }
                     )
             else:

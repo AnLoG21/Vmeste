@@ -29,17 +29,21 @@ def send_booking_reminders() -> dict:
     )
     for booking in qs24:
         text = build_reminder_text(booking)
-        deliver_booking_event(
-            booking,
-            "remind_24h",
-            text,
-            audience="both",
-            title_client="Напоминание о записи",
-            title_org="Напоминание: запись через 24 ч",
-        )
-        booking.reminder_24h_sent = True
-        booking.save(update_fields=["reminder_24h_sent"])
-        n24 += 1
+        try:
+            deliver_booking_event(
+                booking,
+                "remind_24h",
+                text,
+                audience="both",
+                title_client="Напоминание о записи",
+                title_org="Напоминание: запись через 24 ч",
+            )
+            booking.reminder_24h_sent = True
+            booking.save(update_fields=["reminder_24h_sent"])
+            n24 += 1
+        except Exception:
+            # Не помечаем sent — повторим на следующем прогоне cron
+            pass
 
     qs2 = (
         Booking.objects.filter(active)
@@ -48,17 +52,20 @@ def send_booking_reminders() -> dict:
     )
     for booking in qs2:
         text = build_reminder_text(booking)
-        deliver_booking_event(
-            booking,
-            "remind_2h",
-            text,
-            audience="both",
-            title_client="Скоро запись",
-            title_org="Напоминание: запись через 2 ч",
-        )
-        booking.reminder_2h_sent = True
-        booking.save(update_fields=["reminder_2h_sent"])
-        n2 += 1
+        try:
+            deliver_booking_event(
+                booking,
+                "remind_2h",
+                text,
+                audience="both",
+                title_client="Скоро запись",
+                title_org="Напоминание: запись через 2 ч",
+            )
+            booking.reminder_2h_sent = True
+            booking.save(update_fields=["reminder_2h_sent"])
+            n2 += 1
+        except Exception:
+            pass
 
     winback = send_winback_reminders()
     return {"reminders_24h": n24, "reminders_2h": n2, **winback}

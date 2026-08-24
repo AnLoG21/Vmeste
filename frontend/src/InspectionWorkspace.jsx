@@ -16,8 +16,10 @@ const STATUS_LABELS = {
 
 const REPAIR_STATUS_LABELS = {
   none: "",
+  waiting_parts: "Ждём запчасти",
   in_progress: "В работе",
   ready: "Готов",
+  handed_over: "Выдан",
 };
 
 function emptyItemForm() {
@@ -682,24 +684,24 @@ export default function InspectionWorkspace({
                       Итого утверждено: <strong>{money(report.grand_total)}</strong>
                     </p>
                     <div className="inspection-repair-actions">
-                      <p className="field-label">Статус ремонта для клиента</p>
-                      <div className="row-2">
-                        <button
-                          type="button"
-                          className={report.repair_status === "in_progress" ? "primary-btn" : "ghost-btn"}
-                          disabled={busy}
-                          onClick={() => setRepairStatus("in_progress")}
-                        >
-                          В работе
-                        </button>
-                        <button
-                          type="button"
-                          className={report.repair_status === "ready" ? "primary-btn" : "ghost-btn"}
-                          disabled={busy}
-                          onClick={() => setRepairStatus("ready")}
-                        >
-                          Готов
-                        </button>
+                      <p className="field-label">Воронка: приёмка → заказ-наряд → запчасти → выдача</p>
+                      <div className="inspection-funnel-steps" aria-label="Этапы ремонта">
+                        {[
+                          ["waiting_parts", "Запчасти"],
+                          ["in_progress", "В работе"],
+                          ["ready", "Готов"],
+                          ["handed_over", "Выдан"],
+                        ].map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            className={report.repair_status === value ? "primary-btn" : "ghost-btn"}
+                            disabled={busy}
+                            onClick={() => setRepairStatus(value)}
+                          >
+                            {label}
+                          </button>
+                        ))}
                       </div>
                     </div>
                     <button type="button" className="ghost-btn" disabled={busy} onClick={() => downloadPdf("agreement")}>

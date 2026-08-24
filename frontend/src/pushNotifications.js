@@ -64,6 +64,37 @@ export async function initPushNotifications(authFetch, accessToken = "") {
           /* ignore */
         }
       }
+      if (data.view === "cafe_orders" || data.kind === "cafe_new_order" || data.kind === "cafe_waiter_call") {
+        try {
+          window.dispatchEvent(
+            new CustomEvent("vmeste:open-cafe-orders", {
+              detail: { orderId: data.order_id, tab: data.tab || "" },
+            })
+          );
+        } catch {
+          /* ignore */
+        }
+      }
+      if (data.view === "inspections" || data.inspection_id) {
+        try {
+          window.dispatchEvent(
+            new CustomEvent("vmeste:open-inspections", { detail: { inspectionId: data.inspection_id } })
+          );
+        } catch {
+          /* ignore */
+        }
+      }
+      if (data.view === "client_map" || data.event === "waitlist_open") {
+        try {
+          window.dispatchEvent(
+            new CustomEvent("vmeste:open-map", {
+              detail: { providerId: data.provider_id, serviceId: data.service_id },
+            })
+          );
+        } catch {
+          /* ignore */
+        }
+      }
     });
 
     await PushNotifications.register();

@@ -10,6 +10,8 @@ const STATUS_LABELS = {
 const REPAIR_STATUS_LABELS = {
   in_progress: "В работе",
   ready: "Готов",
+  waiting_parts: "Ждём запчасти",
+  handed_over: "Выдан",
 };
 
 export default function ClientInspectionsPanel({

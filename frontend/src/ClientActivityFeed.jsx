@@ -4,6 +4,7 @@ const BOOKING_STATUS = {
   new: "Новая",
   confirmed: "Подтверждена",
   arrived: "Клиент пришёл",
+  no_show: "Неявка",
   cancelled: "Отменена",
   done: "Выполнена",
 };
@@ -43,7 +44,7 @@ function formatWhen(iso) {
 /**
  * Единая лента клиента: записи, заказы кафе, приёмки, лояльность.
  */
-export default function ClientActivityFeed({ authFetch, API_URL, onNavigate }) {
+export default function ClientActivityFeed({ authFetch, API_URL, onNavigate, onRebook }) {
   const [tab, setTab] = useState("all");
   const [bookings, setBookings] = useState([]);
   const [cafeOrders, setCafeOrders] = useState([]);
@@ -99,6 +100,8 @@ export default function ClientActivityFeed({ authFetch, API_URL, onNavigate }) {
         title: b.organization_name || b.provider_name || "Запись",
         subtitle: [b.service_name, BOOKING_STATUS[b.status] || b.status].filter(Boolean).join(" · "),
         view: "bookings",
+        booking: b,
+        canRebook: b.status === "done" || b.status === "cancelled" || b.status === "no_show",
       });
     }
     for (const o of cafeOrders) {
@@ -129,7 +132,7 @@ export default function ClientActivityFeed({ authFetch, API_URL, onNavigate }) {
         kind: "loyalty",
         at: parseTs(a.updated_at) || 1,
         title: a.provider_name || "Лояльность",
-        subtitle: `${a.points ?? a.balance ?? 0} баллов`,
+        subtitle: `${a.points ?? a.balance ?? 0} баллов${a.level_label ? ` · ${a.level_label}` : ""}`,
         view: "loyalty",
       });
     }
@@ -178,26 +181,37 @@ export default function ClientActivityFeed({ authFetch, API_URL, onNavigate }) {
         <ul className="list client-activity-list">
           {items.map((item) => (
             <li key={item.id}>
-              <button
-                type="button"
-                className="client-activity-row"
-                onClick={() => onNavigate?.(item.view)}
-              >
-                <span className={`client-activity-kind client-activity-kind--${item.kind}`}>
-                  {item.kind === "booking"
-                    ? "Запись"
-                    : item.kind === "cafe"
-                      ? "Кафе"
-                      : item.kind === "inspection"
-                        ? "Приёмка"
-                        : "Баллы"}
-                </span>
-                <span className="client-activity-body">
-                  <strong>{item.title}</strong>
-                  <span className="muted small">{item.subtitle}</span>
-                </span>
-                <span className="muted small client-activity-when">{formatWhen(item.at)}</span>
-              </button>
+              <div className="client-activity-row-wrap">
+                <button
+                  type="button"
+                  className="client-activity-row"
+                  onClick={() => onNavigate?.(item.view)}
+                >
+                  <span className={`client-activity-kind client-activity-kind--${item.kind}`}>
+                    {item.kind === "booking"
+                      ? "Запись"
+                      : item.kind === "cafe"
+                        ? "Кафе"
+                        : item.kind === "inspection"
+                          ? "Приёмка"
+                          : "Баллы"}
+                  </span>
+                  <span className="client-activity-body">
+                    <strong>{item.title}</strong>
+                    <span className="muted small">{item.subtitle}</span>
+                  </span>
+                  <span className="muted small client-activity-when">{formatWhen(item.at)}</span>
+                </button>
+                {item.canRebook && (onRebook || onNavigate) ? (
+                  <button
+                    type="button"
+                    className="ghost-btn small"
+                    onClick={() => (onRebook ? onRebook(item.booking) : onNavigate?.("client_map"))}
+                  >
+                    Повторить
+                  </button>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>

@@ -1536,7 +1536,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   async function applyPricesStocks() {
     await withBusy("prices", async () => {
       if (!priceStock.offer_id && !priceStock.nm_id) throw new Error("Укажите артикул или nmID.");
-      await sendPriceStockRows([
+      const data = await sendPriceStockRows([
         {
           offer_id: priceStock.offer_id,
           nm_id: priceStock.nm_id,
@@ -1544,6 +1544,10 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
           stock: priceStock.stock,
         },
       ]);
+      if (data?.sandbox) {
+        setStatus(data.message || "Тестовый режим: на площадку ничего не ушло.");
+        return;
+      }
       setStatus("Цены и остатки отправлены.");
     });
   }
@@ -1556,6 +1560,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
     }
     const withPrice = list.filter((r) => r.price !== "" && r.price != null);
     const withStock = list.filter((r) => r.stock !== "" && r.stock != null);
+    let last = null;
     if (withPrice.length) {
       const protect = Boolean(settings?.price_protect_enabled ?? keysForm.price_protect_enabled);
       const floorPct = Math.max(0, Math.min(90, Number(settings?.price_min_floor_percent ?? keysForm.price_min_floor_percent ?? 10)));
@@ -1588,14 +1593,15 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                 return item;
               }),
             };
-      showLive(await mpCall("products.prices", payload));
+      last = await mpCall("products.prices", payload);
+      showLive(last);
     }
     if (withStock.length) {
       const payload =
         mp === "wildberries"
           ? {
               stocks: withStock.map((r) => ({
-                sku: r.offer_id || String(r.nm_id),
+                sku: r.barcode || r.offer_id || String(r.nm_id || ""),
                 amount: Number(r.stock || 0),
               })),
             }
@@ -1608,17 +1614,37 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
               })),
             };
       const params = mp === "wildberries" ? { warehouseId: warehouseId || "0" } : {};
-      showLive(await mpCall("products.stocks", payload, params));
+      last = await mpCall("products.stocks", payload, params);
+      showLive(last);
     }
     if (!withPrice.length && !withStock.length) {
       throw new Error("Заполните цену и/или остаток хотя бы в одной строке.");
     }
+    return last;
   }
 
   async function applyBulkPricesStocks() {
     await withBusy("bulk-prices", async () => {
-      await sendPriceStockRows(bulkRows);
-      setStatus(`Массово отправлено строк: ${bulkRows.filter((r) => r.offer_id || r.nm_id).length}.`);
+      const data = await sendPriceStockRows(bulkRows);
+      if (data?.sandbox) {
+        setStatus(data.message || "Тестовый режим: на площадку ничего не ушло.");
+        return;
+      }
+      const updated = bulkRows.filter((r) => r.offer_id || r.nm_id);
+      setHistory((prev) =>
+        (prev || []).map((row) => {
+          const ids = marketplaceIdsFromRow(row);
+          const hit = updated.find(
+            (r) =>
+              (r.offer_id && r.offer_id === ids.vendorCode) ||
+              (r.nm_id && String(r.nm_id) === String(ids.nmId)),
+          );
+          if (!hit || hit.stock === "" || hit.stock == null) return row;
+          const product = { ...(row.product || {}), stock: Number(hit.stock) };
+          return { ...row, product };
+        }),
+      );
+      setStatus(`Массово отправлено строк: ${updated.length}.`);
     });
   }
 
@@ -1631,6 +1657,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
           offer_id: ids.vendorCode || row.offer_id || "",
           nm_id: ids.nmId ? String(ids.nmId) : "",
           product_id: ids.productId ? String(ids.productId) : "",
+          barcode: row.product?.barcode || row.barcode || "",
           price: row.product?.price != null ? String(row.product.price) : "",
           stock: row.product?.stock != null ? String(row.product.stock) : "",
         };

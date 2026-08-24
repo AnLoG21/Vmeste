@@ -141,12 +141,45 @@ def mark_client_arrived(booking, actor):
     return True, None
 
 
+def mark_booking_no_show(booking, actor):
+    """Клиент не пришёл — предоплата (если была) остаётся у организации."""
+    if booking.status not in (Booking.Status.NEW, Booking.Status.CONFIRMED, Booking.Status.ARRIVED):
+        return False, "invalid_status"
+    service_id = getattr(booking, "service_id", None)
+    provider_id = booking.provider_id
+    booking.status = Booking.Status.NO_SHOW
+    booking.save(update_fields=["status"])
+    release_booking_occupancy(booking)
+    # Абонемент и предоплата не возвращаем — неявка.
+    try:
+        from notifications.delivery import deliver_booking_event
+
+        deliver_booking_event(
+            booking,
+            "no_show",
+            f"Неявка · {format_booking_when(booking)}. Если была предоплата — она удерживается.",
+            audience="client",
+            title_client="Вы не пришли на запись",
+        )
+    except Exception:
+        pass
+    try:
+        from .waitlist import notify_waitlist_after_slot_freed
+
+        notify_waitlist_after_slot_freed(provider_id, service_id)
+    except Exception:
+        pass
+    return True, None
+
+
 def cancel_booking_by_org(booking, actor):
     provider = booking.provider
     msg_tpl = (getattr(provider, "booking_cancel_message_default", None) or "").strip()
     if not msg_tpl:
         return False, "cancel_message_not_set"
     when = format_booking_when(booking)
+    service_id = getattr(booking, "service_id", None)
+    provider_id = booking.provider_id
     booking.status = Booking.Status.CANCELLED
     booking.save(update_fields=["status"])
     release_booking_occupancy(booking)
@@ -168,6 +201,12 @@ def cancel_booking_by_org(booking, actor):
             audience="client",
             title_client="Запись отменена",
         )
+    except Exception:
+        pass
+    try:
+        from .waitlist import notify_waitlist_after_slot_freed
+
+        notify_waitlist_after_slot_freed(provider_id, service_id)
     except Exception:
         pass
     return True, None
@@ -234,6 +273,8 @@ def cancel_booking_by_client(booking):
     client = booking.client
     when = format_booking_when(booking)
     service_name = getattr(getattr(booking, "service", None), "name", None) or "Услуга"
+    service_id = getattr(booking, "service_id", None)
+    provider_id = booking.provider_id
     text = f"Клиент отменил запись на {when}."
     booking.status = Booking.Status.CANCELLED
     booking.save(update_fields=["status"])
@@ -259,6 +300,12 @@ def cancel_booking_by_client(booking):
             audience="org",
             title_org="Запись отменена клиентом",
         )
+    except Exception:
+        pass
+    try:
+        from .waitlist import notify_waitlist_after_slot_freed
+
+        notify_waitlist_after_slot_freed(provider_id, service_id)
     except Exception:
         pass
     return True, None

@@ -9396,6 +9396,54 @@ body.theme-dark .password-eye-btn:hover {
   background: rgba(255, 255, 255, 0.7);
 }
 
+.inspection-funnel-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.waitlist-panel {
+  margin-top: 12px;
+}
+
+.waitlist-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.waitlist-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.waitlist-join {
+  margin-top: 8px;
+}
+
+.booking-history-repeat {
+  margin-left: 8px;
+}
+
+.client-activity-item-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.client-activity-item-wrap .client-activity-item {
+  flex: 1;
+}
+
+.staff-cafe-presets {
+  grid-column: 1 / -1;
+  margin-bottom: 8px;
+}
+
 .inspection-items {
   list-style: none;
   margin: 0 0 16px;

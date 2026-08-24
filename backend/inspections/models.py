@@ -13,8 +13,10 @@ class InspectionReport(models.Model):
 
     class RepairStatus(models.TextChoices):
         NONE = "none", "—"
+        WAITING_PARTS = "waiting_parts", "Ждём запчасти"
         IN_PROGRESS = "in_progress", "В работе"
         READY = "ready", "Готов"
+        HANDED_OVER = "handed_over", "Выдан клиенту"
 
     provider = models.ForeignKey(
         settings.AUTH_USER_MODEL,
