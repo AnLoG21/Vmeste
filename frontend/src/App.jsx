@@ -17,7 +17,7 @@ import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
 import SalonLoyaltyPackagesPanel from "./SalonLoyaltyPackagesPanel.jsx";
-import VoiceAdminPanel from "./VoiceAdminPanel.jsx";
+import OrgReviewComposer from "./OrgReviewComposer.jsx";
 import MiniDatePicker from "./MiniDatePicker.jsx";
 import {
   orgSphereOf,
@@ -15494,41 +15494,37 @@ export default function App() {
                     ) : null}
                   </p>
                 ) : (
-                  <>
-                    <p className="field-label">Оценка услуги</p>
-                    <StarRating
-                      value={reviewForm.rating}
-                      onChange={(rating) => setReviewForm((p) => ({ ...p, rating }))}
-                    />
-                    {reviewModalBooking.staff_user_id ? (
-                      <>
-                        <p className="field-label">Оценка сотрудника</p>
-                        <StarRating
-                          value={reviewForm.staff_rating}
-                          onChange={(staff_rating) => setReviewForm((p) => ({ ...p, staff_rating }))}
-                        />
-                      </>
-                    ) : null}
-                  </>
-                )}
-                <textarea
-                  placeholder={reviewModalReview?.id ? "Дополнительный текст к отзыву" : "Комментарий об услуге (необязательно)"}
-                  value={reviewForm.text}
-                  onChange={(e) => setReviewForm((p) => ({ ...p, text: e.target.value }))}
-                  rows={3}
-                />
-                {!reviewModalReview?.id && reviewModalBooking.staff_user_id ? (
-                  <textarea
-                    placeholder="Отзыв о сотруднике (необязательно)"
-                    value={reviewForm.staff_text}
-                    onChange={(e) => setReviewForm((p) => ({ ...p, staff_text: e.target.value }))}
-                    rows={3}
+                  <OrgReviewComposer
+                    orgLabel="Оценка услуги"
+                    rating={reviewForm.rating}
+                    onRatingChange={(rating) => setReviewForm((p) => ({ ...p, rating }))}
+                    text={reviewForm.text}
+                    onTextChange={(text) => setReviewForm((p) => ({ ...p, text }))}
+                    showStaff={Boolean(reviewModalBooking.staff_user_id)}
+                    staffRating={reviewForm.staff_rating}
+                    onStaffRatingChange={(staff_rating) => setReviewForm((p) => ({ ...p, staff_rating }))}
+                    staffText={reviewForm.staff_text}
+                    onStaffTextChange={(staff_text) => setReviewForm((p) => ({ ...p, staff_text }))}
+                    hideSubmit
+                    photoInputId="review-photos-input"
+                    onPhotosChange={() => {}}
+                    placeholder="Комментарий об услуге (необязательно)"
                   />
+                )}
+                {reviewModalReview?.id ? (
+                  <>
+                    <textarea
+                      placeholder="Дополнительный текст к отзыву"
+                      value={reviewForm.text}
+                      onChange={(e) => setReviewForm((p) => ({ ...p, text: e.target.value }))}
+                      rows={3}
+                    />
+                    <label className="field-label" htmlFor="review-photos-input">
+                      Добавить фото
+                    </label>
+                    <input id="review-photos-input" type="file" accept="image/*" multiple />
+                  </>
                 ) : null}
-                <label className="field-label" htmlFor="review-photos-input">
-                  {reviewModalReview?.id ? "Добавить фото" : "Фото (необязательно)"}
-                </label>
-                <input id="review-photos-input" type="file" accept="image/*" multiple />
                 {reviewSubmitError ? <p className="status error">{reviewSubmitError}</p> : null}
               </div>
               <div className="review-modal-actions">

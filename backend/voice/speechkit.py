@@ -11,6 +11,8 @@ import urllib.request
 
 from django.conf import settings
 
+from .usage import can_use_speechkit, consume_voice_seconds
+
 logger = logging.getLogger(__name__)
 
 TTS_URL = "https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize"
@@ -56,16 +58,22 @@ def synthesize_speech(text: str, *, voice: str = "alena") -> bytes | None:
     return None
 
 
-def attach_tts_to_response(result: dict, *, enabled: bool) -> dict:
+def attach_tts_to_response(result: dict, *, enabled: bool, vs=None) -> dict:
     """Add say_audio_base64 when TTS is enabled and configured."""
     if not enabled or not speechkit_ready():
         return result
+    if vs is not None and not can_use_speechkit(vs):
+        out = dict(result)
+        out["quota_exceeded"] = True
+        return out
     say = (result.get("say") or "").strip()
     if not say:
         return result
     audio = synthesize_speech(say)
     if not audio:
         return result
+    if vs is not None:
+        consume_voice_seconds(vs, max(2.0, len(say) / 12.0))
     out = dict(result)
     out["say_audio_base64"] = base64.b64encode(audio).decode("ascii")
     out["say_audio_format"] = "oggopus"
@@ -156,13 +164,17 @@ def recognize_speech(audio: bytes, *, audio_format: str = "oggopus", lang: str =
     return None
 
 
-def transcribe_event_text(data: dict, ev: dict) -> str:
+def transcribe_event_text(data: dict, ev: dict, vs=None) -> str:
     """Use ASR when telephony payload has audio but no text."""
     text = (ev.get("text") or "").strip()
     if text or not speechkit_ready():
         return text
+    if vs is not None and not can_use_speechkit(vs):
+        return ""
     audio, fmt = extract_audio_from_payload(data, ev)
     if not audio:
         return ""
     recognized = recognize_speech(audio, audio_format=fmt)
+    if recognized and vs is not None:
+        consume_voice_seconds(vs, 8.0)
     return (recognized or "").strip()

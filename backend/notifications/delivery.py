@@ -55,9 +55,21 @@ def _send_sms(user, phone: str, text: str, api_id: str) -> None:
 
 
 def _org_recipients(booking) -> list[int]:
-    ids = {booking.provider_id}
+    """Provider + assigned master, or staff with manage_bookings if no master yet."""
+    ids = {int(booking.provider_id)}
     if booking.staff_id:
-        ids.add(booking.staff_id)
+        ids.add(int(booking.staff_id))
+        return list(ids)
+    from booking.models import ProviderStaff
+
+    for link in ProviderStaff.objects.filter(
+        provider_id=booking.provider_id,
+        is_active=True,
+        invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+    ).only("staff_id", "permissions"):
+        perms = link.permissions if isinstance(link.permissions, dict) else {}
+        if perms.get("manage_bookings"):
+            ids.add(int(link.staff_id))
     return list(ids)
 
 
@@ -157,7 +169,7 @@ def deliver_booking_event(
                     kind=InAppNotification.Kind.BOOKING,
                     title=(title_client or "Запись")[:120],
                     body=(body[:240] or title_client),
-                    payload=payload,
+                    payload={**payload, "view": "bookings", "event": event},
                 )
             except Exception:
                 logger.exception("client push failed")
@@ -206,7 +218,7 @@ def deliver_booking_event(
             kind=InAppNotification.Kind.BOOKING,
             title=(title_org or "Запись")[:120],
             body=(body[:240] or title_org),
-            payload=payload,
+            payload={**payload, "view": "bookings", "event": event, "audience": "org"},
         )
     except Exception:
         logger.exception("org push failed")

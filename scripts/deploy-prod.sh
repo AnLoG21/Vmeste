@@ -50,6 +50,14 @@ docker compose -f "$COMPOSE_FILE" build web
 docker compose -f "$COMPOSE_FILE" build --no-cache frontend
 docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans web frontend caddy celery_worker celery_beat
 
+if [ -f .env ] && grep -qE '^ASTERISK_INTERNAL_SECRET=.+' .env; then
+  echo "[deploy] Asterisk telephony profile (SIP 5060/udp)…"
+  docker compose -f "$COMPOSE_FILE" --profile telephony build asterisk
+  docker compose -f "$COMPOSE_FILE" --profile telephony up -d --force-recreate asterisk
+else
+  echo "[deploy] skip Asterisk (no ASTERISK_INTERNAL_SECRET in .env)"
+fi
+
 echo "[deploy] verify frontend assets..."
 FE_HTML="$(docker compose -f "$COMPOSE_FILE" exec -T frontend cat /usr/share/nginx/html/index.html)"
 JS_COUNT="$(docker compose -f "$COMPOSE_FILE" exec -T frontend sh -c 'ls -1 /usr/share/nginx/html/assets/*.js 2>/dev/null | wc -l' | tr -d '[:space:]')"

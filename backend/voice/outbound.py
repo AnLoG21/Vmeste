@@ -84,11 +84,8 @@ def dial_booking_confirmation(vs: ProviderVoiceSettings, booking_id: int) -> dic
     phone = getattr(booking.client, "phone", "") or ""
     if len(_digits(phone)) < 10:
         return {"ok": False, "error": "У клиента нет телефона."}
-    if not vs.has_mango():
-        return {"ok": False, "error": "Укажите ключ и salt Mango Office в настройках голоса."}
-    line = (vs.mango_line_number or vs.inbound_phone or "").strip()
-    if not _digits(line):
-        return {"ok": False, "error": "Укажите исходящую линию Mango (номер салона)."}
+    if not vs.has_mango() and not vs.has_sip():
+        return {"ok": False, "error": "Привяжите SIP-номер или ключи Mango для исходящих звонков."}
 
     script = _confirm_script(booking)
     session = VoiceCallSession.objects.create(
@@ -109,14 +106,34 @@ def dial_booking_confirmation(vs: ProviderVoiceSettings, booking_id: int) -> dic
         session=session,
     )
 
-    res = mango_callback(
-        api_key=vs.mango_api_key,
-        api_salt=vs.mango_api_salt,
-        to_number=phone,
-        line_number=line,
-        from_extension=vs.mango_extension or "",
-        command_id=f"vmeste-b{booking.id}-{log.id}",
-    )
+    cid = f"vmeste-b{booking.id}-{log.id}"
+    if vs.has_sip() and vs.ats_provider == ProviderVoiceSettings.AtsProvider.ASTERISK:
+        from .asterisk_ami import asterisk_originate
+
+        did = vs.sip_did or vs.inbound_phone
+        res = asterisk_originate(
+            endpoint=f"vmeste-p{vs.provider_id}",
+            to_number=phone,
+            did=did,
+            command_id=cid,
+        )
+    elif vs.has_mango():
+        line = (vs.mango_line_number or vs.inbound_phone or "").strip()
+        if not _digits(line):
+            log.status = VoiceOutboundLog.Status.FAILED
+            log.error = "Укажите исходящую линию Mango (номер салона)."
+            log.save(update_fields=["status", "error"])
+            return {"ok": False, "error": log.error}
+        res = mango_callback(
+            api_key=vs.mango_api_key,
+            api_salt=vs.mango_api_salt,
+            to_number=phone,
+            line_number=line,
+            from_extension=vs.mango_extension or "",
+            command_id=cid,
+        )
+    else:
+        return {"ok": False, "error": "Для исходящих нужен SIP (Asterisk) или Mango."}
     if res.get("ok"):
         log.status = VoiceOutboundLog.Status.DIALING
         log.external_command_id = res.get("command_id") or ""

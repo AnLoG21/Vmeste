@@ -43,9 +43,11 @@ def notify_new_cafe_order(order) -> None:
     mode_label = {"dine_in": "в зале", "takeaway": "самовывоз", "delivery": "доставка"}.get(mode, mode)
     title = f"Новый заказ #{order.id}"
     body = f"{mode_label} · {order.total} ₽"
-    keys = ["cafe_orders", "cafe_kitchen"]
+    keys = ["cafe_orders"]
     if mode == "delivery":
         keys.append("cafe_delivery")
+    else:
+        keys.append("cafe_kitchen")
     if mode == "dine_in":
         keys.append("cafe_seating")
     notify_cafe_staff(

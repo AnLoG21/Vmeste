@@ -36,6 +36,15 @@ def _staff_can_manage_services(user) -> bool:
     return bool(perms.get("manage_services"))
 
 
+def _can_write_service(user, service) -> bool:
+    if user.role == User.Role.PROVIDER and service.provider_id == user.id:
+        return True
+    if user.role == User.Role.STAFF and _staff_can_manage_services(user):
+        link = _staff_org_provider(user)
+        return bool(link and service.provider_id == link.provider_id)
+    return False
+
+
 class ServiceCategoryViewSet(viewsets.ModelViewSet):
     serializer_class = ServiceCategorySerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -72,6 +81,35 @@ class ServiceCategoryViewSet(viewsets.ModelViewSet):
                 "Категории добавляются из готового каталога сферы. Используйте «Загрузить каталог»."
             )
         serializer.save(provider=user)
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        obj = serializer.instance
+        if user.role == User.Role.PROVIDER and obj.provider_id == user.id:
+            serializer.save()
+            return
+        if user.role == User.Role.STAFF:
+            if not _staff_can_manage_services(user):
+                from rest_framework.exceptions import PermissionDenied
+
+                raise PermissionDenied("Нет права управлять услугами.")
+            serializer.save()
+            return
+        from rest_framework.exceptions import PermissionDenied
+
+        raise PermissionDenied()
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        if user.role == User.Role.PROVIDER and instance.provider_id == user.id:
+            instance.delete()
+            return
+        if user.role == User.Role.STAFF and _staff_can_manage_services(user):
+            instance.delete()
+            return
+        from rest_framework.exceptions import PermissionDenied
+
+        raise PermissionDenied()
 
 
 class ServiceViewSet(viewsets.ModelViewSet):
@@ -117,6 +155,35 @@ class ServiceViewSet(viewsets.ModelViewSet):
             )
         serializer.save(provider=user)
 
+    def perform_update(self, serializer):
+        user = self.request.user
+        obj = serializer.instance
+        if user.role == User.Role.PROVIDER and obj.provider_id == user.id:
+            serializer.save()
+            return
+        if user.role == User.Role.STAFF:
+            if not _staff_can_manage_services(user):
+                from rest_framework.exceptions import PermissionDenied
+
+                raise PermissionDenied("Нет права управлять услугами.")
+            serializer.save()
+            return
+        from rest_framework.exceptions import PermissionDenied
+
+        raise PermissionDenied()
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        if user.role == User.Role.PROVIDER and instance.provider_id == user.id:
+            instance.delete()
+            return
+        if user.role == User.Role.STAFF and _staff_can_manage_services(user):
+            instance.delete()
+            return
+        from rest_framework.exceptions import PermissionDenied
+
+        raise PermissionDenied()
+
     @action(detail=True, methods=["get", "post"], url_path="options")
     def options(self, request, pk=None):
         service = self.get_object()
@@ -125,7 +192,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
             if request.user.role != "provider" or service.provider_id != request.user.id:
                 qs = qs.filter(is_active=True)
             return Response(ServiceOptionSerializer(qs, many=True).data)
-        if request.user.role != "provider" or service.provider_id != request.user.id:
+        if not _can_write_service(request.user, service):
             return Response(status=status.HTTP_403_FORBIDDEN)
         ser = ServiceOptionSerializer(data={**request.data, "service": service.id})
         ser.is_valid(raise_exception=True)
@@ -142,7 +209,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["patch", "delete"], url_path=r"options/(?P<option_id>[^/.]+)")
     def option_detail(self, request, pk=None, option_id=None):
         service = self.get_object()
-        if request.user.role != "provider" or service.provider_id != request.user.id:
+        if not _can_write_service(request.user, service):
             return Response(status=status.HTTP_403_FORBIDDEN)
         opt = service.options.filter(pk=option_id).first()
         if not opt:
@@ -161,7 +228,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="photos")
     def upload_photos(self, request, pk=None):
         service = self.get_object()
-        if request.user.role != "provider" or service.provider_id != request.user.id:
+        if not _can_write_service(request.user, service):
             return Response(status=status.HTTP_403_FORBIDDEN)
         files = request.FILES.getlist("photos") or request.FILES.getlist("photo")
         if not files and request.FILES.get("image"):
@@ -186,7 +253,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["delete"], url_path=r"photos/(?P<photo_id>[^/.]+)")
     def delete_photo(self, request, pk=None, photo_id=None):
         service = self.get_object()
-        if request.user.role != "provider" or service.provider_id != request.user.id:
+        if not _can_write_service(request.user, service):
             return Response(status=status.HTTP_403_FORBIDDEN)
         ph = service.photos.filter(pk=photo_id).first()
         if not ph:

@@ -383,6 +383,48 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
 
         raise PermissionDenied()
 
+    def _staff_can_manage_intervals(self, user) -> bool:
+        link = (
+            ProviderStaff.objects.filter(
+                staff=user,
+                is_active=True,
+                invitation_status=ProviderStaff.InvitationStatus.ACCEPTED,
+            )
+            .first()
+        )
+        if not link:
+            return False
+        perms = link.permissions if isinstance(link.permissions, dict) else {}
+        return bool(perms.get("manage_intervals"))
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        if user.role == "provider":
+            serializer.save()
+            return
+        if user.role == "staff":
+            if not self._staff_can_manage_intervals(user):
+                from rest_framework.exceptions import PermissionDenied
+
+                raise PermissionDenied("Нет права управлять интервалами.")
+            serializer.save()
+            return
+        from rest_framework.exceptions import PermissionDenied
+
+        raise PermissionDenied()
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        if user.role == "provider" and instance.provider_id == user.id:
+            instance.delete()
+            return
+        if user.role == "staff" and self._staff_can_manage_intervals(user):
+            instance.delete()
+            return
+        from rest_framework.exceptions import PermissionDenied
+
+        raise PermissionDenied()
+
     @action(detail=False, methods=["get"], url_path="available-windows")
     def available_windows(self, request):
         if not _acts_as_client(request.user):

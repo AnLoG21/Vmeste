@@ -85,6 +85,14 @@ class ProviderVoiceSettings(models.Model):
         default="",
         help_text="Купленный SIP-номер (DID), на который звонят клиенты.",
     )
+    voice_minutes_quota = models.DecimalField(
+        max_digits=8,
+        decimal_places=1,
+        default=30,
+        help_text="Лимит минут SpeechKit в месяц (0 = без лимита).",
+    )
+    voice_minutes_used = models.DecimalField(max_digits=8, decimal_places=1, default=0)
+    voice_minutes_period_start = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def has_mango(self) -> bool:

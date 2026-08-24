@@ -35,6 +35,9 @@ def _resolve_voice_settings(request) -> ProviderVoiceSettings | None:
 class ProviderVoiceSettingsSerializer(serializers.ModelSerializer):
     webhook_url_hint = serializers.SerializerMethodField()
     speechkit_ready = serializers.SerializerMethodField()
+    voice_minutes_left = serializers.SerializerMethodField()
+    has_mango = serializers.SerializerMethodField()
+    has_sip = serializers.SerializerMethodField()
 
     class Meta:
         model = ProviderVoiceSettings
@@ -60,6 +63,9 @@ class ProviderVoiceSettingsSerializer(serializers.ModelSerializer):
             "has_mango",
             "has_sip",
             "speechkit_ready",
+            "voice_minutes_quota",
+            "voice_minutes_used",
+            "voice_minutes_left",
             "updated_at",
         ]
         read_only_fields = [
@@ -68,6 +74,9 @@ class ProviderVoiceSettingsSerializer(serializers.ModelSerializer):
             "has_mango",
             "has_sip",
             "speechkit_ready",
+            "voice_minutes_quota",
+            "voice_minutes_used",
+            "voice_minutes_left",
             "updated_at",
         ]
         extra_kwargs = {
@@ -75,9 +84,6 @@ class ProviderVoiceSettingsSerializer(serializers.ModelSerializer):
             "mango_api_salt": {"write_only": True},
             "sip_password": {"write_only": True, "required": False, "allow_blank": True},
         }
-
-    has_mango = serializers.SerializerMethodField()
-    has_sip = serializers.SerializerMethodField()
 
     def get_has_mango(self, obj):
         return obj.has_mango()
@@ -91,9 +97,14 @@ class ProviderVoiceSettingsSerializer(serializers.ModelSerializer):
     def get_speechkit_ready(self, obj):
         return speechkit_ready()
 
+    def get_voice_minutes_left(self, obj):
+        from .usage import remaining_minutes
+
+        return remaining_minutes(obj)
+
 
 def _voice_response(result: dict, vs: ProviderVoiceSettings) -> dict:
-    return attach_tts_to_response(result, enabled=bool(vs.tts_enabled))
+    return attach_tts_to_response(result, enabled=bool(vs.tts_enabled), vs=vs)
 
 
 class VoiceCallTurnSerializer(serializers.ModelSerializer):
@@ -233,7 +244,7 @@ class VoiceInboundWebhookView(APIView):
             called_phone=called,
         )
 
-        user_text = transcribe_event_text(data, ev)
+        user_text = transcribe_event_text(data, ev, vs)
         if ev.get("event") == "incoming" and not user_text:
             result = process_turn(session, "", greeting=vs.greeting_text)
         else:

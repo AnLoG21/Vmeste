@@ -30,6 +30,9 @@ const EMPTY_FORM = {
   sip_password: "",
   sip_auth_user: "",
   sip_did: "",
+  voice_minutes_quota: 30,
+  voice_minutes_used: 0,
+  voice_minutes_left: 30,
 };
 
 function mergeSettings(prev, data) {
@@ -55,6 +58,9 @@ function mergeSettings(prev, data) {
     mango_api_key: "",
     mango_api_salt: "",
     sip_password: "",
+    voice_minutes_quota: data.voice_minutes_quota ?? 30,
+    voice_minutes_used: data.voice_minutes_used ?? 0,
+    voice_minutes_left: data.voice_minutes_left ?? 0,
   };
 }
 
@@ -284,8 +290,9 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
             <li>Клиенты звонят на ваш номер → отвечает голосовой администратор.</li>
           </ol>
           <p className="muted small voice-wallet-hint">
-            Стоимость распознавания речи и ИИ (SpeechKit) пока оплачивает платформа. Позже можно включить в подписку
-            или списывать с кошелька салона.
+            Распознавание речи (SpeechKit) списывается с лимита минут организации. Сейчас на тарифе{" "}
+            <strong>{form.voice_minutes_left}</strong> мин из {form.voice_minutes_quota} в месяц. Позже лимит можно
+            включить в подписку или кошелёк.
           </p>
         </div>
       ) : null}
@@ -465,7 +472,7 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
           </>
         ) : null}
 
-        {form.ats_provider === "mango" ? (
+        {form.ats_provider === "mango" || isAsterisk ? (
           <>
             <label className="checkbox">
               <input
@@ -473,11 +480,14 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
                 checked={Boolean(form.confirm_outbound_enabled)}
                 onChange={(e) => patchForm((p) => ({ ...p, confirm_outbound_enabled: e.target.checked }))}
               />
-              Исходящие звонки «подтверждаете визит?» (только Mango)
+              Исходящие звонки «подтверждаете визит?»
             </label>
+            {isAsterisk ? (
+              <p className="muted small">
+                Для SIP исходящие идут через Asterisk на сервере. Нужен привязанный номер и включённая телефония.
+              </p>
+            ) : null}
           </>
-        ) : isAsterisk ? (
-          <p className="muted small">Исходящие напоминания по SIP — в следующих обновлениях.</p>
         ) : null}
 
         <button type="submit" disabled={saving}>
@@ -516,7 +526,7 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
         ) : null}
       </div>
 
-      {form.confirm_outbound_enabled && form.ats_provider === "mango" ? (
+      {form.confirm_outbound_enabled && (form.ats_provider === "mango" || isAsterisk) ? (
         <div className="voice-outbound-block">
           <h4 className="voice-section-head">Записи для обзвона</h4>
           {pendingOutbound.length > 0 ? (
@@ -535,7 +545,12 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "" }) 
           ) : (
             <p className="muted small">Нет записей с телефоном на ближайшие сутки.</p>
           )}
-          <button type="button" className="ghost-btn" onClick={() => runOutbound()} disabled={!form.has_mango}>
+          <button
+            type="button"
+            className="ghost-btn"
+            onClick={() => runOutbound()}
+            disabled={form.ats_provider === "mango" ? !form.has_mango : !form.has_sip}
+          >
             Обзвонить всех
           </button>
         </div>

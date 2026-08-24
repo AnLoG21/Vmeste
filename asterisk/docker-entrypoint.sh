@@ -16,4 +16,11 @@ if [ -f /etc/asterisk/generated/extensions_vmeste.conf ]; then
   ln -sf /etc/asterisk/generated/extensions_vmeste.conf /etc/asterisk/extensions_vmeste.conf
 fi
 
+if [ -f /etc/asterisk/manager.conf ]; then
+  AMI_SECRET="${ASTERISK_AMI_SECRET:-${ASTERISK_INTERNAL_SECRET:-}}"
+  if [ -n "$AMI_SECRET" ]; then
+    sed -i "s/CHANGE_ME/${AMI_SECRET}/g" /etc/asterisk/manager.conf
+  fi
+fi
+
 exec "$@"
