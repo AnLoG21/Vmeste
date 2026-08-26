@@ -109,7 +109,49 @@ def booking_amount_rub(booking) -> Decimal:
             price += Decimal(str(opt.get("price") or 0))
         except Exception:
             pass
-    return price
+    return price.quantize(Decimal("0.01"))
+
+
+def booking_payable_rub(booking) -> Decimal:
+    """Service total minus stored loyalty discount (never negative)."""
+    total = booking_amount_rub(booking)
+    discount = Decimal(str(getattr(booking, "loyalty_discount", 0) or 0))
+    if discount < 0:
+        discount = Decimal("0")
+    payable = total - discount
+    if payable < 0:
+        payable = Decimal("0")
+    return payable.quantize(Decimal("0.01"))
+
+
+def plan_loyalty_redeem(*, provider, client, points: int, booking) -> tuple[int, Decimal]:
+    """
+    Cap redeem by balance and booking total.
+    Returns (points_to_redeem, discount_rub).
+    """
+    points = max(0, int(points or 0))
+    if points <= 0:
+        return 0, Decimal("0.00")
+    settings_obj = LoyaltySettings.objects.filter(provider=provider, enabled=True).first()
+    if not settings_obj:
+        raise ValueError("Лояльность выключена.")
+    rate = Decimal(str(settings_obj.rub_per_point or 1))
+    if rate <= 0:
+        raise ValueError("Некорректный курс баллов.")
+    account = get_or_create_loyalty_account(provider, client)
+    balance = int(account.balance or 0)
+    points = min(points, balance)
+    total = booking_amount_rub(booking)
+    if total <= 0:
+        return 0, Decimal("0.00")
+    max_points_by_price = int(total // rate)
+    points = min(points, max_points_by_price)
+    if points <= 0:
+        return 0, Decimal("0.00")
+    discount = (rate * Decimal(points)).quantize(Decimal("0.01"))
+    if discount > total:
+        discount = total
+    return points, discount
 
 
 @transaction.atomic

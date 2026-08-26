@@ -732,7 +732,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         return self._respond_created_booking(booking)
 
     def _apply_loyalty_redeem(self, booking, data):
-        from .loyalty import consume_package_visit, loyalty_discount_rub, redeem_loyalty_points
+        from .loyalty import consume_package_visit, plan_loyalty_redeem, redeem_loyalty_points
 
         use_package = str(data.get("use_package") or "").strip().lower() in ("1", "true", "yes")
         package_id = data.get("client_package") or data.get("package_id")
@@ -756,6 +756,14 @@ class BookingViewSet(viewsets.ModelViewSet):
             points = 0
         if points <= 0:
             return
+        points, discount = plan_loyalty_redeem(
+            provider=booking.provider,
+            client=booking.client,
+            points=points,
+            booking=booking,
+        )
+        if points <= 0:
+            return
         redeemed = redeem_loyalty_points(
             provider=booking.provider,
             client=booking.client,
@@ -764,10 +772,11 @@ class BookingViewSet(viewsets.ModelViewSet):
             note="Списание при записи",
         )
         if redeemed:
-            discount = loyalty_discount_rub(booking.provider, redeemed)
-            note = f"[баллы −{redeemed}, скидка ≈ {discount} ₽]"
+            booking.loyalty_points_redeemed = int(redeemed)
+            booking.loyalty_discount = discount
+            note = f"[баллы −{redeemed}, скидка {discount} ₽]"
             booking.comment = f"{(booking.comment or '').strip()} {note}".strip()[:250]
-            booking.save(update_fields=["comment"])
+            booking.save(update_fields=["comment", "loyalty_points_redeemed", "loyalty_discount"])
 
     @action(detail=True, methods=["post"], url_path="pay")
     def pay(self, request, pk=None):

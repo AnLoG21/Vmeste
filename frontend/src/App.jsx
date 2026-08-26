@@ -8190,7 +8190,10 @@ export default function App() {
     setClientStatus(
       created.client_package
         ? "Запись создана — списан визит по абонементу."
-        : "Запись создана.",
+        : Number(created.loyalty_points_redeemed) > 0 &&
+            (created.payment_status === "paid" || !created.confirmation_url)
+          ? "Запись создана — баллы учтены в оплате."
+          : "Запись создана.",
     );
     setClientBookingForm({
       locationId: "",
@@ -15883,6 +15886,24 @@ export default function App() {
                         setClientBookingForm((p) => ({ ...p, loyaltyPoints: e.target.value }))
                       }
                     />
+                    {(() => {
+                      const pts = Number(clientBookingForm.loyaltyPoints) || 0;
+                      const rate = Number(bookLoyaltyInfo.rub_per_point) || 1;
+                      const svc = providerServices.find(
+                        (s) => String(s.id) === String(clientBookingForm.serviceId)
+                      );
+                      const price = Number(svc?.price) || 0;
+                      if (!pts || !price) return null;
+                      const discount = Math.min(price, pts * rate);
+                      const due = Math.max(0, Math.round((price - discount) * 100) / 100);
+                      return (
+                        <span className="field-hint">
+                          Скидка ≈ {discount.toLocaleString("ru-RU")} ₽ · к оплате ≈{" "}
+                          {due.toLocaleString("ru-RU")} ₽
+                          {due <= 0 ? " (без карты)" : ""}
+                        </span>
+                      );
+                    })()}
                   </label>
                 ) : null}
                 <button type="submit" disabled={!clientBookingForm.windowKey}>

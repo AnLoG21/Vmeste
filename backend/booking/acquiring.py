@@ -27,6 +27,18 @@ def booking_service_total(booking) -> Decimal:
     return total.quantize(Decimal("0.01"))
 
 
+def booking_payable_total(booking) -> Decimal:
+    """Amount due after loyalty points discount."""
+    total = booking_service_total(booking)
+    discount = Decimal(str(getattr(booking, "loyalty_discount", 0) or 0))
+    if discount < 0:
+        discount = Decimal("0")
+    payable = total - discount
+    if payable < 0:
+        payable = Decimal("0")
+    return payable.quantize(Decimal("0.01"))
+
+
 def get_or_create_acquiring(provider) -> ProviderAcquiring:
     obj, _ = ProviderAcquiring.objects.get_or_create(provider=provider)
     if not (obj.calendar_ics_token or "").strip():
@@ -103,16 +115,23 @@ def attach_prepay_if_needed(booking: Booking) -> dict | None:
             booking.payment_status = "none"
             booking.save(update_fields=["payment_status"])
         return None
-    total = booking_service_total(booking)
-    if total <= 0:
+    payable = booking_payable_total(booking)
+    # Баллы закрыли всю сумму — платёж не создаём
+    if payable <= 0:
+        booking.payment_status = "paid"
+        booking.prepay_amount = 0
+        if not booking.paid_at:
+            booking.paid_at = timezone.now()
+        booking.payment_url = ""
+        booking.save(update_fields=["payment_status", "prepay_amount", "paid_at", "payment_url"])
         return None
     if mode == ProviderAcquiring.PrepayMode.FULL:
-        amount = total
+        amount = payable
     else:
         percent = min(100, max(1, int(getattr(acq, "prepay_percent", 50) or 50)))
-        amount = (total * Decimal(percent) / Decimal(100)).quantize(Decimal("0.01"))
+        amount = (payable * Decimal(percent) / Decimal(100)).quantize(Decimal("0.01"))
         if amount <= 0:
-            amount = total
+            amount = payable
     code, creds = resolve_payment_setup(booking.provider)
     if not provider_ready(code, creds):
         raise ValueError(
@@ -120,11 +139,15 @@ def attach_prepay_if_needed(booking: Booking) -> dict | None:
         )
     front = (getattr(settings, "FRONTEND_URL", "") or "https://vsevmeste.space").rstrip("/")
     return_url = f"{front}/bookings?booking_payment=success&booking_id={booking.id}"
+    discount = Decimal(str(getattr(booking, "loyalty_discount", 0) or 0))
+    desc = f"Предоплата записи: {getattr(booking.service, 'name', 'услуга')}"
+    if discount > 0:
+        desc = f"{desc} (скидка баллами {discount} ₽)"
     pay = create_org_payment(
         provider_code=code,
         creds=creds,
         amount=amount,
-        description=f"Предоплата записи: {getattr(booking.service, 'name', 'услуга')}"[:128],
+        description=desc[:128],
         return_url=return_url,
         fail_url=return_url,
         metadata={"type": "booking", "booking_id": str(booking.id)},

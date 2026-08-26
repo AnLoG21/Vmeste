@@ -103,6 +103,16 @@ class Booking(models.Model):
         db_index=True,
     )
     prepay_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    loyalty_points_redeemed = models.PositiveIntegerField(
+        default=0,
+        help_text="Сколько баллов списано при создании записи.",
+    )
+    loyalty_discount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Скидка в рублях за списанные баллы (учитывается в предоплате).",
+    )
     yookassa_payment_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     payment_url = models.URLField(blank=True, default="")
     paid_at = models.DateTimeField(null=True, blank=True)
