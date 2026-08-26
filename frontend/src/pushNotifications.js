@@ -37,6 +37,21 @@ export async function initPushNotifications(authFetch, accessToken = "") {
 
     await PushNotifications.removeAllListeners();
 
+    if (Capacitor.getPlatform() === "android") {
+      try {
+        await PushNotifications.createChannel({
+          id: "vmeste_default",
+          name: "Вместе",
+          description: "Записи, заказы, чаты",
+          importance: 5,
+          visibility: 1,
+          vibration: true,
+        });
+      } catch {
+        /* channel may already exist */
+      }
+    }
+
     PushNotifications.addListener("registration", (token) => {
       const platform = Capacitor.getPlatform() === "ios" ? "ios" : "android";
       postToken(authFetch, token?.value, platform);
@@ -44,6 +59,20 @@ export async function initPushNotifications(authFetch, accessToken = "") {
 
     PushNotifications.addListener("registrationError", () => {
       startedForToken = "";
+    });
+
+    PushNotifications.addListener("pushNotificationReceived", (notification) => {
+      // Foreground: surface chat/booking deep-links without requiring a tap.
+      const data = notification?.data || {};
+      if (data.conversation_id) {
+        try {
+          window.dispatchEvent(
+            new CustomEvent("vmeste:open-chat", { detail: { conversationId: Number(data.conversation_id) } })
+          );
+        } catch {
+          /* ignore */
+        }
+      }
     });
 
     PushNotifications.addListener("pushNotificationActionPerformed", (action) => {

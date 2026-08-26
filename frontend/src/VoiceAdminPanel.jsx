@@ -17,6 +17,8 @@ const EMPTY_FORM = {
   ats_provider: "asterisk",
   confirm_outbound_enabled: false,
   tts_enabled: false,
+  legal_ack: false,
+  caller_disclosure: "",
   mango_api_key: "",
   mango_api_salt: "",
   mango_line_number: "",
@@ -45,6 +47,8 @@ function mergeSettings(prev, data) {
     ats_provider: data.ats_provider || "asterisk",
     confirm_outbound_enabled: Boolean(data.confirm_outbound_enabled),
     tts_enabled: Boolean(data.tts_enabled),
+    legal_ack: Boolean(data.legal_ack),
+    caller_disclosure: data.caller_disclosure ?? "",
     mango_line_number: data.mango_line_number ?? "",
     mango_extension: data.mango_extension ?? "",
     has_mango: Boolean(data.has_mango),
@@ -147,6 +151,8 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "", on
         ats_provider: form.ats_provider || "asterisk",
         confirm_outbound_enabled: Boolean(form.confirm_outbound_enabled),
         tts_enabled: Boolean(form.tts_enabled),
+        legal_ack: Boolean(form.legal_ack),
+        caller_disclosure: form.caller_disclosure || "",
         mango_line_number: form.mango_line_number || "",
         mango_extension: form.mango_extension || "",
         sip_server: form.sip_server || "",
@@ -261,7 +267,7 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "", on
   }
 
   const isAsterisk = form.ats_provider === "asterisk";
-  const step1Done = Boolean(form.enabled);
+  const step1Done = Boolean(form.enabled) && Boolean(form.legal_ack);
   const step2Done = step1Done && Boolean((form.greeting_text || "").trim());
   const step3Done = isAsterisk ? form.has_sip : step2Done && form.ats_provider !== "generic";
 
@@ -307,7 +313,7 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "", on
 
       <ol className="voice-steps muted small">
         <li className={step1Done ? "voice-steps__done" : ""}>
-          <strong>Шаг 1.</strong> Включите администратора и сохраните приветствие.
+          <strong>Шаг 1.</strong> Включите администратора, подтвердите 152-ФЗ и сохраните приветствие.
         </li>
         <li className={step2Done ? "voice-steps__done" : ""}>
           <strong>Шаг 2.</strong> Пройдите тест без телефона ниже.
@@ -337,6 +343,16 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "", on
           Включить голосового администратора
         </label>
 
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={Boolean(form.legal_ack)}
+            onChange={(e) => patchForm((p) => ({ ...p, legal_ack: e.target.checked }))}
+          />
+          Подтверждаю: звонящий уведомляется об обработке голоса, данные обрабатываются по 152-ФЗ
+          (Яндекс SpeechKit). Без галочки включить робота нельзя.
+        </label>
+
         <label className="field-label">
           Телефон салона (для справки)
           <span className="field-hint">Тот же номер, который укажете в SIP-поле ниже</span>
@@ -358,6 +374,17 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "", on
             value={form.transfer_phone ?? ""}
             onChange={(e) => patchForm((p) => ({ ...p, transfer_phone: e.target.value }))}
             placeholder="+7 495 …"
+          />
+        </label>
+
+        <label className="field-label">
+          Уведомление звонящего (152-ФЗ)
+          <span className="field-hint">Произносится в начале звонка перед приветствием</span>
+          <textarea
+            rows={2}
+            value={form.caller_disclosure ?? ""}
+            onChange={(e) => patchForm((p) => ({ ...p, caller_disclosure: e.target.value }))}
+            placeholder="Разговор обрабатывается голосовым ассистентом…"
           />
         </label>
 

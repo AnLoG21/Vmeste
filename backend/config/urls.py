@@ -4,10 +4,12 @@ from django.contrib import admin
 from django.urls import include, path
 from rest_framework_simplejwt.views import TokenRefreshView
 
+from config.health import health
 from users.auth_views import CustomTokenObtainPairView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/health/", health, name="health"),
     path("api/auth/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/users/", include("users.urls")),

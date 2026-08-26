@@ -94,7 +94,20 @@ def asterisk_originate(
         ok = "Success" in text or "Originate successfully queued" in text or not text
         if "Error" in text and "Success" not in text:
             ok = False
+        if not ok:
+            try:
+                from common.ops_alerts import alert_ops
+
+                alert_ops("asterisk_originate_failed", text[:240], extra={"endpoint": endpoint, "did": did})
+            except Exception:
+                pass
         return {"ok": ok, "command_id": cid, "raw": text[:400], "agi": agi}
     except OSError as e:
         logger.exception("Asterisk AMI connect failed")
+        try:
+            from common.ops_alerts import alert_ops
+
+            alert_ops("asterisk_ami_connect_failed", str(e))
+        except Exception:
+            pass
         return {"ok": False, "error": str(e), "command_id": cid}

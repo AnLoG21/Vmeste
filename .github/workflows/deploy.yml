@@ -10,8 +10,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ci:
+    name: Gate — CI
+    uses: ./.github/workflows/ci.yml
+
   deploy:
     name: Deploy to VPS
+    needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -74,3 +79,23 @@ jobs:
             git reset --hard origin/main
             chmod +x scripts/deploy-prod.sh
             ./scripts/deploy-prod.sh
+
+  notify-failure:
+    name: Ops alert on failure
+    needs: [ci, deploy]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST ops webhook
+        env:
+          WEBHOOK: ${{ secrets.OPS_ALERT_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "OPS_ALERT_WEBHOOK_URL not set — skip"
+            exit 0
+          fi
+          curl -sS -X POST "$WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{\"source\":\"vmeste\",\"event\":\"deploy_or_ci_failed\",\"detail\":\"$RUN_URL\",\"extra\":{\"ref\":\"${{ github.ref }}\",\"sha\":\"${{ github.sha }}\"}}" \
+            || true

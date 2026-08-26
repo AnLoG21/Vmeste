@@ -49,6 +49,8 @@ class ProviderVoiceSettingsSerializer(serializers.ModelSerializer):
             "ats_provider",
             "confirm_outbound_enabled",
             "tts_enabled",
+            "legal_ack",
+            "caller_disclosure",
             "mango_api_key",
             "mango_api_salt",
             "mango_line_number",
@@ -150,6 +152,18 @@ class VoiceSettingsView(APIView):
         validated.pop("sip_password", None)
         for key, val in validated.items():
             setattr(obj, key, val)
+        will_enable = bool(obj.enabled)
+        if will_enable and not bool(obj.legal_ack):
+            return Response(
+                {
+                    "detail": (
+                        "Чтобы включить голос, подтвердите согласие 152-ФЗ "
+                        "(уведомление звонящего и обработка речи через SpeechKit)."
+                    ),
+                    "code": "voice_legal_ack_required",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         obj.save()
         if (data.get("sip_password") or "").strip():
             obj.sip_password = str(data["sip_password"]).strip()
@@ -158,6 +172,12 @@ class VoiceSettingsView(APIView):
             sync_asterisk_configs()
         except Exception:
             logger.exception("voice asterisk sync failed")
+            try:
+                from common.ops_alerts import alert_ops
+
+                alert_ops("asterisk_sync_failed", f"provider={request.user.id}")
+            except Exception:
+                pass
         return Response(ProviderVoiceSettingsSerializer(obj).data)
 
 
@@ -246,9 +266,9 @@ class VoiceInboundWebhookView(APIView):
 
         user_text = transcribe_event_text(data, ev, vs)
         if ev.get("event") == "incoming" and not user_text:
-            result = process_turn(session, "", greeting=vs.greeting_text)
+            result = process_turn(session, "", greeting=vs.effective_greeting())
         else:
-            result = process_turn(session, user_text, greeting=vs.greeting_text)
+            result = process_turn(session, user_text, greeting=vs.effective_greeting())
 
         return Response(_voice_response(result, vs))
 
@@ -267,7 +287,7 @@ class VoiceSessionTurnView(APIView):
         if not session:
             return Response({"detail": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
         text = (request.data.get("text") if isinstance(request.data, dict) else "") or ""
-        result = process_turn(session, str(text).strip(), greeting=vs.greeting_text)
+        result = process_turn(session, str(text).strip(), greeting=vs.effective_greeting())
         return Response(_voice_response(result, vs))
 
 
@@ -289,7 +309,7 @@ class VoiceSimulateCallView(APIView):
             caller_phone=caller,
         )
         first_text = (data.get("text") or "").strip()
-        result = process_turn(session, first_text, greeting=vs.greeting_text)
+        result = process_turn(session, first_text, greeting=vs.effective_greeting())
         result["session_id"] = session.id
         return Response(_voice_response(result, vs), status=status.HTTP_201_CREATED)
 

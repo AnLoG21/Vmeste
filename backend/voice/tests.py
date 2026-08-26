@@ -89,6 +89,7 @@ class VoiceAsteriskSyncTests(TestCase):
         ProviderVoiceSettings.objects.create(
             provider=self.provider,
             enabled=True,
+            legal_ack=True,
             ats_provider=ProviderVoiceSettings.AtsProvider.ASTERISK,
             sip_server="sip.test.ru",
             sip_username="u1",
@@ -140,7 +141,9 @@ class VoiceOrchestratorTests(TestCase):
             ends_at=start + timedelta(hours=8),
             is_booked=False,
         )
-        self.voice = ProviderVoiceSettings.objects.create(provider=self.provider, enabled=True)
+        self.voice = ProviderVoiceSettings.objects.create(
+            provider=self.provider, enabled=True, legal_ack=True
+        )
 
     def test_greeting_on_empty_turn(self):
         session = VoiceCallSession.objects.create(provider=self.provider, caller_phone="+79001112233")
@@ -184,3 +187,36 @@ class VoiceOrchestratorTests(TestCase):
         self.assertEqual(session.id, confirm.id)
         session.refresh_from_db()
         self.assertEqual(session.external_call_id, "mango-real-call-id")
+
+    def test_effective_greeting_prepends_disclosure(self):
+        self.voice.greeting_text = "Здравствуйте, запишем вас."
+        self.voice.caller_disclosure = "Разговор обрабатывается ассистентом."
+        self.voice.save()
+        say = self.voice.effective_greeting()
+        self.assertTrue(say.startswith("Разговор обрабатывается"))
+        self.assertIn("запишем вас", say)
+
+    def test_enable_requires_legal_ack(self):
+        from rest_framework.test import APIClient
+
+        self.voice.enabled = False
+        self.voice.legal_ack = False
+        self.voice.save()
+        client = APIClient()
+        client.force_authenticate(user=self.provider)
+        res = client.patch(
+            "/api/voice/settings/",
+            {"enabled": True},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.data.get("code"), "voice_legal_ack_required")
+        res_ok = client.patch(
+            "/api/voice/settings/",
+            {"enabled": True, "legal_ack": True},
+            format="json",
+        )
+        self.assertEqual(res_ok.status_code, 200)
+        self.voice.refresh_from_db()
+        self.assertTrue(self.voice.enabled)
+        self.assertTrue(self.voice.legal_ack)

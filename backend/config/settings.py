@@ -249,6 +249,8 @@ YANDEX_OAUTH_CLIENT_SECRET = os.environ.get("YANDEX_OAUTH_CLIENT_SECRET", "").st
 YANDEX_CLOUD_FOLDER_ID = os.environ.get("YANDEX_CLOUD_FOLDER_ID", "").strip()
 YANDEX_GPT_API_KEY = os.environ.get("YANDEX_GPT_API_KEY", "").strip()
 YANDEX_SPEECHKIT_API_KEY = os.environ.get("YANDEX_SPEECHKIT_API_KEY", "").strip()
+# Optional: Slack/Telegram webhook for SpeechKit / Asterisk / deploy ops alerts
+OPS_ALERT_WEBHOOK_URL = os.environ.get("OPS_ALERT_WEBHOOK_URL", "").strip()
 ASTERISK_INTERNAL_SECRET = os.environ.get("ASTERISK_INTERNAL_SECRET", "").strip()
 ASTERISK_AMI_SECRET = os.environ.get("ASTERISK_AMI_SECRET", "").strip() or ASTERISK_INTERNAL_SECRET
 ASTERISK_AMI_HOST = os.environ.get("ASTERISK_AMI_HOST", "asterisk").strip()

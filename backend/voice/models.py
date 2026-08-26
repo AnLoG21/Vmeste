@@ -93,6 +93,19 @@ class ProviderVoiceSettings(models.Model):
     )
     voice_minutes_used = models.DecimalField(max_digits=8, decimal_places=1, default=0)
     voice_minutes_period_start = models.DateTimeField(null=True, blank=True)
+    legal_ack = models.BooleanField(
+        default=False,
+        help_text="Салон подтвердил понимание 152-ФЗ / SpeechKit / уведомление звонящего.",
+    )
+    caller_disclosure = models.TextField(
+        blank=True,
+        default=(
+            "Разговор обрабатывается голосовым ассистентом сервиса Вместе "
+            "(распознавание речи Яндекс SpeechKit). Продолжая разговор, "
+            "вы соглашаетесь с обработкой голосовых данных."
+        ),
+        help_text="Фраза в начале звонка про обработку голоса (152-ФЗ).",
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     def has_mango(self) -> bool:
@@ -105,6 +118,18 @@ class ProviderVoiceSettings(models.Model):
             and (self.sip_password or "").strip()
             and (self.sip_did or self.inbound_phone or "").strip()
         )
+
+    def effective_greeting(self) -> str:
+        """Greeting with mandatory caller disclosure for 152-FZ."""
+        greeting = (self.greeting_text or "").strip()
+        disclosure = (self.caller_disclosure or "").strip()
+        if not disclosure:
+            return greeting or "Здравствуйте! Чем могу помочь?"
+        if disclosure.lower() in greeting.lower():
+            return greeting
+        if greeting:
+            return f"{disclosure} {greeting}".strip()
+        return disclosure
 
     def save(self, *args, **kwargs):
         if not (self.webhook_token or "").strip():

@@ -53,8 +53,20 @@ def synthesize_speech(text: str, *, voice: str = "alena") -> bytes | None:
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         logger.error("SpeechKit TTS HTTP %s: %s", e.code, body[:300])
+        try:
+            from common.ops_alerts import alert_ops
+
+            alert_ops("speechkit_tts_http", f"HTTP {e.code}: {body[:200]}")
+        except Exception:
+            pass
     except Exception:
         logger.exception("SpeechKit TTS failed")
+        try:
+            from common.ops_alerts import alert_ops
+
+            alert_ops("speechkit_tts_failed", "exception")
+        except Exception:
+            pass
     return None
 
 
@@ -159,8 +171,20 @@ def recognize_speech(audio: bytes, *, audio_format: str = "oggopus", lang: str =
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8", errors="replace")
         logger.error("SpeechKit STT HTTP %s: %s", e.code, err_body[:300])
+        try:
+            from common.ops_alerts import alert_ops
+
+            alert_ops("speechkit_stt_http", f"HTTP {e.code}: {err_body[:200]}")
+        except Exception:
+            pass
     except Exception:
         logger.exception("SpeechKit STT failed")
+        try:
+            from common.ops_alerts import alert_ops
+
+            alert_ops("speechkit_stt_failed", "exception")
+        except Exception:
+            pass
     return None
 
 
