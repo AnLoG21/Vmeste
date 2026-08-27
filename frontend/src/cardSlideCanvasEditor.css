@@ -1,0 +1,143 @@
+.cs-editor {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cs-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.cs-tool {
+  border: 1px solid #d7d1c7;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  color: #1a242e;
+}
+
+.cs-tool.is-active {
+  border-color: #0f6e56;
+  background: #e8f5f0;
+  color: #0a4f3d;
+  font-weight: 600;
+}
+
+.cs-toolbar-sep {
+  width: 1px;
+  height: 24px;
+  background: #e2ddd4;
+  margin: 0 4px;
+}
+
+.cs-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: #5c6b78;
+}
+
+.cs-mini input[type="color"] {
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #e2ddd4;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.cs-mini input[type="range"] {
+  width: 72px;
+}
+
+.cs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cs-text-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid #e2ddd4;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.cs-text-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+}
+
+.cs-text-panel select,
+.cs-text-panel input[type="number"] {
+  min-width: 110px;
+  padding: 6px 8px;
+  border: 1px solid #e2ddd4;
+  border-radius: 8px;
+}
+
+.cs-toggle {
+  border: 1px solid #d7d1c7;
+  background: #f7f4ef;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.cs-toggle.is-on {
+  background: #0f6e56;
+  border-color: #0f6e56;
+  color: #fff;
+}
+
+.cs-hint {
+  margin: 0;
+}
+
+.cs-stage-wrap {
+  width: 100%;
+  overflow: auto;
+  padding: 8px 0 4px;
+  display: flex;
+  justify-content: center;
+}
+
+.cs-stage {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #d7d1c7;
+  box-shadow: 0 16px 40px rgba(26, 36, 46, 0.12);
+  background: #ddd8cf;
+  flex-shrink: 0;
+}
+
+.cs-stage-inner {
+  width: 1080px;
+  height: 1440px;
+  transform-origin: top left;
+}
+
+.cs-stage-inner .canvas-container {
+  margin: 0 !important;
+}
+
+@media (max-width: 720px) {
+  .cs-tool {
+    padding: 6px 8px;
+    font-size: 0.75rem;
+  }
+}

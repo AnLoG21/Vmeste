@@ -126,6 +126,8 @@ class MarketplaceCardDesign(models.Model):
     layout = models.CharField(max_length=32, choices=LAYOUT_CHOICES, default="hero")
     # Colors, brand bar text, titles, logo URL, toggles
     style = models.JSONField(default=dict, blank=True)
+    # Fabric.js scene JSON (objects, background) for freeform photo editor
+    canvas = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

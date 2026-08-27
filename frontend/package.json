@@ -19,6 +19,7 @@
     "@capacitor/push-notifications": "^8.1.2",
     "@capacitor/status-bar": "^8.0.3",
     "@vitejs/plugin-react-swc": "^3.7.2",
+    "fabric": "^6.9.1",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

@@ -531,11 +531,13 @@ class MarketplaceTemplateView(APIView):
 def _card_design_payload(t: MarketplaceCardDesign) -> dict:
     from .card_designs import normalize_style
 
+    canvas = t.canvas if isinstance(t.canvas, dict) else {}
     return {
         "id": t.id,
         "name": t.name,
         "layout": t.layout,
         "style": normalize_style(t.style if isinstance(t.style, dict) else {}),
+        "canvas": canvas,
         "updated_at": t.updated_at.isoformat() if t.updated_at else None,
     }
 
@@ -582,6 +584,7 @@ class MarketplaceCardDesignView(APIView):
             name=str(data.get("name") or "Мой шаблон")[:180],
             layout=layout,
             style=normalize_style(data.get("style") if isinstance(data.get("style"), dict) else {}),
+            canvas=data.get("canvas") if isinstance(data.get("canvas"), dict) else {},
         )
         return Response(_card_design_payload(t), status=201)
 
@@ -603,6 +606,8 @@ class MarketplaceCardDesignView(APIView):
                 t.layout = layout
         if "style" in data and isinstance(data.get("style"), dict):
             t.style = normalize_style({**(t.style if isinstance(t.style, dict) else {}), **data["style"]})
+        if "canvas" in data and isinstance(data.get("canvas"), dict):
+            t.canvas = data["canvas"]
         t.save()
         return Response(_card_design_payload(t))
 

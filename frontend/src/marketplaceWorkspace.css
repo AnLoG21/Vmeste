@@ -1451,12 +1451,18 @@ body.theme-dark .mp-lightbox-close {
   margin-top: 10px;
 }
 
+.mp-card-design-grid--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 4px;
+}
+
 .mp-card-design-editor {
   margin-top: 12px;
   padding: 12px;
   border: 1px solid #e2ddd4;
   border-radius: 10px;
   background: #fff;
+  max-width: 100%;
 }
 
 .mp-card-design-editor-head {

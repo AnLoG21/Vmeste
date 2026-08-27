@@ -38,6 +38,7 @@ export function emptyCardDesignForm() {
     name: "Новый шаблон",
     layout: "hero",
     style: { ...DEFAULT_CARD_STYLE },
+    canvas: null,
   };
 }
 
@@ -45,6 +46,7 @@ export function normalizeDesign(raw) {
   const d = raw && typeof raw === "object" ? raw : {};
   const style = { ...DEFAULT_CARD_STYLE, ...(d.style && typeof d.style === "object" ? d.style : {}) };
   const layout = ["hero", "benefits", "specs"].includes(d.layout) ? d.layout : "hero";
+  const canvas = d.canvas && typeof d.canvas === "object" ? d.canvas : null;
   return {
     id: d.id ?? null,
     name: String(d.name || "Шаблон").slice(0, 180),
@@ -57,6 +59,7 @@ export function normalizeDesign(raw) {
       benefitsTitle: String(style.benefitsTitle || DEFAULT_CARD_STYLE.benefitsTitle).slice(0, 80),
       logoUrl: String(style.logoUrl || "").slice(0, 500),
     },
+    canvas,
   };
 }
 
