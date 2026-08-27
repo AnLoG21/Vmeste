@@ -451,25 +451,52 @@ export function addShape(canvas, kind, { fill = "#0f6e56", stroke = "#1a242e" } 
   return obj;
 }
 
+export async function addImageFromSource(canvas, source, { asProductSlot = false } = {}) {
+  if (!canvas || !source) return null;
+  let url = "";
+  let revoke = null;
+  try {
+    if (typeof source === "string") {
+      url = source;
+    } else if (source instanceof Blob) {
+      // Persist in template JSON as data URL (blob: dies after reload)
+      url = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("Не удалось прочитать изображение."));
+        reader.readAsDataURL(source);
+      });
+    } else {
+      return null;
+    }
+    if (!url) return null;
+    const img = await FabricImage.fromURL(url, { crossOrigin: "anonymous" });
+    const maxW = asProductSlot ? 900 : 820;
+    const maxH = asProductSlot ? 900 : 820;
+    const scale = Math.min(maxW / (img.width || 1), maxH / (img.height || 1), 1);
+    img.set({
+      left: (SLIDE_W - (img.width || 0) * scale) / 2,
+      top: asProductSlot ? 160 : 220,
+      scaleX: scale,
+      scaleY: scale,
+    });
+    if (asProductSlot) {
+      img.set("vmRole", "productPhoto");
+      applyRole(img, "productPhoto");
+    }
+    canvas.add(img);
+    canvas.setActiveObject(img);
+    canvas.requestRenderAll();
+    return img;
+  } finally {
+    if (revoke) URL.revokeObjectURL(revoke);
+  }
+}
+
 export async function addProductPhotoSlot(canvas, imageUrl) {
   if (imageUrl) {
     try {
-      const img = await FabricImage.fromURL(imageUrl, { crossOrigin: "anonymous" });
-      const maxW = 900;
-      const maxH = 900;
-      const scale = Math.min(maxW / (img.width || 1), maxH / (img.height || 1), 1);
-      img.set({
-        left: (SLIDE_W - (img.width || 0) * scale) / 2,
-        top: 160,
-        scaleX: scale,
-        scaleY: scale,
-        vmRole: "productPhoto",
-      });
-      applyRole(img, "productPhoto");
-      canvas.add(img);
-      canvas.setActiveObject(img);
-      canvas.requestRenderAll();
-      return img;
+      return await addImageFromSource(canvas, imageUrl, { asProductSlot: true });
     } catch {
       /* fall through */
     }

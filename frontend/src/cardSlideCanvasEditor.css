@@ -203,7 +203,11 @@
   margin: 0;
   color: #a8b0ba;
   font-size: 0.78rem;
-  max-width: 520px;
+  max-width: 560px;
+}
+
+.cs-options-empty:not(:empty) {
+  color: #cfe9df;
 }
 
 .cs-workspace {

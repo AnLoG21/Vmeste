@@ -5,6 +5,7 @@ import {
   SLIDE_H,
   SLIDE_W,
   TOOLS,
+  addImageFromSource,
   addProductPhotoSlot,
   addShape,
   addTextObject,
@@ -124,6 +125,13 @@ const ACTION_ICONS = {
       <path d="M17 3v4h4M7 21v-4H3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </Icon>
   ),
+  paste: (
+    <Icon size={18}>
+      <rect x="8" y="4" width="10" height="4" rx="1" stroke="currentColor" strokeWidth="2" />
+      <path d="M7 6H5a2 2 0 00-2 2v11a2 2 0 002 2h12a2 2 0 002-2V8a2 2 0 00-2-2h-2" stroke="currentColor" strokeWidth="2" />
+      <rect x="8" y="11" width="8" height="7" rx="1" stroke="currentColor" strokeWidth="2" />
+    </Icon>
+  ),
 };
 
 /**
@@ -147,6 +155,7 @@ export default function CardSlideCanvasEditor({
   const [brushColor, setBrushColor] = useState("#1a242e");
   const [fillColor, setFillColor] = useState("#0f6e56");
   const [selectedMeta, setSelectedMeta] = useState(null);
+  const [pasteStatus, setPasteStatus] = useState("");
   const [scale, setScale] = useState(0.42);
 
   useEffect(() => {
@@ -339,6 +348,82 @@ export default function CardSlideCanvasEditor({
     })();
   }
 
+  async function insertImageBlob(blob) {
+    const canvas = canvasRef.current;
+    if (!canvas || !blob) return false;
+    setTool("select");
+    await addImageFromSource(canvas, blob);
+    onChangeRef.current?.(serializeCanvas(canvas));
+    setPasteStatus("Картинка вставлена");
+    window.setTimeout(() => setPasteStatus(""), 1800);
+    return true;
+  }
+
+  async function pasteImageFromEvent(e) {
+    const items = Array.from(e?.clipboardData?.items || []);
+    for (const item of items) {
+      if (item.kind === "file" && String(item.type || "").startsWith("image/")) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        e.preventDefault();
+        await insertImageBlob(file);
+        return true;
+      }
+    }
+    const files = Array.from(e?.clipboardData?.files || []);
+    for (const file of files) {
+      if (String(file.type || "").startsWith("image/")) {
+        e.preventDefault();
+        await insertImageBlob(file);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async function pasteFromClipboardButton() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    try {
+      if (navigator.clipboard?.read) {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const type = item.types.find((t) => t.startsWith("image/"));
+          if (!type) continue;
+          const blob = await item.getType(type);
+          await insertImageBlob(blob);
+          return;
+        }
+      }
+      setPasteStatus("В буфере нет картинки — скопируйте снимок и нажмите Ctrl+V");
+      window.setTimeout(() => setPasteStatus(""), 2800);
+    } catch {
+      setPasteStatus("Разрешите доступ к буферу или вставьте через Ctrl+V");
+      window.setTimeout(() => setPasteStatus(""), 2800);
+    }
+  }
+
+  function onWorkspaceDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const files = Array.from(e.dataTransfer?.files || []);
+    const image = files.find((f) => String(f.type || "").startsWith("image/"));
+    if (image) insertImageBlob(image);
+  }
+
+  useEffect(() => {
+    const onPaste = (e) => {
+      if (!canvasRef.current) return;
+      const tag = String(e.target?.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      const active = canvasRef.current.getActiveObject?.();
+      if (active?.isEditing) return;
+      pasteImageFromEvent(e);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []);
+
   useEffect(() => {
     const onKey = (e) => {
       if (!canvasRef.current) return;
@@ -351,6 +436,7 @@ export default function CardSlideCanvasEditor({
         deleteSelected();
         return;
       }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const key = e.key.toLowerCase();
       if (key === "v") setTool("select");
       if (key === "b") setTool("draw");
@@ -390,6 +476,16 @@ export default function CardSlideCanvasEditor({
             </button>
           ))}
           <div className="cs-rail-sep" />
+          <button
+            type="button"
+            className="cs-icon-btn"
+            onClick={pasteFromClipboardButton}
+            title="Вставить из буфера (Ctrl+V)"
+            aria-label="Вставить из буфера"
+          >
+            {ACTION_ICONS.paste}
+            <span className="cs-tooltip">Вставить · Ctrl+V</span>
+          </button>
           <button
             type="button"
             className="cs-icon-btn"
@@ -580,13 +676,21 @@ export default function CardSlideCanvasEditor({
               </div>
             ) : (
               <p className="cs-options-empty">
-                Выберите объект на холсте или добавьте текст / фигуру. Плейсхолдеры {"{{name}}"}, {"{{price}}"},{" "}
-                {"{{brand}}"} подставятся при генерации.
+                {pasteStatus ||
+                  "Ctrl+V или перетащите картинку на холст. Плейсхолдеры {{name}}, {{price}}, {{brand}} — при генерации."}
               </p>
             )}
           </div>
 
-          <div className="cs-workspace" ref={workspaceRef}>
+          <div
+            className="cs-workspace"
+            ref={workspaceRef}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+            }}
+            onDrop={onWorkspaceDrop}
+          >
             <div className="cs-stage" style={{ width: stageW, height: stageH }}>
               <div className="cs-stage-inner" style={{ transform: `scale(${scale})` }}>
                 <canvas ref={hostRef} />
