@@ -1418,6 +1418,38 @@ body.theme-dark .mp-lightbox-close {
   color: #3a4658;
 }
 
+.mp-card-slide-box {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #e2ddd4;
+  border-radius: 12px;
+  background: linear-gradient(165deg, #fbf9f6, #f3f7f5);
+}
+
+.mp-card-slide-box h4 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+}
+
+.mp-card-slide-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) 1fr auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 10px;
+}
+
+.mp-card-slide-hint {
+  margin: 0;
+  align-self: center;
+}
+
+@media (max-width: 720px) {
+  .mp-card-slide-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 900px) {
   .mp-workspace .mp-head {
     grid-template-columns: 1fr auto;

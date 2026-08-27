@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "./marketplaceWorkspace.css";
 import { renderProductCardVideo } from "./productCardVideo.js";
+import { PRODUCT_CARD_TEMPLATES, renderProductCardSlide } from "./productCardTemplates.js";
 import {
   applyAttributeMirrors,
   extractOzonCategoryTree,
@@ -774,6 +775,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   const [orderStatusFilter, setOrderStatusFilter] = useState("");
   const [templateForm, setTemplateForm] = useState({ name: "", brand: "", description_text: "", price: "", stock: "0" });
   const [aiFeatures, setAiFeatures] = useState("");
+  const [cardTemplateId, setCardTemplateId] = useState("hero");
   const [viewer, setViewer] = useState(null);
   const [dotsTick, setDotsTick] = useState(0);
   const [categoryOptions, setCategoryOptions] = useState([]);
@@ -1510,6 +1512,51 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
         images: [...(Array.isArray(p.images) ? p.images : []), videoItem],
       }));
       setStatus("Видео карточки готово.");
+    });
+  }
+
+  async function generateTemplateSlide() {
+    await withBusy("slide", async () => {
+      if (!String(product?.name || "").trim()) throw new Error("Укажите название товара.");
+      const photos = (Array.isArray(product?.images) ? product.images : []).filter((x) => {
+        if (typeof x === "string") return true;
+        return x?.kind !== "video";
+      });
+      if (!photos.length) throw new Error("Загрузите хотя бы одно реальное фото товара — шаблон оформит его в стиле витрины.");
+      const limits = mediaLimitsFor(mp);
+      const counts = countMediaItems(product.images);
+      if (counts.photos >= limits.photos) {
+        throw new Error(`Лимит фото: ${limits.photos}. Удалите лишнее перед генерацией слайда.`);
+      }
+      const blob = await renderProductCardSlide({
+        templateId: cardTemplateId,
+        product,
+        images: product.images,
+        featuresText: aiFeatures,
+      });
+      const localPreview = URL.createObjectURL(blob);
+      const tplMeta = PRODUCT_CARD_TEMPLATES.find((t) => t.id === cardTemplateId);
+      const file = new File([blob], `card-${cardTemplateId}.png`, { type: "image/png" });
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await authFetch(`${base}/media/`, { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        URL.revokeObjectURL(localPreview);
+        throw new Error(data.detail || "Не удалось сохранить слайд.");
+      }
+      const imageItem = {
+        url: data.url,
+        public_url: data.public_url || data.disk_url || data.url,
+        previewUrl: localPreview,
+        name: `Слайд · ${tplMeta?.label || cardTemplateId}`,
+        kind: "image",
+      };
+      setProduct((p) => ({
+        ...p,
+        images: [...(Array.isArray(p.images) ? p.images : []), imageItem],
+      }));
+      setStatus(`Слайд «${tplMeta?.label || cardTemplateId}» добавлен в медиа (стиль витрины).`);
     });
   }
 
@@ -3091,6 +3138,36 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                 ) : (
                   <p className="muted small">Файлы ещё не загружены. Нажмите плюс, чтобы добавить фото.</p>
                 )}
+                <div className="mp-card-slide-box">
+                  <h4>Слайды витрины (единый стиль)</h4>
+                  <p className="muted small">
+                    Берём ваше реальное фото и оформляем как на маркетплейсах: главный кадр, преимущества или
+                    характеристики. Позже сюда же можно подключить Qwen-Image — шаблон стиля уже общий.
+                  </p>
+                  <div className="mp-card-slide-row">
+                    <label>
+                      Шаблон
+                      <select value={cardTemplateId} onChange={(e) => setCardTemplateId(e.target.value)}>
+                        {PRODUCT_CARD_TEMPLATES.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <p className="muted small mp-card-slide-hint">
+                      {PRODUCT_CARD_TEMPLATES.find((t) => t.id === cardTemplateId)?.hint}
+                    </p>
+                    <button
+                      type="button"
+                      className="mp-btn mp-btn-primary"
+                      disabled={busy === "slide"}
+                      onClick={generateTemplateSlide}
+                    >
+                      {busy === "slide" ? `Собираем слайд${dots}` : "Сгенерировать слайд в медиа"}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
             <div className="mp-actions">
