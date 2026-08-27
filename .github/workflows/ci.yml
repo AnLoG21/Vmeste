@@ -59,4 +59,5 @@ jobs:
           booking.tests_loyalty_pay
           booking.tests_actions
           payments.tests
+          marketplaces.tests_analytics
           --verbosity=2

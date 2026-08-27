@@ -15,6 +15,8 @@ import {
 } from "./marketplaceCategoryHelpers.js";
 import MarketplaceCategoryPicker from "./marketplaceCategoryPicker.jsx";
 import SearchableSelect from "./marketplaceSearchableSelect.jsx";
+import MarketplaceAnalyticsPanel from "./MarketplaceAnalyticsPanel.jsx";
+import { aggregateBuhRows, extractRecords as extractAnalyticsRecords } from "./marketplaceAnalytics.js";
 
 const TABS = [
   ["today", "Сегодня"],
@@ -2147,25 +2149,58 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
 
   async function loadFinance() {
     await withBusy("finance", async () => {
-      if (mp !== "ozon") throw new Error("Финансы и акции — для Ozon.");
-      const from = ozonTimestampDaysAgo(30);
-      const to = ozonTimestampNow();
-      const fin = await mpCall("finance.list", {
-        filter: { date: { from, to }, operation_type: [] },
-        page: 1,
-        page_size: 50,
-      });
-      if (fin?.sandbox) {
-        setFinanceRows([]);
-        setStatus(fin.message || "Тестовый режим.");
+      if (mp === "ozon") {
+        const from = ozonTimestampDaysAgo(30);
+        const to = ozonTimestampNow();
+        const fin = await mpCall("finance.list", {
+          filter: { date: { from, to }, operation_type: [] },
+          page: 1,
+          page_size: 50,
+        });
+        if (fin?.sandbox) {
+          setFinanceRows([]);
+          setStatus(fin.message || "Тестовый режим.");
+          return;
+        }
+        const ops = fin?.result?.operations || fin?.operations || extractRecords(fin);
+        setFinanceRows(Array.isArray(ops) ? ops.slice(0, 80) : []);
+        const acts = await mpCall("actions.list");
+        const list = acts?.result || acts?.actions || extractRecords(acts);
+        setActionRows(Array.isArray(list) ? list.slice(0, 80) : []);
+        setStatus(`Финансы: ${(Array.isArray(ops) ? ops : []).length}, акций: ${(Array.isArray(list) ? list : []).length}`);
         return;
       }
-      const ops = fin?.result?.operations || fin?.operations || extractRecords(fin);
-      setFinanceRows(Array.isArray(ops) ? ops.slice(0, 80) : []);
-      const acts = await mpCall("actions.list");
-      const list = acts?.result || acts?.actions || extractRecords(acts);
-      setActionRows(Array.isArray(list) ? list.slice(0, 80) : []);
-      setStatus(`Финансы: ${(Array.isArray(ops) ? ops : []).length}, акций: ${(Array.isArray(list) ? list : []).length}`);
+      // WB: reportDetailByPeriod → нормализованный срез
+      const payload = {
+        dateFrom: daysAgoIso(30).slice(0, 10),
+        dateTo: new Date().toISOString().slice(0, 10),
+      };
+      const salesData = await mpCall("analytics.sales", payload, payload);
+      if (salesData?.sandbox) {
+        setFinanceRows([]);
+        setStatus(salesData.message || "Тестовый режим.");
+        return;
+      }
+      const rows = Array.isArray(salesData) ? salesData : extractAnalyticsRecords(salesData);
+      const agg = aggregateBuhRows(rows);
+      setFinanceRows(
+        (agg.by_day || []).map((d) => ({
+          operation_date: d.date,
+          operation_type: "WB period",
+          amount: d.for_pay,
+          operation_type_name: `шт ${d.qty}`,
+        })),
+      );
+      setActionRows(
+        (agg.by_brand || []).slice(0, 40).map((b) => ({
+          id: b.brand,
+          title: b.brand,
+          name: `шт ${b.qty} · ${Number(b.for_pay).toLocaleString("ru-RU")} ₽`,
+          date_start: "бренд",
+          date_end: "",
+        })),
+      );
+      setStatus(`WB финансы: к выплате ${agg.kpis.for_pay.toLocaleString("ru-RU")} ₽ за 30 дн.`);
     });
   }
 
@@ -4240,61 +4275,24 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       )}
 
       {tab === "analytics" && (
-        <div className="mp-stack">
-          <div className="mp-actions">
-            <button type="button" className="mp-btn mp-btn-primary" disabled={busy === "analytics"} onClick={loadAnalytics}>
-              {busy === "analytics" ? "Загрузка…" : "Продажи, остатки, юнит-экономика (30 дн.)"}
-            </button>
-          </div>
-          <div className="mp-analytics-grid">
-            <div className="cafe-form-panel mp-panel">
-              <h3>Продажи по SKU</h3>
-              <p className="muted small">Заказанные единицы / количество продаж</p>
-              <MpBarChart items={analyticsCharts.sales} color="#1f6feb" />
-            </div>
-            <div className="cafe-form-panel mp-panel">
-              <h3>Остатки по складам</h3>
-              <p className="muted small">Сводка analytics.stocks</p>
-              <MpBarChart items={analyticsCharts.stocks} color="#0f7b6c" />
-            </div>
-            <div className="cafe-form-panel mp-panel">
-              <h3>Юнит-экономика по SKU</h3>
-              <p className="muted small">Выручка / шт. (оценка по отчёту)</p>
-              <MpBarChart items={analyticsCharts.unit} valueKey="value" color="#b45309" />
-              {analyticsCharts.unit.length ? (
-                <div className="mp-table-wrap" style={{ marginTop: 12 }}>
-                  <table className="mp-table">
-                    <thead>
-                      <tr>
-                        <th>SKU</th>
-                        <th>Шт.</th>
-                        <th>Выручка</th>
-                        <th>На шт.</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {analyticsCharts.unit.map((row) => (
-                        <tr key={row.label}>
-                          <td>{row.label}</td>
-                          <td>{row.qty ?? "—"}</td>
-                          <td>{row.revenue != null ? row.revenue.toLocaleString("ru-RU") : "—"}</td>
-                          <td>{row.value != null ? row.value.toLocaleString("ru-RU") : "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
+        <MarketplaceAnalyticsPanel
+          mp={mp}
+          mpCall={mpCall}
+          withBusy={withBusy}
+          busy={busy}
+          settings={settings}
+          authFetch={authFetch}
+          API_URL={API_URL}
+          history={history}
+          onStatus={setStatus}
+        />
       )}
 
       {tab === "finance" && (
         <div>
           <div className="mp-actions">
-            <button type="button" disabled={busy === "finance" || mp !== "ozon"} onClick={loadFinance}>
-              {mp === "ozon" ? "Финансы и акции Ozon" : "Только для Ozon"}
+            <button type="button" disabled={busy === "finance"} onClick={loadFinance}>
+              {mp === "ozon" ? "Финансы и акции Ozon" : "Финансовый срез WB (30 дн.)"}
             </button>
           </div>
           {financeRows.length ? (
@@ -4324,13 +4322,13 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
           ) : null}
           {actionRows.length ? (
             <div className="mp-table-wrap">
-              <h4>Акции</h4>
+              <h4>{mp === "ozon" ? "Акции" : "Топ брендов (из отчёта)"}</h4>
               <table className="mp-table">
                 <thead>
                   <tr>
                     <th>ID</th>
                     <th>Название</th>
-                    <th>Даты</th>
+                    <th>{mp === "ozon" ? "Даты" : "Детали"}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -4339,7 +4337,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                       <td>{row.id || "—"}</td>
                       <td>{row.title || row.name || "—"}</td>
                       <td>
-                        {row.date_start || row.action_start || "—"} — {row.date_end || row.action_end || "—"}
+                        {mp === "ozon"
+                          ? `${row.date_start || row.action_start || "—"} — ${row.date_end || row.action_end || "—"}`
+                          : row.name || "—"}
                       </td>
                     </tr>
                   ))}
@@ -4347,7 +4347,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
               </table>
             </div>
           ) : null}
-          {!financeRows.length && !actionRows.length ? <p className="muted">Нажмите кнопку загрузки (боевой режим + ключи Ozon).</p> : null}
+          {!financeRows.length && !actionRows.length ? (
+            <p className="muted">Нажмите кнопку загрузки (боевой режим + ключи площадки).</p>
+          ) : null}
         </div>
       )}
 

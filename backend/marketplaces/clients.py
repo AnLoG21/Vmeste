@@ -18,6 +18,8 @@ WB_MARKETPLACE = "https://marketplace-api.wildberries.ru"
 WB_PRICES = "https://discounts-prices-api.wildberries.ru"
 WB_STATS = "https://statistics-api.wildberries.ru"
 WB_FEEDBACKS = "https://feedbacks-api.wildberries.ru"
+WB_ANALYTICS = "https://seller-analytics-api.wildberries.ru"
+WB_COMMON = "https://common-api.wildberries.ru"
 
 
 class MarketplaceError(Exception):
@@ -557,6 +559,10 @@ WB_ACTIONS = {
     "analytics.sales": ("GET", f"{WB_STATS}/api/v1/supplier/reportDetailByPeriod"),
     "analytics.stocks": ("GET", f"{WB_STATS}/api/v1/supplier/stocks"),
     "analytics.payments": ("GET", f"{WB_STATS}/api/v1/supplier/sales"),
+    "analytics.nm_report": ("POST", f"{WB_ANALYTICS}/api/v2/nm-report/detail"),
+    "tariffs.commission": ("GET", f"{WB_COMMON}/api/v1/tariffs/commission"),
+    "tariffs.box": ("GET", f"{WB_COMMON}/api/v1/tariffs/box"),
+    "products.prices_list": ("POST", f"{WB_PRICES}/api/v2/list/goods/filter"),
     "warehouses.list": ("GET", f"{WB_MARKETPLACE}/api/v3/warehouses"),
     "questions.list": ("GET", f"{WB_FEEDBACKS}/api/v1/questions"),
     "questions.answer": ("PATCH", f"{WB_FEEDBACKS}/api/v1/questions"),

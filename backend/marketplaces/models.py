@@ -50,6 +50,14 @@ class MarketplaceSettings(models.Model):
     notify_on_sync_errors = models.BooleanField(default=True)
     last_seen_order_ids = models.JSONField(default=dict, blank=True)
     last_sync_at = models.DateTimeField(null=True, blank=True)
+    # offer_id / nm key → себестоимость ₽ (для юнит-экономики)
+    sku_costs = models.JSONField(default=dict, blank=True)
+    # Правила СПП-репрайса: [{offer_id, nm_id, target_buyer_price, supplier_discount}]
+    spp_rules = models.JSONField(default=list, blank=True)
+    spp_reprice_enabled = models.BooleanField(
+        default=False,
+        help_text="Умная защита цены с учётом СПП WB (полуавто).",
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     def has_ozon(self) -> bool:
@@ -137,6 +145,27 @@ class MarketplaceApiLog(models.Model):
     method = models.CharField(max_length=8)
     status_code = models.IntegerField(null=True, blank=True)
     error_message = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-id"]
+
+
+class MarketplaceRepriceLog(models.Model):
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="marketplace_reprice_logs",
+    )
+    marketplace = models.CharField(max_length=20, default="wildberries")
+    offer_id = models.CharField(max_length=128, blank=True, default="")
+    nm_id = models.CharField(max_length=64, blank=True, default="")
+    old_price = models.PositiveIntegerField(default=0)
+    new_price = models.PositiveIntegerField(default=0)
+    spp_percent = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    reason = models.CharField(max_length=400, blank=True, default="")
+    applied = models.BooleanField(default=False)
+    sandbox = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -27,4 +27,6 @@ urlpatterns = [
     path("orders/label/", views.MarketplaceOrderLabelView.as_view()),
     path("sync/", views.MarketplaceSyncView.as_view()),
     path("webhook/", views.MarketplaceWebhookView.as_view()),
+    path("reprice/logs/", views.MarketplaceRepriceLogView.as_view()),
+    path("reprice/spp/", views.MarketplaceSppPlanView.as_view()),
 ]

@@ -34,6 +34,7 @@ from .models import (
     MarketplaceApiLog,
     MarketplaceProductHistory,
     MarketplaceReplyTemplate,
+    MarketplaceRepriceLog,
     MarketplaceSettings,
     MarketplaceTemplate,
 )
@@ -339,6 +340,9 @@ class MarketplaceSettingsView(APIView):
                 "price_protect_enabled": s.price_protect_enabled,
                 "price_min_floor_percent": s.price_min_floor_percent,
                 "ozon_disable_auto_actions": s.ozon_disable_auto_actions,
+                "sku_costs": s.sku_costs if isinstance(s.sku_costs, dict) else {},
+                "spp_rules": s.spp_rules if isinstance(s.spp_rules, list) else [],
+                "spp_reprice_enabled": bool(s.spp_reprice_enabled),
                 "notify_telegram": s.notify_telegram,
                 "notify_push": s.notify_push,
                 "notify_on_new_orders": s.notify_on_new_orders,
@@ -409,6 +413,41 @@ class MarketplaceSettingsView(APIView):
                 pass
         if "ozon_disable_auto_actions" in data:
             s.ozon_disable_auto_actions = bool(data.get("ozon_disable_auto_actions"))
+        if "sku_costs" in data and isinstance(data.get("sku_costs"), dict):
+            cleaned = {}
+            for k, v in list(data.get("sku_costs") or {}.items())[:500]:
+                key = str(k or "").strip()[:128]
+                if not key:
+                    continue
+                try:
+                    cleaned[key] = round(float(v), 2)
+                except (TypeError, ValueError):
+                    continue
+            s.sku_costs = cleaned
+        if "spp_rules" in data and isinstance(data.get("spp_rules"), list):
+            rules = []
+            for item in (data.get("spp_rules") or [])[:100]:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    target = float(item.get("target_buyer_price") or 0)
+                except (TypeError, ValueError):
+                    target = 0
+                try:
+                    disc = float(item.get("supplier_discount") or 0)
+                except (TypeError, ValueError):
+                    disc = 0
+                rules.append(
+                    {
+                        "offer_id": str(item.get("offer_id") or "")[:128],
+                        "nm_id": str(item.get("nm_id") or "")[:64],
+                        "target_buyer_price": target,
+                        "supplier_discount": max(0, min(disc, 99)),
+                    }
+                )
+            s.spp_rules = rules
+        if "spp_reprice_enabled" in data:
+            s.spp_reprice_enabled = bool(data.get("spp_reprice_enabled"))
         if "notify_telegram" in data:
             s.notify_telegram = bool(data.get("notify_telegram"))
         if "notify_push" in data:
@@ -1664,3 +1703,124 @@ class MarketplaceWebhookView(APIView):
             return Response({"detail": "Неверный secret."}, status=403)
         async_result = sync_provider_task.delay(s.provider_id)
         return Response({"ok": True, "provider_id": s.provider_id, "task_id": getattr(async_result, "id", None)})
+
+
+class MarketplaceRepriceLogView(APIView):
+    def get(self, request):
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        rows = MarketplaceRepriceLog.objects.filter(provider=provider)[:80]
+        return Response(
+            {
+                "results": [
+                    {
+                        "id": r.id,
+                        "marketplace": r.marketplace,
+                        "offer_id": r.offer_id,
+                        "nm_id": r.nm_id,
+                        "old_price": r.old_price,
+                        "new_price": r.new_price,
+                        "spp_percent": str(r.spp_percent),
+                        "reason": r.reason,
+                        "applied": r.applied,
+                        "sandbox": r.sandbox,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                    }
+                    for r in rows
+                ]
+            }
+        )
+
+
+class MarketplaceSppPlanView(APIView):
+    """Dry-run / apply SPP target prices for WB (semi-auto, sandbox-aware)."""
+
+    def post(self, request):
+        from .spp_reprice import plan_spp_update
+
+        provider, err = _require_provider(request, need_catalog=True)
+        if err:
+            return err
+        s = _settings(provider)
+        data = request.data if isinstance(request.data, dict) else {}
+        apply = bool(data.get("apply"))
+        rules = data.get("rules") if isinstance(data.get("rules"), list) else (s.spp_rules or [])
+        observations = data.get("observations") if isinstance(data.get("observations"), list) else []
+        obs_by_key = {}
+        for o in observations:
+            if not isinstance(o, dict):
+                continue
+            key = str(o.get("offer_id") or o.get("nm_id") or "").strip()
+            if key:
+                obs_by_key[key] = o
+        plans = []
+        for rule in rules:
+            if not isinstance(rule, dict):
+                continue
+            key = str(rule.get("offer_id") or rule.get("nm_id") or "").strip()
+            obs = obs_by_key.get(key) or obs_by_key.get(str(rule.get("nm_id") or "")) or {}
+            if not obs and observations:
+                # fallback: first obs matching nm
+                for o in observations:
+                    if str(o.get("nm_id") or "") == str(rule.get("nm_id") or "") and rule.get("nm_id"):
+                        obs = o
+                        break
+            plan = plan_spp_update(rule, obs or {"spp_percent": rule.get("spp_percent") or 0, "current_price": 0})
+            if plan:
+                plans.append(plan)
+
+        applied_rows = []
+        sandbox = (s.environment or "sandbox") != "prod"
+        if apply and plans:
+            for plan in plans:
+                if not plan.get("needs_change"):
+                    continue
+                log = MarketplaceRepriceLog.objects.create(
+                    provider=provider,
+                    marketplace="wildberries",
+                    offer_id=plan.get("offer_id") or "",
+                    nm_id=plan.get("nm_id") or "",
+                    old_price=int(plan.get("old_price") or 0),
+                    new_price=int(plan.get("new_price") or 0),
+                    spp_percent=plan.get("spp_percent") or 0,
+                    reason=(plan.get("reason") or "")[:400],
+                    applied=False,
+                    sandbox=sandbox,
+                )
+                if sandbox:
+                    log.reason = (log.reason + " [sandbox — цена не отправлена]")[:400]
+                    log.save(update_fields=["reason"])
+                    applied_rows.append({"id": log.id, "sandbox": True, **plan})
+                    continue
+                # Live: push via products.prices when nm_id present
+                nm = plan.get("nm_id")
+                if not nm:
+                    applied_rows.append({"id": log.id, "error": "Нет nm_id", **plan})
+                    continue
+                try:
+                    payload = {
+                        "data": [
+                            {
+                                "nmID": int(nm),
+                                "price": int(plan["new_price"]),
+                            }
+                        ]
+                    }
+                    request_json(
+                        provider=provider,
+                        marketplace="wildberries",
+                        method="POST",
+                        url=resolve_url(WB_ACTIONS["products.prices"][1], {}),
+                        headers=wb_headers(s),
+                        json_body=payload,
+                    )
+                    log.applied = True
+                    log.save(update_fields=["applied"])
+                    applied_rows.append({"id": log.id, "applied": True, **plan})
+                except Exception as exc:
+                    log.reason = (f"{log.reason} | ошибка: {exc}")[:400]
+                    log.save(update_fields=["reason"])
+                    applied_rows.append({"id": log.id, "error": str(exc), **plan})
+
+        return Response({"plans": plans, "applied": applied_rows, "sandbox": sandbox})
