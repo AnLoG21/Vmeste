@@ -24,14 +24,14 @@ export const FONT_OPTIONS = [
 ];
 
 export const TOOLS = [
-  { id: "select", label: "Выбор" },
-  { id: "text", label: "Текст" },
-  { id: "rect", label: "Прямоуг." },
-  { id: "circle", label: "Круг" },
-  { id: "triangle", label: "Треуг." },
-  { id: "line", label: "Линия" },
-  { id: "draw", label: "Кисть" },
-  { id: "erase", label: "Стереть" },
+  { id: "select", label: "Выбор", hotkey: "V", hint: "Перемещение и масштаб" },
+  { id: "text", label: "Текст", hotkey: "T", hint: "Добавить текстовый слой" },
+  { id: "rect", label: "Прямоугольник", hint: "Добавить прямоугольник" },
+  { id: "circle", label: "Круг", hint: "Добавить круг" },
+  { id: "triangle", label: "Треугольник", hint: "Добавить треугольник" },
+  { id: "line", label: "Линия", hint: "Добавить линию" },
+  { id: "draw", label: "Кисть", hotkey: "B", hint: "Свободное рисование" },
+  { id: "erase", label: "Стереть", hotkey: "E", hint: "Клик по объекту удаляет его" },
 ];
 
 export function hasCanvasScene(canvas) {
