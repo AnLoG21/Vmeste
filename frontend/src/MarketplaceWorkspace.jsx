@@ -785,6 +785,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   const [selectedCardDesignId, setSelectedCardDesignId] = useState("");
   const [cardDesignForm, setCardDesignForm] = useState(() => emptyCardDesignForm());
   const [cardDesignEditorOpen, setCardDesignEditorOpen] = useState(false);
+  const [cardDesignPreviewUrl, setCardDesignPreviewUrl] = useState("");
+  const [cardDesignPreviewBusy, setCardDesignPreviewBusy] = useState(false);
   const [viewer, setViewer] = useState(null);
   const [dotsTick, setDotsTick] = useState(0);
   const [categoryOptions, setCategoryOptions] = useState([]);
@@ -970,6 +972,57 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
     if (!canManageCatalog) return;
     loadCardDesigns().catch(() => {});
   }, [canManageCatalog, API_URL, authFetch]);
+
+  useEffect(() => {
+    if (!cardDesignEditorOpen) {
+      setCardDesignPreviewBusy(false);
+      setCardDesignPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return "";
+      });
+      return undefined;
+    }
+    let cancelled = false;
+    setCardDesignPreviewBusy(true);
+    const timer = setTimeout(() => {
+      (async () => {
+        try {
+          const design = normalizeDesign(cardDesignForm);
+          const previewProduct = {
+            ...product,
+            name: String(product?.name || "").trim() || "Название товара",
+            brand: String(product?.brand || "").trim() || "Ваш бренд",
+            price: product?.price !== "" && product?.price != null ? product.price : 1290,
+          };
+          const blob = await renderProductCardSlide({
+            design,
+            product: previewProduct,
+            images: product?.images || [],
+            featuresText: aiFeatures || "Качество материалов\nБыстрая доставка\nГарантия",
+          });
+          if (cancelled) return;
+          const url = URL.createObjectURL(blob);
+          setCardDesignPreviewUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return url;
+          });
+        } catch {
+          if (!cancelled) {
+            setCardDesignPreviewUrl((prev) => {
+              if (prev) URL.revokeObjectURL(prev);
+              return "";
+            });
+          }
+        } finally {
+          if (!cancelled) setCardDesignPreviewBusy(false);
+        }
+      })();
+    }, 320);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [cardDesignEditorOpen, cardDesignForm, product, aiFeatures]);
 
   useEffect(() => {
     const disk = new URLSearchParams(window.location.search).get("disk");
@@ -3464,6 +3517,23 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                         >
                           Сбросить цвета
                         </button>
+                      </div>
+                      <div className="mp-card-design-preview">
+                        <div className="mp-card-design-preview-label">
+                          <strong>Как будет выглядеть</strong>
+                          <span className="muted small">
+                            {cardDesignPreviewBusy
+                              ? "Обновляем…"
+                              : "Живое превью по текущим настройкам и фото товара"}
+                          </span>
+                        </div>
+                        <div className={`mp-card-design-preview-frame${cardDesignPreviewBusy ? " is-busy" : ""}`}>
+                          {cardDesignPreviewUrl ? (
+                            <img src={cardDesignPreviewUrl} alt="Превью слайда" />
+                          ) : (
+                            <p className="muted small">Превью появится через мгновение</p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ) : null}

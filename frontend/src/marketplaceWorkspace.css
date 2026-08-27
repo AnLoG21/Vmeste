@@ -1526,6 +1526,51 @@ body.theme-dark .mp-lightbox-close {
   margin-top: 12px;
 }
 
+.mp-card-design-preview {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e2ddd4;
+}
+
+.mp-card-design-preview-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.mp-card-design-preview-frame {
+  width: min(260px, 100%);
+  margin: 0 auto;
+  aspect-ratio: 1080 / 1440;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid #e2ddd4;
+  background: linear-gradient(160deg, #f7f4ef, #eef3f0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 28px rgba(26, 36, 46, 0.08);
+  transition: opacity 0.2s ease;
+}
+
+.mp-card-design-preview-frame.is-busy {
+  opacity: 0.72;
+}
+
+.mp-card-design-preview-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mp-card-design-preview-frame p {
+  margin: 0;
+  padding: 12px;
+  text-align: center;
+}
+
 @media (max-width: 720px) {
   .mp-card-slide-row {
     grid-template-columns: 1fr;
