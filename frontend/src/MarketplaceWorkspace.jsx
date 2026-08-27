@@ -967,9 +967,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   }, [loadHistory, loadAlerts]);
 
   useEffect(() => {
-    if (!accessToken || !canManageCatalog) return;
+    if (!canManageCatalog) return;
     loadCardDesigns().catch(() => {});
-  }, [accessToken, canManageCatalog]);
+  }, [canManageCatalog, API_URL, authFetch]);
 
   useEffect(() => {
     const disk = new URLSearchParams(window.location.search).get("disk");
