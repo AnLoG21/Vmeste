@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "./marketplaceWorkspace.css";
 import { renderProductCardVideo } from "./productCardVideo.js";
-import { PRODUCT_CARD_TEMPLATES, renderProductCardSlide } from "./productCardTemplates.js";
+import {
+  DEFAULT_CARD_STYLE,
+  LAYOUT_OPTIONS,
+  emptyCardDesignForm,
+  normalizeDesign,
+  renderProductCardSlide,
+} from "./productCardTemplates.js";
 import {
   applyAttributeMirrors,
   extractOzonCategoryTree,
@@ -775,7 +781,10 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   const [orderStatusFilter, setOrderStatusFilter] = useState("");
   const [templateForm, setTemplateForm] = useState({ name: "", brand: "", description_text: "", price: "", stock: "0" });
   const [aiFeatures, setAiFeatures] = useState("");
-  const [cardTemplateId, setCardTemplateId] = useState("hero");
+  const [cardDesigns, setCardDesigns] = useState([]);
+  const [selectedCardDesignId, setSelectedCardDesignId] = useState("");
+  const [cardDesignForm, setCardDesignForm] = useState(() => emptyCardDesignForm());
+  const [cardDesignEditorOpen, setCardDesignEditorOpen] = useState(false);
   const [viewer, setViewer] = useState(null);
   const [dotsTick, setDotsTick] = useState(0);
   const [categoryOptions, setCategoryOptions] = useState([]);
@@ -857,7 +866,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   }, [tab, mp, settings?.environment]);
 
   useEffect(() => {
-    if (busy === "ai" || busy === "video") {
+    if (busy === "ai" || busy === "video" || busy === "slide" || busy === "card-design") {
       const id = setInterval(() => setDotsTick((t) => t + 1), 450);
       return () => clearInterval(id);
     }
@@ -865,7 +874,10 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
     return undefined;
   }, [busy]);
 
-  const dots = busy === "ai" || busy === "video" ? ".".repeat((dotsTick % 3) + 1) : "";
+  const dots =
+    busy === "ai" || busy === "video" || busy === "slide" || busy === "card-design"
+      ? ".".repeat((dotsTick % 3) + 1)
+      : "";
 
   const base = `${API_URL}/marketplaces`;
   const liveRows = useMemo(() => extractRecords(live), [live]);
@@ -953,6 +965,11 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
     loadHistory().catch(() => {});
     loadAlerts().catch(() => {});
   }, [loadHistory, loadAlerts]);
+
+  useEffect(() => {
+    if (!accessToken || !canManageCatalog) return;
+    loadCardDesigns().catch(() => {});
+  }, [accessToken, canManageCatalog]);
 
   useEffect(() => {
     const disk = new URLSearchParams(window.location.search).get("disk");
@@ -1515,6 +1532,94 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
     });
   }
 
+  async function loadCardDesigns() {
+    try {
+      const res = await authFetch(`${base}/card-designs/`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return;
+      const list = (data.results || []).map(normalizeDesign);
+      setCardDesigns(list);
+      if (list.length && !selectedCardDesignId) {
+        setSelectedCardDesignId(String(list[0].id));
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function seedCardDesigns() {
+    await withBusy("card-design", async () => {
+      const force = cardDesigns.length
+        ? window.confirm("Шаблоны уже есть. Добавить ещё три стартовых?")
+        : false;
+      if (cardDesigns.length && !force) return;
+      const res = await authFetch(`${base}/card-designs/`, {
+        method: "POST",
+        body: JSON.stringify({ seed: true, force }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Не удалось создать стартовые шаблоны.");
+      const list = (data.results || []).map(normalizeDesign);
+      if (force) {
+        await loadCardDesigns();
+      } else {
+        setCardDesigns(list);
+        if (list[0]) setSelectedCardDesignId(String(list[0].id));
+      }
+      setStatus(`Добавлено стартовых шаблонов: ${list.length}. Можно править цвета и названия.`);
+    });
+  }
+
+  function openNewCardDesign() {
+    setCardDesignForm(emptyCardDesignForm());
+    setCardDesignEditorOpen(true);
+  }
+
+  function openEditCardDesign(id) {
+    const found = cardDesigns.find((d) => String(d.id) === String(id));
+    if (!found) return;
+    setCardDesignForm(normalizeDesign(found));
+    setCardDesignEditorOpen(true);
+  }
+
+  async function saveCardDesignForm() {
+    await withBusy("card-design", async () => {
+      const payload = {
+        name: cardDesignForm.name,
+        layout: cardDesignForm.layout,
+        style: cardDesignForm.style,
+      };
+      const isEdit = Boolean(cardDesignForm.id);
+      const res = await authFetch(
+        isEdit ? `${base}/card-designs/${cardDesignForm.id}/` : `${base}/card-designs/`,
+        {
+          method: isEdit ? "PATCH" : "POST",
+          body: JSON.stringify(payload),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Не удалось сохранить шаблон.");
+      await loadCardDesigns();
+      if (data.id) setSelectedCardDesignId(String(data.id));
+      setCardDesignEditorOpen(false);
+      setStatus(isEdit ? "Шаблон обновлён." : "Шаблон создан — можно генерировать слайды.");
+    });
+  }
+
+  async function deleteCardDesign(id) {
+    if (!id || !window.confirm("Удалить этот шаблон слайда?")) return;
+    await withBusy("card-design", async () => {
+      const res = await authFetch(`${base}/card-designs/${id}/`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Не удалось удалить.");
+      }
+      setSelectedCardDesignId("");
+      await loadCardDesigns();
+      setStatus("Шаблон удалён.");
+    });
+  }
+
   async function generateTemplateSlide() {
     await withBusy("slide", async () => {
       if (!String(product?.name || "").trim()) throw new Error("Укажите название товара.");
@@ -1522,21 +1627,28 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
         if (typeof x === "string") return true;
         return x?.kind !== "video";
       });
-      if (!photos.length) throw new Error("Загрузите хотя бы одно реальное фото товара — шаблон оформит его в стиле витрины.");
+      if (!photos.length) {
+        throw new Error("Загрузите хотя бы одно реальное фото товара — шаблон оформит его.");
+      }
       const limits = mediaLimitsFor(mp);
       const counts = countMediaItems(product.images);
       if (counts.photos >= limits.photos) {
         throw new Error(`Лимит фото: ${limits.photos}. Удалите лишнее перед генерацией слайда.`);
       }
+      let design = cardDesigns.find((d) => String(d.id) === String(selectedCardDesignId));
+      if (!design && cardDesignEditorOpen) design = normalizeDesign(cardDesignForm);
+      if (!design) {
+        throw new Error("Сначала создайте или выберите свой шаблон слайда.");
+      }
+      design = normalizeDesign(design);
       const blob = await renderProductCardSlide({
-        templateId: cardTemplateId,
+        design,
         product,
         images: product.images,
         featuresText: aiFeatures,
       });
       const localPreview = URL.createObjectURL(blob);
-      const tplMeta = PRODUCT_CARD_TEMPLATES.find((t) => t.id === cardTemplateId);
-      const file = new File([blob], `card-${cardTemplateId}.png`, { type: "image/png" });
+      const file = new File([blob], `card-${design.layout}-${design.id || "draft"}.png`, { type: "image/png" });
       const fd = new FormData();
       fd.append("file", file);
       const res = await authFetch(`${base}/media/`, { method: "POST", body: fd });
@@ -1549,14 +1661,14 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
         url: data.url,
         public_url: data.public_url || data.disk_url || data.url,
         previewUrl: localPreview,
-        name: `Слайд · ${tplMeta?.label || cardTemplateId}`,
+        name: `Слайд · ${design.name}`,
         kind: "image",
       };
       setProduct((p) => ({
         ...p,
         images: [...(Array.isArray(p.images) ? p.images : []), imageItem],
       }));
-      setStatus(`Слайд «${tplMeta?.label || cardTemplateId}» добавлен в медиа (стиль витрины).`);
+      setStatus(`Слайд по шаблону «${design.name}» добавлен в медиа.`);
     });
   }
 
@@ -3139,34 +3251,222 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                   <p className="muted small">Файлы ещё не загружены. Нажмите плюс, чтобы добавить фото.</p>
                 )}
                 <div className="mp-card-slide-box">
-                  <h4>Слайды витрины (единый стиль)</h4>
+                  <h4>Свои шаблоны слайдов</h4>
                   <p className="muted small">
-                    Берём ваше реальное фото и оформляем как на маркетплейсах: главный кадр, преимущества или
-                    характеристики. Позже сюда же можно подключить Qwen-Image — шаблон стиля уже общий.
+                    Создайте визуальный шаблон (цвета, макет, подписи), затем генерируйте PNG поверх вашего
+                    реального фото товара.
                   </p>
                   <div className="mp-card-slide-row">
                     <label>
                       Шаблон
-                      <select value={cardTemplateId} onChange={(e) => setCardTemplateId(e.target.value)}>
-                        {PRODUCT_CARD_TEMPLATES.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.label}
+                      <select
+                        value={selectedCardDesignId}
+                        onChange={(e) => setSelectedCardDesignId(e.target.value)}
+                      >
+                        {!cardDesigns.length ? <option value="">Нет сохранённых</option> : null}
+                        {cardDesigns.map((d) => (
+                          <option key={d.id} value={String(d.id)}>
+                            {d.name} · {LAYOUT_OPTIONS.find((l) => l.id === d.layout)?.label || d.layout}
                           </option>
                         ))}
                       </select>
                     </label>
                     <p className="muted small mp-card-slide-hint">
-                      {PRODUCT_CARD_TEMPLATES.find((t) => t.id === cardTemplateId)?.hint}
+                      {(() => {
+                        const sel = cardDesigns.find((d) => String(d.id) === String(selectedCardDesignId));
+                        if (!sel) return "Сначала создайте шаблон или добавьте стартовые.";
+                        return LAYOUT_OPTIONS.find((l) => l.id === sel.layout)?.hint || "";
+                      })()}
                     </p>
                     <button
                       type="button"
                       className="mp-btn mp-btn-primary"
-                      disabled={busy === "slide"}
+                      disabled={busy === "slide" || (!selectedCardDesignId && !cardDesignEditorOpen)}
                       onClick={generateTemplateSlide}
                     >
                       {busy === "slide" ? `Собираем слайд${dots}` : "Сгенерировать слайд в медиа"}
                     </button>
                   </div>
+                  <div className="mp-card-design-actions">
+                    <button type="button" className="ghost-btn" disabled={busy === "card-design"} onClick={openNewCardDesign}>
+                      Создать шаблон
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      disabled={!selectedCardDesignId || busy === "card-design"}
+                      onClick={() => openEditCardDesign(selectedCardDesignId)}
+                    >
+                      Редактировать
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      disabled={busy === "card-design"}
+                      onClick={seedCardDesigns}
+                      title="Три готовых макета — можно сразу править"
+                    >
+                      {busy === "card-design" ? `Стартовые…${dots}` : "Стартовые шаблоны"}
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      disabled={!selectedCardDesignId || busy === "card-design"}
+                      onClick={() => deleteCardDesign(selectedCardDesignId)}
+                    >
+                      Удалить
+                    </button>
+                  </div>
+                  {cardDesignEditorOpen ? (
+                    <div className="mp-card-design-editor">
+                      <div className="mp-card-design-editor-head">
+                        <strong>{cardDesignForm.id ? "Редактирование шаблона" : "Новый шаблон"}</strong>
+                        <button type="button" className="ghost-btn" onClick={() => setCardDesignEditorOpen(false)}>
+                          Закрыть
+                        </button>
+                      </div>
+                      <div className="mp-card-design-grid">
+                        <label>
+                          Название
+                          <input
+                            value={cardDesignForm.name}
+                            onChange={(e) => setCardDesignForm((f) => ({ ...f, name: e.target.value }))}
+                            maxLength={180}
+                          />
+                        </label>
+                        <label>
+                          Макет
+                          <select
+                            value={cardDesignForm.layout}
+                            onChange={(e) => setCardDesignForm((f) => ({ ...f, layout: e.target.value }))}
+                          >
+                            {LAYOUT_OPTIONS.map((l) => (
+                              <option key={l.id} value={l.id}>
+                                {l.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Текст в шапке
+                          <input
+                            value={cardDesignForm.style.brandBarText}
+                            onChange={(e) =>
+                              setCardDesignForm((f) => ({
+                                ...f,
+                                style: { ...f.style, brandBarText: e.target.value },
+                              }))
+                            }
+                            maxLength={80}
+                          />
+                        </label>
+                        <label>
+                          Заголовок преимуществ
+                          <input
+                            value={cardDesignForm.style.benefitsTitle}
+                            onChange={(e) =>
+                              setCardDesignForm((f) => ({
+                                ...f,
+                                style: { ...f.style, benefitsTitle: e.target.value },
+                              }))
+                            }
+                            maxLength={80}
+                            disabled={cardDesignForm.layout !== "benefits"}
+                          />
+                        </label>
+                        <label>
+                          URL логотипа (необязательно)
+                          <input
+                            value={cardDesignForm.style.logoUrl}
+                            onChange={(e) =>
+                              setCardDesignForm((f) => ({
+                                ...f,
+                                style: { ...f.style, logoUrl: e.target.value },
+                              }))
+                            }
+                            placeholder="https://…"
+                            maxLength={500}
+                          />
+                        </label>
+                        <div className="mp-card-design-checks">
+                          <label className="mp-check">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(cardDesignForm.style.showPrice)}
+                              onChange={(e) =>
+                                setCardDesignForm((f) => ({
+                                  ...f,
+                                  style: { ...f.style, showPrice: e.target.checked },
+                                }))
+                              }
+                            />
+                            Показывать цену
+                          </label>
+                          <label className="mp-check">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(cardDesignForm.style.showBrand)}
+                              onChange={(e) =>
+                                setCardDesignForm((f) => ({
+                                  ...f,
+                                  style: { ...f.style, showBrand: e.target.checked },
+                                }))
+                              }
+                            />
+                            Показывать бренд
+                          </label>
+                        </div>
+                      </div>
+                      <div className="mp-card-design-colors">
+                        {[
+                          ["bg", "Фон"],
+                          ["panel", "Панель"],
+                          ["ink", "Текст"],
+                          ["muted", "Вторичный"],
+                          ["accent", "Акцент"],
+                          ["accentSoft", "Мягкий"],
+                          ["line", "Линии"],
+                          ["badge", "Бейдж"],
+                        ].map(([key, label]) => (
+                          <label key={key} className="mp-card-color">
+                            <span>{label}</span>
+                            <input
+                              type="color"
+                              value={cardDesignForm.style[key] || DEFAULT_CARD_STYLE[key]}
+                              onChange={(e) =>
+                                setCardDesignForm((f) => ({
+                                  ...f,
+                                  style: { ...f.style, [key]: e.target.value },
+                                }))
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <div className="mp-card-design-save">
+                        <button
+                          type="button"
+                          className="mp-btn mp-btn-primary"
+                          disabled={busy === "card-design"}
+                          onClick={saveCardDesignForm}
+                        >
+                          {busy === "card-design" ? `Сохраняем${dots}` : "Сохранить шаблон"}
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-btn"
+                          onClick={() =>
+                            setCardDesignForm((f) => ({
+                              ...f,
+                              style: { ...DEFAULT_CARD_STYLE, brandBarText: f.style.brandBarText },
+                            }))
+                          }
+                        >
+                          Сбросить цвета
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>

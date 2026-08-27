@@ -32,6 +32,7 @@ from .clients import (
 )
 from .models import (
     MarketplaceApiLog,
+    MarketplaceCardDesign,
     MarketplaceProductHistory,
     MarketplaceReplyTemplate,
     MarketplaceRepriceLog,
@@ -524,6 +525,92 @@ class MarketplaceTemplateView(APIView):
         if err:
             return err
         MarketplaceTemplate.objects.filter(provider=provider, id=pk).delete()
+        return Response({"ok": True})
+
+
+def _card_design_payload(t: MarketplaceCardDesign) -> dict:
+    from .card_designs import normalize_style
+
+    return {
+        "id": t.id,
+        "name": t.name,
+        "layout": t.layout,
+        "style": normalize_style(t.style if isinstance(t.style, dict) else {}),
+        "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+    }
+
+
+class MarketplaceCardDesignView(APIView):
+    """CRUD for user visual slide templates (create your own, then generate photos)."""
+
+    def get(self, request):
+        provider, err = _require_provider(request, need_catalog=True)
+        if err:
+            return err
+        rows = MarketplaceCardDesign.objects.filter(provider=provider)
+        return Response({"results": [_card_design_payload(t) for t in rows[:100]]})
+
+    def post(self, request):
+        from .card_designs import STARTER_DESIGNS, normalize_style
+
+        provider, err = _require_provider(request, need_catalog=True)
+        if err:
+            return err
+        data = request.data if isinstance(request.data, dict) else {}
+        if data.get("seed"):
+            created = []
+            if MarketplaceCardDesign.objects.filter(provider=provider).exists() and not data.get("force"):
+                return Response(
+                    {"detail": "Шаблоны уже есть. Передайте force=true, чтобы добавить стартовые ещё раз."},
+                    status=400,
+                )
+            for item in STARTER_DESIGNS:
+                t = MarketplaceCardDesign.objects.create(
+                    provider=provider,
+                    name=item["name"],
+                    layout=item["layout"],
+                    style=normalize_style(item.get("style")),
+                )
+                created.append(_card_design_payload(t))
+            return Response({"results": created}, status=201)
+
+        layout = str(data.get("layout") or "hero").strip()
+        if layout not in ("hero", "benefits", "specs"):
+            layout = "hero"
+        t = MarketplaceCardDesign.objects.create(
+            provider=provider,
+            name=str(data.get("name") or "Мой шаблон")[:180],
+            layout=layout,
+            style=normalize_style(data.get("style") if isinstance(data.get("style"), dict) else {}),
+        )
+        return Response(_card_design_payload(t), status=201)
+
+    def patch(self, request, pk=None):
+        from .card_designs import normalize_style
+
+        provider, err = _require_provider(request, need_catalog=True)
+        if err:
+            return err
+        t = MarketplaceCardDesign.objects.filter(provider=provider, id=pk).first()
+        if not t:
+            return Response({"detail": "Шаблон не найден."}, status=404)
+        data = request.data if isinstance(request.data, dict) else {}
+        if "name" in data:
+            t.name = str(data.get("name") or t.name)[:180]
+        if "layout" in data:
+            layout = str(data.get("layout") or t.layout).strip()
+            if layout in ("hero", "benefits", "specs"):
+                t.layout = layout
+        if "style" in data and isinstance(data.get("style"), dict):
+            t.style = normalize_style({**(t.style if isinstance(t.style, dict) else {}), **data["style"]})
+        t.save()
+        return Response(_card_design_payload(t))
+
+    def delete(self, request, pk=None):
+        provider, err = _require_provider(request, need_catalog=True)
+        if err:
+            return err
+        MarketplaceCardDesign.objects.filter(provider=provider, id=pk).delete()
         return Response({"ok": True})
 
 

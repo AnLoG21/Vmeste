@@ -1444,8 +1444,94 @@ body.theme-dark .mp-lightbox-close {
   align-self: center;
 }
 
+.mp-card-design-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mp-card-design-editor {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #e2ddd4;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.mp-card-design-editor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.mp-card-design-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mp-card-design-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.mp-card-design-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+}
+
+.mp-card-design-checks .mp-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.mp-card-design-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 12px;
+}
+
+.mp-card-color {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: #5c6b78;
+}
+
+.mp-card-color input[type="color"] {
+  width: 42px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #e2ddd4;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.mp-card-design-save {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 @media (max-width: 720px) {
   .mp-card-slide-row {
+    grid-template-columns: 1fr;
+  }
+
+  .mp-card-design-grid {
     grid-template-columns: 1fr;
   }
 }

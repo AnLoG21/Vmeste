@@ -108,6 +108,31 @@ class MarketplaceTemplate(models.Model):
         ordering = ["-updated_at"]
 
 
+class MarketplaceCardDesign(models.Model):
+    """User-owned visual slide template for marketplace product photos."""
+
+    LAYOUT_CHOICES = [
+        ("hero", "Главный кадр"),
+        ("benefits", "Преимущества"),
+        ("specs", "Характеристики"),
+    ]
+
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="marketplace_card_designs",
+    )
+    name = models.CharField(max_length=180)
+    layout = models.CharField(max_length=32, choices=LAYOUT_CHOICES, default="hero")
+    # Colors, brand bar text, titles, logo URL, toggles
+    style = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+
+
 class MarketplaceReplyTemplate(models.Model):
     KIND_REVIEW = "review"
     KIND_QUESTION = "question"

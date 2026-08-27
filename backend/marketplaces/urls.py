@@ -7,6 +7,8 @@ urlpatterns = [
     path("history/", views.MarketplaceHistoryView.as_view()),
     path("templates/", views.MarketplaceTemplateView.as_view()),
     path("templates/<int:pk>/", views.MarketplaceTemplateView.as_view()),
+    path("card-designs/", views.MarketplaceCardDesignView.as_view()),
+    path("card-designs/<int:pk>/", views.MarketplaceCardDesignView.as_view()),
     path("reply-templates/", views.MarketplaceReplyTemplateView.as_view()),
     path("reply-templates/<int:pk>/", views.MarketplaceReplyTemplateView.as_view()),
     path("alerts/", views.MarketplaceAlertsView.as_view()),
