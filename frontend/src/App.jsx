@@ -7389,6 +7389,10 @@ export default function App() {
         color: "#1565c0",
         d: "M19 6h-2c0-2.76-2.24-5-5-5S7 3.24 7 6H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-7-3c1.66 0 3 1.34 3 3H9c0-1.66 1.34-3 3-3zm0 10c-2.76 0-5-2.24-5-5h2c0 1.66 1.34 3 3 3s3-1.34 3-3h2c0 2.76-2.24 5-5 5z",
       },
+      logout: {
+        color: "#c62828",
+        d: "M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z",
+      },
     };
     const icon = icons[id] || icons.bookings;
     return (
@@ -12271,7 +12275,7 @@ export default function App() {
               <div className="menu-dropdown">
                 <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("profile"); setMenuOpen(false); }}>
                   <span className="menu-item-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
+                    {bookmarkMenuIcon("profile")}
                   </span>
                   <span className="menu-item-label">Личный кабинет</span>
                   {(chatActivity?.badge_count ?? 0) > 0 && (
@@ -12305,14 +12309,14 @@ export default function App() {
                   onClick={() => { setCurrentView("settings"); setMenuOpen(false); }}
                 >
                   <span className="menu-item-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" /></svg>
+                    {bookmarkMenuIcon("settings")}
                   </span>
                   <span className="menu-item-label">Настройки</span>
                 </button>
                 {me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" ? (
                 <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("booking_history"); setMenuOpen(false); }}>
                   <span className="menu-item-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z" /></svg>
+                    {bookmarkMenuIcon("booking_history")}
                   </span>
                   <span className="menu-item-label">История записей</span>
                 </button>
@@ -12320,7 +12324,7 @@ export default function App() {
                 {me?.role !== "client" && (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("subscriptions"); setMenuOpen(false); }}>
                     <span className="menu-item-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" /></svg>
+                      {bookmarkMenuIcon("subscriptions")}
                     </span>
                     <span className="menu-item-label">Подписки</span>
                   </button>
@@ -12333,7 +12337,7 @@ export default function App() {
                     onClick={() => { setCurrentView("staff"); setMenuOpen(false); }}
                   >
                     <span className="menu-item-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" /></svg>
+                      {bookmarkMenuIcon("staff")}
                     </span>
                     <span className="menu-item-label">Сотрудники</span>
                   </button>
@@ -12346,38 +12350,38 @@ export default function App() {
                     onClick={() => { setCurrentView("organization"); setMenuOpen(false); }}
                   >
                     <span className="menu-item-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z" /></svg>
+                      {bookmarkMenuIcon("organization")}
                     </span>
                     <span className="menu-item-label">Организация</span>
                   </button>
                 )}
                 {canManageOrgSettings && me?.provider_sphere === "cafe_restaurant" && !subnavBookmarks.includes("cafe") && (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("cafe"); setMenuOpen(false); }}>
-                    <span className="menu-item-icon" aria-hidden="true">🍽️</span>
+                    <span className="menu-item-icon" aria-hidden="true">{bookmarkMenuIcon("cafe")}</span>
                     <span className="menu-item-label">Зал и меню</span>
                   </button>
                 )}
                 {canManageOrgSettings && me?.provider_sphere === "cafe_restaurant" && !subnavBookmarks.includes("cafe_orders") && (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("cafe_orders"); setMenuOpen(false); }}>
-                    <span className="menu-item-icon" aria-hidden="true">🧾</span>
+                    <span className="menu-item-icon" aria-hidden="true">{bookmarkMenuIcon("cafe_orders")}</span>
                     <span className="menu-item-label">Заказы</span>
                   </button>
                 )}
                 {canManageOrgSettings && me?.provider_sphere === "marketplaces" && !subnavBookmarks.includes("marketplaces") && (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("marketplaces"); setMenuOpen(false); }}>
-                    <span className="menu-item-icon" aria-hidden="true">📦</span>
+                    <span className="menu-item-icon" aria-hidden="true">{bookmarkMenuIcon("marketplaces")}</span>
                     <span className="menu-item-label">Маркетплейсы</span>
                   </button>
                 )}
                 {isBookmarkAvailable("inspections") && !subnavBookmarks.includes("inspections") && (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("inspections"); setMenuOpen(false); }}>
-                    <span className="menu-item-icon" aria-hidden="true">🔧</span>
+                    <span className="menu-item-icon" aria-hidden="true">{bookmarkMenuIcon("inspections")}</span>
                     <span className="menu-item-label">Приёмка</span>
                   </button>
                 )}
                 <button type="button" className="menu-dropdown-item" onClick={exitDemoSession}>
                   <span className="menu-item-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" /></svg>
+                    {bookmarkMenuIcon("logout")}
                   </span>
                   <span className="menu-item-label">{me?.is_demo ? "Выйти из демо" : "Выйти"}</span>
                 </button>
