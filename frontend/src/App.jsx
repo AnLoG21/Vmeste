@@ -21,6 +21,12 @@ import SalonLoyaltyPackagesPanel from "./SalonLoyaltyPackagesPanel.jsx";
 import OrgReviewComposer from "./OrgReviewComposer.jsx";
 import VoiceAdminPanel from "./VoiceAdminPanel.jsx";
 import MiniDatePicker from "./MiniDatePicker.jsx";
+import PlatformTour from "./PlatformTour.jsx";
+import {
+  buildPlatformTourSteps,
+  readPlatformTourDone,
+  writePlatformTourDone,
+} from "./platformTour.js";
 import {
   BOOKMARK_CATALOG,
   SUBNAV_BOOKMARKS_KEY,
@@ -2322,6 +2328,9 @@ export default function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [registerStep, setRegisterStep] = useState(1);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [platformTourPhase, setPlatformTourPhase] = useState("hidden");
+  const [platformTourStep, setPlatformTourStep] = useState(0);
+  const platformTourOfferedRef = useRef(false);
   const [currentView, setCurrentViewState] = useState(() => viewFromPath(window.location.pathname) || "bookings");
   const setCurrentView = useCallback((view) => {
     setCurrentViewState(view);
@@ -3041,6 +3050,18 @@ export default function App() {
     setShowAuthModal(true);
     setAuthStatus("");
   }, [needsOnboarding, me]);
+
+  useEffect(() => {
+    if (!accessToken || !me?.id) return;
+    if (platformTourOfferedRef.current) return;
+    if (me.role !== "provider" && me.role !== "staff") return;
+    if (needsOnboarding || needsCredentialsSetup || me.profile_complete === false) return;
+    if (me.is_demo) return;
+    if (readPlatformTourDone(me.id)) return;
+    platformTourOfferedRef.current = true;
+    setPlatformTourStep(0);
+    setPlatformTourPhase("welcome");
+  }, [accessToken, me, needsOnboarding, needsCredentialsSetup]);
 
   useEffect(() => {
     handleVerifyEmailFromUrl();
@@ -7187,6 +7208,36 @@ export default function App() {
     });
   }
 
+  const platformTourSphere = me?.provider_sphere || me?.employer_sphere || "";
+  const platformTourSteps = buildPlatformTourSteps({
+    role: me?.role,
+    sphere: platformTourSphere,
+    isBookmarkAvailable,
+  });
+
+  function preparePlatformTourStep(step) {
+    if (step?.prepare === "openMenu") setMenuOpen(true);
+  }
+
+  function finishPlatformTour() {
+    if (me?.id) writePlatformTourDone(me.id);
+    setPlatformTourPhase("hidden");
+    setPlatformTourStep(0);
+    setMenuOpen(false);
+  }
+
+  function startPlatformTour() {
+    setPlatformTourStep(0);
+    setPlatformTourPhase("running");
+    preparePlatformTourStep(platformTourSteps[0]);
+  }
+
+  function replayPlatformTour() {
+    setPlatformTourStep(0);
+    setPlatformTourPhase("welcome");
+    setMenuOpen(false);
+  }
+
   function renderSubnavBookmarkButton(id) {
     if (!isBookmarkAvailable(id)) return null;
     const active =
@@ -7204,6 +7255,7 @@ export default function App() {
           key={id}
           type="button"
           className={["app-subnav-chat", active && "active"].filter(Boolean).join(" ")}
+          data-platform-tour={`nav-${id}`}
           onClick={() => navigateBookmark(id)}
         >
           <span className="app-subnav-chat-inner" aria-hidden="true">
@@ -7226,6 +7278,7 @@ export default function App() {
           key={id}
           type="button"
           className={["app-subnav-reviews", active && "active"].filter(Boolean).join(" ")}
+          data-platform-tour={`nav-${id}`}
           onClick={() => navigateBookmark(id)}
         >
           <span>{label}</span>
@@ -7238,7 +7291,13 @@ export default function App() {
       );
     }
     return (
-      <button key={id} type="button" className={active ? "active" : ""} onClick={() => navigateBookmark(id)}>
+      <button
+        key={id}
+        type="button"
+        className={active ? "active" : ""}
+        data-platform-tour={`nav-${id}`}
+        onClick={() => navigateBookmark(id)}
+      >
         {label}
       </button>
     );
@@ -10470,6 +10529,15 @@ export default function App() {
             Тёмная тема
           </label>
         </div>
+        {(me?.role === "provider" || me?.role === "staff") && (
+          <div className="form">
+            <h3>Обучение</h3>
+            <p className="muted">Краткий тур по разделам платформы для вашей организации.</p>
+            <button type="button" className="ghost-btn" onClick={replayPlatformTour}>
+              Показать обучение
+            </button>
+          </div>
+        )}
         <div className="form">
           <h3>Закладки главного меню</h3>
           <p className="muted">
@@ -12186,6 +12254,7 @@ export default function App() {
                 aria-label="Меню"
                 aria-expanded={menuOpen}
                 title="Меню"
+                data-platform-tour="menu-btn"
                 onClick={() => setMenuOpen((v) => !v)}
               >
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
@@ -12229,7 +12298,12 @@ export default function App() {
                   </button>
                 ))}
 
-                <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("settings"); setMenuOpen(false); }}>
+                <button
+                  type="button"
+                  className="menu-dropdown-item"
+                  data-platform-tour="menu-settings"
+                  onClick={() => { setCurrentView("settings"); setMenuOpen(false); }}
+                >
                   <span className="menu-item-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" /></svg>
                   </span>
@@ -12252,7 +12326,12 @@ export default function App() {
                   </button>
                 )}
                 {canAccessStaffPage && (
-                  <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("staff"); setMenuOpen(false); }}>
+                  <button
+                    type="button"
+                    className="menu-dropdown-item"
+                    data-platform-tour="menu-staff"
+                    onClick={() => { setCurrentView("staff"); setMenuOpen(false); }}
+                  >
                     <span className="menu-item-icon" aria-hidden="true">
                       <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" /></svg>
                     </span>
@@ -12260,7 +12339,12 @@ export default function App() {
                   </button>
                 )}
                 {canManageOrgSettings && (
-                  <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("organization"); setMenuOpen(false); }}>
+                  <button
+                    type="button"
+                    className="menu-dropdown-item"
+                    data-platform-tour="menu-org"
+                    onClick={() => { setCurrentView("organization"); setMenuOpen(false); }}
+                  >
                     <span className="menu-item-icon" aria-hidden="true">
                       <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z" /></svg>
                     </span>
@@ -12330,6 +12414,7 @@ export default function App() {
             .filter(Boolean)
             .join(" ")}
           aria-label="Разделы"
+          data-platform-tour="subnav"
         >
           {subnavBookmarks.map((id) => renderSubnavBookmarkButton(id))}
         </nav>
@@ -16049,6 +16134,18 @@ export default function App() {
             </div>,
             document.body
           )}
+
+        <PlatformTour
+          phase={platformTourPhase}
+          step={platformTourStep}
+          steps={platformTourSteps}
+          onStart={startPlatformTour}
+          onSkip={finishPlatformTour}
+          onFinish={finishPlatformTour}
+          onNext={() => setPlatformTourStep((s) => Math.min(s + 1, platformTourSteps.length - 1))}
+          onBack={() => setPlatformTourStep((s) => Math.max(0, s - 1))}
+          onPrepareStep={preparePlatformTourStep}
+        />
       </div>
     </div>
   );

@@ -571,7 +571,7 @@ export default function CardSlideCanvasEditor({
   return (
     <div className="cs-editor">
       <div className="cs-shell">
-        <aside className="cs-rail" aria-label="Инструменты" data-tour="cs-tools">
+        <aside className="cs-rail" aria-label="Инструменты">
           {TOOLS.map((t) => (
             <button
               key={t.id}
@@ -587,7 +587,6 @@ export default function CardSlideCanvasEditor({
             </button>
           ))}
           <div className="cs-rail-sep" />
-          <div data-tour="cs-undo" className="cs-rail-undo-group">
           <button
             type="button"
             className="cs-icon-btn"
@@ -610,7 +609,6 @@ export default function CardSlideCanvasEditor({
             {ACTION_ICONS.redo}
             <span className="cs-tooltip">Вернуть · Ctrl+Y</span>
           </button>
-          </div>
           <div className="cs-rail-sep" />
           <button
             type="button"
@@ -708,7 +706,7 @@ export default function CardSlideCanvasEditor({
               ) : null}
             </div>
 
-            <div className="cs-smart-fields" data-tour="cs-fields">
+            <div className="cs-smart-fields">
               <span className="cs-smart-label">Поля товара</span>
               {SMART_FIELDS.map((f) => (
                 <button
@@ -836,7 +834,6 @@ export default function CardSlideCanvasEditor({
           <div
             className="cs-workspace"
             ref={workspaceRef}
-            data-tour="cs-canvas"
             onDragOver={(e) => {
               e.preventDefault();
               e.dataTransfer.dropEffect = "copy";

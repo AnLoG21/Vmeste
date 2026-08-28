@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { CARD_EDITOR_TOUR_STEPS } from "./cardSlideEditorTour.js";
-import "./cardSlideEditorTour.css";
+import "./platformTour.css";
 
 function useTargetRect(selector, active) {
   const [rect, setRect] = useState(null);
@@ -32,28 +31,43 @@ function useTargetRect(selector, active) {
 /**
  * @param {'welcome' | 'running' | 'hidden'} phase
  */
-export default function CardSlideEditorTour({ phase, step = 0, onStart, onSkip, onNext, onBack, onFinish }) {
+export default function PlatformTour({
+  phase,
+  steps = [],
+  step = 0,
+  onStart,
+  onSkip,
+  onNext,
+  onBack,
+  onFinish,
+  onPrepareStep,
+}) {
   const running = phase === "running";
-  const current = CARD_EDITOR_TOUR_STEPS[step];
+  const current = steps[step];
   const rect = useTargetRect(current?.target, running);
-  const isLast = step >= CARD_EDITOR_TOUR_STEPS.length - 1;
+  const isLast = step >= steps.length - 1;
+
+  useEffect(() => {
+    if (!running || !current?.prepare || !onPrepareStep) return;
+    onPrepareStep(current);
+  }, [running, step, current?.id, current?.prepare, onPrepareStep]);
 
   if (phase === "hidden") return null;
 
   const tooltipStyle = rect
     ? {
-        top: Math.min(rect.bottom + 12, window.innerHeight - 220),
-        left: Math.min(Math.max(12, rect.left), window.innerWidth - 340),
+        top: Math.min(rect.bottom + 12, window.innerHeight - 240),
+        left: Math.min(Math.max(12, rect.left), window.innerWidth - 380),
       }
     : { top: "50%", left: "50%", transform: "translate(-50%, -50%)" };
 
   return createPortal(
-    <div className="cst-root" role="dialog" aria-modal="true" aria-label="Обучение редактору слайдов">
-      <div className="cst-backdrop" onClick={phase === "welcome" ? undefined : onSkip} />
+    <div className="pt-root" role="dialog" aria-modal="true" aria-label="Обучение платформе">
+      <div className="pt-backdrop" />
 
       {running && rect ? (
         <div
-          className="cst-spotlight"
+          className="pt-spotlight"
           style={{
             top: rect.top - 6,
             left: rect.left - 6,
@@ -64,13 +78,14 @@ export default function CardSlideEditorTour({ phase, step = 0, onStart, onSkip, 
       ) : null}
 
       {phase === "welcome" ? (
-        <div className="cst-welcome">
-          <h3>Редактор слайдов</h3>
+        <div className="pt-welcome">
+          <h3>Обучение платформе</h3>
           <p>
-            Короткая обучалка покажет инструменты, поля товара и как сохранить шаблон. Займёт около минуты.
+            Короткий тур по кабинету организации: разделы меню, основные экраны и где настроить профиль
+            компании. Займёт около минуты.
           </p>
-          <div className="cst-actions">
-            <button type="button" className="mp-btn mp-btn-primary" onClick={onStart}>
+          <div className="pt-actions">
+            <button type="button" className="primary-btn" onClick={onStart}>
               Начать обучение
             </button>
             <button type="button" className="ghost-btn" onClick={onSkip}>
@@ -79,14 +94,14 @@ export default function CardSlideEditorTour({ phase, step = 0, onStart, onSkip, 
           </div>
         </div>
       ) : (
-        <div className="cst-tooltip" style={tooltipStyle}>
-          <p className="cst-step-count">
-            Шаг {step + 1} из {CARD_EDITOR_TOUR_STEPS.length}
+        <div className="pt-tooltip" style={tooltipStyle}>
+          <p className="pt-step-count">
+            Шаг {step + 1} из {steps.length}
           </p>
           <strong>{current?.title}</strong>
           <p>{current?.text}</p>
-          {!rect ? <p className="cst-missing muted small">Прокрутите страницу, если элемент не виден.</p> : null}
-          <div className="cst-actions">
+          {!rect ? <p className="pt-missing muted small">Элемент не на экране — нажмите «Далее».</p> : null}
+          <div className="pt-actions">
             <button type="button" className="ghost-btn" onClick={onSkip}>
               Пропустить
             </button>
@@ -95,7 +110,7 @@ export default function CardSlideEditorTour({ phase, step = 0, onStart, onSkip, 
                 Назад
               </button>
             ) : null}
-            <button type="button" className="mp-btn mp-btn-primary" onClick={isLast ? onFinish : onNext}>
+            <button type="button" className="primary-btn" onClick={isLast ? onFinish : onNext}>
               {isLast ? "Готово" : "Далее"}
             </button>
           </div>
