@@ -1473,6 +1473,12 @@ body.theme-dark .mp-lightbox-close {
   margin-bottom: 10px;
 }
 
+.mp-card-design-editor-head-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .mp-card-design-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

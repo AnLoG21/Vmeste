@@ -30,6 +30,13 @@
   background: #555b64;
 }
 
+.cs-rail-undo-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
 .cs-icon-btn {
   position: relative;
   width: 38px;

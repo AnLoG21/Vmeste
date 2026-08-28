@@ -9,7 +9,13 @@ import {
   renderProductCardSlide,
 } from "./productCardTemplates.js";
 import CardSlideCanvasEditor from "./CardSlideCanvasEditor.jsx";
+import CardSlideEditorTour from "./CardSlideEditorTour.jsx";
 import { hasCanvasScene, renderCanvasDesignToBlob } from "./cardSlideCanvas.js";
+import {
+  CARD_EDITOR_TOUR_STEPS,
+  readCardEditorTourDone,
+  writeCardEditorTourDone,
+} from "./cardSlideEditorTour.js";
 import {
   applyAttributeMirrors,
   extractOzonCategoryTree,
@@ -786,6 +792,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   const [selectedCardDesignId, setSelectedCardDesignId] = useState("");
   const [cardDesignForm, setCardDesignForm] = useState(() => emptyCardDesignForm());
   const [cardDesignEditorOpen, setCardDesignEditorOpen] = useState(false);
+  const [cardEditorTourPhase, setCardEditorTourPhase] = useState("hidden");
+  const [cardEditorTourStep, setCardEditorTourStep] = useState(0);
   const [viewer, setViewer] = useState(null);
   const [dotsTick, setDotsTick] = useState(0);
   const [categoryOptions, setCategoryOptions] = useState([]);
@@ -1571,9 +1579,27 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
     });
   }
 
+  function openCardDesignEditorTour(force = false) {
+    if (!force && readCardEditorTourDone()) return;
+    setCardEditorTourStep(0);
+    setCardEditorTourPhase("welcome");
+  }
+
+  function skipCardDesignEditorTour() {
+    writeCardEditorTourDone();
+    setCardEditorTourPhase("hidden");
+    setCardEditorTourStep(0);
+  }
+
+  function startCardDesignEditorTour() {
+    setCardEditorTourStep(0);
+    setCardEditorTourPhase("running");
+  }
+
   function openNewCardDesign() {
     setCardDesignForm(emptyCardDesignForm());
     setCardDesignEditorOpen(true);
+    openCardDesignEditorTour();
   }
 
   function openEditCardDesign(id) {
@@ -1581,6 +1607,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
     if (!found) return;
     setCardDesignForm(normalizeDesign(found));
     setCardDesignEditorOpen(true);
+    openCardDesignEditorTour();
   }
 
   async function saveCardDesignForm() {
@@ -3298,6 +3325,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                       className="mp-btn mp-btn-primary"
                       disabled={busy === "slide" || (!selectedCardDesignId && !cardDesignEditorOpen)}
                       onClick={generateTemplateSlide}
+                      data-tour="mp-generate-slide"
                     >
                       {busy === "slide" ? `Собираем слайд${dots}` : "Сгенерировать слайд в медиа"}
                     </button>
@@ -3336,9 +3364,19 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                     <div className="mp-card-design-editor">
                       <div className="mp-card-design-editor-head">
                         <strong>{cardDesignForm.id ? "Редактирование шаблона" : "Новый шаблон"}</strong>
-                        <button type="button" className="ghost-btn" onClick={() => setCardDesignEditorOpen(false)}>
-                          Закрыть
-                        </button>
+                        <div className="mp-card-design-editor-head-actions">
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            onClick={() => openCardDesignEditorTour(true)}
+                            title="Показать обучение"
+                          >
+                            Обучение
+                          </button>
+                          <button type="button" className="ghost-btn" onClick={() => setCardDesignEditorOpen(false)}>
+                            Закрыть
+                          </button>
+                        </div>
                       </div>
                       <div className="mp-card-design-grid mp-card-design-grid--compact">
                         <label>
@@ -3386,12 +3424,24 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                           className="mp-btn mp-btn-primary"
                           disabled={busy === "card-design"}
                           onClick={saveCardDesignForm}
+                          data-tour="mp-save-design"
                         >
                           {busy === "card-design" ? `Сохраняем${dots}` : "Сохранить шаблон"}
                         </button>
                       </div>
                     </div>
                   ) : null}
+                  <CardSlideEditorTour
+                    phase={cardDesignEditorOpen ? cardEditorTourPhase : "hidden"}
+                    step={cardEditorTourStep}
+                    onStart={startCardDesignEditorTour}
+                    onSkip={skipCardDesignEditorTour}
+                    onBack={() => setCardEditorTourStep((s) => Math.max(0, s - 1))}
+                    onNext={() =>
+                      setCardEditorTourStep((s) => Math.min(s + 1, CARD_EDITOR_TOUR_STEPS.length - 1))
+                    }
+                    onFinish={skipCardDesignEditorTour}
+                  />
                 </div>
               </div>
             </div>
