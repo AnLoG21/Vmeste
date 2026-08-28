@@ -324,6 +324,167 @@ function formatPrice(product) {
   return "";
 }
 
+function pickBenefits(product, featuresText = "") {
+  const fromFeatures = String(featuresText || "")
+    .split(/[,;\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (fromFeatures.length) return fromFeatures.slice(0, 3);
+  const desc = String(product?.description || "")
+    .split(/\n+/)
+    .map((s) => s.replace(/^[-•*]\s*/, "").trim())
+    .filter((s) => s.length > 2);
+  if (desc.length) return desc.slice(0, 3);
+  const fallback = [];
+  if (product?.brand) fallback.push(`Бренд ${product.brand}`);
+  if (product?.price) fallback.push(`Цена ${formatPrice(product)}`);
+  while (fallback.length < 3) {
+    fallback.push(["Качество", "Доставка", "Гарантия"][fallback.length]);
+  }
+  return fallback.slice(0, 3);
+}
+
+function pickSpecs(product) {
+  const rows = [];
+  if (product?.brand) rows.push(["Бренд", product.brand]);
+  if (product?.offer_id) rows.push(["Артикул", product.offer_id]);
+  if (product?.price) rows.push(["Цена", formatPrice(product)]);
+  if (product?.stock != null && product.stock !== "") rows.push(["Остаток", String(product.stock)]);
+  const chars = product?.characteristics || {};
+  for (const [k, v] of Object.entries(chars)) {
+    if (rows.length >= 6) break;
+    const val = Array.isArray(v) ? v.join(", ") : String(v || "").trim();
+    if (!val) continue;
+    rows.push([String(k).slice(0, 24), val.length > 40 ? `${val.slice(0, 38)}…` : val]);
+  }
+  if (!rows.length) rows.push(["Товар", product?.name || "Карточка"]);
+  return rows.slice(0, 6);
+}
+
+export function formatBenefitsText(product, featuresText = "") {
+  return pickBenefits(product, featuresText)
+    .map((b, i) => `${i + 1}. ${b}`)
+    .join("\n");
+}
+
+export function formatSpecsText(product) {
+  return pickSpecs(product)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("\n");
+}
+
+export const SMART_FIELDS = [
+  {
+    id: "productName",
+    label: "Название",
+    placeholder: "{{name}}",
+    vmRole: "productName",
+    fontSize: 42,
+    fontWeight: "700",
+    fillKey: "ink",
+  },
+  {
+    id: "productPrice",
+    label: "Цена",
+    placeholder: "{{price}}",
+    vmRole: "productPrice",
+    fontSize: 32,
+    fontWeight: "700",
+    fillKey: "badge",
+    backgroundColor: true,
+  },
+  {
+    id: "productBrand",
+    label: "Бренд",
+    placeholder: "{{brand}}",
+    vmRole: "productBrand",
+    fontSize: 22,
+    fillKey: "muted",
+  },
+  {
+    id: "productOffer",
+    label: "Артикул",
+    placeholder: "{{offer_id}}",
+    vmRole: "productOffer",
+    fontSize: 20,
+    fillKey: "muted",
+  },
+  {
+    id: "productStock",
+    label: "Остаток",
+    placeholder: "{{stock}}",
+    vmRole: "productStock",
+    fontSize: 20,
+    fillKey: "muted",
+  },
+  {
+    id: "productBenefits",
+    label: "Преимущества",
+    placeholder: "{{benefits}}",
+    vmRole: "productBenefits",
+    fontSize: 24,
+    multiline: true,
+    fillKey: "ink",
+  },
+  {
+    id: "productSpecs",
+    label: "Характеристики",
+    placeholder: "{{specs}}",
+    vmRole: "productSpecs",
+    fontSize: 20,
+    multiline: true,
+    fillKey: "ink",
+  },
+];
+
+export function applyProductTokens(text, product, featuresText = "") {
+  const name = String(product?.name || "Товар").trim() || "Товар";
+  const brand = String(product?.brand || "").trim();
+  const priceLabel = formatPrice(product) || "—";
+  const offer = String(product?.offer_id || "").trim();
+  const stock = product?.stock != null && product?.stock !== "" ? String(product.stock) : "";
+  return String(text || "")
+    .replaceAll("{{name}}", name)
+    .replaceAll("{{brand}}", brand)
+    .replaceAll("{{price}}", priceLabel)
+    .replaceAll("{{offer_id}}", offer)
+    .replaceAll("{{stock}}", stock)
+    .replaceAll("{{benefits}}", formatBenefitsText(product, featuresText))
+    .replaceAll("{{specs}}", formatSpecsText(product));
+}
+
+function isFabricText(obj) {
+  if (!obj) return false;
+  return (
+    obj.isType?.("i-text") ||
+    obj.isType?.("textbox") ||
+    obj.isType?.("text") ||
+    /text/i.test(String(obj.type || ""))
+  );
+}
+
+function resolveTextForRole(role, product, featuresText) {
+  if (role === "productName") return String(product?.name || "Товар").trim() || "Товар";
+  if (role === "productBrand") return String(product?.brand || "").trim();
+  if (role === "productPrice") return formatPrice(product) || "—";
+  if (role === "productOffer") return String(product?.offer_id || "").trim();
+  if (role === "productStock") return product?.stock != null && product?.stock !== "" ? String(product.stock) : "";
+  if (role === "productBenefits") return formatBenefitsText(product, featuresText);
+  if (role === "productSpecs") return formatSpecsText(product);
+  return null;
+}
+
+async function canvasToPngBlob(canvas) {
+  const blob = await Promise.race([
+    canvas.toBlob({ format: "png", multiplier: 1 }),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Таймаут генерации слайда.")), 45000);
+    }),
+  ]);
+  if (!blob) throw new Error("Не удалось сохранить PNG.");
+  return blob;
+}
+
 async function replaceProductPhoto(canvas, url, slot) {
   if (!url || !slot) return;
   try {
@@ -364,7 +525,7 @@ async function replaceProductPhoto(canvas, url, slot) {
 /**
  * Apply product data into a cloned scene and export PNG blob.
  */
-export async function renderCanvasDesignToBlob({ canvasJson, product = {}, images = [] }) {
+export async function renderCanvasDesignToBlob({ canvasJson, product = {}, images = [], featuresText = "" } = {}) {
   const el = document.createElement("canvas");
   el.width = SLIDE_W;
   el.height = SLIDE_H;
@@ -377,20 +538,15 @@ export async function renderCanvasDesignToBlob({ canvasJson, product = {}, image
     const scene = hasCanvasScene(canvasJson) ? structuredClone(canvasJson) : emptyCanvasJson();
     await canvas.loadFromJSON(scene);
 
-    const name = String(product.name || "Товар").trim() || "Товар";
-    const brand = String(product.brand || "").trim();
-    const priceLabel = formatPrice(product);
     const photoUrl = firstPhotoUrl(images);
-
     const objs = [...canvas.getObjects()];
     for (const obj of objs) {
       const role = obj.vmRole || obj.get?.("vmRole");
-      if (obj.type === "i-text" || obj.type === "textbox" || obj.type === "text" || obj.isType?.("i-text")) {
+      if (isFabricText(obj)) {
         let text = String(obj.text || "");
-        text = text.replaceAll("{{name}}", name).replaceAll("{{brand}}", brand).replaceAll("{{price}}", priceLabel || "—");
-        if (role === "productName") text = name;
-        if (role === "productBrand") text = brand || text;
-        if (role === "productPrice") text = priceLabel || text;
+        text = applyProductTokens(text, product, featuresText);
+        const roleText = role ? resolveTextForRole(role, product, featuresText) : null;
+        if (roleText != null && roleText !== "") text = roleText;
         obj.set("text", text);
       }
       if (role === "productPhoto") {
@@ -398,23 +554,39 @@ export async function renderCanvasDesignToBlob({ canvasJson, product = {}, image
       }
     }
     canvas.requestRenderAll();
-    return await new Promise((resolve, reject) => {
-      const lower = canvas.lowerCanvasEl || el;
-      if (typeof canvas.toBlob === "function") {
-        canvas.toBlob((blob) => {
-          if (!blob) reject(new Error("Не удалось сохранить PNG."));
-          else resolve(blob);
-        }, "image/png");
-        return;
-      }
-      lower.toBlob((blob) => {
-        if (!blob) reject(new Error("Не удалось сохранить PNG."));
-        else resolve(blob);
-      }, "image/png");
-    });
+    return await canvasToPngBlob(canvas);
   } finally {
     canvas.dispose();
   }
+}
+
+export function addSmartField(canvas, fieldId, style = DEFAULT_CARD_STYLE) {
+  const field = SMART_FIELDS.find((f) => f.id === fieldId);
+  if (!field || !canvas) return null;
+  const s = { ...DEFAULT_CARD_STYLE, ...(style || {}) };
+  const fill = s[field.fillKey] || s.ink;
+  const text = field.placeholder;
+  const opts = {
+    left: SLIDE_W / 2 - 180,
+    top: SLIDE_H / 2 - 40,
+    text,
+    fontSize: field.fontSize || 28,
+    fontFamily: FONT_OPTIONS[0].id,
+    fontWeight: field.fontWeight || "600",
+    fill,
+    editable: true,
+    vmRole: field.vmRole,
+  };
+  if (field.backgroundColor && fill) {
+    opts.backgroundColor = fill;
+    opts.fill = "#ffffff";
+  }
+  const t = new IText(text, opts);
+  t.set("vmRole", field.vmRole);
+  canvas.add(t);
+  canvas.setActiveObject(t);
+  canvas.requestRenderAll();
+  return t;
 }
 
 export function addTextObject(canvas, { fill = "#1a242e", fontFamily } = {}) {

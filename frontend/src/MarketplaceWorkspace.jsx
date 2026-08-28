@@ -1639,6 +1639,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       }
       let design = cardDesigns.find((d) => String(d.id) === String(selectedCardDesignId));
       if (!design && cardDesignEditorOpen) design = normalizeDesign(cardDesignForm);
+      if (cardDesignEditorOpen && cardDesignForm) {
+        design = normalizeDesign({ ...(design || {}), ...cardDesignForm });
+      }
       if (!design) {
         throw new Error("Сначала создайте или выберите свой шаблон слайда.");
       }
@@ -1649,6 +1652,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
           canvasJson: design.canvas,
           product,
           images: product.images,
+          featuresText: aiFeatures,
         });
       } else {
         blob = await renderProductCardSlide({

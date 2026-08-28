@@ -210,6 +210,42 @@
   color: #cfe9df;
 }
 
+.cs-smart-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding-top: 4px;
+  border-top: 1px solid #4a515a;
+  margin-top: 2px;
+}
+
+.cs-smart-label {
+  font-size: 0.72rem;
+  color: #9aa3ad;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 4px;
+}
+
+.cs-field-btn {
+  border: 1px solid #5a616a;
+  background: #2f3338;
+  color: #e8ecef;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.cs-field-btn:hover {
+  background: #0f6e56;
+  border-color: #0f6e56;
+  color: #fff;
+}
+
 .cs-workspace {
   flex: 1;
   min-height: 420px;

@@ -4,10 +4,12 @@ import {
   FONT_OPTIONS,
   SLIDE_H,
   SLIDE_W,
+  SMART_FIELDS,
   TOOLS,
   addImageFromSource,
   addProductPhotoSlot,
   addShape,
+  addSmartField,
   addTextObject,
   buildStarterCanvasJson,
   createEditorCanvas,
@@ -132,6 +134,40 @@ const ACTION_ICONS = {
       <rect x="8" y="11" width="8" height="7" rx="1" stroke="currentColor" strokeWidth="2" />
     </Icon>
   ),
+  undo: (
+    <Icon size={18}>
+      <path
+        d="M8 8H5v3.5L8.5 15"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5 11.5a7 7 0 1012.5 2.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </Icon>
+  ),
+  redo: (
+    <Icon size={18}>
+      <path
+        d="M16 8h3v3.5L15.5 15"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M19 11.5a7 7 0 11-12.5 2.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </Icon>
+  ),
 };
 
 /**
@@ -150,13 +186,66 @@ export default function CardSlideCanvasEditor({
   const canvasRef = useRef(null);
   const onChangeRef = useRef(onChange);
   const skipEmitRef = useRef(false);
+  const restoringRef = useRef(false);
+  const historyRef = useRef({ past: [], future: [] });
   const [tool, setTool] = useState("select");
   const [brushSize, setBrushSize] = useState(8);
   const [brushColor, setBrushColor] = useState("#1a242e");
   const [fillColor, setFillColor] = useState("#0f6e56");
   const [selectedMeta, setSelectedMeta] = useState(null);
   const [pasteStatus, setPasteStatus] = useState("");
+  const [historyTick, setHistoryTick] = useState(0);
   const [scale, setScale] = useState(0.42);
+
+  function commitCanvasChange(canvas, { skipHistory = false } = {}) {
+    if (!canvas) return;
+    const json = serializeCanvas(canvas);
+    onChangeRef.current?.(json);
+    if (skipHistory || restoringRef.current) return;
+    const snap = JSON.stringify(json);
+    const { past } = historyRef.current;
+    if (past[past.length - 1] === snap) return;
+    past.push(snap);
+    if (past.length > 50) past.shift();
+    historyRef.current.future = [];
+    setHistoryTick((t) => t + 1);
+  }
+
+  async function restoreSnapshot(snap) {
+    const canvas = canvasRef.current;
+    if (!canvas || !snap) return;
+    restoringRef.current = true;
+    skipEmitRef.current = true;
+    await loadSceneOntoCanvas(canvas, JSON.parse(snap));
+    skipEmitRef.current = false;
+    commitCanvasChange(canvas, { skipHistory: true });
+    restoringRef.current = false;
+    setHistoryTick((t) => t + 1);
+  }
+
+  function undo() {
+    const { past, future } = historyRef.current;
+    if (past.length <= 1) return;
+    const current = past.pop();
+    future.push(current);
+    restoreSnapshot(past[past.length - 1]);
+  }
+
+  function redo() {
+    const { past, future } = historyRef.current;
+    if (!future.length) return;
+    const next = future.pop();
+    past.push(next);
+    restoreSnapshot(next);
+  }
+
+  function insertSmartField(fieldId) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    setTool("select");
+    addSmartField(canvas, fieldId, style);
+    commitCanvasChange(canvas);
+  }
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -183,7 +272,7 @@ export default function CardSlideCanvasEditor({
 
     const emit = () => {
       if (skipEmitRef.current) return;
-      onChangeRef.current?.(serializeCanvas(canvas));
+      commitCanvasChange(canvas);
     };
     let emitTimer = null;
     const scheduleEmit = () => {
@@ -225,6 +314,8 @@ export default function CardSlideCanvasEditor({
       const initial = hasCanvasScene(canvasJson) ? canvasJson : buildStarterCanvasJson(layout, style);
       await loadSceneOntoCanvas(canvas, initial);
       skipEmitRef.current = false;
+      historyRef.current = { past: [JSON.stringify(serializeCanvas(canvas))], future: [] };
+      setHistoryTick((t) => t + 1);
       if (!hasCanvasScene(canvasJson)) scheduleEmit();
     })();
 
@@ -263,7 +354,7 @@ export default function CardSlideCanvasEditor({
       canvas.remove(t);
       canvas.discardActiveObject();
       canvas.requestRenderAll();
-      onChangeRef.current?.(serializeCanvas(canvas));
+      commitCanvasChange(canvas);
     };
     canvas.on("mouse:down", onEraseClick);
     canvas.requestRenderAll();
@@ -280,7 +371,7 @@ export default function CardSlideCanvasEditor({
     obj.setCoords();
     canvas.requestRenderAll();
     setSelectedMeta((m) => (m ? { ...m, ...patch, fontSize: patch.fontSize ?? m.fontSize } : m));
-    onChangeRef.current?.(serializeCanvas(canvas));
+    commitCanvasChange(canvas);
   }
 
   function handleToolClick(id) {
@@ -304,7 +395,7 @@ export default function CardSlideCanvasEditor({
     if (!canvas) return;
     setTool("select");
     await addProductPhotoSlot(canvas, productImageUrl);
-    onChangeRef.current?.(serializeCanvas(canvas));
+    commitCanvasChange(canvas);
   }
 
   function deleteSelected() {
@@ -315,7 +406,7 @@ export default function CardSlideCanvasEditor({
     active.forEach((o) => canvas.remove(o));
     canvas.discardActiveObject();
     canvas.requestRenderAll();
-    onChangeRef.current?.(serializeCanvas(canvas));
+    commitCanvasChange(canvas);
   }
 
   function bringForward() {
@@ -324,7 +415,7 @@ export default function CardSlideCanvasEditor({
     if (!canvas || !obj) return;
     canvas.bringObjectForward(obj);
     canvas.requestRenderAll();
-    onChangeRef.current?.(serializeCanvas(canvas));
+    commitCanvasChange(canvas);
   }
 
   function sendBackward() {
@@ -333,7 +424,7 @@ export default function CardSlideCanvasEditor({
     if (!canvas || !obj) return;
     canvas.sendObjectBackwards(obj);
     canvas.requestRenderAll();
-    onChangeRef.current?.(serializeCanvas(canvas));
+    commitCanvasChange(canvas);
   }
 
   function resetStarter() {
@@ -344,7 +435,9 @@ export default function CardSlideCanvasEditor({
       skipEmitRef.current = true;
       await loadSceneOntoCanvas(canvas, buildStarterCanvasJson(layout, style));
       skipEmitRef.current = false;
-      onChangeRef.current?.(serializeCanvas(canvas));
+      historyRef.current = { past: [JSON.stringify(serializeCanvas(canvas))], future: [] };
+      setHistoryTick((t) => t + 1);
+      commitCanvasChange(canvas, { skipHistory: true });
     })();
   }
 
@@ -353,7 +446,7 @@ export default function CardSlideCanvasEditor({
     if (!canvas || !blob) return false;
     setTool("select");
     await addImageFromSource(canvas, blob);
-    onChangeRef.current?.(serializeCanvas(canvas));
+    commitCanvasChange(canvas);
     setPasteStatus("Картинка вставлена");
     window.setTimeout(() => setPasteStatus(""), 1800);
     return true;
@@ -436,7 +529,22 @@ export default function CardSlideCanvasEditor({
         deleteSelected();
         return;
       }
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.ctrlKey || e.metaKey) {
+        const key = e.key.toLowerCase();
+        if (key === "z") {
+          e.preventDefault();
+          if (e.shiftKey) redo();
+          else undo();
+          return;
+        }
+        if (key === "y") {
+          e.preventDefault();
+          redo();
+          return;
+        }
+        return;
+      }
+      if (e.altKey) return;
       const key = e.key.toLowerCase();
       if (key === "v") setTool("select");
       if (key === "b") setTool("draw");
@@ -456,6 +564,9 @@ export default function CardSlideCanvasEditor({
   const stageH = Math.round(SLIDE_H * scale);
   const activeTool = TOOLS.find((t) => t.id === tool) || TOOLS[0];
   const isBold = selectedMeta?.fontWeight === "bold" || selectedMeta?.fontWeight === "700";
+  const canUndo = historyRef.current.past.length > 1;
+  const canRedo = historyRef.current.future.length > 0;
+  void historyTick;
 
   return (
     <div className="cs-editor">
@@ -475,6 +586,29 @@ export default function CardSlideCanvasEditor({
               <span className="cs-tooltip">{t.label}{t.hotkey ? ` · ${t.hotkey}` : ""}</span>
             </button>
           ))}
+          <div className="cs-rail-sep" />
+          <button
+            type="button"
+            className="cs-icon-btn"
+            onClick={undo}
+            disabled={!canUndo}
+            title="Отменить (Ctrl+Z)"
+            aria-label="Отменить"
+          >
+            {ACTION_ICONS.undo}
+            <span className="cs-tooltip">Отменить · Ctrl+Z</span>
+          </button>
+          <button
+            type="button"
+            className="cs-icon-btn"
+            onClick={redo}
+            disabled={!canRedo}
+            title="Вернуть (Ctrl+Y)"
+            aria-label="Вернуть"
+          >
+            {ACTION_ICONS.redo}
+            <span className="cs-tooltip">Вернуть · Ctrl+Y</span>
+          </button>
           <div className="cs-rail-sep" />
           <button
             type="button"
@@ -570,6 +704,21 @@ export default function CardSlideCanvasEditor({
                   />
                 </label>
               ) : null}
+            </div>
+
+            <div className="cs-smart-fields">
+              <span className="cs-smart-label">Поля товара</span>
+              {SMART_FIELDS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  className="cs-field-btn"
+                  onClick={() => insertSmartField(f.id)}
+                  title={`Вставить: ${f.placeholder}`}
+                >
+                  {f.label}
+                </button>
+              ))}
             </div>
 
             {selectedMeta?.isText ? (
