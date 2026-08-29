@@ -13,6 +13,7 @@ from catalog.models import Service
 from reviews.models import Review
 
 from users.models import ProviderGalleryPhoto, User
+from users.map_visibility import provider_locations_visible_on_map, providers_visible_on_map
 from common.media_urls import photo_urls
 
 from .models import ProviderLocation
@@ -125,6 +126,7 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
         )
         if not getattr(request.user, "is_demo", False):
             qs = qs.filter(provider__is_demo=False)
+        qs = provider_locations_visible_on_map(qs)
         qs = qs.exclude(provider__provider_sphere=User.ProviderSphere.MARKETPLACES)
 
         search = (request.query_params.get("search") or "").strip()
@@ -240,6 +242,7 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
         ).exclude(id__in=seen_providers)
         if not getattr(request.user, "is_demo", False):
             providers_qs = providers_qs.filter(is_demo=False)
+        providers_qs = providers_visible_on_map(providers_qs)
         providers_qs = providers_qs.exclude(provider_sphere=User.ProviderSphere.MARKETPLACES)
 
         search = (request.query_params.get("search") or "").strip()

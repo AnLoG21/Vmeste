@@ -20,8 +20,11 @@ class UserAdmin(DjangoUserAdmin):
                     "organization_latitude",
                     "organization_longitude",
                     "provider_sphere",
+                    "is_demo",
+                    "map_hidden",
                 )
             },
         ),
     )
-    list_display = ("username", "email", "role", "is_staff", "is_active")
+    list_display = ("username", "email", "role", "map_hidden", "is_staff", "is_active")
+    list_filter = ("role", "map_hidden", "is_demo", "is_active")

@@ -10,6 +10,7 @@ from reviews.models import Review, ReviewPhoto
 
 from common.media_urls import photo_urls
 
+from .map_visibility import providers_visible_on_map
 from .models import User
 from .org_profile import default_working_hours
 from .slug_utils import ensure_organization_slug
@@ -108,6 +109,7 @@ class PublicOrganizationBySlugView(APIView):
                 role=User.Role.PROVIDER,
                 is_active=True,
                 is_demo=False,
+                map_hidden=False,
             )
         except User.DoesNotExist:
             return Response({"detail": "Организация не найдена."}, status=status.HTTP_404_NOT_FOUND)
@@ -121,7 +123,7 @@ class PublicOrganizationSitemapView(APIView):
     authentication_classes = []
 
     def get(self, request):
-        qs = (
+        qs = providers_visible_on_map(
             User.objects.filter(role=User.Role.PROVIDER, is_active=True, is_demo=False)
             .exclude(organization_name="")
             .exclude(provider_sphere=User.ProviderSphere.MARKETPLACES)
@@ -161,7 +163,7 @@ class SitemapXmlView(APIView):
         for key, _title in CITY_SITEMAP:
             urls.append((f"/city/{key}", "0.85", "weekly", today))
 
-        qs = (
+        qs = providers_visible_on_map(
             User.objects.filter(role=User.Role.PROVIDER, is_active=True, is_demo=False)
             .exclude(organization_name="")
             .exclude(organization_slug="")

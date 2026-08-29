@@ -878,7 +878,12 @@ class CafeOrgPublicView(APIView):
         from users.models import User
         from users.slug_utils import ensure_organization_slug
 
-        provider = User.objects.filter(role=User.Role.PROVIDER, is_active=True, provider_sphere=User.ProviderSphere.CAFE_RESTAURANT).filter(
+        provider = User.objects.filter(
+            role=User.Role.PROVIDER,
+            is_active=True,
+            map_hidden=False,
+            provider_sphere=User.ProviderSphere.CAFE_RESTAURANT,
+        ).filter(
             organization_slug__iexact=slug
         ).first()
         if not provider:
@@ -912,6 +917,7 @@ class CafeOrgPublicView(APIView):
         provider = User.objects.filter(
             role=User.Role.PROVIDER,
             is_active=True,
+            map_hidden=False,
             provider_sphere=User.ProviderSphere.CAFE_RESTAURANT,
             organization_slug__iexact=slug,
         ).first()
@@ -960,6 +966,7 @@ class CafeOrgDineInAttachView(APIView):
         provider = User.objects.filter(
             role=User.Role.PROVIDER,
             is_active=True,
+            map_hidden=False,
             provider_sphere=User.ProviderSphere.CAFE_RESTAURANT,
             organization_slug__iexact=slug,
         ).first()

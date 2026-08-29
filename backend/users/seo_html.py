@@ -10,6 +10,7 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.views import View
 
+from .map_visibility import providers_visible_on_map
 from .models import User
 from .org_profile import default_working_hours
 from .public_org import CITY_SITEMAP, SITE_ORIGIN, build_public_org_payload
@@ -149,7 +150,12 @@ class SeoOrgHtmlView(View):
     def get(self, request, slug):
         slug = (slug or "").strip().lower()
         provider = (
-            User.objects.filter(role=User.Role.PROVIDER, is_active=True, organization_slug__iexact=slug).first()
+            User.objects.filter(
+                role=User.Role.PROVIDER,
+                is_active=True,
+                map_hidden=False,
+                organization_slug__iexact=slug,
+            ).first()
             if slug
             else None
         )
@@ -200,6 +206,7 @@ class SeoMenuHtmlView(View):
             User.objects.filter(
                 role=User.Role.PROVIDER,
                 is_active=True,
+                map_hidden=False,
                 provider_sphere=User.ProviderSphere.CAFE_RESTAURANT,
                 organization_slug__iexact=slug,
             ).first()
@@ -340,7 +347,7 @@ class SeoCityHtmlView(View):
                 status=404,
             )
         aliases = CITY_ALIASES.get(city_key, [city_title.lower()])
-        qs = (
+        qs = providers_visible_on_map(
             User.objects.filter(role=User.Role.PROVIDER, is_active=True)
             .exclude(organization_name="")
             .order_by("id")[:800]

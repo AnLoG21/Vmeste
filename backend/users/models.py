@@ -92,6 +92,11 @@ class User(AbstractUser):
         db_index=True,
         help_text="Общий демо-аккаунт: при выходе из демо пользовательские данные откатываются.",
     )
+    map_hidden = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Скрыть организацию на карте и в публичном каталоге (тестовые аккаунты).",
+    )
     provider_authority_confirmed_at = models.DateTimeField(
         null=True,
         blank=True,
