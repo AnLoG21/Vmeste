@@ -32,12 +32,19 @@ export const DEFAULT_SUBNAV_BOOKMARKS = {
   client: ["client_map", "activity", "service_apps", "chats"],
   provider: ["bookings", "client_map", "analytics", "my_bookings", "service_apps", "chats"],
   staff: ["bookings", "reviews", "analytics", "service_apps", "chats"],
-  provider_cafe: ["cafe_orders", "cafe", "reviews", "analytics", "client_map", "chats"],
-  staff_cafe: ["cafe_orders", "cafe", "analytics", "chats"],
-  provider_service: ["bookings", "client_map", "my_bookings", "analytics", "chats", "inspections"],
-  provider_salon: ["bookings", "client_map", "my_bookings", "analytics", "chats"],
-  provider_marketplaces: ["marketplaces", "analytics", "reviews", "chats"],
+  provider_cafe: ["cafe_orders", "cafe", "reviews", "analytics", "client_map", "service_apps", "chats"],
+  staff_cafe: ["cafe_orders", "cafe", "analytics", "service_apps", "chats"],
+  provider_service: ["bookings", "client_map", "my_bookings", "analytics", "service_apps", "chats", "inspections"],
+  provider_salon: ["bookings", "client_map", "my_bookings", "analytics", "service_apps", "chats"],
+  provider_marketplaces: ["marketplaces", "analytics", "reviews", "service_apps", "chats"],
 };
+
+function ensureServiceAppsBookmark(list, allowed) {
+  if (!allowed.has("service_apps") || list.includes("service_apps")) return list;
+  const chatsIdx = list.indexOf("chats");
+  if (chatsIdx >= 0) return [...list.slice(0, chatsIdx), "service_apps", ...list.slice(chatsIdx)];
+  return [...list, "service_apps"];
+}
 
 export function defaultSubnavBookmarks(role, sphere) {
   if (role === "provider" && sphere === "cafe_restaurant") {
@@ -107,6 +114,7 @@ export function loadSubnavBookmarks(role, sphere) {
       if (!next.includes("marketplaces")) next = ["marketplaces", ...next];
       else next = ["marketplaces", ...next.filter((id) => id !== "marketplaces")];
     }
+    next = ensureServiceAppsBookmark(next, allowed);
     return next.length ? next : [...fallback];
   } catch {
     return [...fallback];

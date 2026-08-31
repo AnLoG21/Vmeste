@@ -7412,7 +7412,7 @@ export default function App() {
     const role = me?.role;
     if (!role) return [];
     const inSubnav = new Set(subnavBookmarks);
-    const preferred = ["marketplaces", "cafe", "cafe_orders", "activity", "cafe_my_orders", "loyalty", "client_map", "my_bookings", "intervals", "services", "analytics", "bookings", "reviews", "chats"];
+    const preferred = ["marketplaces", "cafe", "cafe_orders", "activity", "cafe_my_orders", "loyalty", "client_map", "my_bookings", "intervals", "services", "service_apps", "analytics", "bookings", "reviews", "chats"];
     return preferred.filter((id) => !inSubnav.has(id) && isBookmarkAvailable(id));
   }
 
@@ -12383,6 +12383,12 @@ export default function App() {
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("inspections"); setMenuOpen(false); }}>
                     <span className="menu-item-icon" aria-hidden="true">{bookmarkMenuIcon("inspections")}</span>
                     <span className="menu-item-label">Приёмка</span>
+                  </button>
+                )}
+                {isBookmarkAvailable("service_apps") && (
+                  <button type="button" className="menu-dropdown-item" onClick={() => navigateBookmark("service_apps")}>
+                    <span className="menu-item-icon" aria-hidden="true">{bookmarkMenuIcon("service_apps")}</span>
+                    <span className="menu-item-label">Сервисы</span>
                   </button>
                 )}
                 <button type="button" className="menu-dropdown-item" onClick={exitDemoSession}>
