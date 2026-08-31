@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from decimal import Decimal, InvalidOperation
 from html import unescape
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
@@ -38,7 +39,7 @@ _UNIT_ALIASES = {
 def _fetch_html(url: str, timeout: int = 12) -> str:
     req = Request(url, headers={"User-Agent": _USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
     with urlopen(req, timeout=timeout) as resp:
-        raw = resp.read(400_000)
+        raw = resp.read(500_000)
     for enc in ("utf-8", "cp1251", "latin-1"):
         try:
             return raw.decode(enc)
@@ -80,6 +81,39 @@ def _title_tag(html: str) -> str:
     return unescape(m.group(1).strip()) if m else ""
 
 
+def _is_recipe_type(val) -> bool:
+    if val in ("Recipe", ["Recipe"]):
+        return True
+    if isinstance(val, list):
+        return "Recipe" in val
+    if isinstance(val, str):
+        return val == "Recipe" or val.endswith("Recipe")
+    return False
+
+
+def _find_recipe_in_ld(data) -> dict | None:
+    if isinstance(data, dict):
+        if _is_recipe_type(data.get("@type")):
+            return data
+        for key in ("@graph", "mainEntity", "itemListElement"):
+            nested = data.get(key)
+            if isinstance(nested, list):
+                for item in nested:
+                    found = _find_recipe_in_ld(item)
+                    if found:
+                        return found
+            elif nested:
+                found = _find_recipe_in_ld(nested)
+                if found:
+                    return found
+    elif isinstance(data, list):
+        for item in data:
+            found = _find_recipe_in_ld(item)
+            if found:
+                return found
+    return None
+
+
 def _json_ld_recipe(html: str) -> dict:
     for block in re.findall(
         r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
@@ -90,27 +124,36 @@ def _json_ld_recipe(html: str) -> dict:
             data = json.loads(block.strip())
         except Exception:
             continue
-        items = data if isinstance(data, list) else [data]
-        for item in items:
-            if isinstance(item, dict) and item.get("@type") in ("Recipe", ["Recipe"]):
-                return item
-            if isinstance(item, dict) and "@graph" in item:
-                for g in item["@graph"]:
-                    if isinstance(g, dict) and g.get("@type") == "Recipe":
-                        return g
+        found = _find_recipe_in_ld(data)
+        if found:
+            return found
     return {}
 
 
 def _normalize_unit(raw: str) -> str:
     key = (raw or "").strip().lower().rstrip(".")
-    return _UNIT_ALIASES.get(key, raw.strip()[:40] if raw else "шт.")
+    return _UNIT_ALIASES.get(key, raw.strip()[:40] if raw else "")
+
+
+def _safe_decimal(val) -> Decimal:
+    if val is None or val == "":
+        return Decimal("0")
+    try:
+        s = str(val).replace(",", ".").strip()
+        if not s or s in ("-", "—"):
+            return Decimal("0")
+        if re.search(r"[-–]", s) and not re.match(r"^[\d.,]+[-–][\d.,]+$", s):
+            return Decimal("0")
+        return Decimal(re.sub(r"[^\d.]", "", s) or "0")
+    except (InvalidOperation, ValueError):
+        return Decimal("0")
 
 
 def _parse_amount_unit_tail(tail: str) -> tuple[str, str]:
     tail = tail.strip()
     low = tail.lower()
     if low in ("по вкусу", "щепотка", "щепотки", "немного"):
-        return "0", _normalize_unit(tail)
+        return "", _normalize_unit(tail) or tail
     m = re.match(
         r"^([\d]+(?:[.,]\d+)?(?:\s*[-–]\s*[\d]+(?:[.,]\d+)?)?)\s*(.*)$",
         tail,
@@ -118,14 +161,14 @@ def _parse_amount_unit_tail(tail: str) -> tuple[str, str]:
     )
     if m:
         amount = m.group(1).replace(",", ".").replace(" ", "")
-        unit_raw = (m.group(2) or "шт.").strip()
+        unit_raw = (m.group(2) or "").strip()
         if not unit_raw:
-            unit_raw = "шт."
-        return amount, _normalize_unit(unit_raw)
-    m2 = re.match(r"^([а-яa-zё.]+)\s+(.+)$", tail, re.I)
+            return amount, "шт."
+        return amount, _normalize_unit(unit_raw) or unit_raw
+    m2 = re.match(r"^([а-яa-zё.]+)$", tail, re.I)
     if m2 and _normalize_unit(m2.group(1)) != m2.group(1):
         return "1", _normalize_unit(m2.group(1))
-    return "0", tail[:40] if tail else ""
+    return "", tail[:40] if tail else ""
 
 
 def _parse_ingredient_line(text: str) -> dict | None:
@@ -133,32 +176,114 @@ def _parse_ingredient_line(text: str) -> dict | None:
     text = re.sub(r"\s+", " ", text).strip()
     if not text or len(text) < 2:
         return None
-    for sep in (" - ", " – ", " — ", " -", " –", " —"):
-        if sep.strip() in text or sep in text:
-            parts = re.split(r"\s*[-–—]\s*", text, maxsplit=1)
-            if len(parts) == 2:
-                name, tail = parts[0].strip(), parts[1].strip()
-                amount, unit = _parse_amount_unit_tail(tail)
-                return {"name": name[:200], "amount": amount, "unit": unit}
+    parts = re.split(r"\s*[-–—]\s*", text, maxsplit=1)
+    if len(parts) == 2:
+        name, tail = parts[0].strip(), parts[1].strip()
+        amount, unit = _parse_amount_unit_tail(tail)
+        return {"name": name[:200], "amount": amount, "unit": unit}
     m = re.match(r"^([\d.,]+(?:\s*[-–]\s*[\d.,]+)?)\s*([а-яa-z.%]+)?\s+(.+)$", text, re.I)
     if m:
         return {
             "name": m.group(3).strip()[:200],
-            "amount": m.group(1).replace(",", "."),
-            "unit": _normalize_unit(m.group(2) or "шт."),
+            "amount": m.group(1).replace(",", ".").replace(" ", ""),
+            "unit": _normalize_unit(m.group(2) or "") or (m.group(2) or "шт."),
         }
-    return {"name": text[:200], "amount": "0", "unit": ""}
+    return {"name": text[:200], "amount": "", "unit": ""}
+
+
+def _parse_ingredient_item(line) -> dict | None:
+    if isinstance(line, dict):
+        name = (line.get("name") or "").strip()
+        if not name:
+            return None
+        val = line.get("value") or line.get("amount") or ""
+        if isinstance(val, dict):
+            val = val.get("value") or val.get("name") or ""
+        val = str(val).strip()
+        if val:
+            if re.search(r"[-–—]", val) and not re.match(r"^[\d.,]", val):
+                combined = _parse_ingredient_line(f"{name} - {val}")
+                if combined:
+                    return combined
+            amount, unit = _parse_amount_unit_tail(val)
+            return {"name": name[:200], "amount": amount, "unit": unit}
+        return {"name": name[:200], "amount": "", "unit": ""}
+    return _parse_ingredient_line(str(line))
+
+
+def _split_comma_ingredient(text: str) -> dict | None:
+    text = strip_html(text)
+    if "," not in text:
+        return None
+    name, tail = [p.strip() for p in text.rsplit(",", 1)]
+    if not name:
+        return None
+    amount, unit = _parse_amount_unit_tail(tail)
+    return {"name": name[:200], "amount": amount, "unit": unit}
+
+
+def _parse_ingredients_from_html(html: str) -> list[dict]:
+    out: list[dict] = []
+    seen: set[str] = set()
+    for m in re.finditer(
+        r'<meta[^>]+itemprop=["\']recipeIngredient["\'][^>]*content=["\']([^"\']+)["\']',
+        html,
+        re.I,
+    ):
+        row = _split_comma_ingredient(m.group(1)) or _parse_ingredient_line(m.group(1))
+        if row and row["name"] not in seen:
+            seen.add(row["name"])
+            out.append(row)
+    for m in re.finditer(
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+itemprop=["\']recipeIngredient["\']',
+        html,
+        re.I,
+    ):
+        row = _split_comma_ingredient(m.group(1)) or _parse_ingredient_line(m.group(1))
+        if row and row["name"] not in seen:
+            seen.add(row["name"])
+            out.append(row)
+    for m in re.finditer(
+        r'itemprop=["\']recipeIngredient["\'][^>]*>(.*?)</(?:span|li|p|div|a)>',
+        html,
+        re.I | re.S,
+    ):
+        inner = m.group(1)
+        if inner.strip().startswith("<"):
+            inner = re.sub(r"<a[^>]*>(.*?)</a>", r"\1", inner, flags=re.I | re.S)
+        row = _split_comma_ingredient(inner) or _parse_ingredient_line(inner)
+        if row and row["name"] not in seen:
+            seen.add(row["name"])
+            out.append(row)
+    for m in re.finditer(
+        r'class="[^"]*(?:ingredient|recipe-ingredient)[^"]*"[^>]*>(.*?)</li>',
+        html,
+        re.I | re.S,
+    ):
+        row = _parse_ingredient_line(m.group(1))
+        if row and row["name"] not in seen:
+            seen.add(row["name"])
+            out.append(row)
+    return out
 
 
 def _parse_ingredients(recipe_ld: dict, html: str) -> list[dict]:
+    html_rows = _parse_ingredients_from_html(html)
+    if html_rows and any(r.get("amount") for r in html_rows):
+        return html_rows
     raw = recipe_ld.get("recipeIngredient") or recipe_ld.get("ingredients") or []
     out = []
     for line in raw[:40]:
-        row = _parse_ingredient_line(str(line))
+        if isinstance(line, str) and "," in line:
+            row = _split_comma_ingredient(line) or _parse_ingredient_item(line)
+        else:
+            row = _parse_ingredient_item(line)
         if row:
             out.append(row)
     if out:
         return out
+    if html_rows:
+        return html_rows
     block = re.search(
         r"(?:ингредиенты|состав)[^<]*</[^>]+>\s*<[^>]+>(.*?)</",
         html,
@@ -172,7 +297,50 @@ def _parse_ingredients(recipe_ld: dict, html: str) -> list[dict]:
     return out
 
 
-def _parse_steps(recipe_ld: dict) -> list[dict]:
+def _step_image_url(block) -> str:
+    if isinstance(block, dict):
+        img = block.get("image")
+        if isinstance(img, str):
+            return img
+        if isinstance(img, list) and img:
+            first = img[0]
+            return first if isinstance(first, str) else (first.get("url") or "")
+        if isinstance(img, dict):
+            return img.get("url") or ""
+    return ""
+
+
+def _parse_steps_from_html(html: str, base_url: str) -> list[dict]:
+    out: list[dict] = []
+    for m in re.finditer(
+        r'class="[^"]*_editorjsContent[^"]*"[^>]*>(.*?)</div>\s*</div>',
+        html,
+        re.I | re.S,
+    ):
+        block = m.group(1)
+        text = strip_html(block)
+        text = re.sub(r"^Шаг\s+\d+\s*", "", text, flags=re.I).strip()
+        img_m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', block, re.I)
+        img = urljoin(base_url, unescape(img_m.group(1))) if img_m else ""
+        if text or img:
+            out.append({"text": text, "image_url": img})
+    if out:
+        return out
+    for m in re.finditer(
+        r'itemprop=["\']recipeInstructions["\'][^>]*>(.*?)</(?:li|p|div)>',
+        html,
+        re.I | re.S,
+    ):
+        block = m.group(1)
+        text = strip_html(block)
+        img_m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', block, re.I)
+        img = urljoin(base_url, unescape(img_m.group(1))) if img_m else ""
+        if text or img:
+            out.append({"text": text, "image_url": img})
+    return out
+
+
+def _parse_steps(recipe_ld: dict, html: str, base_url: str = "") -> list[dict]:
     instr = recipe_ld.get("recipeInstructions") or []
     out = []
     for block in instr[:30]:
@@ -182,8 +350,16 @@ def _parse_steps(recipe_ld: dict) -> list[dict]:
             text = str(block)
         text = strip_html(text)
         if text:
-            out.append({"text": text})
-    return out
+            img = _step_image_url(block)
+            if img and base_url:
+                img = urljoin(base_url, img)
+            out.append({"text": text, "image_url": img})
+    html_steps = _parse_steps_from_html(html, base_url)
+    if html_steps and (not out or any(s.get("image_url") for s in html_steps)):
+        return html_steps
+    if out:
+        return out
+    return html_steps
 
 
 def _collect_image_urls(recipe_ld: dict, html: str, base_url: str) -> list[str]:
@@ -192,7 +368,11 @@ def _collect_image_urls(recipe_ld: dict, html: str, base_url: str) -> list[str]:
     if isinstance(img, str):
         urls.append(img)
     elif isinstance(img, list):
-        urls.extend([u for u in img if isinstance(u, str)])
+        for u in img:
+            if isinstance(u, str):
+                urls.append(u)
+            elif isinstance(u, dict) and u.get("url"):
+                urls.append(u["url"])
     elif isinstance(img, dict) and img.get("url"):
         urls.append(img["url"])
     og = _meta(html, "og:image")
@@ -221,7 +401,7 @@ def parse_recipe_url(url: str) -> dict:
         ld.get("description") or _meta(html, "og:description") or _meta(html, "description") or ""
     )[:2000]
     ingredients = _parse_ingredients(ld, html)
-    steps = _parse_steps(ld)
+    steps = _parse_steps(ld, html, url)
     image_urls = _collect_image_urls(ld, html, url)
     servings = 4
     try:
@@ -233,15 +413,19 @@ def parse_recipe_url(url: str) -> dict:
             servings = max(1, min(99, int(m.group(1))))
     except Exception:
         pass
-    return {
+    base = {
         "title": title[:200],
         "description": description,
         "source_url": url,
         "servings": servings,
         "ingredients": ingredients,
-        "steps": steps or [{"text": "Отредактируйте шаги приготовления."}],
+        "steps": steps or [{"text": "Отредактируйте шаги приготовления.", "image_url": ""}],
         "image_urls": image_urls,
+        "cuisine_slug": "",
     }
+    from .recipe_sites import apply_site_adapter
+
+    return apply_site_adapter(url, html, ld, base)
 
 
 def download_image(url: str, max_bytes: int = 4_000_000) -> tuple[bytes, str]:
@@ -254,3 +438,21 @@ def download_image(url: str, max_bytes: int = 4_000_000) -> tuple[bytes, str]:
     if "." not in name:
         name += ".jpg"
     return data, name[:120]
+
+
+def ingredient_row_to_db(row: dict) -> tuple[str, Decimal, str]:
+    name = (row.get("name") or "").strip()[:200]
+    amount_raw = row.get("amount")
+    unit = (row.get("unit") or "").strip()[:40]
+    if amount_raw in (None, "", "0", 0):
+        if unit in ("щепотка", "по вкусу"):
+            return name, Decimal("0"), unit
+        return name, Decimal("0"), ""
+    amt = _safe_decimal(amount_raw)
+    if amt == 0 and unit:
+        return name, Decimal("0"), unit
+    if amt == 0 and not unit:
+        return name, Decimal("0"), ""
+    if not unit:
+        unit = "шт."
+    return name, amt, unit

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db.models import Avg, Count, F, Q
+from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -15,7 +15,9 @@ from users.models import User
 from .models import (
     VmenuCategory,
     VmenuComment,
+    VmenuCommentLike,
     VmenuCommentPhoto,
+    VmenuCuisine,
     VmenuFollow,
     VmenuIngredient,
     VmenuLike,
@@ -28,11 +30,12 @@ from .models import (
 )
 from .feed_rank import rank_recommended
 from .privacy import can_message_user
-from .recipe_parser import download_image, parse_recipe_url as fetch_recipe_from_url
+from .recipe_parser import download_image, ingredient_row_to_db, parse_recipe_url as fetch_recipe_from_url
 from .units import scale_ingredients
 from .serializers import (
     VmenuCategorySerializer,
     VmenuCommentSerializer,
+    VmenuCuisineSerializer,
     VmenuProfileSerializer,
     VmenuRecipeDetailSerializer,
     VmenuRecipeListSerializer,
@@ -54,12 +57,35 @@ def _display_name(user) -> str:
 def _can_message(viewer, target: User) -> bool:
     return can_message_user(viewer, target)
 
+
+def _comments_queryset(user):
+    qs = VmenuComment.objects.select_related("user", "reply_to_user").prefetch_related("photos")
+    qs = qs.annotate(like_count=Count("likes", distinct=True))
+    if user and user.is_authenticated:
+        qs = qs.annotate(
+            liked=Exists(VmenuCommentLike.objects.filter(user=user, comment_id=OuterRef("pk")))
+        )
+    return qs.order_by("-created_at")
+
+
+def _recalc_recipe_rating(recipe):
+    agg = VmenuComment.objects.filter(recipe=recipe, rating__gt=0).aggregate(avg=Avg("rating"))
+    VmenuRecipe.objects.filter(pk=recipe.pk).update(avg_rating=agg["avg"] or 0)
+
+
 def _recipe_list_qs(user):
     return (
         VmenuRecipe.objects.filter(status=VmenuRecipe.Status.PUBLISHED)
-        .select_related("author", "category")
+        .select_related("author", "category", "cuisine")
         .prefetch_related("extra_photos")
     )
+
+
+def _cuisine_from_slug(slug: str) -> VmenuCuisine | None:
+    slug = (slug or "").strip()
+    if not slug:
+        return None
+    return VmenuCuisine.objects.filter(slug=slug).first()
 
 
 def _annotate_recipe_flags(qs, user):
@@ -77,6 +103,14 @@ class VmenuCategoryListView(APIView):
     def get(self, request):
         cats = VmenuCategory.objects.all()
         return Response(VmenuCategorySerializer(cats, many=True).data)
+
+
+class VmenuCuisineListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        items = VmenuCuisine.objects.all()
+        return Response(VmenuCuisineSerializer(items, many=True).data)
 
 
 class VmenuFeedView(APIView):
@@ -111,6 +145,7 @@ class VmenuSearchView(APIView):
     def get(self, request):
         q = (request.query_params.get("q") or "").strip()
         category = (request.query_params.get("category") or "").strip()
+        cuisine = (request.query_params.get("cuisine") or "").strip()
         sort = (request.query_params.get("sort") or "rating").strip()
         min_rating = request.query_params.get("min_rating")
 
@@ -119,6 +154,8 @@ class VmenuSearchView(APIView):
             qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q))
         if category:
             qs = qs.filter(category__slug=category)
+        if cuisine:
+            qs = qs.filter(cuisine__slug=cuisine)
         if min_rating:
             try:
                 qs = qs.filter(avg_rating__gte=Decimal(min_rating))
@@ -148,7 +185,7 @@ class VmenuMyBookView(APIView):
         saved_ids = VmenuSave.objects.filter(user=request.user).values_list("recipe_id", flat=True)
         saved = VmenuRecipe.objects.filter(id__in=saved_ids)
         qs = _annotate_recipe_flags(
-            (own | saved).distinct().select_related("category", "author"),
+            (own | saved).distinct().select_related("category", "cuisine", "author"),
             request.user,
         ).order_by("-updated_at")
         return Response(
@@ -162,16 +199,24 @@ class VmenuRecipeDetailView(APIView):
 
     def get(self, request, recipe_id):
         try:
-            recipe = VmenuRecipe.objects.select_related("author", "category").prefetch_related(
-                "extra_photos", "ingredients", "steps", "comments__user", "comments__photos"
-            ).get(pk=recipe_id)
+            recipe = (
+                VmenuRecipe.objects.select_related("author", "category", "cuisine")
+                .prefetch_related(
+                    "extra_photos",
+                    "ingredients",
+                    "steps",
+                    Prefetch("comments", queryset=_comments_queryset(request.user)),
+                )
+                .get(pk=recipe_id)
+            )
         except VmenuRecipe.DoesNotExist:
             return Response({"detail": "Рецепт не найден."}, status=status.HTTP_404_NOT_FOUND)
         if recipe.status != VmenuRecipe.Status.PUBLISHED and recipe.author_id != request.user.id:
             if not VmenuSave.objects.filter(user=request.user, recipe=recipe).exists():
                 return Response(status=status.HTTP_404_NOT_FOUND)
-        VmenuRecipeView.objects.create(recipe=recipe, user=request.user)
-        VmenuRecipe.objects.filter(pk=recipe.pk).update(view_count=F("view_count") + 1)
+        _, view_created = VmenuRecipeView.objects.get_or_create(recipe=recipe, user=request.user)
+        if view_created:
+            VmenuRecipe.objects.filter(pk=recipe.pk).update(view_count=F("view_count") + 1)
         recipe.refresh_from_db()
         data = VmenuRecipeDetailSerializer(recipe, context={"request": request}).data
         data["liked"] = VmenuLike.objects.filter(user=request.user, recipe=recipe).exists()
@@ -200,6 +245,9 @@ class VmenuRecipeDetailView(APIView):
         if "category_id" in request.data:
             cid = request.data.get("category_id")
             recipe.category_id = cid or None
+        if "cuisine_id" in request.data:
+            cid = request.data.get("cuisine_id")
+            recipe.cuisine_id = cid or None
         if request.data.get("publish") in (True, "true", "1", 1):
             recipe.publish()
         elif request.data.get("book_only") in (True, "true", "1", 1):
@@ -231,6 +279,7 @@ class VmenuRecipeCreateView(APIView):
             source_url=(request.data.get("source_url") or "").strip(),
             status=VmenuRecipe.Status.DRAFT,
             category_id=request.data.get("category_id") or None,
+            cuisine_id=request.data.get("cuisine_id") or None,
             servings=int(request.data.get("servings") or 4),
         )
         if "cover_image" in request.FILES:
@@ -299,7 +348,7 @@ class VmenuRecipeCommentView(APIView):
         recipe = VmenuRecipe.objects.filter(pk=recipe_id, status=VmenuRecipe.Status.PUBLISHED).first()
         if not recipe:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        rating = int(request.data.get("rating") or 0)
+        rating = max(0, min(5, int(request.data.get("rating") or 0)))
         text = (request.data.get("text") or "").strip()
         parent_id = request.data.get("parent_id")
         parent = None
@@ -311,16 +360,45 @@ class VmenuRecipeCommentView(APIView):
             reply_to = User.objects.filter(username__iexact=reply_username, is_active=True).first()
         import re
 
-        comment = VmenuComment.objects.create(
-            user=request.user,
-            recipe=recipe,
-            parent=parent,
-            reply_to_user=reply_to,
-            text=text,
-            rating=max(0, min(5, rating)),
-        )
-        for f in request.FILES.getlist("photos"):
-            VmenuCommentPhoto.objects.create(comment=comment, image=f)
+        created_new = False
+        is_reply = bool(parent)
+        if rating > 0 and not is_reply:
+            existing = VmenuComment.objects.filter(
+                recipe=recipe,
+                user=request.user,
+                rating__gt=0,
+                parent__isnull=True,
+            ).first()
+            if existing:
+                existing.rating = rating
+                if text:
+                    existing.text = text
+                existing.save(update_fields=["rating", "text"])
+                comment = existing
+            else:
+                comment = VmenuComment.objects.create(
+                    user=request.user,
+                    recipe=recipe,
+                    parent=parent,
+                    reply_to_user=reply_to,
+                    text=text,
+                    rating=rating,
+                )
+                created_new = True
+        else:
+            comment = VmenuComment.objects.create(
+                user=request.user,
+                recipe=recipe,
+                parent=parent,
+                reply_to_user=reply_to,
+                text=text,
+                rating=0,
+            )
+            created_new = True
+
+        if created_new:
+            for f in request.FILES.getlist("photos"):
+                VmenuCommentPhoto.objects.create(comment=comment, image=f)
         mentioned = set(re.findall(r"@([a-zA-Z0-9_]+)", text))
         if reply_to:
             mentioned.add(reply_to.username)
@@ -341,13 +419,32 @@ class VmenuRecipeCommentView(APIView):
                     "text_preview": text[:120],
                 },
             )
-        agg = VmenuComment.objects.filter(recipe=recipe, rating__gt=0).aggregate(avg=Avg("rating"))
-        VmenuRecipe.objects.filter(pk=recipe.pk).update(
-            comment_count=recipe.comment_count + 1,
-            avg_rating=agg["avg"] or 0,
-        )
+        if created_new:
+            VmenuRecipe.objects.filter(pk=recipe.pk).update(comment_count=F("comment_count") + 1)
+        _recalc_recipe_rating(recipe)
         recipe.refresh_from_db()
+        comment = _comments_queryset(request.user).get(pk=comment.id)
         return Response(VmenuCommentSerializer(comment, context={"request": request}).data)
+
+
+class VmenuCommentLikeView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, recipe_id, comment_id):
+        comment = VmenuComment.objects.filter(pk=comment_id, recipe_id=recipe_id).first()
+        if not comment:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        VmenuCommentLike.objects.get_or_create(user=request.user, comment=comment)
+        count = comment.likes.count()
+        return Response({"liked": True, "like_count": count})
+
+    def delete(self, request, recipe_id, comment_id):
+        comment = VmenuComment.objects.filter(pk=comment_id, recipe_id=recipe_id).first()
+        if not comment:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        VmenuCommentLike.objects.filter(user=request.user, comment=comment).delete()
+        count = comment.likes.count()
+        return Response({"liked": False, "like_count": count})
 
 
 class VmenuFollowView(APIView):
@@ -373,15 +470,29 @@ class VmenuUserSearchView(APIView):
     def get(self, request):
         q = (request.query_params.get("q") or "").strip()
         if len(q) < 2:
-            return Response({"items": []})
-        qs = User.objects.filter(is_active=True).filter(
-            Q(username__icontains=q)
-            | Q(first_name__icontains=q)
-            | Q(last_name__icontains=q)
-        ).exclude(pk=request.user.id)[:30]
-        return Response(
-            {"items": VmenuUserPublicSerializer(qs, many=True, context={"request": request}).data}
+            return Response({"items": [], "has_more": False})
+        show_all = request.query_params.get("all") in ("1", "true", "yes")
+        try:
+            limit = max(1, min(100, int(request.query_params.get("limit") or 10)))
+        except (TypeError, ValueError):
+            limit = 10
+        qs = (
+            User.objects.filter(is_active=True)
+            .filter(Q(username__icontains=q) | Q(first_name__icontains=q) | Q(last_name__icontains=q))
+            .exclude(pk=request.user.id)
+            .order_by("username")
         )
+        total = qs.count()
+        cap = total if show_all else limit
+        following_ids = set(
+            VmenuFollow.objects.filter(follower=request.user).values_list("following_id", flat=True)
+        )
+        items = []
+        for user in qs[:cap]:
+            row = VmenuUserPublicSerializer(user, context={"request": request}).data
+            row["is_following"] = user.id in following_ids
+            items.append(row)
+        return Response({"items": items, "has_more": total > cap, "total": total})
 
 
 class VmenuUserProfileView(APIView):
@@ -476,9 +587,15 @@ class VmenuFollowListView(APIView):
         else:
             qs = VmenuFollow.objects.filter(follower=request.user).select_related("following")
             users = [row.following for row in qs]
-        return Response(
-            {"items": VmenuUserPublicSerializer(users, many=True, context={"request": request}).data}
+        following_ids = set(
+            VmenuFollow.objects.filter(follower=request.user).values_list("following_id", flat=True)
         )
+        items = []
+        for user in users:
+            row = VmenuUserPublicSerializer(user, context={"request": request}).data
+            row["is_following"] = user.id in following_ids
+            items.append(row)
+        return Response({"items": items})
 
 
 class VmenuParseUrlView(APIView):
@@ -492,6 +609,8 @@ class VmenuParseUrlView(APIView):
             parsed = fetch_recipe_from_url(url)
         except Exception as exc:
             return Response({"detail": str(exc) or "Не удалось загрузить страницу."}, status=status.HTTP_400_BAD_REQUEST)
+        from django.core.files.base import ContentFile
+
         recipe = VmenuRecipe.objects.create(
             author=request.user,
             title=parsed["title"],
@@ -500,17 +619,30 @@ class VmenuParseUrlView(APIView):
             status=VmenuRecipe.Status.DRAFT,
             servings=parsed.get("servings") or 4,
         )
+        cuisine_slug = (parsed.get("cuisine_slug") or "").strip()
+        if cuisine_slug:
+            cuisine = _cuisine_from_slug(cuisine_slug)
+            if cuisine:
+                recipe.cuisine = cuisine
+                recipe.save(update_fields=["cuisine"])
         for i, row in enumerate(parsed.get("ingredients") or []):
+            name, amount, unit = ingredient_row_to_db(row)
             VmenuIngredient.objects.create(
                 recipe=recipe,
-                name=row.get("name", ""),
-                amount=row.get("amount") or 0,
-                unit=row.get("unit") or "г",
+                name=name,
+                amount=amount,
+                unit=unit,
                 sort_order=i,
             )
         for i, row in enumerate(parsed.get("steps") or []):
-            VmenuStep.objects.create(recipe=recipe, text=row.get("text", ""), sort_order=i)
-        from django.core.files.base import ContentFile
+            step = VmenuStep.objects.create(recipe=recipe, text=row.get("text", ""), sort_order=i)
+            step_img = row.get("image_url")
+            if step_img:
+                try:
+                    data, fname = download_image(step_img)
+                    step.image.save(fname, ContentFile(data), save=True)
+                except Exception:
+                    pass
 
         for idx, img_url in enumerate(parsed.get("image_urls") or []):
             try:
@@ -539,11 +671,12 @@ class VmenuRecipeIngredientsView(APIView):
         items = request.data.get("ingredients") or []
         VmenuIngredient.objects.filter(recipe=recipe).delete()
         for i, row in enumerate(items):
+            name, amount, unit = ingredient_row_to_db(row if isinstance(row, dict) else {"name": str(row)})
             VmenuIngredient.objects.create(
                 recipe=recipe,
-                name=(row.get("name") or "").strip()[:200],
-                amount=row.get("amount") or 0,
-                unit=(row.get("unit") or "").strip()[:40],
+                name=name,
+                amount=amount,
+                unit=unit,
                 sort_order=i,
             )
         recipe.refresh_from_db()
@@ -566,17 +699,28 @@ class VmenuRecipeStepsView(APIView):
                 items = json.loads(items)
             except Exception:
                 items = []
-        VmenuStep.objects.filter(recipe=recipe).delete()
+        existing = list(recipe.steps.order_by("sort_order", "id"))
+        kept_ids = []
         for i, row in enumerate(items):
-            step = VmenuStep.objects.create(
-                recipe=recipe,
-                text=(row.get("text") or "").strip(),
-                sort_order=i,
-            )
             file_key = f"step_image_{i}"
-            if file_key in request.FILES:
-                step.image = request.FILES[file_key]
-                step.save(update_fields=["image"])
+            if i < len(existing):
+                step = existing[i]
+                step.text = (row.get("text") or "").strip()
+                step.sort_order = i
+                if file_key in request.FILES:
+                    step.image = request.FILES[file_key]
+                step.save()
+            else:
+                step = VmenuStep.objects.create(
+                    recipe=recipe,
+                    text=(row.get("text") or "").strip(),
+                    sort_order=i,
+                )
+                if file_key in request.FILES:
+                    step.image = request.FILES[file_key]
+                    step.save(update_fields=["image"])
+            kept_ids.append(step.id)
+        VmenuStep.objects.filter(recipe=recipe).exclude(id__in=kept_ids).delete()
         recipe.refresh_from_db()
         return Response(VmenuRecipeDetailSerializer(recipe, context={"request": request}).data)
 

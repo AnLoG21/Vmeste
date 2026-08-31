@@ -37,9 +37,14 @@ export function scaleIngredients(ingredients, baseServings, targetServings, disp
   const target = Math.max(1, Number(targetServings) || 1);
   const factor = target / base;
   return (ingredients || []).map((ing) => {
-    let amount = q((Number(ing.amount) || 0) * factor);
-    let unit = ing.unit || "г";
-    if (displayUnit) {
+    const raw = Number(ing.amount);
+    const hasAmount = ing.amount !== "" && ing.amount != null && Number.isFinite(raw) && raw !== 0;
+    if (!hasAmount) {
+      return { ...ing, amount: ing.amount ?? "", unit: ing.unit || "" };
+    }
+    let amount = q(raw * factor);
+    let unit = ing.unit || "";
+    if (displayUnit && unit) {
       const converted = convertUnit(amount, unit, displayUnit);
       if (converted != null) {
         amount = converted;
@@ -67,9 +72,13 @@ export function formatIngredientLine(ing) {
   const name = ing.name || "";
   const unit = (ing.unit || "").trim();
   const amt = ing.amount;
+  if (amt === "" || amt == null) {
+    return unit ? `${name} — ${unit}` : name;
+  }
   const n = Number(amt);
-  if (!unit && (!amt || n === 0)) return name;
-  if (unit && (!amt || n === 0)) return `${name} — ${unit}`;
+  if (!Number.isFinite(n) || n === 0) {
+    return unit ? `${name} — ${unit}` : name;
+  }
   if (!unit) return `${name} — ${formatAmount(amt)}`;
   return `${name} — ${formatAmount(amt)} ${unit}`;
 }

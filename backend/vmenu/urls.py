@@ -2,6 +2,8 @@ from django.urls import path
 
 from .views import (
     VmenuCategoryListView,
+    VmenuCommentLikeView,
+    VmenuCuisineListView,
     VmenuFeedView,
     VmenuFollowListView,
     VmenuFollowView,
@@ -23,6 +25,7 @@ from .views import (
 
 urlpatterns = [
     path("categories/", VmenuCategoryListView.as_view()),
+    path("cuisines/", VmenuCuisineListView.as_view()),
     path("feed/", VmenuFeedView.as_view()),
     path("search/", VmenuSearchView.as_view()),
     path("book/", VmenuMyBookView.as_view()),
@@ -32,6 +35,7 @@ urlpatterns = [
     path("recipes/<int:recipe_id>/like/", VmenuRecipeLikeView.as_view()),
     path("recipes/<int:recipe_id>/save/", VmenuRecipeSaveView.as_view()),
     path("recipes/<int:recipe_id>/comments/", VmenuRecipeCommentView.as_view()),
+    path("recipes/<int:recipe_id>/comments/<int:comment_id>/like/", VmenuCommentLikeView.as_view()),
     path("recipes/<int:recipe_id>/ingredients/", VmenuRecipeIngredientsView.as_view()),
     path("recipes/<int:recipe_id>/steps/", VmenuRecipeStepsView.as_view()),
     path("recipes/<int:recipe_id>/extra-photos/", VmenuRecipeExtraPhotosView.as_view()),

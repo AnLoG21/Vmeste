@@ -5,6 +5,8 @@ from common.media_urls import photo_urls
 from .models import (
     VmenuCategory,
     VmenuComment,
+    VmenuCommentLike,
+    VmenuCuisine,
     VmenuIngredient,
     VmenuLike,
     VmenuProfile,
@@ -32,6 +34,12 @@ def _user_public(user, request):
 class VmenuCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = VmenuCategory
+        fields = ("id", "name", "slug")
+
+
+class VmenuCuisineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VmenuCuisine
         fields = ("id", "name", "slug")
 
 
@@ -73,6 +81,7 @@ class VmenuProfileSerializer(serializers.ModelSerializer):
 class VmenuRecipeListSerializer(serializers.ModelSerializer):
     author = serializers.SerializerMethodField()
     category = VmenuCategorySerializer(read_only=True)
+    cuisine = VmenuCuisineSerializer(read_only=True)
     cover_url = serializers.SerializerMethodField()
     extra_photo_urls = serializers.SerializerMethodField()
     liked = serializers.SerializerMethodField()
@@ -86,6 +95,7 @@ class VmenuRecipeListSerializer(serializers.ModelSerializer):
             "description",
             "author",
             "category",
+            "cuisine",
             "cover_url",
             "extra_photo_urls",
             "view_count",
@@ -132,9 +142,23 @@ class VmenuRecipeListSerializer(serializers.ModelSerializer):
 
 
 class VmenuIngredientSerializer(serializers.ModelSerializer):
+    amount = serializers.SerializerMethodField()
+    unit = serializers.SerializerMethodField()
+
     class Meta:
         model = VmenuIngredient
         fields = ("id", "name", "amount", "unit", "sort_order")
+
+    def get_amount(self, obj):
+        if obj.amount is None or obj.amount == 0:
+            return ""
+        s = format(obj.amount, "f").rstrip("0").rstrip(".")
+        return s or "0"
+
+    def get_unit(self, obj):
+        if obj.amount is None or obj.amount == 0:
+            return (obj.unit or "").strip() if (obj.unit or "").strip() in ("щепотка", "по вкусу") else ""
+        return obj.unit or ""
 
 
 class VmenuStepSerializer(serializers.ModelSerializer):
@@ -154,10 +178,36 @@ class VmenuCommentSerializer(serializers.ModelSerializer):
     user = serializers.SerializerMethodField()
     photos = serializers.SerializerMethodField()
     reply_to_user = serializers.SerializerMethodField()
+    like_count = serializers.SerializerMethodField()
+    liked = serializers.SerializerMethodField()
 
     class Meta:
         model = VmenuComment
-        fields = ("id", "user", "text", "rating", "photos", "parent_id", "reply_to_user", "created_at")
+        fields = (
+            "id",
+            "user",
+            "text",
+            "rating",
+            "photos",
+            "parent_id",
+            "reply_to_user",
+            "like_count",
+            "liked",
+            "created_at",
+        )
+
+    def get_like_count(self, obj):
+        if hasattr(obj, "like_count") and obj.like_count is not None:
+            return obj.like_count
+        return obj.likes.count()
+
+    def get_liked(self, obj):
+        if hasattr(obj, "liked"):
+            return bool(obj.liked)
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return VmenuCommentLike.objects.filter(user=request.user, comment=obj).exists()
 
     def get_user(self, obj):
         return _user_public(obj.user, self.context.get("request"))
@@ -179,12 +229,14 @@ class VmenuCommentSerializer(serializers.ModelSerializer):
 class VmenuRecipeDetailSerializer(serializers.ModelSerializer):
     author = serializers.SerializerMethodField()
     category = VmenuCategorySerializer(read_only=True)
+    cuisine = VmenuCuisineSerializer(read_only=True)
     cover_url = serializers.SerializerMethodField()
     extra_photo_urls = serializers.SerializerMethodField()
     video_url = serializers.SerializerMethodField()
     ingredients = VmenuIngredientSerializer(many=True, read_only=True)
     steps = VmenuStepSerializer(many=True, read_only=True)
     comments = VmenuCommentSerializer(many=True, read_only=True)
+    my_rating = serializers.SerializerMethodField()
 
     class Meta:
         model = VmenuRecipe
@@ -197,6 +249,7 @@ class VmenuRecipeDetailSerializer(serializers.ModelSerializer):
             "servings",
             "author",
             "category",
+            "cuisine",
             "cover_url",
             "extra_photo_urls",
             "video_url",
@@ -205,6 +258,7 @@ class VmenuRecipeDetailSerializer(serializers.ModelSerializer):
             "save_count",
             "comment_count",
             "avg_rating",
+            "my_rating",
             "published_at",
             "ingredients",
             "steps",
@@ -234,3 +288,10 @@ class VmenuRecipeDetailSerializer(serializers.ModelSerializer):
         if request:
             return request.build_absolute_uri(obj.video.url)
         return obj.video.url
+
+    def get_my_rating(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return 0
+        row = obj.comments.filter(user=request.user, rating__gt=0, parent__isnull=True).first()
+        return row.rating if row else 0

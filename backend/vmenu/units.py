@@ -62,9 +62,19 @@ def scale_ingredients(ingredients, base_servings: int, target_servings: int, dis
     factor = Decimal(target_servings) / Decimal(base_servings)
     out = []
     for ing in ingredients:
-        amount = scale_amount(ing.get("amount") if isinstance(ing, dict) else ing.amount, factor)
-        unit = (ing.get("unit") if isinstance(ing, dict) else ing.unit) or "г"
+        raw_amount = ing.get("amount") if isinstance(ing, dict) else ing.amount
         name = ing.get("name") if isinstance(ing, dict) else ing.name
+        unit = ((ing.get("unit") if isinstance(ing, dict) else ing.unit) or "").strip()
+        try:
+            base_amt = Decimal(str(raw_amount or 0))
+        except Exception:
+            base_amt = Decimal("0")
+        if base_amt == 0:
+            out.append({"name": name, "amount": "", "unit": unit})
+            continue
+        amount = scale_amount(raw_amount, factor)
+        if not unit:
+            unit = "шт."
         if display_unit:
             converted = convert_unit(amount, unit, display_unit)
             if converted is not None:

@@ -18,10 +18,10 @@ export function VmenuCloseButton({ onClick }) {
   );
 }
 
-export function VmenuRatingBadge({ rating }) {
+export function VmenuRatingBadge({ rating, inline = false }) {
   if (!rating || Number(rating) <= 0) return null;
   return (
-    <div className="vmenu-rating-badge" aria-label={`Рейтинг ${rating}`}>
+    <div className={`vmenu-rating-badge ${inline ? "vmenu-rating-badge--inline" : ""}`} aria-label={`Рейтинг ${rating}`}>
       <span className="vmenu-rating-badge-star">★</span>
       <span>{Number(rating).toFixed(1)}</span>
     </div>

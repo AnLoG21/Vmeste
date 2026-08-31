@@ -2629,6 +2629,9 @@ export default function App() {
   const [staffServicesOpenId, setStaffServicesOpenId] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [selectedChatId, setSelectedChatId] = useState(null);
+  const [vmenuTab, setVmenuTab] = useState("feed");
+  const [vmenuChatsHostEl, setVmenuChatsHostEl] = useState(null);
+  const [mainChatsHostEl, setMainChatsHostEl] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatHasMoreOlder, setChatHasMoreOlder] = useState(false);
   const [chatLoadingOlder, setChatLoadingOlder] = useState(false);
@@ -2764,6 +2767,9 @@ export default function App() {
   const [chatReceiptsMode, setChatReceiptsMode] = useState(() => loadReceiptsPref());
   const currentViewRef = useRef(currentView);
   const meRef = useRef(me);
+  const chatsSurfaceActive =
+    currentView === "chats" || (currentView === "vmenu" && vmenuTab === "chats");
+  const chatsSurfaceActiveRef = useRef(chatsSurfaceActive);
   const lastConvMsgDigestRef = useRef({});
   const digestPrimedRef = useRef(false);
 
@@ -2954,7 +2960,7 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (!accessToken || currentView !== "chats" || me?.role !== "provider" || !orgActiveStaffIdsKey) return;
+    if (!accessToken || !chatsSurfaceActive || me?.role !== "provider" || !orgActiveStaffIdsKey) return;
     const ids = orgActiveStaffIdsKey.split(",").map(Number).filter(Boolean);
     if (!ids.length) return;
     let cancelled = false;
@@ -3356,7 +3362,7 @@ export default function App() {
   }, [accessToken, me]);
 
   useEffect(() => {
-    if (!accessToken || currentView !== "chats") return;
+    if (!accessToken || !chatsSurfaceActive) return;
     if (me?.role === "provider") {
       loadChats();
       authFetch(`${API_URL}/booking/staff/`).then((r) => {
@@ -3370,7 +3376,7 @@ export default function App() {
     } else if (me?.role === "client") {
       loadChats();
     }
-  }, [accessToken, currentView, me?.role]);
+  }, [accessToken, chatsSurfaceActive, me?.role]);
 
   useEffect(() => {
     chatMessagesRef.current = chatMessages;
@@ -3392,7 +3398,7 @@ export default function App() {
   }, [chatHasMoreOlder]);
 
   useEffect(() => {
-    if (!accessToken || !selectedChatId || currentView !== "chats") return;
+    if (!accessToken || !selectedChatId || !chatsSurfaceActive) return;
     let cancelled = false;
     setChatMessages([]);
     setChatHasMoreOlder(false);
@@ -3453,7 +3459,7 @@ export default function App() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [accessToken, selectedChatId, currentView]);
+  }, [accessToken, selectedChatId, chatsSurfaceActive]);
 
   useEffect(() => {
     if (!me) return;
@@ -3533,13 +3539,13 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (currentView !== "chats" || !conversations.length) return;
+    if (!chatsSurfaceActive || !conversations.length) return;
     lastConvMsgDigestRef.current = conversations.reduce((acc, c) => {
       acc[c.id] = c.last_message?.id ?? null;
       return acc;
     }, {});
     digestPrimedRef.current = true;
-  }, [currentView, conversations]);
+  }, [chatsSurfaceActive, conversations]);
 
   useEffect(() => {
     const next = {};
@@ -4012,6 +4018,14 @@ export default function App() {
   }, [currentView]);
 
   useEffect(() => {
+    chatsSurfaceActiveRef.current = chatsSurfaceActive;
+  }, [chatsSurfaceActive]);
+
+  useEffect(() => {
+    if (currentView !== "vmenu") setVmenuChatsHostEl(null);
+  }, [currentView]);
+
+  useEffect(() => {
     meRef.current = me;
   }, [me]);
 
@@ -4044,7 +4058,7 @@ export default function App() {
   }, [subnavBookmarks, me?.role]);
 
   useEffect(() => {
-    if (!accessToken || currentView === "chats") return;
+    if (!accessToken || chatsSurfaceActive) return;
     const canPoll =
       me?.role === "provider" ||
       (me?.role === "staff" && (staffEffectivePerms.manage_chats || staffEffectivePerms.manage_client_chats));
@@ -4055,7 +4069,7 @@ export default function App() {
       if (cancelled || !res.ok) return;
       const list = await res.json();
       const myId = Number(meRef.current?.id);
-      if (currentViewRef.current !== "chats" && digestPrimedRef.current) {
+      if (!chatsSurfaceActiveRef.current && digestPrimedRef.current) {
         const prev = lastConvMsgDigestRef.current;
         for (const c of list) {
           const mid = c.last_message?.id;
@@ -12122,6 +12136,8 @@ export default function App() {
       : { backgroundColor: activeChatWallpaper }
     : undefined;
   const tgMainDark = activeChatWallpaper === "#1e2a24";
+  const chatsRoleOk = me?.role === "client" || me?.role === "provider" || me?.role === "staff";
+  const chatsPortalTarget = currentView === "vmenu" ? vmenuChatsHostEl : mainChatsHostEl;
   const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "service_apps", "vmenu"].includes(currentView);
   const profileWide = accessToken && ["profile", "subscriptions"].includes(currentView);
 
@@ -12167,7 +12183,7 @@ export default function App() {
           )}
         </button>
         <div>{verifyStatus && <p className="verify-note">{verifyStatus}</p>}</div>
-        {accessToken && (me?.role === "client" || (me?.role === "provider" && currentView === "client_map")) && (
+        {accessToken && currentView !== "vmenu" && (me?.role === "client" || (me?.role === "provider" && currentView === "client_map")) && (
           <div className="client-header-search">
             <div className="client-header-search-input-wrap" ref={clientHeaderSearchWrapRef}>
               <input
@@ -13164,6 +13180,8 @@ export default function App() {
             me={me}
             selectedChatId={selectedChatId}
             onSelectChat={(convId) => setSelectedChatId(convId)}
+            onTabChange={setVmenuTab}
+            onChatsHostReady={setVmenuChatsHostEl}
             onExit={() => setCurrentView("service_apps")}
           />
         )}
@@ -13242,8 +13260,11 @@ export default function App() {
             ) : null}
           </>
         )}
-        {accessToken && currentView === "chats" && (me?.role === "client" || me?.role === "provider" || me?.role === "staff") && (
-          <section className="card full-width tg-chats-card">
+        {accessToken && currentView === "chats" && chatsRoleOk && (
+          <div ref={setMainChatsHostEl} className="tg-chats-portal-host card full-width" />
+        )}
+        {accessToken && chatsSurfaceActive && chatsRoleOk && chatsPortalTarget && createPortal(
+          <section className={`card full-width tg-chats-card${currentView === "vmenu" ? " tg-chats-card--vmenu" : ""}`}>
             <div
               className={[
                 "tg-body",
@@ -14578,7 +14599,8 @@ export default function App() {
                 </div>
               </div>
             )}
-          </section>
+          </section>,
+          chatsPortalTarget,
         )}
 
         {accessToken &&

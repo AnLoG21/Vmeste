@@ -29,6 +29,10 @@ export function loadCategories(authFetch, API_URL) {
   return vmenuFetch(authFetch, API_URL, "/categories/");
 }
 
+export function loadCuisines(authFetch, API_URL) {
+  return vmenuFetch(authFetch, API_URL, "/cuisines/");
+}
+
 export function loadMyProfile(authFetch, API_URL) {
   return vmenuFetch(authFetch, API_URL, "/users/me/");
 }
@@ -41,8 +45,11 @@ export function loadFollows(authFetch, API_URL, kind = "following") {
   return vmenuFetch(authFetch, API_URL, `/follows/?kind=${kind}`);
 }
 
-export function searchUsers(authFetch, API_URL, q) {
-  return vmenuFetch(authFetch, API_URL, `/users/search/?q=${encodeURIComponent(q)}`);
+export function searchUsers(authFetch, API_URL, q, { limit = 10, all = false } = {}) {
+  const params = new URLSearchParams({ q });
+  if (all) params.set("all", "1");
+  else params.set("limit", String(limit));
+  return vmenuFetch(authFetch, API_URL, `/users/search/?${params}`);
 }
 
 export function toggleLike(authFetch, API_URL, recipeId, liked) {
@@ -77,6 +84,12 @@ export function postComment(authFetch, API_URL, recipeId, formData) {
   return vmenuFetch(authFetch, API_URL, `/recipes/${recipeId}/comments/`, { method: "POST", body: formData });
 }
 
+export function toggleCommentLike(authFetch, API_URL, recipeId, commentId, liked) {
+  return vmenuFetch(authFetch, API_URL, `/recipes/${recipeId}/comments/${commentId}/like/`, {
+    method: liked ? "DELETE" : "POST",
+  });
+}
+
 export function loadRecipe(authFetch, API_URL, id, params = {}) {
   const q = new URLSearchParams(params);
   const suffix = q.toString() ? `?${q}` : "";
@@ -108,4 +121,22 @@ export function openUserChat(authFetch, API_URL, userId) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ user_id: userId }),
   });
+}
+
+export function deleteRecipe(authFetch, API_URL, recipeId) {
+  return vmenuFetch(authFetch, API_URL, `/recipes/${recipeId}/`, { method: "DELETE" });
+}
+
+/** Normalize ingredient from API for editor fields. */
+export function normalizeIngredient(ing) {
+  const raw = ing.amount;
+  const n = Number(raw);
+  const hasAmount = raw !== "" && raw != null && Number.isFinite(n) && n !== 0;
+  let unit = (ing.unit || "").trim();
+  if (!hasAmount) {
+    if (!["щепотка", "по вкусу"].includes(unit)) unit = "";
+    return { ...ing, amount: "", unit };
+  }
+  const amountStr = String(raw).replace(/\.?0+$/, "") || String(raw);
+  return { ...ing, amount: amountStr, unit: unit || "г" };
 }

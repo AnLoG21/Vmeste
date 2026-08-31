@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./vmenu.css";
 import VmenuLogo from "./VmenuLogo.jsx";
 import { vmenuFetch, VMENU_DRAFT_KEY } from "./vmenuApi.js";
-import { VmenuChatsTab } from "./VmenuChatsTab.jsx";
 import {
   VmenuBookTab,
   VmenuFeedTab,
@@ -26,7 +25,14 @@ const TABS = [
 
 const DRAFT_KEY = VMENU_DRAFT_KEY;
 
-export default function VmenuApp({ authFetch, API_URL, me, onExit, onSelectChat, selectedChatId }) {
+export default function VmenuApp({
+  authFetch,
+  API_URL,
+  me,
+  onSelectChat,
+  onTabChange,
+  onChatsHostReady,
+}) {
   const [tab, setTab] = useState("feed");
   const [screen, setScreen] = useState("main");
   const [userId, setUserId] = useState(null);
@@ -36,6 +42,14 @@ export default function VmenuApp({ authFetch, API_URL, me, onExit, onSelectChat,
   const [settingsCategories, setSettingsCategories] = useState([]);
   const [editorDraft, setEditorDraft] = useState(null);
   const editorSaveRef = useRef(null);
+
+  const setActiveTab = useCallback(
+    (nextTab) => {
+      setTab(nextTab);
+      onTabChange?.(nextTab);
+    },
+    [onTabChange],
+  );
 
   function openUser(id) {
     setUserId(id);
@@ -70,7 +84,7 @@ export default function VmenuApp({ authFetch, API_URL, me, onExit, onSelectChat,
     if (payload.avatar) fd.append("avatar", payload.avatar);
     await vmenuFetch(authFetch, API_URL, "/users/me/", { method: "PATCH", body: fd });
     setScreen("main");
-    setTab("profile");
+    setActiveTab("profile");
   }
 
   const switchTab = useCallback(
@@ -79,10 +93,18 @@ export default function VmenuApp({ authFetch, API_URL, me, onExit, onSelectChat,
         await editorSaveRef.current(true);
       }
       setScreen("main");
-      setTab(nextTab);
+      setActiveTab(nextTab);
     },
-    [screen],
+    [screen, setActiveTab],
   );
+
+  useEffect(() => {
+    onTabChange?.("feed");
+  }, [onTabChange]);
+
+  useEffect(() => {
+    if (tab !== "chats") onChatsHostReady?.(null);
+  }, [tab, onChatsHostReady]);
 
   useEffect(() => {
     if (screen !== "editor" || editorId) return;
@@ -101,12 +123,13 @@ export default function VmenuApp({ authFetch, API_URL, me, onExit, onSelectChat,
           userId={userId}
           authFetch={authFetch}
           API_URL={API_URL}
+          me={me}
           onBack={() => setScreen("main")}
           onOpenRecipe={openRecipe}
           onOpenChat={(convId) => {
             onSelectChat?.(convId);
             setScreen("main");
-            setTab("chats");
+            setActiveTab("chats");
           }}
         />
       );
@@ -117,7 +140,12 @@ export default function VmenuApp({ authFetch, API_URL, me, onExit, onSelectChat,
           recipeId={detailId}
           authFetch={authFetch}
           API_URL={API_URL}
+          me={me}
           onBack={() => setScreen("main")}
+          onDeleted={() => {
+            setDetailId(null);
+            setScreen("main");
+          }}
           onOpenUser={(id) => {
             setUserId(id);
             setScreen("user");
@@ -139,7 +167,7 @@ export default function VmenuApp({ authFetch, API_URL, me, onExit, onSelectChat,
             sessionStorage.removeItem(DRAFT_KEY);
             setEditorDraft(null);
             setScreen("main");
-            setTab("book");
+            setActiveTab("book");
           }}
           onCancel={() => {
             setScreen("main");
@@ -158,23 +186,24 @@ export default function VmenuApp({ authFetch, API_URL, me, onExit, onSelectChat,
       );
     }
     if (tab === "chats") {
+      return <div className="vmenu-chats-host" ref={onChatsHostReady} />;
+    }
+    if (tab === "feed") {
       return (
-        <VmenuChatsTab
-          authFetch={authFetch}
-          API_URL={API_URL}
-          me={me}
-          initialChatId={selectedChatId}
-          onChatOpen={onSelectChat}
-        />
+        <VmenuFeedTab authFetch={authFetch} API_URL={API_URL} me={me} onOpenUser={openUser} onOpenRecipe={openRecipe} />
       );
     }
-    if (tab === "feed") return <VmenuFeedTab authFetch={authFetch} API_URL={API_URL} onOpenUser={openUser} onOpenRecipe={openRecipe} />;
-    if (tab === "search") return <VmenuSearchTab authFetch={authFetch} API_URL={API_URL} onOpenUser={openUser} onOpenRecipe={openRecipe} />;
+    if (tab === "search") {
+      return (
+        <VmenuSearchTab authFetch={authFetch} API_URL={API_URL} me={me} onOpenUser={openUser} onOpenRecipe={openRecipe} />
+      );
+    }
     if (tab === "book") {
       return (
         <VmenuBookTab
           authFetch={authFetch}
           API_URL={API_URL}
+          me={me}
           onCreate={() => openEditor()}
           onOpenRecipe={openRecipe}
           onEditRecipe={(id) => openEditor(id)}

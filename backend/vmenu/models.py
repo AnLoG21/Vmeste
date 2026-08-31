@@ -41,6 +41,18 @@ class VmenuCategory(models.Model):
         return self.name
 
 
+class VmenuCuisine(models.Model):
+    name = models.CharField(max_length=80)
+    slug = models.SlugField(max_length=80, unique=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class VmenuRecipe(models.Model):
     class Status(models.TextChoices):
         DRAFT = "draft", "Черновик"
@@ -54,6 +66,13 @@ class VmenuRecipe(models.Model):
     )
     category = models.ForeignKey(
         VmenuCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recipes",
+    )
+    cuisine = models.ForeignKey(
+        VmenuCuisine,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -165,6 +184,19 @@ class VmenuCommentPhoto(models.Model):
     image = models.ImageField(upload_to="vmenu/comments/%Y/%m/")
 
 
+class VmenuCommentLike(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="vmenu_comment_likes",
+    )
+    comment = models.ForeignKey(VmenuComment, on_delete=models.CASCADE, related_name="likes")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("user", "comment")]
+
+
 class VmenuFollow(models.Model):
     follower = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -191,3 +223,11 @@ class VmenuRecipeView(models.Model):
         blank=True,
     )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["recipe", "user"],
+                name="vmenu_unique_recipe_view_per_user",
+            ),
+        ]
