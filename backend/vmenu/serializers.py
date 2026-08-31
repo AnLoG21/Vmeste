@@ -157,7 +157,7 @@ class VmenuIngredientSerializer(serializers.ModelSerializer):
 
     def get_unit(self, obj):
         if obj.amount is None or obj.amount == 0:
-            return (obj.unit or "").strip() if (obj.unit or "").strip() in ("щепотка", "по вкусу") else ""
+            return (obj.unit or "").strip() if (obj.unit or "").strip() in ("щепотка", "по вкусу", "зубчик") else ""
         return obj.unit or ""
 
 

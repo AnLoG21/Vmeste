@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { loadRecipe, postComment, toggleCommentLike } from "./vmenuApi.js";
 import { VmenuTextArea } from "./VmenuComponents.jsx";
 
@@ -36,6 +36,7 @@ export function VmenuComments({
   const [replyTo, setReplyTo] = useState(null);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
+  const commentInputRef = useRef(null);
 
   async function reload() {
     setLoading(true);
@@ -57,6 +58,18 @@ export function VmenuComments({
   useEffect(() => {
     void reload();
   }, [recipeId]);
+
+  function startReply(comment) {
+    const username = comment.user?.username || "";
+    setReplyTo({ id: comment.id, username });
+    setCommentText(username ? `@${username} ` : "");
+    commentInputRef.current?.focus();
+  }
+
+  function cancelReply() {
+    setReplyTo(null);
+    setCommentText("");
+  }
 
   async function submitComment(e) {
     e.preventDefault();
@@ -109,15 +122,13 @@ export function VmenuComments({
                 type="button"
                 className="vmenu-comment-reply"
                 aria-label="Ответить"
-                onClick={() => setReplyTo({ id: c.id, username: c.user?.username })}
+                onClick={() => startReply(c)}
               >
                 ↩
               </button>
             </div>
             {c.reply_to_user ? (
-              <span className="muted small">
-                @{c.reply_to_user.username}{" "}
-              </span>
+              <span className="muted small">@{c.reply_to_user.username} </span>
             ) : null}
             <p>{c.text}</p>
             <button
@@ -142,20 +153,18 @@ export function VmenuComments({
             <Stars value={rating} onChange={setRating} />
           </div>
         ) : null}
-        {replyTo ? (
-          <p className="muted small">
-            Ответ @{replyTo.username}{" "}
-            <button type="button" className="ghost-btn" onClick={() => setReplyTo(null)}>
-              ×
-            </button>
-          </p>
-        ) : null}
         <div className="vmenu-comment-input-row">
+          {replyTo ? (
+            <button type="button" className="vmenu-comment-reply-prefix" onClick={cancelReply} aria-label="Отменить ответ">
+              ↩
+            </button>
+          ) : null}
           <VmenuTextArea
+            ref={commentInputRef}
             value={commentText}
             onChange={setCommentText}
             rows={compact ? 2 : 3}
-            placeholder="Комментарий… @username для упоминания"
+            placeholder={replyTo ? "" : "Комментарий…"}
           />
           <button type="submit" className="vmenu-send-btn" aria-label="Отправить">
             ➤

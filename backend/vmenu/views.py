@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 
 from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q
@@ -8,6 +9,8 @@ from rest_framework import permissions, status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from chat.models import Conversation
 
 from common.media_urls import photo_urls
 from users.models import User
@@ -86,6 +89,64 @@ def _cuisine_from_slug(slug: str) -> VmenuCuisine | None:
     if not slug:
         return None
     return VmenuCuisine.objects.filter(slug=slug).first()
+
+
+def _interaction_scores(host_user, user_ids: list[int], direction: str) -> dict[int, int]:
+    scores: dict[int, int] = {uid: 0 for uid in user_ids}
+    if not user_ids:
+        return scores
+    if direction == "followers":
+        for row in (
+            VmenuLike.objects.filter(recipe__author=host_user, user_id__in=user_ids)
+            .values("user_id")
+            .annotate(c=Count("id"))
+        ):
+            scores[row["user_id"]] = scores.get(row["user_id"], 0) + row["c"] * 3
+        for row in (
+            VmenuSave.objects.filter(recipe__author=host_user, user_id__in=user_ids)
+            .values("user_id")
+            .annotate(c=Count("id"))
+        ):
+            scores[row["user_id"]] = scores.get(row["user_id"], 0) + row["c"] * 2
+        for row in (
+            VmenuComment.objects.filter(recipe__author=host_user, user_id__in=user_ids, parent__isnull=True)
+            .values("user_id")
+            .annotate(c=Count("id"))
+        ):
+            scores[row["user_id"]] = scores.get(row["user_id"], 0) + row["c"] * 4
+    else:
+        for row in (
+            VmenuLike.objects.filter(user=host_user, recipe__author_id__in=user_ids)
+            .values("recipe__author_id")
+            .annotate(c=Count("id"))
+        ):
+            uid = row["recipe__author_id"]
+            scores[uid] = scores.get(uid, 0) + row["c"] * 3
+        for row in (
+            VmenuSave.objects.filter(user=host_user, recipe__author_id__in=user_ids)
+            .values("recipe__author_id")
+            .annotate(c=Count("id"))
+        ):
+            uid = row["recipe__author_id"]
+            scores[uid] = scores.get(uid, 0) + row["c"] * 2
+        for row in (
+            VmenuComment.objects.filter(user=host_user, recipe__author_id__in=user_ids, parent__isnull=True)
+            .values("recipe__author_id")
+            .annotate(c=Count("id"))
+        ):
+            uid = row["recipe__author_id"]
+            scores[uid] = scores.get(uid, 0) + row["c"] * 4
+    return scores
+
+
+def _top_interacted_users(host_user, user_ids: list[int], direction: str, limit: int = 3) -> list[User]:
+    user_ids = list(dict.fromkeys(user_ids))
+    if not user_ids:
+        return []
+    scores = _interaction_scores(host_user, user_ids, direction)
+    ranked = sorted(user_ids, key=lambda uid: (-scores.get(uid, 0), uid))[:limit]
+    users = {u.id: u for u in User.objects.filter(id__in=ranked)}
+    return [users[uid] for uid in ranked if uid in users]
 
 
 def _annotate_recipe_flags(qs, user):
@@ -476,12 +537,16 @@ class VmenuUserSearchView(APIView):
             limit = max(1, min(100, int(request.query_params.get("limit") or 10)))
         except (TypeError, ValueError):
             limit = 10
-        qs = (
-            User.objects.filter(is_active=True)
-            .filter(Q(username__icontains=q) | Q(first_name__icontains=q) | Q(last_name__icontains=q))
-            .exclude(pk=request.user.id)
-            .order_by("username")
-        )
+        qs = User.objects.filter(is_active=True, is_demo=False).exclude(pk=request.user.id)
+        words = [w for w in re.split(r"\s+", q) if w]
+        for word in words:
+            qs = qs.filter(
+                Q(username__icontains=word)
+                | Q(first_name__icontains=word)
+                | Q(last_name__icontains=word)
+                | Q(patronymic__icontains=word)
+            )
+        qs = qs.order_by("username")
         total = qs.count()
         cap = total if show_all else limit
         following_ids = set(
@@ -528,11 +593,14 @@ class VmenuMyProfileView(APIView):
         profile = _profile(request.user)
         followers = VmenuFollow.objects.filter(following=request.user).count()
         following = VmenuFollow.objects.filter(follower=request.user).count()
-        recent_followers = (
-            VmenuFollow.objects.filter(following=request.user)
-            .select_related("follower")
-            .order_by("-created_at")[:8]
+        follower_ids = list(
+            VmenuFollow.objects.filter(following=request.user).values_list("follower_id", flat=True)
         )
+        following_ids = list(
+            VmenuFollow.objects.filter(follower=request.user).values_list("following_id", flat=True)
+        )
+        recent_followers = _top_interacted_users(request.user, follower_ids, "followers", limit=3)
+        recent_following = _top_interacted_users(request.user, following_ids, "following", limit=3)
         recipes = _annotate_recipe_flags(
             VmenuRecipe.objects.filter(author=request.user, status=VmenuRecipe.Status.PUBLISHED).select_related(
                 "category"
@@ -545,7 +613,12 @@ class VmenuMyProfileView(APIView):
                 "followers_count": followers,
                 "following_count": following,
                 "recent_followers": VmenuUserPublicSerializer(
-                    [f.follower for f in recent_followers],
+                    recent_followers,
+                    many=True,
+                    context={"request": request},
+                ).data,
+                "recent_following": VmenuUserPublicSerializer(
+                    recent_following,
                     many=True,
                     context={"request": request},
                 ).data,
@@ -596,6 +669,41 @@ class VmenuFollowListView(APIView):
             row["is_following"] = user.id in following_ids
             items.append(row)
         return Response({"items": items})
+
+
+class VmenuChatContactsView(APIView):
+    """Подписчики без активного личного чата (диалоги — отдельно в /chat/conversations/?user_direct=1)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        peer_ids_in_chat = set()
+        convs = (
+            Conversation.objects.filter(members__user=user, is_user_direct=True, is_group=False)
+            .prefetch_related("members")
+            .distinct()
+        )
+        for conv in convs:
+            for member in conv.members.all():
+                if member.user_id != user.id:
+                    peer_ids_in_chat.add(member.user_id)
+
+        follower_ids = list(
+            VmenuFollow.objects.filter(following=user).values_list("follower_id", flat=True)
+        )
+        contact_ids = [uid for uid in follower_ids if uid not in peer_ids_in_chat]
+        users = (
+            User.objects.filter(id__in=contact_ids, is_active=True, is_demo=False)
+            .select_related("vmenu_profile")
+            .order_by("first_name", "last_name", "username")
+        )
+        items = []
+        for u in users:
+            row = VmenuUserPublicSerializer(u, context={"request": request}).data
+            row["can_message"] = _can_message(user, u)
+            items.append(row)
+        return Response({"followers": items})
 
 
 class VmenuParseUrlView(APIView):

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./vmenu.css";
 import VmenuLogo from "./VmenuLogo.jsx";
 import { vmenuFetch, VMENU_DRAFT_KEY } from "./vmenuApi.js";
+import { readVmenuUrlState, writeVmenuUrlState } from "./vmenuUrl.js";
 import {
   VmenuBookTab,
   VmenuFeedTab,
@@ -33,37 +34,63 @@ export default function VmenuApp({
   onTabChange,
   onChatsHostReady,
 }) {
-  const [tab, setTab] = useState("feed");
-  const [screen, setScreen] = useState("main");
-  const [userId, setUserId] = useState(null);
-  const [editorId, setEditorId] = useState(null);
-  const [detailId, setDetailId] = useState(null);
+  const initial = readVmenuUrlState();
+  const [tab, setTab] = useState(initial.tab);
+  const [screen, setScreen] = useState(initial.screen);
+  const [userId, setUserId] = useState(initial.userId);
+  const [editorId, setEditorId] = useState(initial.editorId);
+  const [detailId, setDetailId] = useState(initial.detailId);
+  const [followsKind, setFollowsKind] = useState(initial.followsKind || "following");
   const [settingsProfile, setSettingsProfile] = useState(null);
   const [settingsCategories, setSettingsCategories] = useState([]);
   const [editorDraft, setEditorDraft] = useState(null);
   const editorSaveRef = useRef(null);
 
+  const syncUrl = useCallback(
+    (next = {}) => {
+      writeVmenuUrlState({
+        tab: next.tab ?? tab,
+        screen: next.screen ?? screen,
+        userId: next.userId ?? userId,
+        detailId: next.detailId ?? detailId,
+        editorId: next.editorId ?? editorId,
+        followsKind: next.followsKind ?? followsKind,
+      });
+    },
+    [tab, screen, userId, detailId, editorId, followsKind],
+  );
+
   const setActiveTab = useCallback(
-    (nextTab) => {
+    (nextTab, extra = {}) => {
       setTab(nextTab);
       onTabChange?.(nextTab);
+      syncUrl({ tab: nextTab, screen: "main", ...extra });
     },
-    [onTabChange],
+    [onTabChange, syncUrl],
   );
 
   function openUser(id) {
     setUserId(id);
     setScreen("user");
+    syncUrl({ screen: "user", userId: id });
   }
 
   function openEditor(id = null) {
     setEditorId(id);
     setScreen("editor");
+    syncUrl({ screen: "editor", editorId: id });
   }
 
   function openRecipe(id) {
     setDetailId(id);
     setScreen("detail");
+    syncUrl({ screen: "detail", detailId: id });
+  }
+
+  function openFollows(kind = "following") {
+    setFollowsKind(kind);
+    setScreen("main");
+    setActiveTab("follows", { followsKind: kind, screen: "main" });
   }
 
   async function openSettings() {
@@ -74,6 +101,7 @@ export default function VmenuApp({
     setSettingsProfile(data.profile);
     setSettingsCategories(cats || []);
     setScreen("settings");
+    syncUrl({ screen: "settings" });
   }
 
   async function saveSettings(payload) {
@@ -93,14 +121,14 @@ export default function VmenuApp({
         await editorSaveRef.current(true);
       }
       setScreen("main");
-      setActiveTab(nextTab);
+      setActiveTab(nextTab, { screen: "main" });
     },
     [screen, setActiveTab],
   );
 
   useEffect(() => {
-    onTabChange?.("feed");
-  }, [onTabChange]);
+    onTabChange?.(tab);
+  }, []);
 
   useEffect(() => {
     if (tab !== "chats") onChatsHostReady?.(null);
@@ -124,7 +152,10 @@ export default function VmenuApp({
           authFetch={authFetch}
           API_URL={API_URL}
           me={me}
-          onBack={() => setScreen("main")}
+          onBack={() => {
+            setScreen("main");
+            syncUrl({ screen: "main", userId: null });
+          }}
           onOpenRecipe={openRecipe}
           onOpenChat={(convId) => {
             onSelectChat?.(convId);
@@ -141,15 +172,16 @@ export default function VmenuApp({
           authFetch={authFetch}
           API_URL={API_URL}
           me={me}
-          onBack={() => setScreen("main")}
+          onBack={() => {
+            setScreen("main");
+            syncUrl({ screen: "main", detailId: null });
+          }}
           onDeleted={() => {
             setDetailId(null);
             setScreen("main");
+            syncUrl({ screen: "main", detailId: null });
           }}
-          onOpenUser={(id) => {
-            setUserId(id);
-            setScreen("user");
-          }}
+          onOpenUser={openUser}
         />
       );
     }
@@ -171,6 +203,7 @@ export default function VmenuApp({
           }}
           onCancel={() => {
             setScreen("main");
+            syncUrl({ screen: "main", editorId: null });
           }}
         />
       );
@@ -181,7 +214,10 @@ export default function VmenuApp({
           profile={settingsProfile}
           categories={settingsCategories}
           onSave={saveSettings}
-          onClose={() => setScreen("main")}
+          onClose={() => {
+            setScreen("main");
+            syncUrl({ screen: "main" });
+          }}
         />
       );
     }
@@ -217,18 +253,28 @@ export default function VmenuApp({
           API_URL={API_URL}
           me={me}
           onOpenUser={openUser}
+          onOpenFollows={openFollows}
           onCreate={() => openEditor()}
           onOpenSettings={openSettings}
           onOpenRecipe={openRecipe}
         />
       );
     }
-    if (tab === "follows") return <VmenuFollowsTab authFetch={authFetch} API_URL={API_URL} onOpenUser={openUser} />;
+    if (tab === "follows") {
+      return (
+        <VmenuFollowsTab
+          authFetch={authFetch}
+          API_URL={API_URL}
+          initialKind={followsKind}
+          onOpenUser={openUser}
+        />
+      );
+    }
     return null;
   }
 
   return (
-    <section className="vmenu-app card">
+    <section className={`vmenu-app card${tab === "chats" ? " vmenu-app--chats" : ""}${tab === "follows" ? " vmenu-app--follows" : ""}`}>
       {renderMain()}
       <nav className="vmenu-bottom-nav" aria-label="Вменю">
         {TABS.map((t) => (

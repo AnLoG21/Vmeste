@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { forwardRef, useRef, useState } from "react";
 
 export function VmenuBackButton({ onClick, label = "Назад" }) {
   return (
@@ -28,7 +28,7 @@ export function VmenuRatingBadge({ rating, inline = false }) {
   );
 }
 
-export function VmenuStatWidget({ icon, value, label, onClick }) {
+export function VmenuStatWidget({ icon, value, label, onClick, avatars = [] }) {
   const Tag = onClick ? "button" : "div";
   return (
     <Tag type={onClick ? "button" : undefined} className="vmenu-stat-widget" onClick={onClick}>
@@ -37,7 +37,18 @@ export function VmenuStatWidget({ icon, value, label, onClick }) {
       </span>
       <span className="vmenu-stat-widget-body">
         <strong>{value}</strong>
-        <span>{label}</span>
+        <span className="vmenu-stat-widget-label-row">
+          <span>{label}</span>
+          {avatars?.length ? (
+            <span className="vmenu-stat-avatars">
+              {avatars.slice(0, 3).map((u) => (
+                <span key={u.id} className="vmenu-stat-avatar" title={u.display_name}>
+                  {u.avatar_url ? <img src={u.avatar_url} alt="" /> : u.display_name?.[0] || "?"}
+                </span>
+              ))}
+            </span>
+          ) : null}
+        </span>
       </span>
     </Tag>
   );
@@ -126,9 +137,10 @@ export function VmenuFieldBlock({ label, children, className = "" }) {
   );
 }
 
-export function VmenuTextArea({ value, onChange, rows = 4, placeholder }) {
+export const VmenuTextArea = forwardRef(function VmenuTextArea({ value, onChange, rows = 4, placeholder }, ref) {
   return (
     <textarea
+      ref={ref}
       className="vmenu-textarea"
       rows={rows}
       value={value}
@@ -136,7 +148,7 @@ export function VmenuTextArea({ value, onChange, rows = 4, placeholder }) {
       onChange={(e) => onChange?.(e.target.value)}
     />
   );
-}
+});
 
 export function VmenuTextInput({ value, onChange, placeholder, type = "text" }) {
   return (

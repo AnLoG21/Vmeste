@@ -2628,6 +2628,7 @@ export default function App() {
   const [staffPermsOpenId, setStaffPermsOpenId] = useState(null);
   const [staffServicesOpenId, setStaffServicesOpenId] = useState(null);
   const [conversations, setConversations] = useState([]);
+  const [vmenuChatContacts, setVmenuChatContacts] = useState([]);
   const [selectedChatId, setSelectedChatId] = useState(null);
   const [vmenuTab, setVmenuTab] = useState("feed");
   const [vmenuChatsHostEl, setVmenuChatsHostEl] = useState(null);
@@ -3363,6 +3364,11 @@ export default function App() {
 
   useEffect(() => {
     if (!accessToken || !chatsSurfaceActive) return;
+    if (currentView === "vmenu") {
+      loadChats();
+      loadVmenuChatContacts();
+      return;
+    }
     if (me?.role === "provider") {
       loadChats();
       authFetch(`${API_URL}/booking/staff/`).then((r) => {
@@ -3376,7 +3382,18 @@ export default function App() {
     } else if (me?.role === "client") {
       loadChats();
     }
-  }, [accessToken, chatsSurfaceActive, me?.role]);
+  }, [accessToken, chatsSurfaceActive, me?.role, currentView]);
+
+  const prevVmenuChatsModeRef = useRef(false);
+  useEffect(() => {
+    const vmenuChatsMode = currentView === "vmenu" && vmenuTab === "chats";
+    const was = prevVmenuChatsModeRef.current;
+    prevVmenuChatsModeRef.current = vmenuChatsMode;
+    if (was && !vmenuChatsMode && accessToken) {
+      loadChats();
+      setVmenuChatContacts([]);
+    }
+  }, [accessToken, currentView, vmenuTab]);
 
   useEffect(() => {
     chatMessagesRef.current = chatMessages;
@@ -3675,6 +3692,8 @@ export default function App() {
     if (!accessToken || !me || me.role !== "client") return;
     if (!clientMeBootstrappedRef.current) {
       clientMeBootstrappedRef.current = true;
+      const fromPath = viewFromPath(window.location.pathname);
+      if (fromPath && fromPath !== "bookings") return;
       setCurrentView("client_map");
     }
   }, [accessToken, me?.id, me?.role]);
@@ -5887,8 +5906,37 @@ export default function App() {
   }
 
   async function loadChats() {
-    const res = await authFetch(`${API_URL}/chat/conversations/`);
+    const isVmenu = currentViewRef.current === "vmenu";
+    const url = isVmenu
+      ? `${API_URL}/chat/conversations/?user_direct=1`
+      : `${API_URL}/chat/conversations/`;
+    const res = await authFetch(url);
     if (res.ok) setConversations(await res.json());
+  }
+
+  async function loadVmenuChatContacts() {
+    const res = await authFetch(`${API_URL}/vmenu/chats/contacts/`);
+    if (res.ok) {
+      const data = await res.json();
+      setVmenuChatContacts(Array.isArray(data?.followers) ? data.followers : []);
+    }
+  }
+
+  async function openVmenuUserChat(userId) {
+    const res = await authFetch(`${API_URL}/chat/conversations/create-user-direct/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId }),
+    });
+    if (!res.ok) {
+      setChatStatus("Не удалось открыть чат с пользователем.");
+      return;
+    }
+    const conv = await res.json();
+    await loadChats();
+    await loadVmenuChatContacts();
+    setSelectedChatId(conv.id);
+    setChatStatus("");
   }
 
   function togglePinChatForFolder(convId, folder) {
@@ -10507,7 +10555,9 @@ export default function App() {
 
   const filteredSidebarChats = useMemo(() => {
     let list = conversations;
-    if (me?.role === "client") {
+    if (currentView === "vmenu") {
+      list = list.filter((c) => c.is_user_direct && !c.is_saved_messages);
+    } else if (me?.role === "client") {
       list = list.filter((c) => c.is_client_correspondence && !c.is_saved_messages);
     } else {
       const folder = chatFolder;
@@ -10516,6 +10566,19 @@ export default function App() {
     const q = chatSearchQuery.trim().toLowerCase();
     if (q) {
       list = list.filter((c) => displayConversationTitle(c).toLowerCase().includes(q));
+    }
+    if (currentView === "vmenu") {
+      const lastTs = (c) => {
+        const t = c.last_message?.created_at;
+        if (!t) return 0;
+        const x = new Date(t).getTime();
+        return Number.isNaN(x) ? 0 : x;
+      };
+      return [...list].sort((a, b) => {
+        const d = lastTs(b) - lastTs(a);
+        if (d !== 0) return d;
+        return Number(b.id) - Number(a.id);
+      });
     }
     const folder = me?.role === "client" ? "clients" : chatFolder;
     const pins = folder === "clients" ? chatPins.clients : chatPins.org;
@@ -10534,7 +10597,19 @@ export default function App() {
       return Number(b.id) - Number(a.id);
     });
     return [...pinnedList, ...unpinned];
-  }, [conversations, chatFolder, chatSearchQuery, chatLocalPrefs, chatPins, me?.role]);
+  }, [conversations, chatFolder, chatSearchQuery, chatLocalPrefs, chatPins, me?.role, currentView]);
+
+  const filteredVmenuChatContacts = useMemo(() => {
+    let list = vmenuChatContacts;
+    const q = chatSearchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((u) => {
+        const name = String(u.display_name || u.username || "").toLowerCase();
+        return name.includes(q);
+      });
+    }
+    return list;
+  }, [vmenuChatContacts, chatSearchQuery]);
 
   function renderGeneralSettings() {
     const role = me?.role;
@@ -12136,7 +12211,11 @@ export default function App() {
       : { backgroundColor: activeChatWallpaper }
     : undefined;
   const tgMainDark = activeChatWallpaper === "#1e2a24";
-  const chatsRoleOk = me?.role === "client" || me?.role === "provider" || me?.role === "staff";
+  const chatsRoleOk =
+    currentView === "vmenu" ||
+    me?.role === "client" ||
+    me?.role === "provider" ||
+    me?.role === "staff";
   const chatsPortalTarget = currentView === "vmenu" ? vmenuChatsHostEl : mainChatsHostEl;
   const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "service_apps", "vmenu"].includes(currentView);
   const profileWide = accessToken && ["profile", "subscriptions"].includes(currentView);
@@ -13274,7 +13353,7 @@ export default function App() {
               <aside className="tg-sidebar">
                 <div className="tg-sidebar-head">
                   <span className="tg-sidebar-title">Чаты</span>
-                  {me?.role === "provider" && (
+                  {me?.role === "provider" && currentView !== "vmenu" && (
                     <div className="tg-fab-wrap">
                       <button
                         type="button"
@@ -13294,12 +13373,12 @@ export default function App() {
                 <input
                   type="search"
                   className="tg-chat-search"
-                  placeholder="Поиск по чатам..."
+                  placeholder={currentView === "vmenu" ? "Поиск по людям..." : "Поиск по чатам..."}
                   value={chatSearchQuery}
                   onChange={(e) => setChatSearchQuery(e.target.value)}
                   onFocus={() => setChatFabOpen(false)}
                 />
-                {(me?.role === "provider" || me?.role === "staff") && (
+                {currentView !== "vmenu" && (me?.role === "provider" || me?.role === "staff") && (
                 <div className="tg-folder-tabs">
                   <button type="button" className={chatFolder === "org" ? "active" : ""} onClick={() => setChatFolder("org")}>
                     <span className="tg-folder-tab-label">Организация</span>
@@ -13315,12 +13394,19 @@ export default function App() {
                   </button>
                 </div>
                 )}
+                {filteredSidebarChats.length > 0 && currentView === "vmenu" ? (
+                  <div className="vmenu-chat-section-label">Переписки</div>
+                ) : null}
                 <div className="tg-chat-list">
                   {filteredSidebarChats.map((c) => {
-                    const peerM = chatFolder === "org" ? getOrgDmPeerMember(c, me?.id) : null;
-                    const showPresenceDot = Boolean(peerM) && !c.is_group && !c.is_saved_messages && !c.is_client_correspondence;
+                    const peerM = currentView === "vmenu"
+                      ? (c.members || []).find((m) => Number(m.user) !== Number(me?.id))
+                      : (chatFolder === "org" ? getOrgDmPeerMember(c, me?.id) : null);
+                    const showPresenceDot = Boolean(peerM) && !c.is_group && !c.is_saved_messages && (
+                      currentView === "vmenu" ? c.is_user_direct : !c.is_client_correspondence
+                    );
                     const pinsList = chatFolder === "clients" ? chatPins.clients : chatPins.org;
-                    const isPinned = pinsList.map(Number).includes(Number(c.id));
+                    const isPinned = currentView !== "vmenu" && pinsList.map(Number).includes(Number(c.id));
                     const unreadN = Number(c.unread_message_count) || 0;
                     return (
                     <div
@@ -13388,6 +13474,7 @@ export default function App() {
                           {unreadN > 99 ? "99+" : unreadN}
                         </span>
                       )}
+                      {currentView !== "vmenu" && (
                       <div className="tg-chat-row-actions">
                         <button
                           type="button"
@@ -13454,11 +13541,54 @@ export default function App() {
                           )}
                         </div>
                       </div>
+                      )}
                     </div>
                   );
                   })}
                 </div>
-                {filteredSidebarChats.length === 0 && <p className="tg-empty">{chatFolder === "clients" ? "Пока нет чатов с клиентами — они появятся здесь автоматически." : "Нет чатов в этой папке."}</p>}
+                {currentView === "vmenu" && filteredVmenuChatContacts.length > 0 ? (
+                  <>
+                    <div className="vmenu-chat-section-label">Подписчики</div>
+                    <div className="tg-chat-list vmenu-chat-contacts">
+                      {filteredVmenuChatContacts.map((u) => {
+                        const title = u.display_name || u.username || "Пользователь";
+                        const letter = title.slice(0, 1).toUpperCase();
+                        return (
+                          <div key={u.id} className="tg-chat-item-row vmenu-chat-contact-row">
+                            <button
+                              type="button"
+                              className="tg-chat-item-main"
+                              disabled={u.can_message === false}
+                              title={u.can_message === false ? "Пользователь ограничил сообщения" : undefined}
+                              onClick={() => void openVmenuUserChat(u.id)}
+                            >
+                              <span className="tg-avatar-wrap">
+                                <span className="tg-avatar">
+                                  {u.avatar_url ? (
+                                    <img src={u.avatar_url} alt="" className="tg-avatar-img" />
+                                  ) : (
+                                    letter
+                                  )}
+                                </span>
+                              </span>
+                              <span className="tg-chat-item-text">
+                                <span className="tg-chat-item-title">{title}</span>
+                                <span className="tg-chat-item-sub">Подписчик</span>
+                              </span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : null}
+                {currentView === "vmenu"
+                  ? filteredSidebarChats.length === 0 && filteredVmenuChatContacts.length === 0 && (
+                    <p className="tg-empty">Пока нет переписок. Напишите подписчику или откройте профиль пользователя.</p>
+                  )
+                  : filteredSidebarChats.length === 0 && (
+                    <p className="tg-empty">{chatFolder === "clients" ? "Пока нет чатов с клиентами — они появятся здесь автоматически." : "Нет чатов в этой папке."}</p>
+                  )}
               </aside>
               <div className={`tg-main ${tgMainDark ? "tg-main--dark" : ""}`} style={tgMainStyle}>
                 <div className="tg-main-head">

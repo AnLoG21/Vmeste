@@ -134,7 +134,7 @@ export function normalizeIngredient(ing) {
   const hasAmount = raw !== "" && raw != null && Number.isFinite(n) && n !== 0;
   let unit = (ing.unit || "").trim();
   if (!hasAmount) {
-    if (!["щепотка", "по вкусу"].includes(unit)) unit = "";
+    if (!["щепотка", "по вкусу", "зубчик"].includes(unit)) unit = "";
     return { ...ing, amount: "", unit };
   }
   const amountStr = String(raw).replace(/\.?0+$/, "") || String(raw);

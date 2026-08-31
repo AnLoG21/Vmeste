@@ -8,7 +8,7 @@ import re
 from urllib.parse import urlparse
 
 from .cuisine_data import detect_cuisine_slug, normalize_cuisine_slug
-from .recipe_parser import _parse_amount_unit_tail, _parse_ingredient_line, strip_html
+from .recipe_parser import _normalize_unit, _parse_amount_unit_tail, _parse_ingredient_line, strip_html
 
 SitePatch = dict
 
@@ -25,7 +25,12 @@ def _rows_from_lines(lines: list[str]) -> list[dict]:
     seen: set[str] = set()
     for line in lines:
         row = _parse_ingredient_line(line)
-        if row and row["name"] not in seen:
+        if isinstance(row, list):
+            for item in row:
+                if item and item["name"] not in seen:
+                    seen.add(item["name"])
+                    out.append(item)
+        elif row and row["name"] not in seen:
             seen.add(row["name"])
             out.append(row)
     return out
@@ -94,6 +99,9 @@ def _parse_russianfood(html: str) -> list[dict]:
 
 
 def _parse_povarenok(html: str) -> list[dict]:
+    meta = _parse_meta_recipe_ingredients(html)
+    if meta:
+        return meta
     out: list[dict] = []
     seen: set[str] = set()
     for m in re.finditer(
@@ -103,17 +111,43 @@ def _parse_povarenok(html: str) -> list[dict]:
     ):
         block = m.group(1)
         name_m = re.search(r'class="[^"]*ingredient-name[^"]*"[^>]*>(.*?)</', block, re.I | re.S)
-        qty_m = re.search(r'class="[^"]*ingredient-amount[^"]*"[^>]*>(.*?)</', block, re.I | re.S)
+        qty_m = re.search(
+            r'class="[^"]*(?:ingredient-amount|squant|value)[^"]*"[^>]*>(.*?)</',
+            block,
+            re.I | re.S,
+        )
+        unit_m = re.search(r'class="[^"]*ingredient-unit[^"]*"[^>]*>(.*?)</', block, re.I | re.S)
         if name_m:
             name = strip_html(name_m.group(1))
-            tail = strip_html(qty_m.group(1)) if qty_m else ""
-            row = _parse_ingredient_line(f"{name} - {tail}" if tail else name)
+            amount = strip_html(qty_m.group(1)) if qty_m else ""
+            unit = strip_html(unit_m.group(1)) if unit_m else ""
+            if amount and unit:
+                row = {"name": name[:200], "amount": amount.replace(",", "."), "unit": _normalize_unit(unit) or unit}
+            elif amount:
+                amt, unt = _parse_amount_unit_tail(amount)
+                row = {"name": name[:200], "amount": amt, "unit": unt}
+            else:
+                row = _parse_ingredient_line(name)
+            if isinstance(row, list):
+                for item in row:
+                    if item and item["name"] not in seen:
+                        seen.add(item["name"])
+                        out.append(item)
+            elif row and row["name"] not in seen:
+                seen.add(row["name"])
+                out.append(row)
         else:
-            row = _parse_ingredient_line(block)
-        if row and row["name"] not in seen:
-            seen.add(row["name"])
-            out.append(row)
-    return out or _parse_meta_recipe_ingredients(html)
+            line = strip_html(block)
+            row = _parse_ingredient_line(line)
+            if isinstance(row, list):
+                for item in row:
+                    if item and item["name"] not in seen:
+                        seen.add(item["name"])
+                        out.append(item)
+            elif row and row["name"] not in seen:
+                seen.add(row["name"])
+                out.append(row)
+    return out
 
 
 def _parse_povar(html: str) -> list[dict]:

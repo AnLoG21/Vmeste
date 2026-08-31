@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     VmenuCategoryListView,
+    VmenuChatContactsView,
     VmenuCommentLikeView,
     VmenuCuisineListView,
     VmenuFeedView,
@@ -45,4 +46,5 @@ urlpatterns = [
     path("users/<int:user_id>/", VmenuUserProfileView.as_view()),
     path("users/<int:user_id>/follow/", VmenuFollowView.as_view()),
     path("follows/", VmenuFollowListView.as_view()),
+    path("chats/contacts/", VmenuChatContactsView.as_view()),
 ]

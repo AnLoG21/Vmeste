@@ -467,8 +467,7 @@ export function VmenuSearchTab({ authFetch, API_URL, me, onOpenUser, onOpenRecip
     <div className="vmenu-tab">
       <h2>Поиск рецептов</h2>
       <form className="vmenu-search-toolbar" onSubmit={runSearch}>
-        <input className="vmenu-search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Название, ингредиент…" />
-        <select value={category} onChange={(e) => setCategory(e.target.value)}>
+        <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Категория">
           <option value="">Все категории</option>
           {categories.map((c) => (
             <option key={c.id} value={c.slug}>
@@ -476,7 +475,7 @@ export function VmenuSearchTab({ authFetch, API_URL, me, onOpenUser, onOpenRecip
             </option>
           ))}
         </select>
-        <select value={cuisine} onChange={(e) => setCuisine(e.target.value)}>
+        <select value={cuisine} onChange={(e) => setCuisine(e.target.value)} aria-label="Кухня">
           <option value="">Все кухни</option>
           {cuisines.map((c) => (
             <option key={c.id} value={c.slug}>
@@ -484,13 +483,24 @@ export function VmenuSearchTab({ authFetch, API_URL, me, onOpenUser, onOpenRecip
             </option>
           ))}
         </select>
-        <select value={sort} onChange={(e) => setSort(e.target.value)}>
+        <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Сортировка">
           <option value="rating">По рейтингу</option>
           <option value="popular">По популярности</option>
           <option value="new">Сначала новые</option>
         </select>
-        <button type="submit" className="primary-btn vmenu-search-btn">
-          Найти
+        <input
+          className="vmenu-search-input"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Название, ингредиент…"
+        />
+        <button type="submit" className="vmenu-search-icon-btn" aria-label="Найти">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
+            />
+          </svg>
         </button>
       </form>
       <div className="vmenu-feed">
@@ -616,7 +626,7 @@ export function VmenuBookTab({ authFetch, API_URL, me, onCreate, onOpenRecipe, o
   );
 }
 
-export function VmenuProfileTab({ authFetch, API_URL, me, onOpenUser, onCreate, onOpenSettings, onOpenRecipe }) {
+export function VmenuProfileTab({ authFetch, API_URL, me, onOpenUser, onOpenFollows, onCreate, onOpenSettings, onOpenRecipe }) {
   const [data, setData] = useState(null);
 
   useEffect(() => {
@@ -644,15 +654,20 @@ export function VmenuProfileTab({ authFetch, API_URL, me, onOpenUser, onCreate, 
       </div>
       <p className="muted">{data.profile?.bio || "Расскажите о себе в настройках."}</p>
       <div className="vmenu-stats-row">
-        <VmenuStatWidget icon="👥" value={data.followers_count} label="подписчиков" onClick={() => onOpenUser?.(me?.id)} />
-        <VmenuStatWidget icon="➕" value={data.following_count} label="подписок" />
-      </div>
-      <div className="vmenu-follower-row">
-        {data.recent_followers?.map((u) => (
-          <button key={u.id} type="button" className="vmenu-mini-avatar" onClick={() => onOpenUser(u.id)} title={u.display_name}>
-            {u.avatar_url ? <img src={u.avatar_url} alt="" /> : u.display_name?.[0]}
-          </button>
-        ))}
+        <VmenuStatWidget
+          icon="👥"
+          value={data.followers_count}
+          label="подписчиков"
+          avatars={data.recent_followers}
+          onClick={() => onOpenFollows?.("followers")}
+        />
+        <VmenuStatWidget
+          icon="➕"
+          value={data.following_count}
+          label="подписок"
+          avatars={data.recent_following}
+          onClick={() => onOpenFollows?.("following")}
+        />
       </div>
       <button type="button" className="primary-btn vmenu-publish-btn" onClick={onCreate}>
         + Опубликовать рецепт
@@ -675,14 +690,18 @@ export function VmenuProfileTab({ authFetch, API_URL, me, onOpenUser, onCreate, 
   );
 }
 
-export function VmenuFollowsTab({ authFetch, API_URL, onOpenUser }) {
-  const [kind, setKind] = useState("following");
+export function VmenuFollowsTab({ authFetch, API_URL, initialKind = "following", onOpenUser }) {
+  const [kind, setKind] = useState(initialKind === "followers" ? "followers" : "following");
   const [items, setItems] = useState([]);
   const [q, setQ] = useState("");
   const [searchHits, setSearchHits] = useState([]);
   const [searchHasMore, setSearchHasMore] = useState(false);
   const [searchAll, setSearchAll] = useState(false);
   const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    setKind(initialKind === "followers" ? "followers" : "following");
+  }, [initialKind]);
 
   async function reloadList() {
     const d = await loadFollows(authFetch, API_URL, kind);
@@ -738,7 +757,7 @@ export function VmenuFollowsTab({ authFetch, API_URL, onOpenUser }) {
   const listUsers = q.trim().length >= 2 ? searchHits : items;
 
   return (
-    <div className="vmenu-tab">
+    <div className="vmenu-tab vmenu-tab--follows">
       <h2>Подписки</h2>
       <div className="vmenu-search-form">
         <input
