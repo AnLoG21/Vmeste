@@ -1,0 +1,262 @@
+.vmenu-app {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 120px);
+  max-width: 640px;
+  margin: 0 auto;
+  padding-bottom: 72px;
+  position: relative;
+}
+
+.vmenu-tab {
+  flex: 1;
+  padding: 12px 14px 80px;
+}
+
+.vmenu-tab-head,
+.vmenu-tab-head-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.vmenu-tab-head-row {
+  justify-content: space-between;
+}
+
+.vmenu-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 900;
+  display: flex;
+  justify-content: space-around;
+  gap: 2px;
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.96);
+  border-top: 1px solid #e2ddd4;
+  backdrop-filter: blur(8px);
+}
+
+.vmenu-bottom-nav button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.68rem;
+  padding: 4px 2px;
+  background: transparent;
+  border: none;
+  color: #5c6b78;
+}
+
+.vmenu-bottom-nav button.active {
+  color: #0f6e56;
+  font-weight: 600;
+}
+
+.vmenu-card {
+  position: relative;
+  border: 1px solid #e8e3da;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 14px;
+  background: #fff;
+}
+
+.vmenu-card-views {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  font-size: 0.72rem;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.vmenu-card-cover {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+}
+
+.vmenu-card-cover--empty {
+  background: linear-gradient(135deg, #f4efe6, #dce8e2);
+}
+
+.vmenu-card-body {
+  padding: 12px;
+}
+
+.vmenu-card-author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+}
+
+.vmenu-card-author img,
+.vmenu-mini-avatar img,
+.vmenu-avatar-fallback {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.vmenu-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f6e56;
+  color: #fff;
+  font-size: 0.8rem;
+}
+
+.vmenu-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.vmenu-card-actions button {
+  border: 1px solid #e2ddd4;
+  background: #faf8f4;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+}
+
+.vmenu-card-actions button.active {
+  border-color: #0f6e56;
+  color: #0f6e56;
+}
+
+.vmenu-chip {
+  display: inline-block;
+  font-size: 0.75rem;
+  background: #eef5f1;
+  color: #0f6e56;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.vmenu-stars button {
+  background: none;
+  border: none;
+  color: #ccc;
+  font-size: 1.2rem;
+  padding: 0 2px;
+}
+
+.vmenu-stars button.on {
+  color: #f9a825;
+}
+
+.vmenu-search-form,
+.vmenu-ing-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.vmenu-ing-row input,
+.vmenu-ing-row select {
+  flex: 1;
+  min-width: 80px;
+}
+
+.vmenu-user-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+
+.vmenu-user-list button {
+  width: 100%;
+  text-align: left;
+  padding: 10px 0;
+  border: none;
+  border-bottom: 1px solid #eee;
+  background: transparent;
+}
+
+.vmenu-tabs-inline {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.vmenu-tabs-inline button.active {
+  font-weight: 600;
+  color: #0f6e56;
+}
+
+.vmenu-follower-row {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.vmenu-mini-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #e2ddd4;
+  padding: 0;
+  background: #eef5f1;
+}
+
+.vmenu-publish-btn {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.vmenu-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.services-hub-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  padding: 16px;
+  border: 1px solid #e2ddd4;
+  border-radius: 14px;
+  background: #fff;
+  margin-top: 12px;
+}
+
+.services-hub-card:hover {
+  border-color: #0f6e56;
+}
+
+[data-theme="dark"] .vmenu-bottom-nav {
+  background: rgba(28, 32, 38, 0.96);
+  border-color: #3a424f;
+}
+
+[data-theme="dark"] .vmenu-card,
+[data-theme="dark"] .services-hub-card {
+  background: #1e242c;
+  border-color: #3a424f;
+}

@@ -13,6 +13,7 @@ import ClientLoyaltyPage from "./ClientLoyaltyPage.jsx";
 import ClientActivityFeed from "./ClientActivityFeed.jsx";
 import WaitlistPanel, { JoinWaitlistButton } from "./WaitlistPanel.jsx";
 import MarketplaceWorkspace from "./MarketplaceWorkspace.jsx";
+import VmenuApp, { ServicesHub } from "./vmenu/VmenuApp.jsx";
 import InspectionWorkspace from "./InspectionWorkspace.jsx";
 import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
@@ -7174,6 +7175,7 @@ export default function App() {
       }
       return false;
     }
+    if (id === "service_apps" || id === "vmenu") return Boolean(accessToken);
     return true;
   }
 
@@ -7388,6 +7390,10 @@ export default function App() {
       marketplaces: {
         color: "#1565c0",
         d: "M19 6h-2c0-2.76-2.24-5-5-5S7 3.24 7 6H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-7-3c1.66 0 3 1.34 3 3H9c0-1.66 1.34-3 3-3zm0 10c-2.76 0-5-2.24-5-5h2c0 1.66 1.34 3 3 3s3-1.34 3-3h2c0 2.76-2.24 5-5 5z",
+      },
+      service_apps: {
+        color: "#e65100",
+        d: "M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm0 10h4v-4h-4v4zm6-6v4h4v-4h-4zm-6 6h4v-4h-4v4zm6 0h4v-4h-4v4z",
       },
       logout: {
         color: "#c62828",
@@ -12115,7 +12121,7 @@ export default function App() {
       : { backgroundColor: activeChatWallpaper }
     : undefined;
   const tgMainDark = activeChatWallpaper === "#1e2a24";
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "service_apps", "vmenu"].includes(currentView);
 
   return (
     <div className={`page${accessToken ? " page-logged" : " page--guest"}`}>
@@ -12409,7 +12415,7 @@ export default function App() {
         </div>
       )}
 
-      {accessToken && me?.role && (
+      {accessToken && me?.role && currentView !== "vmenu" && (
         <nav
           className={[
             "app-subnav",
@@ -13124,6 +13130,18 @@ export default function App() {
             accessPerms={cafeAccessPerms}
             orgStaff={orgStaff}
             providerId={me?.role === "provider" ? me.id : me?.employer_id}
+          />
+        )}
+        {accessToken && currentView === "service_apps" && (
+          <ServicesHub onOpenVmenu={() => setCurrentView("vmenu")} />
+        )}
+        {accessToken && currentView === "vmenu" && (
+          <VmenuApp
+            authFetch={authFetch}
+            API_URL={API_URL}
+            me={me}
+            onOpenChats={() => setCurrentView("chats")}
+            onSelectChat={(convId) => setSelectedChatId(convId)}
           />
         )}
         {accessToken &&

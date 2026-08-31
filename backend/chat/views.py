@@ -251,6 +251,55 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @action(detail=False, methods=["post"], url_path="create-user-direct")
+    def create_user_direct(self, request):
+        """Личный чат между пользователями (Вменю)."""
+        from vmenu.privacy import can_message_user
+
+        user_id = request.data.get("user_id")
+        if not user_id:
+            return Response({"detail": "user_id required"}, status=status.HTTP_400_BAD_REQUEST)
+        peer = User.objects.filter(pk=user_id, is_active=True).first()
+        if not peer:
+            return Response({"detail": "Пользователь не найден."}, status=status.HTTP_404_NOT_FOUND)
+        if peer.id == request.user.id:
+            return Response({"detail": "Нельзя написать себе."}, status=status.HTTP_400_BAD_REQUEST)
+        if not can_message_user(request.user, peer):
+            return Response({"detail": "Пользователь не принимает сообщения."}, status=status.HTTP_403_FORBIDDEN)
+        candidates = (
+            Conversation.objects.filter(
+                is_group=False,
+                is_saved_messages=False,
+                is_client_correspondence=False,
+                is_user_direct=True,
+                organization__isnull=True,
+            )
+            .prefetch_related("members")
+        )
+        for c in candidates:
+            user_ids = {m.user_id for m in c.members.all()}
+            if user_ids == {request.user.id, peer.id}:
+                return Response(
+                    ConversationSerializer(c, context={"request": request}).data,
+                    status=status.HTTP_200_OK,
+                )
+        with transaction.atomic():
+            conv = Conversation.objects.create(
+                title="",
+                is_group=False,
+                is_saved_messages=False,
+                is_client_correspondence=False,
+                is_user_direct=True,
+                organization=None,
+            )
+            ConversationMember.objects.create(conversation=conv, user=request.user)
+            ConversationMember.objects.create(conversation=conv, user=peer)
+        conv = self.get_queryset().get(pk=conv.pk)
+        return Response(
+            ConversationSerializer(conv, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
 
 class MessageViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer

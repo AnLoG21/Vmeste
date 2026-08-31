@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     "inspections",
     "marketplaces",
     "voice",
+    "vmenu",
 ]
 
 MIDDLEWARE = [

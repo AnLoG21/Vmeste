@@ -11,6 +11,7 @@ export const BOOKMARK_CATALOG = [
   { id: "intervals", label: "Календарь интервалов", roles: ["provider", "staff"], menuIcon: "calendar" },
   { id: "services", label: "Услуги и категории", roles: ["provider", "staff"], menuIcon: "services" },
   { id: "chats", label: "Чаты", roles: ["client", "provider", "staff"] },
+  { id: "service_apps", label: "Сервисы", roles: ["client", "provider", "staff"] },
   { id: "settings", label: "Настройки", roles: ["client", "provider", "staff"] },
   { id: "profile", label: "Личный кабинет", roles: ["client", "provider", "staff"] },
   { id: "booking_history", label: "История записей", roles: ["client", "provider", "staff"] },
@@ -28,9 +29,9 @@ export const BOOKMARK_CATALOG = [
 ];
 
 export const DEFAULT_SUBNAV_BOOKMARKS = {
-  client: ["client_map", "activity", "chats"],
-  provider: ["bookings", "client_map", "analytics", "my_bookings", "chats"],
-  staff: ["bookings", "reviews", "analytics", "chats"],
+  client: ["client_map", "activity", "service_apps", "chats"],
+  provider: ["bookings", "client_map", "analytics", "my_bookings", "service_apps", "chats"],
+  staff: ["bookings", "reviews", "analytics", "service_apps", "chats"],
   provider_cafe: ["cafe_orders", "cafe", "reviews", "analytics", "client_map", "chats"],
   staff_cafe: ["cafe_orders", "cafe", "analytics", "chats"],
   provider_service: ["bookings", "client_map", "my_bookings", "analytics", "chats", "inspections"],

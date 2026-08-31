@@ -7,6 +7,10 @@ class Conversation(models.Model):
     is_group = models.BooleanField(default=False)
     is_saved_messages = models.BooleanField(default=False)
     is_client_correspondence = models.BooleanField(default=False)
+    is_user_direct = models.BooleanField(
+        default=False,
+        help_text="Личная переписка между пользователями (Вменю и др.).",
+    )
     organization = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

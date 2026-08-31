@@ -16,6 +16,8 @@ export const VIEW_PATHS = {
   analytics: "/analytics",
   inspections: "/inspections",
   marketplaces: "/marketplaces",
+  service_apps: "/services",
+  vmenu: "/vmenu",
   client_map: "/map",
   activity: "/activity",
   client_book: "/book",

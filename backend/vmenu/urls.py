@@ -1,0 +1,41 @@
+from django.urls import path
+
+from .views import (
+    VmenuCategoryListView,
+    VmenuFeedView,
+    VmenuFollowListView,
+    VmenuFollowView,
+    VmenuMyBookView,
+    VmenuMyProfileView,
+    VmenuParseUrlView,
+    VmenuRecipeCommentView,
+    VmenuRecipeCreateView,
+    VmenuRecipeDetailView,
+    VmenuRecipeIngredientsView,
+    VmenuRecipeLikeView,
+    VmenuRecipeSaveView,
+    VmenuRecipeStepsView,
+    VmenuSearchView,
+    VmenuUserProfileView,
+    VmenuUserSearchView,
+)
+
+urlpatterns = [
+    path("categories/", VmenuCategoryListView.as_view()),
+    path("feed/", VmenuFeedView.as_view()),
+    path("search/", VmenuSearchView.as_view()),
+    path("book/", VmenuMyBookView.as_view()),
+    path("recipes/", VmenuRecipeCreateView.as_view()),
+    path("recipes/parse-url/", VmenuParseUrlView.as_view()),
+    path("recipes/<int:recipe_id>/", VmenuRecipeDetailView.as_view()),
+    path("recipes/<int:recipe_id>/like/", VmenuRecipeLikeView.as_view()),
+    path("recipes/<int:recipe_id>/save/", VmenuRecipeSaveView.as_view()),
+    path("recipes/<int:recipe_id>/comments/", VmenuRecipeCommentView.as_view()),
+    path("recipes/<int:recipe_id>/ingredients/", VmenuRecipeIngredientsView.as_view()),
+    path("recipes/<int:recipe_id>/steps/", VmenuRecipeStepsView.as_view()),
+    path("users/search/", VmenuUserSearchView.as_view()),
+    path("users/me/", VmenuMyProfileView.as_view()),
+    path("users/<int:user_id>/", VmenuUserProfileView.as_view()),
+    path("users/<int:user_id>/follow/", VmenuFollowView.as_view()),
+    path("follows/", VmenuFollowListView.as_view()),
+]
