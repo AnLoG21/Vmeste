@@ -72,6 +72,7 @@ class VmenuRecipeListSerializer(serializers.ModelSerializer):
     author = serializers.SerializerMethodField()
     category = VmenuCategorySerializer(read_only=True)
     cover_url = serializers.SerializerMethodField()
+    extra_photo_urls = serializers.SerializerMethodField()
     liked = serializers.SerializerMethodField()
     saved = serializers.SerializerMethodField()
 
@@ -84,6 +85,7 @@ class VmenuRecipeListSerializer(serializers.ModelSerializer):
             "author",
             "category",
             "cover_url",
+            "extra_photo_urls",
             "view_count",
             "like_count",
             "save_count",
@@ -101,6 +103,14 @@ class VmenuRecipeListSerializer(serializers.ModelSerializer):
         if not obj.cover_image:
             return ""
         return photo_urls(self.context.get("request"), obj.cover_image).get("url") or ""
+
+    def get_extra_photo_urls(self, obj):
+        request = self.context.get("request")
+        urls = []
+        for ph in obj.extra_photos.all()[:4]:
+            if ph.image:
+                urls.append(photo_urls(request, ph.image).get("url") or "")
+        return urls
 
     def get_liked(self, obj):
         if hasattr(obj, "liked"):

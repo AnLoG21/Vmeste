@@ -75,6 +75,31 @@ export function postComment(authFetch, API_URL, recipeId, formData) {
   return vmenuFetch(authFetch, API_URL, `/recipes/${recipeId}/comments/`, { method: "POST", body: formData });
 }
 
+export function loadRecipe(authFetch, API_URL, id, params = {}) {
+  const q = new URLSearchParams(params);
+  const suffix = q.toString() ? `?${q}` : "";
+  return vmenuFetch(authFetch, API_URL, `/recipes/${id}/${suffix}`);
+}
+
+export function uploadExtraPhotos(authFetch, API_URL, recipeId, files) {
+  const fd = new FormData();
+  for (const f of files) fd.append("photos", f);
+  return vmenuFetch(authFetch, API_URL, `/recipes/${recipeId}/extra-photos/`, { method: "POST", body: fd });
+}
+
+export function deleteExtraPhoto(authFetch, API_URL, recipeId, photoId) {
+  return vmenuFetch(authFetch, API_URL, `/recipes/${recipeId}/extra-photos/${photoId}/`, { method: "DELETE" });
+}
+
+export function saveRecipeSteps(authFetch, API_URL, recipeId, steps, stepImages = {}) {
+  const fd = new FormData();
+  fd.append("steps", JSON.stringify(steps.map((s) => ({ text: s.text }))));
+  Object.entries(stepImages).forEach(([i, file]) => {
+    if (file) fd.append(`step_image_${i}`, file);
+  });
+  return vmenuFetch(authFetch, API_URL, `/recipes/${recipeId}/steps/`, { method: "PUT", body: fd });
+}
+
 export function openUserChat(authFetch, API_URL, userId) {
   return authFetch(`${API_URL}/chat/conversations/create-user-direct/`, {
     method: "POST",

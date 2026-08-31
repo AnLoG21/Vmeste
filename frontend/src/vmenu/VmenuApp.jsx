@@ -7,6 +7,7 @@ import {
   VmenuFeedTab,
   VmenuFollowsTab,
   VmenuProfileTab,
+  VmenuRecipeDetail,
   VmenuRecipeEditor,
   VmenuSearchTab,
   VmenuSettings,
@@ -27,7 +28,9 @@ export default function VmenuApp({ authFetch, API_URL, me, onOpenChats, onSelect
   const [screen, setScreen] = useState("main");
   const [userId, setUserId] = useState(null);
   const [editorId, setEditorId] = useState(null);
+  const [detailId, setDetailId] = useState(null);
   const [settingsProfile, setSettingsProfile] = useState(null);
+  const [settingsCategories, setSettingsCategories] = useState([]);
 
   function openUser(id) {
     setUserId(id);
@@ -39,9 +42,18 @@ export default function VmenuApp({ authFetch, API_URL, me, onOpenChats, onSelect
     setScreen("editor");
   }
 
+  function openRecipe(id) {
+    setDetailId(id);
+    setScreen("detail");
+  }
+
   async function openSettings() {
-    const data = await vmenuFetch(authFetch, API_URL, "/users/me/");
+    const [data, cats] = await Promise.all([
+      vmenuFetch(authFetch, API_URL, "/users/me/"),
+      vmenuFetch(authFetch, API_URL, "/categories/"),
+    ]);
     setSettingsProfile(data.profile);
+    setSettingsCategories(cats || []);
     setScreen("settings");
   }
 
@@ -49,6 +61,7 @@ export default function VmenuApp({ authFetch, API_URL, me, onOpenChats, onSelect
     const fd = new FormData();
     if (payload.bio != null) fd.append("bio", payload.bio);
     if (payload.allow_messages) fd.append("allow_messages", payload.allow_messages);
+    if (payload.interest_tags) fd.append("interest_tags", JSON.stringify(payload.interest_tags));
     await vmenuFetch(authFetch, API_URL, "/users/me/", { method: "PATCH", body: fd });
     setScreen("main");
     setTab("profile");
@@ -62,9 +75,24 @@ export default function VmenuApp({ authFetch, API_URL, me, onOpenChats, onSelect
           authFetch={authFetch}
           API_URL={API_URL}
           onBack={() => setScreen("main")}
+          onOpenRecipe={openRecipe}
           onOpenChat={(convId) => {
             onSelectChat?.(convId);
             onOpenChats?.();
+          }}
+        />
+      );
+    }
+    if (screen === "detail" && detailId) {
+      return (
+        <VmenuRecipeDetail
+          recipeId={detailId}
+          authFetch={authFetch}
+          API_URL={API_URL}
+          onBack={() => setScreen("main")}
+          onOpenUser={(id) => {
+            setUserId(id);
+            setScreen("user");
           }}
         />
       );
@@ -84,11 +112,11 @@ export default function VmenuApp({ authFetch, API_URL, me, onOpenChats, onSelect
       );
     }
     if (screen === "settings" && settingsProfile) {
-      return <VmenuSettings profile={settingsProfile} onSave={saveSettings} onClose={() => setScreen("main")} />;
+      return <VmenuSettings profile={settingsProfile} categories={settingsCategories} onSave={saveSettings} onClose={() => setScreen("main")} />;
     }
-    if (tab === "feed") return <VmenuFeedTab authFetch={authFetch} API_URL={API_URL} onOpenUser={openUser} />;
-    if (tab === "search") return <VmenuSearchTab authFetch={authFetch} API_URL={API_URL} onOpenUser={openUser} />;
-    if (tab === "book") return <VmenuBookTab authFetch={authFetch} API_URL={API_URL} onCreate={() => openEditor()} />;
+    if (tab === "feed") return <VmenuFeedTab authFetch={authFetch} API_URL={API_URL} onOpenUser={openUser} onOpenRecipe={openRecipe} />;
+    if (tab === "search") return <VmenuSearchTab authFetch={authFetch} API_URL={API_URL} onOpenUser={openUser} onOpenRecipe={openRecipe} />;
+    if (tab === "book") return <VmenuBookTab authFetch={authFetch} API_URL={API_URL} onCreate={() => openEditor()} onOpenRecipe={openRecipe} />;
     if (tab === "profile") {
       return (
         <VmenuProfileTab
@@ -98,6 +126,7 @@ export default function VmenuApp({ authFetch, API_URL, me, onOpenChats, onSelect
           onOpenUser={openUser}
           onCreate={() => openEditor()}
           onOpenSettings={openSettings}
+          onOpenRecipe={openRecipe}
         />
       );
     }

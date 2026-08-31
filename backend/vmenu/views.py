@@ -26,7 +26,10 @@ from .models import (
     VmenuStep,
     VmenuRecipeView,
 )
+from .feed_rank import rank_recommended
 from .privacy import can_message_user
+from .recipe_parser import parse_recipe_url as fetch_recipe_from_url
+from .units import scale_ingredients
 from .serializers import (
     VmenuCategorySerializer,
     VmenuCommentSerializer,
@@ -88,11 +91,12 @@ class VmenuFeedView(APIView):
 
         following = list(base.filter(author_id__in=following_ids)[:40])
         following_ids_set = {r.id for r in following}
-        recommended = list(
+        pool = list(
             base.exclude(author_id__in=following_ids)
             .exclude(id__in=following_ids_set)
-            .order_by("-like_count", "-save_count", "-published_at")[:30]
+            .order_by("-like_count", "-save_count", "-published_at")[:80]
         )
+        recommended = rank_recommended(pool, user, limit=30)
         items = following + recommended
         return Response(
             {
@@ -169,6 +173,17 @@ class VmenuRecipeDetailView(APIView):
         data = VmenuRecipeDetailSerializer(recipe, context={"request": request}).data
         data["liked"] = VmenuLike.objects.filter(user=request.user, recipe=recipe).exists()
         data["saved"] = VmenuSave.objects.filter(user=request.user, recipe=recipe).exists()
+        servings = request.query_params.get("servings")
+        if servings:
+            try:
+                target = max(1, min(99, int(servings)))
+                unit = (request.query_params.get("unit") or "").strip() or None
+                data["scaled_servings"] = target
+                data["scaled_ingredients"] = scale_ingredients(
+                    recipe.ingredients.all(), recipe.servings, target, unit
+                )
+            except (TypeError, ValueError):
+                pass
         return Response(data)
 
     def patch(self, request, recipe_id):
@@ -396,6 +411,17 @@ class VmenuMyProfileView(APIView):
             profile.allow_messages = request.data.get("allow_messages")
         if "avatar" in request.FILES:
             profile.avatar = request.FILES["avatar"]
+        if "interest_tags" in request.data:
+            raw = request.data.get("interest_tags")
+            if isinstance(raw, str):
+                import json
+
+                try:
+                    raw = json.loads(raw)
+                except Exception:
+                    raw = []
+            if isinstance(raw, list):
+                profile.interest_tags = [int(x) for x in raw if str(x).isdigit()][:20]
         profile.save()
         return Response(VmenuProfileSerializer(profile, context={"request": request}).data)
 
@@ -417,21 +443,35 @@ class VmenuFollowListView(APIView):
 
 
 class VmenuParseUrlView(APIView):
-    """Заглушка парсера рецепта по URL — заполняет черновик для ручного редактирования."""
-
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         url = (request.data.get("url") or "").strip()
         if not url:
             return Response({"detail": "Укажите ссылку."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            parsed = fetch_recipe_from_url(url)
+        except Exception as exc:
+            return Response({"detail": str(exc) or "Не удалось загрузить страницу."}, status=status.HTTP_400_BAD_REQUEST)
         recipe = VmenuRecipe.objects.create(
             author=request.user,
-            title="Рецепт с сайта",
-            description=f"Импортировано с {url}. Отредактируйте ингредиенты и шаги.",
-            source_url=url,
+            title=parsed["title"],
+            description=parsed["description"],
+            source_url=parsed["source_url"],
             status=VmenuRecipe.Status.DRAFT,
+            servings=parsed.get("servings") or 4,
         )
+        for i, row in enumerate(parsed.get("ingredients") or []):
+            VmenuIngredient.objects.create(
+                recipe=recipe,
+                name=row.get("name", ""),
+                amount=row.get("amount") or 0,
+                unit=row.get("unit") or "г",
+                sort_order=i,
+            )
+        for i, row in enumerate(parsed.get("steps") or []):
+            VmenuStep.objects.create(recipe=recipe, text=row.get("text", ""), sort_order=i)
+        recipe.refresh_from_db()
         return Response(
             VmenuRecipeDetailSerializer(recipe, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
@@ -468,12 +508,51 @@ class VmenuRecipeStepsView(APIView):
         if not recipe:
             return Response(status=status.HTTP_404_NOT_FOUND)
         items = request.data.get("steps") or []
+        if isinstance(items, str):
+            import json
+
+            try:
+                items = json.loads(items)
+            except Exception:
+                items = []
         VmenuStep.objects.filter(recipe=recipe).delete()
         for i, row in enumerate(items):
-            VmenuStep.objects.create(
+            step = VmenuStep.objects.create(
                 recipe=recipe,
                 text=(row.get("text") or "").strip(),
                 sort_order=i,
             )
+            file_key = f"step_image_{i}"
+            if file_key in request.FILES:
+                step.image = request.FILES[file_key]
+                step.save(update_fields=["image"])
         recipe.refresh_from_db()
         return Response(VmenuRecipeDetailSerializer(recipe, context={"request": request}).data)
+
+
+class VmenuRecipeExtraPhotosView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, recipe_id):
+        recipe = VmenuRecipe.objects.filter(pk=recipe_id, author=request.user).first()
+        if not recipe:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        existing = recipe.extra_photos.count()
+        files = request.FILES.getlist("photos") or list(request.FILES.values())
+        if not files:
+            return Response({"detail": "Нет файлов."}, status=status.HTTP_400_BAD_REQUEST)
+        added = 0
+        for f in files:
+            if existing + added >= 4:
+                break
+            VmenuRecipePhoto.objects.create(recipe=recipe, image=f, sort_order=existing + added)
+            added += 1
+        recipe.refresh_from_db()
+        return Response(VmenuRecipeDetailSerializer(recipe, context={"request": request}).data)
+
+    def delete(self, request, recipe_id, photo_id):
+        deleted, _ = VmenuRecipePhoto.objects.filter(pk=photo_id, recipe_id=recipe_id, recipe__author=request.user).delete()
+        if not deleted:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response({"ok": True})
