@@ -6,10 +6,12 @@ from .models import (
     VmenuCategory,
     VmenuComment,
     VmenuIngredient,
+    VmenuLike,
     VmenuProfile,
     VmenuRecipe,
     VmenuStep,
     VmenuRecipePhoto,
+    VmenuSave,
 )
 
 
@@ -115,11 +117,17 @@ class VmenuRecipeListSerializer(serializers.ModelSerializer):
     def get_liked(self, obj):
         if hasattr(obj, "liked"):
             return bool(obj.liked)
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return VmenuLike.objects.filter(user=request.user, recipe=obj).exists()
         return False
 
     def get_saved(self, obj):
         if hasattr(obj, "saved"):
             return bool(obj.saved)
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return VmenuSave.objects.filter(user=request.user, recipe=obj).exists()
         return False
 
 
@@ -145,13 +153,19 @@ class VmenuStepSerializer(serializers.ModelSerializer):
 class VmenuCommentSerializer(serializers.ModelSerializer):
     user = serializers.SerializerMethodField()
     photos = serializers.SerializerMethodField()
+    reply_to_user = serializers.SerializerMethodField()
 
     class Meta:
         model = VmenuComment
-        fields = ("id", "user", "text", "rating", "photos", "created_at")
+        fields = ("id", "user", "text", "rating", "photos", "parent_id", "reply_to_user", "created_at")
 
     def get_user(self, obj):
         return _user_public(obj.user, self.context.get("request"))
+
+    def get_reply_to_user(self, obj):
+        if not obj.reply_to_user_id:
+            return None
+        return _user_public(obj.reply_to_user, self.context.get("request"))
 
     def get_photos(self, obj):
         request = self.context.get("request")

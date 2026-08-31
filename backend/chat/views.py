@@ -43,14 +43,16 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         _ensure_saved_messages_chat(self.request.user)
-        return (
+        qs = (
             Conversation.objects.filter(members__user=self.request.user)
             .distinct()
             .prefetch_related(
                 Prefetch("members", queryset=ConversationMember.objects.select_related("user"))
             )
-            .order_by("-id")
         )
+        if self.request.query_params.get("user_direct") in ("1", "true", "yes"):
+            qs = qs.filter(is_user_direct=True)
+        return qs.order_by("-id")
 
     @action(detail=False, methods=["post"], url_path="create-group")
     def create_group(self, request):

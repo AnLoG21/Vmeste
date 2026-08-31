@@ -28,7 +28,7 @@ from .models import (
 )
 from .feed_rank import rank_recommended
 from .privacy import can_message_user
-from .recipe_parser import parse_recipe_url as fetch_recipe_from_url
+from .recipe_parser import download_image, parse_recipe_url as fetch_recipe_from_url
 from .units import scale_ingredients
 from .serializers import (
     VmenuCategorySerializer,
@@ -147,7 +147,10 @@ class VmenuMyBookView(APIView):
         )
         saved_ids = VmenuSave.objects.filter(user=request.user).values_list("recipe_id", flat=True)
         saved = VmenuRecipe.objects.filter(id__in=saved_ids)
-        qs = (own | saved).distinct().select_related("category", "author").order_by("-updated_at")
+        qs = _annotate_recipe_flags(
+            (own | saved).distinct().select_related("category", "author"),
+            request.user,
+        ).order_by("-updated_at")
         return Response(
             {"items": VmenuRecipeListSerializer(qs, many=True, context={"request": request}).data}
         )
@@ -298,14 +301,46 @@ class VmenuRecipeCommentView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         rating = int(request.data.get("rating") or 0)
         text = (request.data.get("text") or "").strip()
+        parent_id = request.data.get("parent_id")
+        parent = None
+        if parent_id:
+            parent = VmenuComment.objects.filter(pk=parent_id, recipe=recipe).first()
+        reply_to = None
+        reply_username = (request.data.get("reply_to_username") or "").strip().lstrip("@")
+        if reply_username:
+            reply_to = User.objects.filter(username__iexact=reply_username, is_active=True).first()
+        import re
+
         comment = VmenuComment.objects.create(
             user=request.user,
             recipe=recipe,
+            parent=parent,
+            reply_to_user=reply_to,
             text=text,
             rating=max(0, min(5, rating)),
         )
         for f in request.FILES.getlist("photos"):
             VmenuCommentPhoto.objects.create(comment=comment, image=f)
+        mentioned = set(re.findall(r"@([a-zA-Z0-9_]+)", text))
+        if reply_to:
+            mentioned.add(reply_to.username)
+        from notifications.models import InAppNotification
+
+        for uname in mentioned:
+            target = User.objects.filter(username__iexact=uname, is_active=True).exclude(pk=request.user.id).first()
+            if not target:
+                continue
+            InAppNotification.objects.create(
+                user=target,
+                kind=InAppNotification.Kind.VMENU,
+                payload={
+                    "recipe_id": recipe.id,
+                    "recipe_title": recipe.title,
+                    "comment_id": comment.id,
+                    "from_user": request.user.username,
+                    "text_preview": text[:120],
+                },
+            )
         agg = VmenuComment.objects.filter(recipe=recipe, rating__gt=0).aggregate(avg=Avg("rating"))
         VmenuRecipe.objects.filter(pk=recipe.pk).update(
             comment_count=recipe.comment_count + 1,
@@ -356,8 +391,9 @@ class VmenuUserProfileView(APIView):
         user = User.objects.filter(pk=user_id, is_active=True).first()
         if not user:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        recipes = VmenuRecipe.objects.filter(author=user, status=VmenuRecipe.Status.PUBLISHED).select_related(
-            "category"
+        recipes = _annotate_recipe_flags(
+            VmenuRecipe.objects.filter(author=user, status=VmenuRecipe.Status.PUBLISHED).select_related("category"),
+            request.user,
         )[:50]
         followers = VmenuFollow.objects.filter(following=user).count()
         following = VmenuFollow.objects.filter(follower=user).count()
@@ -386,9 +422,12 @@ class VmenuMyProfileView(APIView):
             .select_related("follower")
             .order_by("-created_at")[:8]
         )
-        recipes = VmenuRecipe.objects.filter(
-            author=request.user, status=VmenuRecipe.Status.PUBLISHED
-        ).select_related("category")[:50]
+        recipes = _annotate_recipe_flags(
+            VmenuRecipe.objects.filter(author=request.user, status=VmenuRecipe.Status.PUBLISHED).select_related(
+                "category"
+            ),
+            request.user,
+        )[:50]
         return Response(
             {
                 "profile": VmenuProfileSerializer(profile, context={"request": request}).data,
@@ -471,6 +510,18 @@ class VmenuParseUrlView(APIView):
             )
         for i, row in enumerate(parsed.get("steps") or []):
             VmenuStep.objects.create(recipe=recipe, text=row.get("text", ""), sort_order=i)
+        from django.core.files.base import ContentFile
+
+        for idx, img_url in enumerate(parsed.get("image_urls") or []):
+            try:
+                data, fname = download_image(img_url)
+                cf = ContentFile(data, name=fname)
+                if idx == 0:
+                    recipe.cover_image.save(fname, cf, save=True)
+                elif recipe.extra_photos.count() < 4:
+                    VmenuRecipePhoto.objects.create(recipe=recipe, image=cf, sort_order=idx)
+            except Exception:
+                continue
         recipe.refresh_from_db()
         return Response(
             VmenuRecipeDetailSerializer(recipe, context={"request": request}).data,

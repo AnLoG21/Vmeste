@@ -10,6 +10,7 @@ class InAppNotification(models.Model):
         REVIEW = "review", "Отзыв"
         SUBSCRIPTION = "subscription", "Подписка"
         INSPECTION = "inspection", "Приёмка / согласование"
+        VMENU = "vmenu", "Вменю"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

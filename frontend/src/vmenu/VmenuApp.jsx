@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./vmenu.css";
 import VmenuLogo from "./VmenuLogo.jsx";
-import { vmenuFetch } from "./vmenuApi.js";
+import { vmenuFetch, VMENU_DRAFT_KEY } from "./vmenuApi.js";
+import { VmenuChatsTab } from "./VmenuChatsTab.jsx";
 import {
   VmenuBookTab,
   VmenuFeedTab,
@@ -23,7 +24,9 @@ const TABS = [
   { id: "follows", label: "Подписки", icon: "👥" },
 ];
 
-export default function VmenuApp({ authFetch, API_URL, me, onOpenChats, onSelectChat }) {
+const DRAFT_KEY = VMENU_DRAFT_KEY;
+
+export default function VmenuApp({ authFetch, API_URL, me, onExit, onSelectChat, selectedChatId }) {
   const [tab, setTab] = useState("feed");
   const [screen, setScreen] = useState("main");
   const [userId, setUserId] = useState(null);
@@ -31,6 +34,8 @@ export default function VmenuApp({ authFetch, API_URL, me, onOpenChats, onSelect
   const [detailId, setDetailId] = useState(null);
   const [settingsProfile, setSettingsProfile] = useState(null);
   const [settingsCategories, setSettingsCategories] = useState([]);
+  const [editorDraft, setEditorDraft] = useState(null);
+  const editorSaveRef = useRef(null);
 
   function openUser(id) {
     setUserId(id);
@@ -62,10 +67,32 @@ export default function VmenuApp({ authFetch, API_URL, me, onOpenChats, onSelect
     if (payload.bio != null) fd.append("bio", payload.bio);
     if (payload.allow_messages) fd.append("allow_messages", payload.allow_messages);
     if (payload.interest_tags) fd.append("interest_tags", JSON.stringify(payload.interest_tags));
+    if (payload.avatar) fd.append("avatar", payload.avatar);
     await vmenuFetch(authFetch, API_URL, "/users/me/", { method: "PATCH", body: fd });
     setScreen("main");
     setTab("profile");
   }
+
+  const switchTab = useCallback(
+    async (nextTab) => {
+      if (screen === "editor" && editorSaveRef.current) {
+        await editorSaveRef.current(true);
+      }
+      setScreen("main");
+      setTab(nextTab);
+    },
+    [screen],
+  );
+
+  useEffect(() => {
+    if (screen !== "editor" || editorId) return;
+    try {
+      const raw = sessionStorage.getItem(DRAFT_KEY);
+      if (raw) setEditorDraft(JSON.parse(raw));
+    } catch {
+      /* ignore */
+    }
+  }, [screen, editorId]);
 
   function renderMain() {
     if (screen === "user" && userId) {
@@ -78,7 +105,8 @@ export default function VmenuApp({ authFetch, API_URL, me, onOpenChats, onSelect
           onOpenRecipe={openRecipe}
           onOpenChat={(convId) => {
             onSelectChat?.(convId);
-            onOpenChats?.();
+            setScreen("main");
+            setTab("chats");
           }}
         />
       );
@@ -103,20 +131,56 @@ export default function VmenuApp({ authFetch, API_URL, me, onOpenChats, onSelect
           authFetch={authFetch}
           API_URL={API_URL}
           recipeId={editorId}
-          onDone={() => {
-            setScreen("main");
-            setTab("profile");
+          initialDraft={editorDraft}
+          registerDraftSaver={(fn) => {
+            editorSaveRef.current = fn;
           }}
-          onCancel={() => setScreen("main")}
+          onDone={() => {
+            sessionStorage.removeItem(DRAFT_KEY);
+            setEditorDraft(null);
+            setScreen("main");
+            setTab("book");
+          }}
+          onCancel={() => {
+            setScreen("main");
+          }}
         />
       );
     }
     if (screen === "settings" && settingsProfile) {
-      return <VmenuSettings profile={settingsProfile} categories={settingsCategories} onSave={saveSettings} onClose={() => setScreen("main")} />;
+      return (
+        <VmenuSettings
+          profile={settingsProfile}
+          categories={settingsCategories}
+          onSave={saveSettings}
+          onClose={() => setScreen("main")}
+        />
+      );
+    }
+    if (tab === "chats") {
+      return (
+        <VmenuChatsTab
+          authFetch={authFetch}
+          API_URL={API_URL}
+          me={me}
+          initialChatId={selectedChatId}
+          onChatOpen={onSelectChat}
+        />
+      );
     }
     if (tab === "feed") return <VmenuFeedTab authFetch={authFetch} API_URL={API_URL} onOpenUser={openUser} onOpenRecipe={openRecipe} />;
     if (tab === "search") return <VmenuSearchTab authFetch={authFetch} API_URL={API_URL} onOpenUser={openUser} onOpenRecipe={openRecipe} />;
-    if (tab === "book") return <VmenuBookTab authFetch={authFetch} API_URL={API_URL} onCreate={() => openEditor()} onOpenRecipe={openRecipe} />;
+    if (tab === "book") {
+      return (
+        <VmenuBookTab
+          authFetch={authFetch}
+          API_URL={API_URL}
+          onCreate={() => openEditor()}
+          onOpenRecipe={openRecipe}
+          onEditRecipe={(id) => openEditor(id)}
+        />
+      );
+    }
     if (tab === "profile") {
       return (
         <VmenuProfileTab
@@ -143,14 +207,7 @@ export default function VmenuApp({ authFetch, API_URL, me, onOpenChats, onSelect
             key={t.id}
             type="button"
             className={tab === t.id && screen === "main" ? "active" : ""}
-            onClick={() => {
-              if (t.id === "chats") {
-                onOpenChats?.();
-                return;
-              }
-              setScreen("main");
-              setTab(t.id);
-            }}
+            onClick={() => switchTab(t.id)}
           >
             <span aria-hidden>{t.icon}</span>
             <span>{t.label}</span>

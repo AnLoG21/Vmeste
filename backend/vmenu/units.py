@@ -13,12 +13,14 @@ _TO_BASE = {
     "ч.л.": ("volume", Decimal("5")),
     "ст.л.": ("volume", Decimal("15")),
     "шт.": ("count", Decimal("1")),
+    "стакан": ("volume", Decimal("250")),
+    "щепотка": ("count", Decimal("1")),
 }
 
 _DISPLAY_UNITS = {
     "mass": ["г", "кг"],
-    "volume": ["мл", "л", "ч.л.", "ст.л."],
-    "count": ["шт."],
+    "volume": ["мл", "л", "ч.л.", "ст.л.", "стакан"],
+    "count": ["шт.", "щепотка"],
 }
 
 

@@ -1,5 +1,7 @@
 /** API helpers for Вменю microservice. */
 
+export const VMENU_DRAFT_KEY = "vmeste_vmenu_editor_draft_v1";
+
 export async function vmenuFetch(authFetch, API_URL, path, options = {}) {
   const res = await authFetch(`${API_URL}/vmenu${path}`, options);
   if (!res.ok) {

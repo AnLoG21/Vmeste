@@ -3765,12 +3765,16 @@ body.theme-dark .tg-chat-item-row:hover {
 }
 
 .grid-centered-workspace {
-  max-width: 720px;
+  max-width: 920px;
   width: 100%;
   margin-left: auto;
   margin-right: auto;
   grid-template-columns: minmax(0, 1fr);
   justify-items: stretch;
+}
+
+.grid-centered-workspace.grid-profile-wide {
+  max-width: 1040px;
 }
 
 .org-main-display {

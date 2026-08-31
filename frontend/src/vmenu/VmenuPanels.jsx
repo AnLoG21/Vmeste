@@ -20,8 +20,19 @@ import {
   updateRecipe,
   uploadExtraPhotos,
   vmenuFetch,
+  VMENU_DRAFT_KEY,
 } from "./vmenuApi.js";
-import { ALL_UNITS, formatAmount, scaleIngredients } from "./vmenuUnits.js";
+import {
+  VmenuBackButton,
+  VmenuCloseButton,
+  VmenuFieldBlock,
+  VmenuMediaUpload,
+  VmenuRatingBadge,
+  VmenuStatWidget,
+  VmenuTextArea,
+  VmenuTextInput,
+} from "./VmenuComponents.jsx";
+import { ALL_UNITS, formatIngredientLine, scaleIngredients } from "./vmenuUnits.js";
 import VmenuLogo from "./VmenuLogo.jsx";
 
 function Stars({ value, onChange }) {
@@ -69,6 +80,13 @@ export function VmenuRecipeCard({ recipe, authFetch, API_URL, onOpenUser, onOpen
   const [saved, setSaved] = useState(Boolean(recipe.saved));
   const [likeCount, setLikeCount] = useState(recipe.like_count || 0);
   const [saveCount, setSaveCount] = useState(recipe.save_count || 0);
+
+  useEffect(() => {
+    setLiked(Boolean(recipe.liked));
+    setSaved(Boolean(recipe.saved));
+    setLikeCount(recipe.like_count || 0);
+    setSaveCount(recipe.save_count || 0);
+  }, [recipe.id, recipe.liked, recipe.saved, recipe.like_count, recipe.save_count]);
   const [commentOpen, setCommentOpen] = useState(false);
   const [rating, setRating] = useState(5);
   const [commentText, setCommentText] = useState("");
@@ -100,6 +118,7 @@ export function VmenuRecipeCard({ recipe, authFetch, API_URL, onOpenUser, onOpen
 
   return (
     <article className="vmenu-card">
+      <VmenuRatingBadge rating={recipe.avg_rating} />
       <div className="vmenu-card-views">{recipe.view_count || 0} просмотров</div>
       {photos.length ? (
         <PhotoCarousel urls={photos} onOpen={() => onOpenRecipe?.(recipe.id)} />
@@ -165,12 +184,20 @@ export function VmenuRecipeDetail({ recipeId, authFetch, API_URL, onBack, onOpen
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
   const [carouselIdx, setCarouselIdx] = useState(0);
+  const [rating, setRating] = useState(5);
+  const [commentText, setCommentText] = useState("");
+  const [replyTo, setReplyTo] = useState(null);
   const [servingsInit, setServingsInit] = useState(false);
 
   useEffect(() => {
     setServingsInit(false);
     setCarouselIdx(0);
   }, [recipeId]);
+
+  useEffect(() => {
+    setLiked(Boolean(recipe?.liked));
+    setSaved(Boolean(recipe?.saved));
+  }, [recipe?.liked, recipe?.saved]);
 
   async function load() {
     setStatus("Загрузка…");
@@ -215,23 +242,39 @@ export function VmenuRecipeDetail({ recipeId, authFetch, API_URL, onBack, onOpen
     setRecipe((r) => ({ ...r, save_count: data.save_count }));
   }
 
+  async function submitComment(e) {
+    e.preventDefault();
+    const fd = new FormData();
+    fd.append("text", commentText);
+    fd.append("rating", String(rating));
+    if (replyTo?.username) fd.append("reply_to_username", replyTo.username);
+    if (replyTo?.id) fd.append("parent_id", String(replyTo.id));
+    await postComment(authFetch, API_URL, recipe.id, fd);
+    setCommentText("");
+    setReplyTo(null);
+    await load();
+  }
+
   return (
     <div className="vmenu-tab vmenu-detail">
-      <button type="button" className="ghost-btn" onClick={onBack}>
-        ← Назад
-      </button>
-      {photos.length ? (
-        <div className="vmenu-detail-gallery">
-          <img src={photos[carouselIdx % photos.length]} alt="" />
-          {photos.length > 1 ? (
-            <div className="vmenu-carousel-dots">
-              {photos.map((_, i) => (
-                <button key={i} type="button" className={i === carouselIdx ? "on" : ""} onClick={() => setCarouselIdx(i)} />
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="vmenu-detail-top">
+        <VmenuBackButton onClick={onBack} />
+      </div>
+      <div className="vmenu-detail-hero">
+        <VmenuRatingBadge rating={recipe.avg_rating} />
+        {photos.length ? (
+          <div className="vmenu-detail-gallery">
+            <img src={photos[carouselIdx % photos.length]} alt="" />
+            {photos.length > 1 ? (
+              <div className="vmenu-carousel-dots">
+                {photos.map((_, i) => (
+                  <button key={i} type="button" className={i === carouselIdx ? "on" : ""} onClick={() => setCarouselIdx(i)} />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
       {recipe.video_url ? (
         <video className="vmenu-detail-video" src={recipe.video_url} controls playsInline />
       ) : null}
@@ -282,9 +325,7 @@ export function VmenuRecipeDetail({ recipeId, authFetch, API_URL, onBack, onOpen
       <h3>Ингредиенты</h3>
       <ul className="vmenu-ing-list">
         {ingredients.map((ing, i) => (
-          <li key={ing.id || i}>
-            <strong>{ing.name}</strong> — {formatAmount(ing.amount)} {ing.unit}
-          </li>
+          <li key={ing.id || i}>{formatIngredientLine(ing)}</li>
         ))}
       </ul>
       <h3>Приготовление</h3>
@@ -296,20 +337,39 @@ export function VmenuRecipeDetail({ recipeId, authFetch, API_URL, onBack, onOpen
           </li>
         ))}
       </ol>
-      {recipe.comments?.length ? (
-        <>
-          <h3>Отзывы</h3>
-          <ul className="vmenu-comments">
-            {recipe.comments.map((c) => (
-              <li key={c.id}>
-                <strong>{c.user?.display_name}</strong>
-                {c.rating ? <span> ★ {c.rating}</span> : null}
-                <p>{c.text}</p>
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : null}
+      <h3>Комментарии</h3>
+      <ul className="vmenu-comments-list">
+        {(recipe.comments || []).map((c) => (
+          <li key={c.id} className="vmenu-comment-item">
+            <div className="vmenu-comment-head">
+              <strong>{c.user?.display_name}</strong>
+              {c.rating ? <span className="vmenu-comment-rating">★ {c.rating}</span> : null}
+              <button type="button" className="vmenu-comment-reply" onClick={() => setReplyTo({ id: c.id, username: c.user?.username })}>
+                Ответить
+              </button>
+            </div>
+            {c.reply_to_user ? <span className="muted small">@{c.reply_to_user.username} </span> : null}
+            <p>{c.text}</p>
+          </li>
+        ))}
+      </ul>
+      <form className="vmenu-comment-compose" onSubmit={submitComment}>
+        <Stars value={rating} onChange={setRating} />
+        {replyTo ? (
+          <p className="muted small">
+            Ответ @{replyTo.username}{" "}
+            <button type="button" className="ghost-btn" onClick={() => setReplyTo(null)}>
+              ×
+            </button>
+          </p>
+        ) : null}
+        <div className="vmenu-comment-input-row">
+          <VmenuTextArea value={commentText} onChange={setCommentText} rows={3} placeholder="Комментарий… @username для упоминания" />
+          <button type="submit" className="vmenu-send-btn" aria-label="Отправить">
+            ➤
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -378,8 +438,8 @@ export function VmenuSearchTab({ authFetch, API_URL, onOpenUser, onOpenRecipe })
   return (
     <div className="vmenu-tab">
       <h2>Поиск рецептов</h2>
-      <form className="vmenu-search-form" onSubmit={runSearch}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Название, ингредиент…" />
+      <form className="vmenu-search-toolbar" onSubmit={runSearch}>
+        <input className="vmenu-search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Название, ингредиент…" />
         <select value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">Все категории</option>
           {categories.map((c) => (
@@ -393,7 +453,7 @@ export function VmenuSearchTab({ authFetch, API_URL, onOpenUser, onOpenRecipe })
           <option value="popular">По популярности</option>
           <option value="new">Сначала новые</option>
         </select>
-        <button type="submit" className="primary-btn">
+        <button type="submit" className="primary-btn vmenu-search-btn">
           Найти
         </button>
       </form>
@@ -413,12 +473,20 @@ export function VmenuSearchTab({ authFetch, API_URL, onOpenUser, onOpenRecipe })
   );
 }
 
-export function VmenuBookTab({ authFetch, API_URL, onCreate, onOpenRecipe }) {
+export function VmenuBookTab({ authFetch, API_URL, onCreate, onOpenRecipe, onEditRecipe }) {
   const [items, setItems] = useState([]);
+  const [openCats, setOpenCats] = useState({});
 
   useEffect(() => {
     void loadBook(authFetch, API_URL).then((d) => setItems(d.items || []));
   }, [authFetch, API_URL]);
+
+  const grouped = items.reduce((acc, r) => {
+    const key = r.category?.name || "Без категории";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(r);
+    return acc;
+  }, {});
 
   return (
     <div className="vmenu-tab">
@@ -428,17 +496,36 @@ export function VmenuBookTab({ authFetch, API_URL, onCreate, onOpenRecipe }) {
           + Создать
         </button>
       </div>
-      <div className="vmenu-feed">
-        {items.map((r) => (
-          <VmenuRecipeCard
-            key={r.id}
-            recipe={r}
-            authFetch={authFetch}
-            API_URL={API_URL}
-            onOpenRecipe={onOpenRecipe}
-          />
+      <div className="vmenu-book-tree">
+        {Object.entries(grouped).map(([cat, recipes]) => (
+          <div key={cat} className="vmenu-book-cat">
+            <button
+              type="button"
+              className="vmenu-book-cat-head"
+              onClick={() => setOpenCats((p) => ({ ...p, [cat]: !p[cat] }))}
+            >
+              <span>{openCats[cat] ? "▾" : "▸"}</span>
+              <span>{cat}</span>
+              <span className="muted">({recipes.length})</span>
+            </button>
+            {openCats[cat] !== false ? (
+              <ul className="vmenu-book-recipes">
+                {recipes.map((r) => (
+                  <li key={r.id}>
+                    <button type="button" onClick={() => onOpenRecipe?.(r.id)}>
+                      {r.title}
+                    </button>
+                    <button type="button" className="ghost-btn" onClick={() => onEditRecipe?.(r.id)}>
+                      ✎
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         ))}
       </div>
+      {!items.length ? <p className="muted">Сохраняйте рецепты или создавайте свои.</p> : null}
     </div>
   );
 }
@@ -454,16 +541,23 @@ export function VmenuProfileTab({ authFetch, API_URL, me, onOpenUser, onCreate, 
 
   return (
     <div className="vmenu-tab">
-      <div className="vmenu-tab-head-row">
-        <h2>{data.profile?.display_name || me?.username}</h2>
-        <button type="button" className="ghost-btn" onClick={onOpenSettings}>
-          ⚙
-        </button>
+      <div className="vmenu-profile-head">
+        {data.profile?.avatar_url ? (
+          <img className="vmenu-profile-avatar" src={data.profile.avatar_url} alt="" />
+        ) : (
+          <span className="vmenu-profile-avatar vmenu-avatar-fallback">{data.profile?.display_name?.[0] || "?"}</span>
+        )}
+        <div>
+          <h2>{data.profile?.display_name || me?.username}</h2>
+          <button type="button" className="ghost-btn" onClick={onOpenSettings}>
+            ⚙ Настройки
+          </button>
+        </div>
       </div>
       <p className="muted">{data.profile?.bio || "Расскажите о себе в настройках."}</p>
-      <div className="vmenu-stats">
-        <span>{data.followers_count} подписчиков</span>
-        <span>{data.following_count} подписок</span>
+      <div className="vmenu-stats-row">
+        <VmenuStatWidget icon="👥" value={data.followers_count} label="подписчиков" onClick={() => onOpenUser?.(me?.id)} />
+        <VmenuStatWidget icon="➕" value={data.following_count} label="подписок" />
       </div>
       <div className="vmenu-follower-row">
         {data.recent_followers?.map((u) => (
@@ -580,9 +674,7 @@ export function VmenuUserView({ userId, authFetch, API_URL, onBack, onOpenChat, 
 
   return (
     <div className="vmenu-tab">
-      <button type="button" className="ghost-btn" onClick={onBack}>
-        ← Назад
-      </button>
+      <VmenuBackButton onClick={onBack} />
       <h2>{u.display_name}</h2>
       <p className="muted">@{u.username}</p>
       <div className="vmenu-profile-actions">
@@ -615,21 +707,31 @@ export function VmenuUserView({ userId, authFetch, API_URL, onBack, onOpenChat, 
   );
 }
 
-export function VmenuRecipeEditor({ authFetch, API_URL, recipeId, onDone, onCancel }) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [sourceUrl, setSourceUrl] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [servings, setServings] = useState(4);
+export function VmenuRecipeEditor({
+  authFetch,
+  API_URL,
+  recipeId,
+  initialDraft,
+  registerDraftSaver,
+  onDone,
+  onCancel,
+}) {
+  const [title, setTitle] = useState(initialDraft?.title || "");
+  const [description, setDescription] = useState(initialDraft?.description || "");
+  const [sourceUrl, setSourceUrl] = useState(initialDraft?.sourceUrl || "");
+  const [categoryId, setCategoryId] = useState(initialDraft?.categoryId || "");
+  const [servings, setServings] = useState(initialDraft?.servings || 4);
   const [categories, setCategories] = useState([]);
   const [cover, setCover] = useState(null);
+  const [coverPreview, setCoverPreview] = useState("");
   const [extraPhotos, setExtraPhotos] = useState([]);
+  const [extraError, setExtraError] = useState("");
   const [video, setVideo] = useState(null);
-  const [ingredients, setIngredients] = useState([{ name: "", amount: "", unit: "г" }]);
-  const [steps, setSteps] = useState([{ text: "" }]);
+  const [ingredients, setIngredients] = useState(initialDraft?.ingredients || [{ name: "", amount: "", unit: "г" }]);
+  const [steps, setSteps] = useState(initialDraft?.steps || [{ text: "" }]);
   const [stepImages, setStepImages] = useState({});
   const [status, setStatus] = useState("");
-  const [id, setId] = useState(recipeId || null);
+  const [id, setId] = useState(recipeId || initialDraft?.id || null);
 
   useEffect(() => {
     void loadCategories(authFetch, API_URL).then(setCategories);
@@ -640,11 +742,51 @@ export function VmenuRecipeEditor({ authFetch, API_URL, recipeId, onDone, onCanc
         setSourceUrl(r.source_url || "");
         setCategoryId(r.category?.id || "");
         setServings(r.servings || 4);
+        setCoverPreview(r.cover_url || "");
         setIngredients(r.ingredients?.length ? r.ingredients : [{ name: "", amount: "", unit: "г" }]);
         setSteps(r.steps?.length ? r.steps : [{ text: "" }]);
       });
     }
   }, [recipeId]);
+
+  async function saveDraft(silent = false) {
+    if (!title.trim() && !description.trim()) return;
+    const payload = { id, title, description, sourceUrl, categoryId, servings, ingredients, steps };
+    sessionStorage.setItem(VMENU_DRAFT_KEY, JSON.stringify(payload));
+    if (!silent) setStatus("Черновик сохранён");
+    else setStatus("");
+    const fd = new FormData();
+    fd.append("title", title || "Черновик");
+    fd.append("description", description);
+    fd.append("servings", String(servings));
+    if (categoryId) fd.append("category_id", categoryId);
+    if (cover) fd.append("cover_image", cover);
+    if (video) fd.append("video", video);
+    fd.append("book_only", "1");
+    let recipe = id;
+    try {
+      if (!id) {
+        const created = await createRecipe(authFetch, API_URL, fd);
+        recipe = created.id;
+        setId(recipe);
+      } else {
+        await updateRecipe(authFetch, API_URL, id, fd);
+      }
+      await vmenuFetch(authFetch, API_URL, `/recipes/${recipe}/ingredients/`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ingredients }),
+      });
+      await saveRecipeSteps(authFetch, API_URL, recipe, steps, stepImages);
+      sessionStorage.setItem(VMENU_DRAFT_KEY, JSON.stringify({ ...payload, id: recipe }));
+    } catch {
+      if (!silent) setStatus("Не удалось сохранить черновик");
+    }
+  }
+
+  useEffect(() => {
+    registerDraftSaver?.(saveDraft);
+  }, [title, description, ingredients, steps, id, cover, video, servings, categoryId]);
 
   async function parseUrl() {
     setStatus("Импорт…");
@@ -656,6 +798,7 @@ export function VmenuRecipeEditor({ authFetch, API_URL, recipeId, onDone, onCanc
       setServings(r.servings || 4);
       if (r.ingredients?.length) setIngredients(r.ingredients);
       if (r.steps?.length) setSteps(r.steps);
+      if (r.cover_url) setCoverPreview(r.cover_url);
       setStatus("");
     } catch (e) {
       setStatus(e.message);
@@ -690,6 +833,7 @@ export function VmenuRecipeEditor({ authFetch, API_URL, recipeId, onDone, onCanc
       body: JSON.stringify({ ingredients }),
     });
     await saveRecipeSteps(authFetch, API_URL, recipe, steps, stepImages);
+    sessionStorage.removeItem(VMENU_DRAFT_KEY);
     setStatus("");
     onDone?.();
   }
@@ -698,26 +842,21 @@ export function VmenuRecipeEditor({ authFetch, API_URL, recipeId, onDone, onCanc
     <div className="vmenu-tab vmenu-editor">
       <div className="vmenu-tab-head-row">
         <h2>{id ? "Редактирование" : "Новый рецепт"}</h2>
-        <button type="button" className="ghost-btn" onClick={onCancel}>
-          Закрыть
-        </button>
+        <VmenuCloseButton onClick={onCancel} />
       </div>
-      <label className="field-label">
-        Ссылка на рецепт (опционально)
+      <VmenuFieldBlock label="Ссылка на рецепт (опционально)">
         <div className="row-2">
-          <input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://…" />
+          <VmenuTextInput value={sourceUrl} onChange={setSourceUrl} placeholder="https://…" />
           <button type="button" className="ghost-btn" onClick={parseUrl}>
             Импорт
           </button>
         </div>
-      </label>
-      <label className="field-label">
-        Название
-        <input value={title} onChange={(e) => setTitle(e.target.value)} />
-      </label>
-      <label className="field-label">
-        Категория
-        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+      </VmenuFieldBlock>
+      <VmenuFieldBlock label="Название">
+        <VmenuTextInput value={title} onChange={setTitle} />
+      </VmenuFieldBlock>
+      <VmenuFieldBlock label="Категория">
+        <select className="vmenu-textinput" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
           <option value="">—</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
@@ -725,99 +864,86 @@ export function VmenuRecipeEditor({ authFetch, API_URL, recipeId, onDone, onCanc
             </option>
           ))}
         </select>
-      </label>
-      <label className="field-label">
-        Описание
-        <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
-      </label>
-      <label className="field-label">
-        Порций по рецепту
-        <input type="number" min={1} max={99} value={servings} onChange={(e) => setServings(Number(e.target.value) || 1)} />
-      </label>
-      <label className="field-label">
-        Главное фото
-        <input type="file" accept="image/*" onChange={(e) => setCover(e.target.files?.[0] || null)} />
-      </label>
-      <label className="field-label">
-        Доп. фото (до 4)
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={(e) => setExtraPhotos(Array.from(e.target.files || []).slice(0, 4))}
-        />
-      </label>
-      <label className="field-label">
-        Видео (опционально)
-        <input type="file" accept="video/*" onChange={(e) => setVideo(e.target.files?.[0] || null)} />
-      </label>
+      </VmenuFieldBlock>
+      <VmenuFieldBlock label="Описание">
+        <VmenuTextArea value={description} onChange={setDescription} rows={4} />
+      </VmenuFieldBlock>
+      <VmenuFieldBlock label="Порций по рецепту">
+        <VmenuTextInput type="number" value={String(servings)} onChange={(v) => setServings(Number(v) || 1)} />
+      </VmenuFieldBlock>
+      <VmenuMediaUpload
+        label="Главное фото"
+        accept="image/*"
+        max={1}
+        files={cover ? [cover] : []}
+        previews={coverPreview && !cover ? [coverPreview] : []}
+        onChange={(files) => {
+          setCover(files[0] || null);
+          if (files[0]) setCoverPreview(URL.createObjectURL(files[0]));
+        }}
+      />
+      <VmenuMediaUpload
+        label="Доп. фото (до 4)"
+        accept="image/*"
+        multiple
+        max={4}
+        files={extraPhotos}
+        error={extraError}
+        onChange={(files, err) => {
+          setExtraError(err || "");
+          setExtraPhotos(files);
+        }}
+        onRemove={(i) => setExtraPhotos((p) => p.filter((_, idx) => idx !== i))}
+      />
+      <VmenuMediaUpload
+        label="Видео (опционально)"
+        accept="video/*"
+        max={1}
+        files={video ? [video] : []}
+        onChange={(files) => setVideo(files[0] || null)}
+      />
       <h3>Ингредиенты</h3>
       {ingredients.map((ing, i) => (
         <div key={i} className="vmenu-ing-row">
-          <input
-            placeholder="Название"
-            value={ing.name}
-            onChange={(e) => {
-              const next = [...ingredients];
-              next[i] = { ...ing, name: e.target.value };
-              setIngredients(next);
-            }}
-          />
-          <input
-            placeholder="Кол-во"
-            value={ing.amount}
-            onChange={(e) => {
-              const next = [...ingredients];
-              next[i] = { ...ing, amount: e.target.value };
-              setIngredients(next);
-            }}
-          />
-          <select
-            value={ing.unit}
-            onChange={(e) => {
-              const next = [...ingredients];
-              next[i] = { ...ing, unit: e.target.value };
-              setIngredients(next);
-            }}
-          >
-            {["г", "кг", "мл", "л", "ч.л.", "ст.л.", "шт."].map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
+          <input placeholder="Название" value={ing.name} onChange={(e) => {
+            const next = [...ingredients]; next[i] = { ...ing, name: e.target.value }; setIngredients(next);
+          }} />
+          <input placeholder="Кол-во" value={ing.amount} onChange={(e) => {
+            const next = [...ingredients]; next[i] = { ...ing, amount: e.target.value }; setIngredients(next);
+          }} />
+          <select value={ing.unit} onChange={(e) => {
+            const next = [...ingredients]; next[i] = { ...ing, unit: e.target.value }; setIngredients(next);
+          }}>
+            {ALL_UNITS.map((u) => (
+              <option key={u} value={u}>{u}</option>
             ))}
           </select>
         </div>
       ))}
-      <button
-        type="button"
-        className="ghost-btn"
-        onClick={() => setIngredients([...ingredients, { name: "", amount: "", unit: "г" }])}
-      >
+      <button type="button" className="ghost-btn" onClick={() => setIngredients([...ingredients, { name: "", amount: "", unit: "г" }])}>
         + Ингредиент
       </button>
       <h3>Шаги</h3>
       {steps.map((st, i) => (
         <div key={i} className="vmenu-step-edit">
-          <label className="field-label">
-            Шаг {i + 1}
-            <textarea
-              rows={2}
+          <VmenuFieldBlock label={`Шаг ${i + 1}`}>
+            <VmenuTextArea
               value={st.text}
-              onChange={(e) => {
+              onChange={(v) => {
                 const next = [...steps];
-                next[i] = { ...st, text: e.target.value };
+                next[i] = { ...st, text: v };
                 setSteps(next);
               }}
+              rows={5}
             />
-          </label>
-          <label className="field-label">
-            Фото шага
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setStepImages((prev) => ({ ...prev, [i]: e.target.files?.[0] || null }))}
-            />
-          </label>
+          </VmenuFieldBlock>
+          <VmenuMediaUpload
+            label="Фото шага"
+            accept="image/*"
+            max={1}
+            files={stepImages[i] ? [stepImages[i]] : []}
+            onChange={(files) => setStepImages((prev) => ({ ...prev, [i]: files[0] || null }))}
+          />
         </div>
       ))}
       <button type="button" className="ghost-btn" onClick={() => setSteps([...steps, { text: "" }])}>
@@ -825,6 +951,9 @@ export function VmenuRecipeEditor({ authFetch, API_URL, recipeId, onDone, onCanc
       </button>
       {status ? <p className="status">{status}</p> : null}
       <div className="vmenu-editor-actions">
+        <button type="button" className="ghost-btn" onClick={() => saveDraft(false)}>
+          Сохранить черновик
+        </button>
         <button type="button" className="ghost-btn" onClick={() => save(false)}>
           В книгу без публикации
         </button>
@@ -840,6 +969,8 @@ export function VmenuSettings({ profile, categories = [], onSave, onClose }) {
   const [bio, setBio] = useState(profile?.bio || "");
   const [allowMessages, setAllowMessages] = useState(profile?.allow_messages || "followers");
   const [interests, setInterests] = useState(profile?.interest_tags || []);
+  const [avatar, setAvatar] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(profile?.avatar_url || "");
 
   function toggleInterest(catId) {
     setInterests((prev) => (prev.includes(catId) ? prev.filter((x) => x !== catId) : [...prev, catId].slice(0, 10)));
@@ -849,15 +980,22 @@ export function VmenuSettings({ profile, categories = [], onSave, onClose }) {
     <div className="vmenu-tab vmenu-settings">
       <div className="vmenu-tab-head-row">
         <h2>Настройки Вменю</h2>
-        <button type="button" className="ghost-btn" onClick={onClose}>
-          Закрыть
-        </button>
+        <VmenuCloseButton onClick={onClose} />
       </div>
-      <h3>Общие</h3>
-      <label className="field-label">
-        О себе
-        <textarea rows={3} value={bio} onChange={(e) => setBio(e.target.value)} />
-      </label>
+      <VmenuMediaUpload
+        label="Аватар"
+        accept="image/*"
+        max={1}
+        files={avatar ? [avatar] : []}
+        previews={avatarPreview && !avatar ? [avatarPreview] : []}
+        onChange={(files) => {
+          setAvatar(files[0] || null);
+          if (files[0]) setAvatarPreview(URL.createObjectURL(files[0]));
+        }}
+      />
+      <VmenuFieldBlock label="О себе">
+        <VmenuTextArea value={bio} onChange={setBio} rows={4} />
+      </VmenuFieldBlock>
       <h3>Конфиденциальность</h3>
       <label className="field-label">
         Кто может писать в чат
@@ -884,7 +1022,7 @@ export function VmenuSettings({ profile, categories = [], onSave, onClose }) {
       <button
         type="button"
         className="primary-btn"
-        onClick={() => onSave({ bio, allow_messages: allowMessages, interest_tags: interests })}
+        onClick={() => onSave({ bio, allow_messages: allowMessages, interest_tags: interests, avatar })}
       >
         Сохранить
       </button>

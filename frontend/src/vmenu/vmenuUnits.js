@@ -8,6 +8,8 @@ const TO_BASE = {
   "ч.л.": ["volume", 5],
   "ст.л.": ["volume", 15],
   "шт.": ["count", 1],
+  стакан: ["volume", 250],
+  щепотка: ["count", 1],
 };
 
 const DISPLAY_UNITS = {
@@ -16,7 +18,7 @@ const DISPLAY_UNITS = {
   count: ["шт."],
 };
 
-export const ALL_UNITS = ["г", "кг", "мл", "л", "ч.л.", "ст.л.", "шт."];
+export const ALL_UNITS = ["г", "кг", "мл", "л", "ч.л.", "ст.л.", "шт.", "стакан", "щепотка"];
 
 function q(n) {
   return Math.round(n * 1000) / 1000;
@@ -59,4 +61,15 @@ export function formatAmount(amount) {
   if (!Number.isFinite(n)) return String(amount || "");
   if (Number.isInteger(n)) return String(n);
   return String(q(n));
+}
+
+export function formatIngredientLine(ing) {
+  const name = ing.name || "";
+  const unit = (ing.unit || "").trim();
+  const amt = ing.amount;
+  const n = Number(amt);
+  if (!unit && (!amt || n === 0)) return name;
+  if (unit && (!amt || n === 0)) return `${name} — ${unit}`;
+  if (!unit) return `${name} — ${formatAmount(amt)}`;
+  return `${name} — ${formatAmount(amt)} ${unit}`;
 }

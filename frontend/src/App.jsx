@@ -14,6 +14,7 @@ import ClientActivityFeed from "./ClientActivityFeed.jsx";
 import WaitlistPanel, { JoinWaitlistButton } from "./WaitlistPanel.jsx";
 import MarketplaceWorkspace from "./MarketplaceWorkspace.jsx";
 import VmenuApp, { ServicesHub } from "./vmenu/VmenuApp.jsx";
+import VmenuLogo from "./vmenu/VmenuLogo.jsx";
 import InspectionWorkspace from "./InspectionWorkspace.jsx";
 import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
@@ -12122,6 +12123,7 @@ export default function App() {
     : undefined;
   const tgMainDark = activeChatWallpaper === "#1e2a24";
   const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "service_apps", "vmenu"].includes(currentView);
+  const profileWide = accessToken && ["profile", "subscriptions"].includes(currentView);
 
   return (
     <div className={`page${accessToken ? " page-logged" : " page--guest"}`}>
@@ -12130,6 +12132,10 @@ export default function App() {
           type="button"
           className="brand-link brand-btn"
           onClick={() => {
+            if (currentView === "vmenu") {
+              setCurrentView("service_apps");
+              return;
+            }
             if (!accessToken) window.scrollTo({ top: 0, behavior: "smooth" });
             else if (me?.role === "client") setCurrentView("client_map");
             else if (me?.provider_sphere === "marketplaces") setCurrentView("marketplaces");
@@ -12137,6 +12143,15 @@ export default function App() {
             else setCurrentView("bookings");
           }}
         >
+          {currentView === "vmenu" ? (
+            <span className="vmenu-app-header-brand">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                <path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+              </svg>
+              <VmenuLogo size={28} />
+              <strong>Вменю</strong>
+            </span>
+          ) : (
           <img
             src={logoMain}
             alt="Вместе"
@@ -12149,6 +12164,7 @@ export default function App() {
               e.currentTarget.style.display = "none";
             }}
           />
+          )}
         </button>
         <div>{verifyStatus && <p className="verify-note">{verifyStatus}</p>}</div>
         {accessToken && (me?.role === "client" || (me?.role === "provider" && currentView === "client_map")) && (
@@ -12436,7 +12452,7 @@ export default function App() {
         </nav>
       )}
 
-      <main className={`grid${centeredWorkspace ? " grid-centered-workspace" : ""}`}>
+      <main className={`grid${centeredWorkspace ? " grid-centered-workspace" : ""}${profileWide ? " grid-profile-wide" : ""}`}>
         {!accessToken && (
           <LandingPage
             onLogin={() => openAuth("login")}
@@ -13146,8 +13162,9 @@ export default function App() {
             authFetch={authFetch}
             API_URL={API_URL}
             me={me}
-            onOpenChats={() => setCurrentView("chats")}
+            selectedChatId={selectedChatId}
             onSelectChat={(convId) => setSelectedChatId(convId)}
+            onExit={() => setCurrentView("service_apps")}
           />
         )}
         {accessToken &&
