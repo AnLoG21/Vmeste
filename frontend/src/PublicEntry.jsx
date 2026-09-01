@@ -4,6 +4,7 @@ import CafeGuestPage from "./CafeGuestPage.jsx";
 import BookingWidgetPage from "./BookingWidgetPage.jsx";
 import { InspectionPublicPage } from "./InspectionApproveView.jsx";
 import BusinessesPage from "./legal/BusinessesPage.jsx";
+import PlatformAppsPage from "./legal/PlatformAppsPage.jsx";
 import CityPage from "./legal/CityPage.jsx";
 import ContactsPage from "./legal/ContactsPage.jsx";
 import NotFoundPage from "./legal/NotFoundPage.jsx";
@@ -68,6 +69,7 @@ const LEGAL_ROUTES = {
   "/contacts": ContactsPage,
   "/privacy": PrivacyPage,
   "/businesses": BusinessesPage,
+  "/apps": PlatformAppsPage,
 };
 
 function normalizePath(pathname) {

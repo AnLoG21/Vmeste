@@ -919,6 +919,7 @@
 .landing-biz-card p { margin: 0; color: #5a3a22; line-height: 1.45; }
 .landing-biz-link { margin-top: auto; color: #c45c00; font-weight: 700; font-size: 0.95rem; }
 .landing-biz-card--more { background: linear-gradient(165deg, #fff8f2, #ffe8d5); }
+.landing-biz-card--app { background: linear-gradient(165deg, #f8fffc, #e8f5f0); border-color: #b8ddd0; }
 
 .public-org-gallery {
   display: grid;

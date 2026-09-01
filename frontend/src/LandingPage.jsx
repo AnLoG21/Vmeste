@@ -375,6 +375,40 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           </p>
         </section>
 
+        <section className="landing-section" id="apps">
+          <h2>Сервисы платформы</h2>
+          <p className="landing-section-lead">
+            Отдельные приложения внутри Вместе — один аккаунт, разные задачи. Подробнее о каждом
+            сервисе на отдельной странице.
+          </p>
+          <div className="landing-businesses-grid">
+            <a className="landing-biz-card landing-biz-card--app" href="/apps#vmenu">
+              <span className="landing-biz-emoji" aria-hidden="true">
+                🍳
+              </span>
+              <strong>Вменю</strong>
+              <span>Рецепты, лента, книга и чаты</span>
+              <span className="landing-biz-link">Подробнее →</span>
+            </a>
+            <a className="landing-biz-card landing-biz-card--app" href="/apps#voice">
+              <span className="landing-biz-emoji" aria-hidden="true">
+                🎙️
+              </span>
+              <strong>Голосовой ассистент</strong>
+              <span>Звонки и напоминания клиентам</span>
+              <span className="landing-biz-link">Подробнее →</span>
+            </a>
+            <a className="landing-biz-card landing-biz-card--more" href="/apps">
+              <span className="landing-biz-emoji" aria-hidden="true">
+                📱
+              </span>
+              <strong>Все сервисы</strong>
+              <span>Описания и возможности</span>
+              <span className="landing-biz-link">Открыть раздел →</span>
+            </a>
+          </div>
+        </section>
+
         <section className="landing-section landing-businesses" id="businesses">
           <h2>Для каких бизнесов уже готово</h2>
           <p className="landing-section-lead">
@@ -774,6 +808,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
         <nav className="landing-footer-nav" aria-label="Разделы сайта">
           <a href="/#demo">Демо</a>
           <a href="/#cases">Кейсы</a>
+          <a href="/apps">Сервисы</a>
           <a href="/businesses">Для бизнеса</a>
           <a href="/city/moscow">Москва</a>
           <a href="/city/spb">Санкт-Петербург</a>

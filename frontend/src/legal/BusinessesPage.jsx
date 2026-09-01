@@ -275,6 +275,7 @@ export default function BusinessesPage() {
         </p>
         <nav className="landing-footer-nav" aria-label="Разделы сайта">
           <a href="/">Главная</a>
+          <a href="/apps">Сервисы</a>
           <a href="/businesses">Для бизнеса</a>
           <a href="/contacts">Контакты</a>
           <a href="/offer">Оферта</a>
