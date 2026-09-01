@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   createRecipe,
   deleteRecipe,
+  deleteExtraPhoto,
   followUser,
   loadBook,
   loadCategories,
@@ -706,7 +707,7 @@ export function VmenuBookTab({ authFetch, API_URL, me, onCreate, onOpenRecipe, o
                                     <span className="vmenu-book-thumb vmenu-book-thumb--empty" />
                                   )}
                                   <span className="vmenu-book-row-title">
-                                    {r.title}
+                                    <span className="vmenu-book-row-title-text">{r.title}</span>
                                     {r.status === "draft" ? <span className="vmenu-draft-badge">Черновик</span> : null}
                                   </span>
                                 </button>
@@ -1000,9 +1001,13 @@ export function VmenuRecipeEditor({
   const [cuisines, setCuisines] = useState([]);
   const [cover, setCover] = useState(null);
   const [coverPreview, setCoverPreview] = useState("");
+  const [clearCover, setClearCover] = useState(false);
   const [extraPhotos, setExtraPhotos] = useState([]);
+  const [existingExtraPhotos, setExistingExtraPhotos] = useState([]);
   const [extraError, setExtraError] = useState("");
   const [video, setVideo] = useState(null);
+  const [videoPreview, setVideoPreview] = useState("");
+  const [clearVideo, setClearVideo] = useState(false);
   const [ingredients, setIngredients] = useState(initialDraft?.ingredients || [{ name: "", amount: "", unit: "г" }]);
   const [steps, setSteps] = useState(initialDraft?.steps || [{ text: "" }]);
   const [stepImages, setStepImages] = useState({});
@@ -1021,8 +1026,14 @@ export function VmenuRecipeEditor({
         setCategoryId(r.category?.id || "");
         setCuisineId(r.cuisine?.id || "");
         setServings(r.servings || 4);
-        setCoverPreview(r.cover_url || "");
         setIngredients(r.ingredients?.length ? r.ingredients.map(normalizeIngredient) : [{ name: "", amount: "", unit: "г" }]);
+        setCoverPreview(r.cover_url || "");
+        setClearCover(false);
+        setExistingExtraPhotos(r.extra_photos || []);
+        setExtraPhotos([]);
+        setVideoPreview(r.video_url || "");
+        setClearVideo(false);
+        setVideo(null);
         setSteps(r.steps?.length ? r.steps : [{ text: "" }]);
         setStepImages({});
         const previews = {};
@@ -1047,7 +1058,9 @@ export function VmenuRecipeEditor({
     if (categoryId) fd.append("category_id", categoryId);
     if (cuisineId) fd.append("cuisine_id", cuisineId);
     if (cover) fd.append("cover_image", cover);
+    if (clearCover) fd.append("clear_cover", "1");
     if (video) fd.append("video", video);
+    if (clearVideo) fd.append("clear_video", "1");
     fd.append("book_only", "1");
     let recipe = id;
     try {
@@ -1110,7 +1123,9 @@ export function VmenuRecipeEditor({
     if (categoryId) fd.append("category_id", categoryId);
     if (cuisineId) fd.append("cuisine_id", cuisineId);
     if (cover) fd.append("cover_image", cover);
+    if (clearCover) fd.append("clear_cover", "1");
     if (video) fd.append("video", video);
+    if (clearVideo) fd.append("clear_video", "1");
     if (publish) fd.append("publish", "1");
     else if (!publish && id) fd.append("book_only", "1");
     let recipe = id;
@@ -1122,7 +1137,10 @@ export function VmenuRecipeEditor({
       await updateRecipe(authFetch, API_URL, id, fd);
     }
     if (extraPhotos.length) {
-      await uploadExtraPhotos(authFetch, API_URL, recipe, extraPhotos.slice(0, 4));
+      const slots = Math.max(0, 4 - existingExtraPhotos.length);
+      if (slots > 0) {
+        await uploadExtraPhotos(authFetch, API_URL, recipe, extraPhotos.slice(0, slots));
+      }
     }
     await vmenuFetch(authFetch, API_URL, `/recipes/${recipe}/ingredients/`, {
       method: "PUT",
@@ -1183,10 +1201,17 @@ export function VmenuRecipeEditor({
         accept="image/*"
         max={1}
         files={cover ? [cover] : []}
-        previews={coverPreview && !cover ? [coverPreview] : []}
+        previews={coverPreview && !cover && !clearCover ? [coverPreview] : []}
         onChange={(files) => {
-          setCover(files[0] || null);
-          if (files[0]) setCoverPreview(URL.createObjectURL(files[0]));
+          const f = files[0] || null;
+          setCover(f);
+          setClearCover(false);
+          if (f) setCoverPreview(URL.createObjectURL(f));
+        }}
+        onRemove={() => {
+          setCover(null);
+          setCoverPreview("");
+          setClearCover(true);
         }}
       />
       <VmenuMediaUpload
@@ -1195,19 +1220,45 @@ export function VmenuRecipeEditor({
         multiple
         max={4}
         files={extraPhotos}
+        remotePreviews={existingExtraPhotos}
         error={extraError}
         onChange={(files, err) => {
           setExtraError(err || "");
           setExtraPhotos(files);
         }}
         onRemove={(i) => setExtraPhotos((p) => p.filter((_, idx) => idx !== i))}
+        onRemoveRemote={(photoId) => {
+          void (async () => {
+            if (id) {
+              try {
+                await deleteExtraPhoto(authFetch, API_URL, id, photoId);
+              } catch {
+                setExtraError("Не удалось удалить фото");
+                return;
+              }
+            }
+            setExistingExtraPhotos((p) => p.filter((x) => x.id !== photoId));
+          })();
+        }}
       />
       <VmenuMediaUpload
         label="Видео (опционально)"
         accept="video/*"
         max={1}
+        mediaType="video"
         files={video ? [video] : []}
-        onChange={(files) => setVideo(files[0] || null)}
+        previews={videoPreview && !video && !clearVideo ? [videoPreview] : []}
+        onChange={(files) => {
+          const f = files[0] || null;
+          setVideo(f);
+          setClearVideo(false);
+          if (f) setVideoPreview(URL.createObjectURL(f));
+        }}
+        onRemove={() => {
+          setVideo(null);
+          setVideoPreview("");
+          setClearVideo(true);
+        }}
       />
       <h3>Ингредиенты</h3>
       {ingredients.map((ing, i) => (

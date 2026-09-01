@@ -275,7 +275,7 @@ export default function VmenuApp({
 
   return (
     <section className={`vmenu-app card${tab === "chats" ? " vmenu-app--chats" : ""}${tab === "follows" ? " vmenu-app--follows" : ""}`}>
-      {renderMain()}
+      <div className="vmenu-app-body">{renderMain()}</div>
       <nav className="vmenu-bottom-nav" aria-label="Вменю">
         {TABS.map((t) => (
           <button

@@ -108,17 +108,23 @@ export function VmenuMediaUpload({
   max = 1,
   files = [],
   previews = [],
+  remotePreviews = [],
+  mediaType = "image",
   onChange,
   onRemove,
+  onRemoveRemote,
   error,
 }) {
   const inputRef = useRef(null);
   const [lightbox, setLightbox] = useState(null);
 
+  const remoteCount = remotePreviews.length;
+  const totalCount = remoteCount + files.length;
+
   function pick(e) {
     const picked = Array.from(e.target.files || []);
     if (!picked.length) return;
-    if (multiple && max && picked.length + files.length > max) {
+    if (multiple && max && picked.length + totalCount > max) {
       onChange?.(files, `Можно загрузить не более ${max} файлов`);
       e.target.value = "";
       return;
@@ -126,27 +132,61 @@ export function VmenuMediaUpload({
     if (!multiple && max === 1) {
       onChange?.(picked.slice(0, 1), "");
     } else {
-      onChange?.([...files, ...picked].slice(0, max), "");
+      onChange?.([...files, ...picked].slice(0, max - remoteCount), "");
     }
     e.target.value = "";
   }
 
-  const thumbs = previews.length ? previews : files.map((f) => (f instanceof File ? URL.createObjectURL(f) : f));
+  const fileThumbs = files.map((f) => (f instanceof File ? URL.createObjectURL(f) : f));
+  const addLabel = mediaType === "video" ? "Видео" : "Фото";
 
   return (
     <div className="vmenu-media-upload">
       {label ? <div className="vmenu-field-label">{label}</div> : null}
       <div className="vmenu-media-upload-row">
-        {(files.length < max || !multiple) && files.length < max ? (
-          <label className="vmenu-photo-add-btn" title={label || "Добавить"}>
+        {totalCount < max ? (
+          <label className="vmenu-photo-add-btn" title={label || `Добавить ${addLabel.toLowerCase()}`}>
             <span className="vmenu-photo-add-plus">+</span>
-            <span>Фото</span>
+            <span>{addLabel}</span>
             <input ref={inputRef} type="file" accept={accept} multiple={multiple} hidden onChange={pick} />
           </label>
         ) : null}
-        {thumbs.map((src, i) => (
-          <button key={i} type="button" className="vmenu-photo-thumb" onClick={() => setLightbox(src)}>
-            <img src={src} alt="" />
+        {remotePreviews.map((item, i) => (
+          <button
+            key={`remote-${item.id}`}
+            type="button"
+            className="vmenu-photo-thumb"
+            onClick={() => setLightbox(item.url)}
+          >
+            <img src={item.thumb_url || item.url} alt="" />
+            {onRemoveRemote ? (
+              <span
+                className="vmenu-photo-thumb-remove"
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveRemote(item.id);
+                }}
+                onKeyDown={(e) => e.key === "Enter" && onRemoveRemote(item.id)}
+                aria-label="Удалить"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                  <path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                </svg>
+              </span>
+            ) : null}
+          </button>
+        ))}
+        {fileThumbs.map((src, i) => (
+          <button key={`file-${i}`} type="button" className="vmenu-photo-thumb" onClick={() => setLightbox(src)}>
+            {mediaType === "video" ? (
+              <span className="vmenu-photo-thumb-video" aria-hidden="true">
+                ▶
+              </span>
+            ) : (
+              <img src={src} alt="" />
+            )}
             {onRemove ? (
               <span
                 className="vmenu-photo-thumb-remove"
@@ -166,9 +206,37 @@ export function VmenuMediaUpload({
             ) : null}
           </button>
         ))}
+        {previews.map((src, i) =>
+          remoteCount || files.length ? null : (
+            <button key={`preview-${i}`} type="button" className="vmenu-photo-thumb" onClick={() => setLightbox(src)}>
+              {mediaType === "video" ? (
+                <video src={src} className="vmenu-photo-thumb-vid" muted playsInline />
+              ) : (
+                <img src={src} alt="" />
+              )}
+              {onRemove ? (
+                <span
+                  className="vmenu-photo-thumb-remove"
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove(i);
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && onRemove(i)}
+                  aria-label="Удалить"
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                    <path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                  </svg>
+                </span>
+              ) : null}
+            </button>
+          ),
+        )}
       </div>
       {error ? <p className="status error">{error}</p> : null}
-      {lightbox ? (
+      {lightbox && mediaType !== "video" ? (
         <div className="vmenu-lightbox" role="dialog" onClick={() => setLightbox(null)}>
           <img src={lightbox} alt="" />
         </div>

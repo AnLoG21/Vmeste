@@ -261,6 +261,7 @@ class VmenuRecipeDetailSerializer(serializers.ModelSerializer):
     cuisine = VmenuCuisineSerializer(read_only=True)
     cover_url = serializers.SerializerMethodField()
     extra_photo_urls = serializers.SerializerMethodField()
+    extra_photos = serializers.SerializerMethodField()
     video_url = serializers.SerializerMethodField()
     ingredients = VmenuIngredientSerializer(many=True, read_only=True)
     steps = VmenuStepSerializer(many=True, read_only=True)
@@ -281,6 +282,7 @@ class VmenuRecipeDetailSerializer(serializers.ModelSerializer):
             "cuisine",
             "cover_url",
             "extra_photo_urls",
+            "extra_photos",
             "video_url",
             "view_count",
             "like_count",
@@ -303,12 +305,22 @@ class VmenuRecipeDetailSerializer(serializers.ModelSerializer):
         return photo_urls(self.context.get("request"), obj.cover_image).get("url") or ""
 
     def get_extra_photo_urls(self, obj):
+        return [row.get("url") or "" for row in self.get_extra_photos(obj)]
+
+    def get_extra_photos(self, obj):
         request = self.context.get("request")
-        urls = []
+        out = []
         for ph in obj.extra_photos.all()[:4]:
             if ph.image:
-                urls.append(photo_urls(request, ph.image).get("url") or "")
-        return urls
+                urls = photo_urls(request, ph.image)
+                out.append(
+                    {
+                        "id": ph.id,
+                        "url": urls.get("url") or "",
+                        "thumb_url": urls.get("thumb_url") or urls.get("url") or "",
+                    }
+                )
+        return out
 
     def get_video_url(self, obj):
         if not obj.video:

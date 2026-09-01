@@ -320,6 +320,14 @@ class VmenuRecipeDetailView(APIView):
             recipe.publish()
         elif request.data.get("book_only") in (True, "true", "1", 1):
             recipe.status = VmenuRecipe.Status.BOOK_ONLY
+        if request.data.get("clear_cover") in (True, "true", "1", 1):
+            if recipe.cover_image:
+                recipe.cover_image.delete(save=False)
+            recipe.cover_image = None
+        if request.data.get("clear_video") in (True, "true", "1", 1):
+            if recipe.video:
+                recipe.video.delete(save=False)
+            recipe.video = None
         if "cover_image" in request.FILES:
             recipe.cover_image = request.FILES["cover_image"]
         if "video" in request.FILES:
