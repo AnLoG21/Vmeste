@@ -18,7 +18,7 @@ const DISPLAY_UNITS = {
   count: ["шт."],
 };
 
-export const ALL_UNITS = ["г", "кг", "мл", "л", "ч.л.", "ст.л.", "шт.", "стакан", "щепотка"];
+export const ALL_UNITS = ["г", "кг", "мл", "л", "ч.л.", "ст.л.", "шт.", "стакан", "щепотка", "зубчик", "по вкусу"];
 
 function q(n) {
   return Math.round(n * 1000) / 1000;
@@ -56,7 +56,9 @@ export function scaleIngredients(ingredients, baseServings, targetServings, disp
 }
 
 export function compatibleUnits(unit) {
-  const meta = TO_BASE[unit || "г"];
+  const u = (unit || "").trim();
+  if (u === "по вкусу" || u === "зубчик" || u === "щепотка") return [u];
+  const meta = TO_BASE[u || "г"];
   if (!meta) return ALL_UNITS;
   return DISPLAY_UNITS[meta[0]] || ["шт."];
 }

@@ -36,7 +36,7 @@ import {
   VmenuTextInput,
   VmenuTrashButton,
 } from "./VmenuComponents.jsx";
-import { ALL_UNITS, formatIngredientLine, scaleIngredients } from "./vmenuUnits.js";
+import { ALL_UNITS, compatibleUnits, formatAmount, scaleIngredients } from "./vmenuUnits.js";
 import VmenuLogo from "./VmenuLogo.jsx";
 import { VmenuPostMenu } from "./VmenuPostMenu.jsx";
 import { VmenuComments } from "./VmenuComments.jsx";
@@ -235,17 +235,18 @@ export function VmenuRecipeCard({ recipe, authFetch, API_URL, me, onOpenUser, on
 export function VmenuRecipeDetail({ recipeId, authFetch, API_URL, me, onBack, onOpenUser, onDeleted }) {
   const [recipe, setRecipe] = useState(null);
   const [servings, setServings] = useState(4);
-  const [unitMode, setUnitMode] = useState("");
   const [status, setStatus] = useState("Загрузка…");
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
   const [carouselIdx, setCarouselIdx] = useState(0);
   const [servingsInit, setServingsInit] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [ingUnitPick, setIngUnitPick] = useState({});
 
   useEffect(() => {
     setServingsInit(false);
     setCarouselIdx(0);
+    setIngUnitPick({});
   }, [recipeId]);
 
   useEffect(() => {
@@ -257,7 +258,6 @@ export function VmenuRecipeDetail({ recipeId, authFetch, API_URL, me, onBack, on
     setStatus("Загрузка…");
     try {
       const params = { servings: String(servings) };
-      if (unitMode) params.unit = unitMode;
       const data = await loadRecipe(authFetch, API_URL, recipeId, params);
       setRecipe(data);
       setLiked(Boolean(data.liked));
@@ -274,15 +274,21 @@ export function VmenuRecipeDetail({ recipeId, authFetch, API_URL, me, onBack, on
 
   useEffect(() => {
     void load();
-  }, [recipeId, servings, unitMode]);
+  }, [recipeId, servings]);
 
   if (!recipe && status) return <p className="status">{status}</p>;
   if (!recipe) return null;
 
   const photos = [recipe.cover_url, ...(recipe.extra_photo_urls || [])].filter(Boolean);
-  const ingredients = recipe.scaled_ingredients?.length
-    ? recipe.scaled_ingredients
-    : scaleIngredients(recipe.ingredients, recipe.servings, servings, unitMode || null);
+  const baseIngredients = recipe.scaled_ingredients?.length ? recipe.scaled_ingredients : recipe.ingredients || [];
+  const ingredients = baseIngredients.map((ing, i) => {
+    const key = ing.id ?? i;
+    const scaled = scaleIngredients([ing], recipe.servings, servings, null)[0];
+    const picked = ingUnitPick[key];
+    if (!picked || picked === (scaled.unit || "")) return scaled;
+    const converted = scaleIngredients([ing], recipe.servings, servings, picked)[0];
+    return converted;
+  });
 
   async function onLike() {
     const data = await toggleLike(authFetch, API_URL, recipe.id, liked);
@@ -372,23 +378,37 @@ export function VmenuRecipeDetail({ recipeId, authFetch, API_URL, me, onBack, on
             onChange={(e) => setServings(Number(e.target.value))}
           />
         </label>
-        <label>
-          Единицы
-          <select value={unitMode} onChange={(e) => setUnitMode(e.target.value)}>
-            <option value="">Как в рецепте</option>
-            {ALL_UNITS.map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
       <h3>Ингредиенты</h3>
-      <ul className="vmenu-ing-list">
-        {ingredients.map((ing, i) => (
-          <li key={ing.id || i}>{formatIngredientLine(ing)}</li>
-        ))}
+      <ul className="vmenu-ing-list vmenu-ing-list--detail">
+        {ingredients.map((ing, i) => {
+          const key = ing.id ?? i;
+          const baseIng = recipe.ingredients?.find((x) => x.id === ing.id) || recipe.ingredients?.[i] || ing;
+          const unitOptions = [...new Set([baseIng.unit, ...compatibleUnits(baseIng.unit || "г")].filter(Boolean))];
+          const currentUnit = ingUnitPick[key] ?? ing.unit ?? baseIng.unit ?? "";
+          return (
+            <li key={key} className="vmenu-ing-detail-row">
+              <span className="vmenu-ing-detail-name">{ing.name}</span>
+              <span className="vmenu-ing-detail-amount">
+                {ing.amount === "" || ing.amount == null
+                  ? ""
+                  : formatAmount(ing.amount)}
+              </span>
+              <select
+                className="vmenu-ing-detail-unit"
+                value={currentUnit}
+                onChange={(e) => setIngUnitPick((p) => ({ ...p, [key]: e.target.value }))}
+                aria-label={`Единица для ${ing.name}`}
+              >
+                {unitOptions.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </select>
+            </li>
+          );
+        })}
       </ul>
       <h3>Приготовление</h3>
       <ol className="vmenu-steps-list">
@@ -511,64 +531,68 @@ export function VmenuSearchTab({ authFetch, API_URL, me, onOpenUser, onOpenRecip
     <div className="vmenu-tab">
       <h2>Поиск рецептов</h2>
       <form className="vmenu-search-toolbar" onSubmit={runSearch}>
-        <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Категория">
-          <option value="">Все категории</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.slug}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <select value={cuisine} onChange={(e) => setCuisine(e.target.value)} aria-label="Кухня">
-          <option value="">Все кухни</option>
-          {cuisines.map((c) => (
-            <option key={c.id} value={c.slug}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Сортировка">
-          <option value="rating">По рейтингу</option>
-          <option value="popular">По популярности</option>
-          <option value="new">Сначала новые</option>
-        </select>
-        <div className="vmenu-search-input-wrap">
-          <input
-            className="vmenu-search-input"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onFocus={() => suggestions.length && setSuggestOpen(true)}
-            onBlur={() => window.setTimeout(() => setSuggestOpen(false), 180)}
-            placeholder="Название, ингредиент…"
-          />
-          {suggestOpen && suggestions.length ? (
-            <ul className="vmenu-search-suggest">
-              {suggestions.map((r) => (
-                <li key={r.id}>
-                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pickSuggestion(r)}>
-                    {r.cover_url ? (
-                      <img className="vmenu-search-suggest-thumb" src={r.cover_url} alt="" />
-                    ) : (
-                      <span className="vmenu-search-suggest-thumb vmenu-search-suggest-thumb--empty">🍽</span>
-                    )}
-                    <span className="vmenu-search-suggest-body">
-                      <strong>{r.title}</strong>
-                      {r.author?.display_name ? <span className="muted small">{r.author.display_name}</span> : null}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
+        <div className="vmenu-search-filters">
+          <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Категория">
+            <option value="">Все категории</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.slug}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <select value={cuisine} onChange={(e) => setCuisine(e.target.value)} aria-label="Кухня">
+            <option value="">Все кухни</option>
+            {cuisines.map((c) => (
+              <option key={c.id} value={c.slug}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Сортировка">
+            <option value="rating">По рейтингу</option>
+            <option value="popular">По популярности</option>
+            <option value="new">Сначала новые</option>
+          </select>
         </div>
-        <button type="submit" className="vmenu-search-icon-btn" aria-label="Найти">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            <path
-              fill="currentColor"
-              d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
+        <div className="vmenu-search-query-row">
+          <div className="vmenu-search-input-wrap">
+            <input
+              className="vmenu-search-input"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onFocus={() => suggestions.length && setSuggestOpen(true)}
+              onBlur={() => window.setTimeout(() => setSuggestOpen(false), 180)}
+              placeholder="Название, ингредиент…"
             />
-          </svg>
-        </button>
+            {suggestOpen && suggestions.length ? (
+              <ul className="vmenu-search-suggest">
+                {suggestions.map((r) => (
+                  <li key={r.id}>
+                    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pickSuggestion(r)}>
+                      {r.cover_url ? (
+                        <img className="vmenu-search-suggest-thumb" src={r.cover_url} alt="" />
+                      ) : (
+                        <span className="vmenu-search-suggest-thumb vmenu-search-suggest-thumb--empty">🍽</span>
+                      )}
+                      <span className="vmenu-search-suggest-body">
+                        <strong>{r.title}</strong>
+                        {r.author?.display_name ? <span className="muted small">{r.author.display_name}</span> : null}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+          <button type="submit" className="vmenu-search-icon-btn" aria-label="Найти">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
+              />
+            </svg>
+          </button>
+        </div>
       </form>
       <div className="vmenu-feed">
         {items.map((r) => (
@@ -681,7 +705,10 @@ export function VmenuBookTab({ authFetch, API_URL, me, onCreate, onOpenRecipe, o
                                   ) : (
                                     <span className="vmenu-book-thumb vmenu-book-thumb--empty" />
                                   )}
-                                  <span className="vmenu-book-row-title">{r.title}</span>
+                                  <span className="vmenu-book-row-title">
+                                    {r.title}
+                                    {r.status === "draft" ? <span className="vmenu-draft-badge">Черновик</span> : null}
+                                  </span>
                                 </button>
                                 {isOwner ? (
                                   <button

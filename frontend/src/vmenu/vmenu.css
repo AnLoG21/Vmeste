@@ -57,14 +57,52 @@
 
 .vmenu-app--chats {
   max-width: 1080px;
-  height: calc(100dvh - 100px);
-  max-height: calc(100dvh - 100px);
+  min-height: 0;
+  height: calc(100dvh - 88px);
+  max-height: calc(100dvh - 88px);
   overflow: hidden;
-  padding-bottom: 72px;
+  padding-bottom: 68px;
 }
 
 .vmenu-app--follows {
-  max-width: 960px;
+  max-width: min(2880px, 98vw);
+}
+
+.vmenu-app--chats .vmenu-chats-host {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.vmenu-app .tg-chats-card--vmenu.card.full-width {
+  max-height: 100%;
+  overflow: hidden;
+  margin-bottom: 0;
+}
+
+.vmenu-app .tg-chats-card--vmenu .tg-sidebar-head,
+.vmenu-app .tg-chats-card--vmenu .tg-chat-search,
+.vmenu-app .tg-chats-card--vmenu .vmenu-chat-section-label {
+  flex-shrink: 0;
+}
+
+.vmenu-app .tg-chats-card--vmenu .tg-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.vmenu-app .tg-chats-card--vmenu .tg-main-head,
+.vmenu-app .tg-chats-card--vmenu .tg-main-head-bar {
+  flex-shrink: 0;
+}
+
+.vmenu-app .tg-chats-card--vmenu .tg-thread {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .vmenu-app button {
@@ -91,6 +129,29 @@
 
 .vmenu-app .primary-btn:hover {
   background: #0c5a46;
+}
+
+.vmenu-comments-block .vmenu-send-btn,
+.vmenu-app .vmenu-comments-block .vmenu-send-btn {
+  background: #0f6e56 !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+.vmenu-comments-block .vmenu-send-btn:hover,
+.vmenu-app .vmenu-comments-block .vmenu-send-btn:hover {
+  background: #0c5a46 !important;
+}
+
+.vmenu-app .vmenu-search-icon-btn {
+  background: #0f6e56 !important;
+  color: #fff !important;
+  border: 1px solid #0f6e56 !important;
+}
+
+.vmenu-app .vmenu-search-icon-btn:hover {
+  background: #0c5a46 !important;
+  border-color: #0c5a46 !important;
 }
 
 .vmenu-tab {
@@ -773,13 +834,28 @@
 
 .vmenu-search-toolbar {
   display: flex;
-  flex-wrap: nowrap;
-  gap: 8px;
-  align-items: center;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
   margin-bottom: 14px;
 }
 
-.vmenu-search-toolbar select {
+.vmenu-search-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+.vmenu-search-query-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  width: 100%;
+}
+
+.vmenu-search-filters select {
   flex: 0 1 auto;
   min-width: 0;
   max-width: 150px;
@@ -801,7 +877,7 @@
   left: 0;
   right: 0;
   top: calc(100% + 4px);
-  z-index: 50;
+  z-index: 80;
   list-style: none;
   margin: 0;
   padding: 6px;
@@ -1361,6 +1437,49 @@
   background: rgba(0, 0, 0, 0.08);
 }
 
+.vmenu-ing-list--detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vmenu-ing-detail-row {
+  display: grid;
+  grid-template-columns: 1fr minmax(56px, 0.45fr) minmax(88px, 0.55fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.vmenu-ing-detail-name {
+  min-width: 0;
+}
+
+.vmenu-ing-detail-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.vmenu-ing-detail-unit {
+  border: 1px solid #e2ddd4;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+  background: #fff;
+}
+
+.vmenu-draft-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #ffebee;
+  color: #c62828;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
 .vmenu-send-btn {
   width: 42px;
   height: 42px;
@@ -1451,17 +1570,17 @@
   .vmenu-ing-edit-row .vmenu-ing-unit {
     grid-column: 1 / 3;
   }
-  .vmenu-search-toolbar {
-    flex-wrap: wrap;
+  .vmenu-ing-detail-row {
+    grid-template-columns: 1fr auto;
   }
-  .vmenu-search-toolbar select {
-    flex: 1 1 calc(33% - 6px);
+  .vmenu-ing-detail-unit {
+    grid-column: 1 / -1;
+  }
+  .vmenu-search-filters select {
+    flex: 1 1 calc(50% - 6px);
     max-width: none;
   }
-  .vmenu-search-input-wrap {
-    flex: 1 1 100%;
-  }
-  .vmenu-search-input {
-    flex: 1 1 100%;
+  .vmenu-search-query-row {
+    flex-wrap: nowrap;
   }
 }

@@ -137,6 +137,6 @@ export function normalizeIngredient(ing) {
     if (!["щепотка", "по вкусу", "зубчик"].includes(unit)) unit = "";
     return { ...ing, amount: "", unit };
   }
-  const amountStr = String(raw).replace(/\.?0+$/, "") || String(raw);
+  const amountStr = Number.isInteger(n) ? String(n) : String(n).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
   return { ...ing, amount: amountStr, unit: unit || "г" };
 }

@@ -187,6 +187,9 @@ def _parse_amount_unit_tail(tail: str) -> tuple[str, str]:
     low = tail.lower()
     if low in ("по вкусу", "щепотка", "щепотки", "немного") or low.startswith("по вкусу"):
         return "", "по вкусу"
+    m_zub = re.match(r"^(\d+)\s+зубчик", low, re.I)
+    if m_zub:
+        return m_zub.group(1), "зубчик"
     if re.fullmatch(r"зубчик[аов]*", low):
         return "1", "зубчик"
     m = re.match(

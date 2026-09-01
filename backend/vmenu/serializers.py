@@ -141,6 +141,15 @@ class VmenuRecipeListSerializer(serializers.ModelSerializer):
         return False
 
 
+def _format_decimal_amount(val) -> str:
+    if val is None or val == 0:
+        return ""
+    if val == val.to_integral_value():
+        return str(int(val))
+    s = format(val, "f").rstrip("0").rstrip(".")
+    return s or "0"
+
+
 class VmenuBookRecipeSerializer(serializers.ModelSerializer):
     author = serializers.SerializerMethodField()
     category = VmenuCategorySerializer(read_only=True)
@@ -149,7 +158,7 @@ class VmenuBookRecipeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VmenuRecipe
-        fields = ("id", "title", "author", "category", "cuisine", "cover_url")
+        fields = ("id", "title", "author", "category", "cuisine", "cover_url", "status")
 
     def get_author(self, obj):
         return _user_public(obj.author, self.context.get("request"))
@@ -173,8 +182,7 @@ class VmenuIngredientSerializer(serializers.ModelSerializer):
     def get_amount(self, obj):
         if obj.amount is None or obj.amount == 0:
             return ""
-        s = format(obj.amount, "f").rstrip("0").rstrip(".")
-        return s or "0"
+        return _format_decimal_amount(obj.amount)
 
     def get_unit(self, obj):
         if obj.amount is None or obj.amount == 0:
