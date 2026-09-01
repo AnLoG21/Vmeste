@@ -133,6 +133,96 @@
   }
 }
 
+@media (max-width: 900px) {
+  .vmenu-app {
+    max-width: 100%;
+    min-height: 0;
+  }
+
+  .vmenu-app--chats {
+    max-width: 100%;
+    height: calc(100dvh - 56px - 52px - env(safe-area-inset-top, 0px));
+    max-height: calc(100dvh - 56px - 52px - env(safe-area-inset-top, 0px));
+    padding-bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+    margin: 0;
+    border-radius: 0;
+    padding-left: 0;
+    padding-right: 0;
+    overflow: hidden;
+  }
+
+  .vmenu-chats-host .tg-chats-card.tg-chats-card--vmenu.card.full-width,
+  .vmenu-app .tg-chats-card.tg-chats-card--vmenu.card.full-width {
+    height: 100%;
+    min-height: 0 !important;
+    max-height: none;
+    border-radius: 0;
+  }
+
+  .vmenu-chats-host .tg-body--vmenu,
+  .vmenu-app .tg-body--vmenu {
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: none;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: 100%;
+    min-height: 0 !important;
+    max-height: none;
+    overflow: hidden;
+  }
+
+  .vmenu-chats-host .tg-body--vmenu.tg-body--mobile-list .tg-main,
+  .vmenu-app .tg-body--vmenu.tg-body--mobile-list .tg-main {
+    display: none !important;
+  }
+
+  .vmenu-chats-host .tg-body--vmenu.tg-body--mobile-thread .tg-sidebar,
+  .vmenu-app .tg-body--vmenu.tg-body--mobile-thread .tg-sidebar {
+    display: none !important;
+  }
+
+  .vmenu-chats-host .tg-body--vmenu.tg-body--mobile-list .tg-sidebar,
+  .vmenu-chats-host .tg-body--vmenu.tg-body--mobile-thread .tg-main,
+  .vmenu-app .tg-body--vmenu.tg-body--mobile-list .tg-sidebar,
+  .vmenu-app .tg-body--vmenu.tg-body--mobile-thread .tg-main {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    border: none;
+  }
+
+  .vmenu-chats-host .tg-chats-card--vmenu .tg-sidebar,
+  .vmenu-app .tg-chats-card--vmenu .tg-sidebar {
+    width: 100%;
+    max-width: 100%;
+    border-right: none;
+  }
+
+  .vmenu-chats-host .tg-chats-card--vmenu .tg-sidebar-scroll,
+  .vmenu-app .tg-chats-card--vmenu .tg-sidebar-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .vmenu-chats-host .tg-body--vmenu .tg-chat-back-btn,
+  .vmenu-app .tg-body--vmenu .tg-chat-back-btn {
+    display: inline-flex !important;
+  }
+
+  .vmenu-chats-host .tg-chats-card--vmenu .tg-chat-search,
+  .vmenu-app .tg-chats-card--vmenu .tg-chat-search {
+    width: auto;
+    max-width: calc(100% - 20px);
+  }
+}
+
 .vmenu-app--chats .vmenu-chats-host {
   flex: 1;
   min-height: 0;

@@ -363,13 +363,32 @@ def _parse_kulina(html: str) -> list[dict]:
     return out
 
 
+def _gastronom_steps_scope(html: str) -> str:
+    start_m = re.search(r"<h[1-6][^>]*>\s*(?:Шаг|Step)\s*1\s*</h[1-6]>", html, re.I | re.S)
+    if not start_m:
+        return html
+    scoped = html[start_m.start() :]
+    stop = re.search(
+        r"(?:"
+        r"<(?:div|section|aside)[^>]*\bclass=\"[^\"]*"
+        r"(?:recipe-tip|useful-tip|tip-block|article-tip|editor-tip|similar-recipes|similar|related-recipes|recipe-comments|comments-block|subscription)"
+        r"[^\"]*\"[^>]*>"
+        r"|<h[1-6][^>]*>\s*(?:Полезный совет|Кстати|Похожие материалы|Комментарии|Оценить рецепт)"
+        r")",
+        scoped,
+        re.I | re.S,
+    )
+    return scoped[: stop.start()] if stop else scoped
+
+
 def _parse_gastronom_steps(html: str, base_url: str) -> list[dict]:
     out: list[dict] = []
+    scoped_html = _gastronom_steps_scope(html)
 
     heads = list(
         re.finditer(
             r"<h([1-6])[^>]*>\s*(?:Шаг|Step)\s*(\d+)\s*</h\1>(.*?)(?=<h[1-6]\b|$)",
-            html,
+            scoped_html,
             re.I | re.S,
         )
     )

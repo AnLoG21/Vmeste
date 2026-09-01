@@ -373,10 +373,55 @@ def _clean_step_text(text: str) -> str:
     return text
 
 
+_GASTRONOM_STEP_HTML_STOP = re.compile(
+    r"(?:"
+    r"<(?:div|section|aside|article|footer)[^>]*\bclass=\"[^\"]*"
+    r"(?:tip|advice|useful|similar|related|comments|comment|subscribe|subscription|rating|source|error-report|share|tags|hashtag)"
+    r"[^\"]*\"[^>]*>"
+    r"|<h[1-6][^>]*>\s*(?:Полезный совет|Кстати|Похожие|Комментари|Оценить|Источник|Лучшие рецепты|Еще больше)"
+    r")",
+    re.I | re.S,
+)
+
+_GASTRONOM_STEP_TEXT_STOP = re.compile(
+    r"\s+(?:"
+    r"ПОЛЕЗНЫЙ СОВЕТ|"
+    r"КСТАТИ|"
+    r"Если вы заметили ошибку|"
+    r"Источник:|"
+    r"Похожие материалы|"
+    r"Комментарии|"
+    r"Оценить рецепт|"
+    r"Лучшие рецепты и идеи|"
+    r"Еще больше идей"
+    r")\b",
+    re.I,
+)
+
+
+def _truncate_gastronom_step_html(html_fragment: str) -> str:
+    html_fragment = html_fragment or ""
+    m = _GASTRONOM_STEP_HTML_STOP.search(html_fragment)
+    if m:
+        html_fragment = html_fragment[: m.start()]
+    return html_fragment
+
+
+def _trim_gastronom_step_tail(text: str) -> str:
+    if not text:
+        return text
+    m = _GASTRONOM_STEP_TEXT_STOP.search(text)
+    if m:
+        text = text[: m.start()]
+    return text.strip()
+
+
 def _gastronom_step_body_text(html_fragment: str) -> str:
-    chunk = re.split(r"<h[1-6]\b", html_fragment, maxsplit=1, flags=re.I)[0]
+    chunk = _truncate_gastronom_step_html(html_fragment)
+    chunk = re.split(r"<h[1-6]\b", chunk, maxsplit=1, flags=re.I)[0]
     chunk = re.sub(r"<img[^>]*>", "", chunk, flags=re.I)
-    return _clean_step_text(chunk)
+    text = _clean_step_text(chunk)
+    return _trim_gastronom_step_tail(text)
 
 
 def _split_long_step_text(text: str) -> list[str]:
