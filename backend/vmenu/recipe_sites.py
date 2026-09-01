@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 import re
 
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
+from html import unescape
 
 from .cuisine_data import detect_cuisine_slug, normalize_cuisine_slug
 from .recipe_parser import _normalize_unit, _parse_amount_unit_tail, _parse_ingredient_line, strip_html
@@ -355,6 +356,61 @@ def _parse_kulina(html: str) -> list[dict]:
     return out
 
 
+def _parse_gastronom_steps(html: str, base_url: str) -> list[dict]:
+    out: list[dict] = []
+    for m in re.finditer(
+        r'itemprop=["\']recipeInstructions["\'][^>]*>(.*?)</(?:ul|ol)>',
+        html,
+        re.I | re.S,
+    ):
+        for li in re.finditer(r"<li[^>]*>(.*?)</li>", m.group(1), re.I | re.S):
+            inner = li.group(1)
+            img_m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', inner, re.I)
+            img = urljoin(base_url, unescape(img_m.group(1))) if img_m else ""
+            text = strip_html(re.sub(r"<img[^>]*>", "", inner, flags=re.I))
+            text = re.sub(r"^Шаг\s+\d+\s*[:.)-]?\s*", "", text, flags=re.I).strip()
+            if text or img:
+                out.append({"text": text, "image_url": img})
+    if out:
+        return out
+    for m in re.finditer(
+        r'class="[^"]*(?:recipe-step|cooking-step|instruction)[^"]*"[^>]*>(.*?)</(?:li|div|p)>',
+        html,
+        re.I | re.S,
+    ):
+        inner = m.group(1)
+        img_m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', inner, re.I)
+        img = urljoin(base_url, unescape(img_m.group(1))) if img_m else ""
+        text = strip_html(re.sub(r"<img[^>]*>", "", inner, flags=re.I))
+        if text or img:
+            out.append({"text": text, "image_url": img})
+    return out
+
+
+def _parse_gastronom(html: str) -> list[dict]:
+    rows = _parse_meta_recipe_ingredients(html)
+    if rows:
+        return rows
+    out: list[dict] = []
+    seen: set[str] = set()
+    for m in re.finditer(
+        r'itemprop=["\']recipeIngredient["\'][^>]*>(.*?)</(?:li|p|div|span)>',
+        html,
+        re.I | re.S,
+    ):
+        line = strip_html(m.group(1))
+        row = _split_comma_ingredient(line) or _parse_ingredient_line(line)
+        if isinstance(row, list):
+            for item in row:
+                if item and item["name"] not in seen:
+                    seen.add(item["name"])
+                    out.append(item)
+        elif row and row["name"] not in seen:
+            seen.add(row["name"])
+            out.append(row)
+    return out
+
+
 def _parse_hlebopechka(html: str) -> SitePatch | None:
     patch: SitePatch = {}
     title_m = re.search(r'<h1[^>]*class="[^"]*topictitle[^"]*"[^>]*>(.*?)</h1>', html, re.I | re.S)
@@ -427,6 +483,7 @@ _INGREDIENT_PARSERS: dict[str, object] = {
     "webspoon.ru": _parse_meta_recipe_ingredients,
     "allrecipes.ru": _parse_meta_recipe_ingredients,
     "eda.ru": _parse_eda,
+    "gastronom.ru": _parse_gastronom,
 }
 
 
@@ -460,6 +517,10 @@ def apply_site_adapter(url: str, html: str, recipe_ld: dict, base: dict) -> dict
         hb = _parse_hlebopechka(html)
         if hb:
             patch.update(hb)
+    elif domain == "gastronom.ru":
+        gastro_steps = _parse_gastronom_steps(html, url)
+        if gastro_steps:
+            patch["steps"] = gastro_steps
 
     parser = _INGREDIENT_PARSERS.get(domain)
     if parser:
@@ -486,4 +547,4 @@ def apply_site_adapter(url: str, html: str, recipe_ld: dict, base: dict) -> dict
     return result
 
 
-SUPPORTED_DOMAINS = sorted(set(_INGREDIENT_PARSERS) | {"ovkuse.ru", "hlebopechka.ru"})
+SUPPORTED_DOMAINS = sorted(set(_INGREDIENT_PARSERS) | {"ovkuse.ru", "hlebopechka.ru", "gastronom.ru"})

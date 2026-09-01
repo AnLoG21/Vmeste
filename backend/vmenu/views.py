@@ -36,6 +36,7 @@ from .privacy import can_message_user
 from .recipe_parser import download_image, ingredient_row_to_db, parse_recipe_url as fetch_recipe_from_url
 from .units import scale_ingredients
 from .serializers import (
+    VmenuBookRecipeSerializer,
     VmenuCategorySerializer,
     VmenuCommentSerializer,
     VmenuCuisineSerializer,
@@ -241,16 +242,22 @@ class VmenuMyBookView(APIView):
     def get(self, request):
         own = VmenuRecipe.objects.filter(
             author=request.user,
-            status__in=[VmenuRecipe.Status.BOOK_ONLY, VmenuRecipe.Status.DRAFT],
+            status__in=[
+                VmenuRecipe.Status.BOOK_ONLY,
+                VmenuRecipe.Status.DRAFT,
+                VmenuRecipe.Status.PUBLISHED,
+            ],
         )
         saved_ids = VmenuSave.objects.filter(user=request.user).values_list("recipe_id", flat=True)
         saved = VmenuRecipe.objects.filter(id__in=saved_ids)
-        qs = _annotate_recipe_flags(
-            (own | saved).distinct().select_related("category", "cuisine", "author"),
-            request.user,
-        ).order_by("-updated_at")
+        qs = (
+            (own | saved)
+            .distinct()
+            .select_related("category", "cuisine", "author", "author__vmenu_profile")
+            .order_by("-updated_at")
+        )
         return Response(
-            {"items": VmenuRecipeListSerializer(qs, many=True, context={"request": request}).data}
+            {"items": VmenuBookRecipeSerializer(qs, many=True, context={"request": request}).data}
         )
 
 
@@ -345,7 +352,11 @@ class VmenuRecipeCreateView(APIView):
         )
         if "cover_image" in request.FILES:
             recipe.cover_image = request.FILES["cover_image"]
-            recipe.save(update_fields=["cover_image"])
+        if request.data.get("publish") in (True, "true", "1", 1):
+            recipe.publish()
+        elif request.data.get("book_only") in (True, "true", "1", 1):
+            recipe.status = VmenuRecipe.Status.BOOK_ONLY
+        recipe.save()
         return Response(
             VmenuRecipeDetailSerializer(recipe, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
@@ -564,7 +575,7 @@ class VmenuUserProfileView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, user_id):
-        user = User.objects.filter(pk=user_id, is_active=True).first()
+        user = User.objects.filter(pk=user_id, is_active=True).select_related("vmenu_profile").first()
         if not user:
             return Response(status=status.HTTP_404_NOT_FOUND)
         recipes = _annotate_recipe_flags(

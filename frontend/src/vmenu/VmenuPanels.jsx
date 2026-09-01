@@ -27,12 +27,14 @@ import {
 import {
   VmenuBackButton,
   VmenuCloseButton,
+  VmenuConfirmModal,
   VmenuFieldBlock,
   VmenuMediaUpload,
   VmenuRatingBadge,
   VmenuStatWidget,
   VmenuTextArea,
   VmenuTextInput,
+  VmenuTrashButton,
 } from "./VmenuComponents.jsx";
 import { ALL_UNITS, formatIngredientLine, scaleIngredients } from "./vmenuUnits.js";
 import VmenuLogo from "./VmenuLogo.jsx";
@@ -136,6 +138,7 @@ export function VmenuRecipeCard({ recipe, authFetch, API_URL, me, onOpenUser, on
   const [commentOpen, setCommentOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(recipe.comment_count || 0);
   const [avgRating, setAvgRating] = useState(recipe.avg_rating || 0);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   async function onLike() {
     const data = await toggleLike(authFetch, API_URL, recipe.id, liked);
@@ -153,16 +156,24 @@ export function VmenuRecipeCard({ recipe, authFetch, API_URL, me, onOpenUser, on
   const isOwner = Number(recipe.author?.id) === Number(me?.id);
 
   async function handleDelete() {
-    if (!window.confirm("Удалить рецепт?")) return;
     await deleteRecipe(authFetch, API_URL, recipe.id);
+    setDeleteConfirm(false);
     onDeleted?.(recipe.id);
     onRefresh?.();
   }
 
   return (
     <article className="vmenu-card">
+      <VmenuConfirmModal
+        open={deleteConfirm}
+        title="Удалить рецепт?"
+        message="Рецепт будет удалён без возможности восстановления."
+        confirmLabel="Удалить"
+        onConfirm={() => void handleDelete()}
+        onCancel={() => setDeleteConfirm(false)}
+      />
       <VmenuRatingBadge rating={avgRating} />
-      <VmenuPostMenu onDelete={handleDelete} disabled={!isOwner} />
+      <VmenuPostMenu onDelete={() => setDeleteConfirm(true)} disabled={!isOwner} />
       <div className="vmenu-card-views">{recipe.view_count || 0} просмотров</div>
       {photos.length ? (
         <PhotoCarousel urls={photos} onOpen={() => onOpenRecipe?.(recipe.id)} />
@@ -230,6 +241,7 @@ export function VmenuRecipeDetail({ recipeId, authFetch, API_URL, me, onBack, on
   const [saved, setSaved] = useState(false);
   const [carouselIdx, setCarouselIdx] = useState(0);
   const [servingsInit, setServingsInit] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   useEffect(() => {
     setServingsInit(false);
@@ -287,17 +299,25 @@ export function VmenuRecipeDetail({ recipeId, authFetch, API_URL, me, onBack, on
   const isOwner = Number(recipe?.author?.id) === Number(me?.id);
 
   async function handleDelete() {
-    if (!window.confirm("Удалить рецепт?")) return;
     await deleteRecipe(authFetch, API_URL, recipe.id);
+    setDeleteConfirm(false);
     onDeleted?.(recipe.id);
     onBack?.();
   }
 
   return (
     <div className="vmenu-tab vmenu-detail">
+      <VmenuConfirmModal
+        open={deleteConfirm}
+        title="Удалить рецепт?"
+        message="Рецепт будет удалён без возможности восстановления."
+        confirmLabel="Удалить"
+        onConfirm={() => void handleDelete()}
+        onCancel={() => setDeleteConfirm(false)}
+      />
       <div className="vmenu-detail-top">
         <VmenuBackButton onClick={onBack} />
-        <VmenuPostMenu onDelete={handleDelete} disabled={!isOwner} />
+        <VmenuPostMenu onDelete={() => setDeleteConfirm(true)} disabled={!isOwner} />
       </div>
       <div className="vmenu-detail-hero">
         {photos.length ? (
@@ -451,16 +471,40 @@ export function VmenuSearchTab({ authFetch, API_URL, me, onOpenUser, onOpenRecip
   const [categories, setCategories] = useState([]);
   const [cuisines, setCuisines] = useState([]);
   const [items, setItems] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestOpen, setSuggestOpen] = useState(false);
 
   useEffect(() => {
     void loadCategories(authFetch, API_URL).then((d) => setCategories(d || []));
     void loadCuisines(authFetch, API_URL).then((d) => setCuisines(d || []));
   }, [authFetch, API_URL]);
 
+  useEffect(() => {
+    const query = q.trim();
+    if (query.length < 2) {
+      setSuggestions([]);
+      setSuggestOpen(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      void searchRecipes(authFetch, API_URL, { q: query, sort, category, cuisine, limit: 8 }).then((data) => {
+        setSuggestions(data.items || []);
+        setSuggestOpen(true);
+      });
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [q, sort, category, cuisine, authFetch, API_URL]);
+
   async function runSearch(e) {
     e?.preventDefault();
+    setSuggestOpen(false);
     const data = await searchRecipes(authFetch, API_URL, { q, sort, category, cuisine });
     setItems(data.items || []);
+  }
+
+  function pickSuggestion(recipe) {
+    setSuggestOpen(false);
+    onOpenRecipe?.(recipe.id);
   }
 
   return (
@@ -488,12 +532,35 @@ export function VmenuSearchTab({ authFetch, API_URL, me, onOpenUser, onOpenRecip
           <option value="popular">По популярности</option>
           <option value="new">Сначала новые</option>
         </select>
-        <input
-          className="vmenu-search-input"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Название, ингредиент…"
-        />
+        <div className="vmenu-search-input-wrap">
+          <input
+            className="vmenu-search-input"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onFocus={() => suggestions.length && setSuggestOpen(true)}
+            onBlur={() => window.setTimeout(() => setSuggestOpen(false), 180)}
+            placeholder="Название, ингредиент…"
+          />
+          {suggestOpen && suggestions.length ? (
+            <ul className="vmenu-search-suggest">
+              {suggestions.map((r) => (
+                <li key={r.id}>
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pickSuggestion(r)}>
+                    {r.cover_url ? (
+                      <img className="vmenu-search-suggest-thumb" src={r.cover_url} alt="" />
+                    ) : (
+                      <span className="vmenu-search-suggest-thumb vmenu-search-suggest-thumb--empty">🍽</span>
+                    )}
+                    <span className="vmenu-search-suggest-body">
+                      <strong>{r.title}</strong>
+                      {r.author?.display_name ? <span className="muted small">{r.author.display_name}</span> : null}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
         <button type="submit" className="vmenu-search-icon-btn" aria-label="Найти">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
             <path
@@ -523,36 +590,58 @@ export function VmenuSearchTab({ authFetch, API_URL, me, onOpenUser, onOpenRecip
 
 export function VmenuBookTab({ authFetch, API_URL, me, onCreate, onOpenRecipe, onEditRecipe }) {
   const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [openCats, setOpenCats] = useState({});
   const [openCuisines, setOpenCuisines] = useState({});
+  const [removeTarget, setRemoveTarget] = useState(null);
 
   async function reload() {
-    const d = await loadBook(authFetch, API_URL);
-    setItems(d.items || []);
+    setLoading(true);
+    try {
+      const d = await loadBook(authFetch, API_URL);
+      setItems(d.items || []);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     void reload();
   }, [authFetch, API_URL]);
 
-  async function handleRemove(r) {
+  async function confirmRemove() {
+    if (!removeTarget) return;
+    const r = removeTarget;
     const isOwner = Number(r.author?.id) === Number(me?.id);
-    if (!window.confirm(isOwner ? "Удалить рецепт?" : "Убрать из книги?")) return;
     if (isOwner) await deleteRecipe(authFetch, API_URL, r.id);
     else await toggleSave(authFetch, API_URL, r.id, true);
+    setRemoveTarget(null);
     await reload();
   }
 
   const grouped = groupBookItems(items);
 
   return (
-    <div className="vmenu-tab">
+    <div className="vmenu-tab vmenu-tab--book">
+      <VmenuConfirmModal
+        open={Boolean(removeTarget)}
+        title={removeTarget && Number(removeTarget.author?.id) === Number(me?.id) ? "Удалить рецепт?" : "Убрать из книги?"}
+        message={
+          removeTarget && Number(removeTarget.author?.id) === Number(me?.id)
+            ? "Рецепт будет удалён без возможности восстановления."
+            : "Рецепт исчезнет из вашей книги, но останется у автора."
+        }
+        confirmLabel={removeTarget && Number(removeTarget.author?.id) === Number(me?.id) ? "Удалить" : "Убрать"}
+        onConfirm={() => void confirmRemove()}
+        onCancel={() => setRemoveTarget(null)}
+      />
       <div className="vmenu-tab-head-row">
         <h2>Книга рецептов</h2>
         <button type="button" className="primary-btn" onClick={onCreate}>
           + Создать
         </button>
       </div>
+      {loading ? <p className="muted">Загрузка…</p> : null}
       <div className="vmenu-book-tree">
         {Object.entries(grouped).map(([cat, cuisines]) => (
           <div key={cat} className="vmenu-book-cat">
@@ -605,7 +694,7 @@ export function VmenuBookTab({ authFetch, API_URL, me, onCreate, onOpenRecipe, o
                                   </button>
                                 ) : null}
                                 <VmenuPostMenu
-                                  onDelete={() => handleRemove(r)}
+                                  onDelete={() => setRemoveTarget(r)}
                                   deleteLabel={isOwner ? "Удалить" : "Убрать из книги"}
                                 />
                               </li>
@@ -621,7 +710,7 @@ export function VmenuBookTab({ authFetch, API_URL, me, onCreate, onOpenRecipe, o
           </div>
         ))}
       </div>
-      {!items.length ? <p className="muted">Сохраняйте рецепты или создавайте свои.</p> : null}
+      {!loading && !items.length ? <p className="muted">Сохраняйте рецепты или создавайте свои.</p> : null}
     </div>
   );
 }
@@ -738,22 +827,6 @@ export function VmenuFollowsTab({ authFetch, API_URL, initialKind = "following",
     }
   }
 
-  async function toggleFollowUser(user) {
-    const following = Boolean(user.is_following);
-    await followUser(authFetch, API_URL, user.id, following);
-    const next = !following;
-    setSearchHits((prev) => prev.map((u) => (u.id === user.id ? { ...u, is_following: next } : u)));
-    setItems((prev) => {
-      if (kind === "following" && following) {
-        return prev.filter((u) => u.id !== user.id);
-      }
-      return prev.map((u) => (u.id === user.id ? { ...u, is_following: next } : u));
-    });
-    if (kind === "following" && !following) {
-      await reloadList();
-    }
-  }
-
   const listUsers = q.trim().length >= 2 ? searchHits : items;
 
   return (
@@ -786,8 +859,7 @@ export function VmenuFollowsTab({ authFetch, API_URL, initialKind = "following",
             key={u.id}
             user={u}
             onOpenUser={onOpenUser}
-            onToggleFollow={toggleFollowUser}
-            showFollow
+            showFollow={false}
           />
         ))}
       </ul>
@@ -798,7 +870,7 @@ export function VmenuFollowsTab({ authFetch, API_URL, initialKind = "following",
 
 export function VmenuUserView({ userId, authFetch, API_URL, me, onBack, onOpenChat, onOpenRecipe }) {
   const [data, setData] = useState(null);
-  const [confirmUnfollow, setConfirmUnfollow] = useState(false);
+  const [unfollowConfirm, setUnfollowConfirm] = useState(false);
 
   useEffect(() => {
     void loadUserProfile(authFetch, API_URL, userId).then(setData);
@@ -807,13 +879,15 @@ export function VmenuUserView({ userId, authFetch, API_URL, me, onBack, onOpenCh
   if (!data) return <p className="status">Загрузка…</p>;
   const u = data.user;
 
-  async function toggleFollow() {
-    if (data.is_following && !confirmUnfollow) {
-      setConfirmUnfollow(true);
-      return;
-    }
-    await followUser(authFetch, API_URL, userId, data.is_following);
-    setConfirmUnfollow(false);
+  async function doUnfollow() {
+    await followUser(authFetch, API_URL, userId, true);
+    setUnfollowConfirm(false);
+    const fresh = await loadUserProfile(authFetch, API_URL, userId);
+    setData(fresh);
+  }
+
+  async function doFollow() {
+    await followUser(authFetch, API_URL, userId, false);
     const fresh = await loadUserProfile(authFetch, API_URL, userId);
     setData(fresh);
   }
@@ -826,19 +900,37 @@ export function VmenuUserView({ userId, authFetch, API_URL, me, onBack, onOpenCh
   }
 
   return (
-    <div className="vmenu-tab">
+    <div className="vmenu-tab vmenu-user-view">
+      <VmenuConfirmModal
+        open={unfollowConfirm}
+        title="Отписаться?"
+        message="Вы действительно хотите отписаться?"
+        confirmLabel="Отписаться"
+        onConfirm={() => void doUnfollow()}
+        onCancel={() => setUnfollowConfirm(false)}
+      />
       <VmenuBackButton onClick={onBack} />
-      <h2>{u.display_name}</h2>
-      <p className="muted">@{u.username}</p>
+      <div className="vmenu-user-view-head">
+        {u.avatar_url ? (
+          <img className="vmenu-profile-avatar" src={u.avatar_url} alt="" />
+        ) : (
+          <span className="vmenu-profile-avatar vmenu-avatar-fallback">{u.display_name?.[0] || "?"}</span>
+        )}
+        <div>
+          <h2>{u.display_name}</h2>
+          <p className="muted">@{u.username}</p>
+        </div>
+      </div>
       <div className="vmenu-profile-actions">
-        <button type="button" className={data.is_following ? "ghost-btn" : "primary-btn"} onClick={toggleFollow}>
-          {data.is_following ? (confirmUnfollow ? "Отписаться?" : "Вы подписаны") : "Подписаться"}
-        </button>
-        {confirmUnfollow ? (
-          <button type="button" className="ghost-btn" onClick={() => setConfirmUnfollow(false)}>
-            Отменить
+        {data.is_following ? (
+          <button type="button" className="vmenu-subscribed-btn" onClick={() => setUnfollowConfirm(true)}>
+            ✓ Вы подписаны
           </button>
-        ) : null}
+        ) : (
+          <button type="button" className="primary-btn" onClick={() => void doFollow()}>
+            Подписаться
+          </button>
+        )}
         {data.can_message ? (
           <button type="button" className="ghost-btn" onClick={startChat}>
             💬 Написать
@@ -1092,21 +1184,50 @@ export function VmenuRecipeEditor({
       />
       <h3>Ингредиенты</h3>
       {ingredients.map((ing, i) => (
-        <div key={i} className="vmenu-ing-row">
-          <input placeholder="Название" value={ing.name} onChange={(e) => {
-            const next = [...ingredients]; next[i] = { ...ing, name: e.target.value }; setIngredients(next);
-          }} />
-          <input placeholder="Кол-во" value={ing.amount} onChange={(e) => {
-            const next = [...ingredients]; next[i] = { ...ing, amount: e.target.value }; setIngredients(next);
-          }} />
-          <select value={ing.unit || ""} onChange={(e) => {
-            const next = [...ingredients]; next[i] = { ...ing, unit: e.target.value }; setIngredients(next);
-          }}>
+        <div key={i} className="vmenu-ing-edit-row">
+          <input
+            className="vmenu-textinput"
+            placeholder="Название"
+            value={ing.name}
+            onChange={(e) => {
+              const next = [...ingredients];
+              next[i] = { ...ing, name: e.target.value };
+              setIngredients(next);
+            }}
+          />
+          <input
+            className="vmenu-textinput vmenu-ing-amount"
+            placeholder="Кол-во"
+            value={ing.amount}
+            onChange={(e) => {
+              const next = [...ingredients];
+              next[i] = { ...ing, amount: e.target.value };
+              setIngredients(next);
+            }}
+          />
+          <select
+            className="vmenu-textinput vmenu-ing-unit"
+            value={ing.unit || ""}
+            onChange={(e) => {
+              const next = [...ingredients];
+              next[i] = { ...ing, unit: e.target.value };
+              setIngredients(next);
+            }}
+          >
             <option value="">—</option>
             {ALL_UNITS.map((u) => (
-              <option key={u} value={u}>{u}</option>
+              <option key={u} value={u}>
+                {u}
+              </option>
             ))}
           </select>
+          <VmenuTrashButton
+            label="Удалить ингредиент"
+            onClick={() => {
+              const next = ingredients.filter((_, idx) => idx !== i);
+              setIngredients(next.length ? next : [{ name: "", amount: "", unit: "г" }]);
+            }}
+          />
         </div>
       ))}
       <button type="button" className="ghost-btn" onClick={() => setIngredients([...ingredients, { name: "", amount: "", unit: "г" }])}>
@@ -1115,17 +1236,44 @@ export function VmenuRecipeEditor({
       <h3>Шаги</h3>
       {steps.map((st, i) => (
         <div key={i} className="vmenu-step-edit">
-          <VmenuFieldBlock label={`Шаг ${i + 1}`}>
-            <VmenuTextArea
-              value={st.text}
-              onChange={(v) => {
-                const next = [...steps];
-                next[i] = { ...st, text: v };
-                setSteps(next);
+          <div className="vmenu-step-edit-head">
+            <VmenuFieldBlock label={`Шаг ${i + 1}`}>
+              <VmenuTextArea
+                value={st.text}
+                onChange={(v) => {
+                  const next = [...steps];
+                  next[i] = { ...st, text: v };
+                  setSteps(next);
+                }}
+                rows={5}
+              />
+            </VmenuFieldBlock>
+            <VmenuTrashButton
+              label="Удалить шаг"
+              onClick={() => {
+                const next = steps.filter((_, idx) => idx !== i);
+                setSteps(next.length ? next : [{ text: "" }]);
+                setStepImages((prev) => {
+                  const out = {};
+                  Object.entries(prev).forEach(([k, v]) => {
+                    const ki = Number(k);
+                    if (ki < i) out[ki] = v;
+                    else if (ki > i) out[ki - 1] = v;
+                  });
+                  return out;
+                });
+                setStepImagePreviews((prev) => {
+                  const out = {};
+                  Object.entries(prev).forEach(([k, v]) => {
+                    const ki = Number(k);
+                    if (ki < i) out[ki] = v;
+                    else if (ki > i) out[ki - 1] = v;
+                  });
+                  return out;
+                });
               }}
-              rows={5}
             />
-          </VmenuFieldBlock>
+          </div>
           <VmenuMediaUpload
             label="Фото шага"
             accept="image/*"
@@ -1133,6 +1281,18 @@ export function VmenuRecipeEditor({
             files={stepImages[i] ? [stepImages[i]] : []}
             previews={stepImagePreviews[i] && !stepImages[i] ? [stepImagePreviews[i]] : []}
             onChange={(files) => setStepImages((prev) => ({ ...prev, [i]: files[0] || null }))}
+            onRemove={() => {
+              setStepImages((prev) => {
+                const next = { ...prev };
+                delete next[i];
+                return next;
+              });
+              setStepImagePreviews((prev) => {
+                const next = { ...prev };
+                delete next[i];
+                return next;
+              });
+            }}
           />
         </div>
       ))}

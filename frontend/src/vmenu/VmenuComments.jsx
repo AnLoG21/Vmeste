@@ -4,7 +4,7 @@ import { VmenuTextArea } from "./VmenuComponents.jsx";
 
 function Stars({ value, onChange, disabled }) {
   return (
-    <span className="vmenu-stars">
+    <span className="vmenu-stars" aria-label="Оценка">
       {[1, 2, 3, 4, 5].map((n) => (
         <button
           key={n}
@@ -36,7 +36,9 @@ export function VmenuComments({
   const [replyTo, setReplyTo] = useState(null);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
+  const [attachFiles, setAttachFiles] = useState([]);
   const commentInputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   async function reload() {
     setLoading(true);
@@ -71,6 +73,12 @@ export function VmenuComments({
     setCommentText("");
   }
 
+  function pickAttachments(e) {
+    const picked = Array.from(e.target.files || []).slice(0, 4);
+    setAttachFiles(picked);
+    e.target.value = "";
+  }
+
   async function submitComment(e) {
     e.preventDefault();
     const fd = new FormData();
@@ -86,9 +94,11 @@ export function VmenuComments({
     } else {
       fd.append("rating", "0");
     }
+    for (const f of attachFiles) fd.append("photos", f);
     await postComment(authFetch, API_URL, recipeId, fd);
     setCommentText("");
     setReplyTo(null);
+    setAttachFiles([]);
     await reload();
   }
 
@@ -143,17 +153,38 @@ export function VmenuComments({
       </ul>
       {!comments.length && !loading ? <p className="muted small">Пока нет комментариев.</p> : null}
       <form className="vmenu-comment-compose" onSubmit={submitComment}>
-        {!replyTo ? (
+        {!replyTo && !hasRated ? (
           <div className="vmenu-comment-rating-row">
-            {hasRated ? (
-              <p className="muted small">Ваша оценка — измените звёзды ниже</p>
-            ) : (
-              <p className="muted small">Оценка (один раз)</p>
-            )}
             <Stars value={rating} onChange={setRating} />
           </div>
         ) : null}
+        {attachFiles.length ? (
+          <p className="muted small vmenu-comment-attach-hint">
+            Прикреплено: {attachFiles.map((f) => f.name).join(", ")}
+          </p>
+        ) : null}
         <div className="vmenu-comment-input-row">
+          <button
+            type="button"
+            className="vmenu-comment-attach-btn"
+            aria-label="Прикрепить фото или видео"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M16.5 6v11.5a4 4 0 0 1-8 0V5a2.5 2.5 0 0 1 5 0v10.5a1 1 0 1 1-2 0V6H10v9.5a2.5 2.5 0 0 0 5 0V5a4 4 0 0 0-8 0v12.5a6 6 0 0 0 12 0V6h-2.5z"
+              />
+            </svg>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*"
+            multiple
+            hidden
+            onChange={pickAttachments}
+          />
           {replyTo ? (
             <button type="button" className="vmenu-comment-reply-prefix" onClick={cancelReply} aria-label="Отменить ответ">
               ↩
@@ -167,7 +198,9 @@ export function VmenuComments({
             placeholder={replyTo ? "" : "Комментарий…"}
           />
           <button type="submit" className="vmenu-send-btn" aria-label="Отправить">
-            ➤
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path fill="currentColor" d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
           </button>
         </div>
       </form>

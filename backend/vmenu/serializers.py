@@ -141,6 +141,27 @@ class VmenuRecipeListSerializer(serializers.ModelSerializer):
         return False
 
 
+class VmenuBookRecipeSerializer(serializers.ModelSerializer):
+    author = serializers.SerializerMethodField()
+    category = VmenuCategorySerializer(read_only=True)
+    cuisine = VmenuCuisineSerializer(read_only=True)
+    cover_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VmenuRecipe
+        fields = ("id", "title", "author", "category", "cuisine", "cover_url")
+
+    def get_author(self, obj):
+        return _user_public(obj.author, self.context.get("request"))
+
+    def get_cover_url(self, obj):
+        if not obj.cover_image:
+            return ""
+        return photo_urls(self.context.get("request"), obj.cover_image).get("thumb_url") or photo_urls(
+            self.context.get("request"), obj.cover_image
+        ).get("url") or ""
+
+
 class VmenuIngredientSerializer(serializers.ModelSerializer):
     amount = serializers.SerializerMethodField()
     unit = serializers.SerializerMethodField()

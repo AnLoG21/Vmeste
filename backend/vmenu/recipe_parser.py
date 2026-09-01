@@ -164,6 +164,22 @@ def _safe_decimal(val) -> Decimal:
         return Decimal("0")
 
 
+def _split_ingredient_names(name: str) -> list[str]:
+    names: list[str] = []
+    for chunk in re.split(r",\s*", name):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if re.search(r"\s+и\s+", chunk, re.I):
+            for part in re.split(r"\s+и\s+", chunk, flags=re.I):
+                part = part.strip()
+                if part:
+                    names.append(part)
+        else:
+            names.append(chunk)
+    return names
+
+
 def _parse_amount_unit_tail(tail: str) -> tuple[str, str]:
     tail = re.sub(r"\s+", " ", (tail or "").strip())
     tail = re.sub(r"ст\.\s*л\.?", "ст.л.", tail, flags=re.I)
@@ -205,10 +221,9 @@ def _parse_ingredient_line(text: str) -> dict | list[dict] | None:
     if len(parts) == 2:
         name, tail = parts[0].strip(), parts[1].strip()
         amount, unit = _parse_amount_unit_tail(tail)
-        if "," in name:
-            names = [n.strip() for n in name.split(",") if n.strip()]
-            if len(names) > 1:
-                return _ingredient_rows_from_names(names, amount, unit)
+        names = _split_ingredient_names(name)
+        if len(names) > 1:
+            return _ingredient_rows_from_names(names, amount, unit)
         return {"name": name[:200], "amount": amount, "unit": unit}
     m = re.match(r"^([\d.,]+(?:\s*[-–]\s*[\d.,]+)?)\s*([а-яa-z.%]+)?\s+(.+)$", text, re.I)
     if m:
@@ -250,15 +265,24 @@ def _parse_ingredient_item(line) -> dict | None:
     return _parse_ingredient_line(str(line))
 
 
-def _split_comma_ingredient(text: str) -> dict | None:
+def _split_comma_ingredient(text: str) -> dict | list[dict] | None:
     text = strip_html(text)
-    if "," not in text:
+    if "," not in text and not re.search(r"\s+и\s+", text, re.I):
         return None
-    name, tail = [p.strip() for p in text.rsplit(",", 1)]
-    if not name:
-        return None
-    amount, unit = _parse_amount_unit_tail(tail)
-    return {"name": name[:200], "amount": amount, "unit": unit}
+    if "," in text:
+        name, tail = [p.strip() for p in text.rsplit(",", 1)]
+        if not name:
+            return None
+        amount, unit = _parse_amount_unit_tail(tail)
+        if not amount and not unit and tail and not re.match(
+            r"^(по\s+вкусу|зубчик|щепотка|немного|\d)", tail, re.I
+        ):
+            return _parse_ingredient_line(text)
+        names = _split_ingredient_names(name)
+        if len(names) > 1:
+            return _ingredient_rows_from_names(names, amount, unit)
+        return {"name": name[:200], "amount": amount, "unit": unit}
+    return _parse_ingredient_line(text)
 
 
 def _parse_ingredients_from_html(html: str) -> list[dict]:

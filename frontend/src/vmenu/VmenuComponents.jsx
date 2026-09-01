@@ -18,6 +18,52 @@ export function VmenuCloseButton({ onClick }) {
   );
 }
 
+export function VmenuTrashButton({ onClick, label = "Удалить" }) {
+  return (
+    <button type="button" className="vmenu-trash-btn" onClick={onClick} aria-label={label} title={label}>
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+        />
+      </svg>
+    </button>
+  );
+}
+
+export function VmenuConfirmModal({
+  open,
+  title,
+  message,
+  confirmLabel = "Удалить",
+  cancelLabel = "Отменить",
+  danger = true,
+  onConfirm,
+  onCancel,
+}) {
+  if (!open) return null;
+  return (
+    <div className="modal-backdrop vmenu-confirm-backdrop" role="dialog" aria-modal="true" onClick={onCancel}>
+      <div className="modal-card vmenu-confirm-card" onClick={(e) => e.stopPropagation()}>
+        {title ? <h3 className="vmenu-confirm-title">{title}</h3> : null}
+        {message ? <p className="vmenu-confirm-message">{message}</p> : null}
+        <div className="vmenu-confirm-actions">
+          <button type="button" className="ghost-btn" onClick={onCancel}>
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            className={danger ? "vmenu-confirm-danger-btn" : "primary-btn"}
+            onClick={onConfirm}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function VmenuRatingBadge({ rating, inline = false }) {
   if (!rating || Number(rating) <= 0) return null;
   return (
@@ -111,8 +157,11 @@ export function VmenuMediaUpload({
                   onRemove(i);
                 }}
                 onKeyDown={(e) => e.key === "Enter" && onRemove(i)}
+                aria-label="Удалить"
               >
-                ×
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                  <path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                </svg>
               </span>
             ) : null}
           </button>
