@@ -164,19 +164,6 @@ export function VmenuComments({
           </p>
         ) : null}
         <div className="vmenu-comment-input-row">
-          <button
-            type="button"
-            className="vmenu-comment-attach-btn"
-            aria-label="Прикрепить фото или видео"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="M16.5 6v11.5a4 4 0 0 1-8 0V5a2.5 2.5 0 0 1 5 0v10.5a1 1 0 1 1-2 0V6H10v9.5a2.5 2.5 0 0 0 5 0V5a4 4 0 0 0-8 0v12.5a6 6 0 0 0 12 0V6h-2.5z"
-              />
-            </svg>
-          </button>
           <input
             ref={fileInputRef}
             type="file"
@@ -197,6 +184,19 @@ export function VmenuComments({
             rows={compact ? 2 : 3}
             placeholder={replyTo ? "" : "Комментарий…"}
           />
+          <button
+            type="button"
+            className="vmenu-comment-attach-btn"
+            aria-label="Прикрепить фото или видео"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M16.5 6v11.5a4 4 0 0 1-8 0V5a2.5 2.5 0 0 1 5 0v10.5a1 1 0 1 1-2 0V6H10v9.5a2.5 2.5 0 0 0 5 0V5a4 4 0 0 0-8 0v12.5a6 6 0 0 0 12 0V6h-2.5z"
+              />
+            </svg>
+          </button>
           <button type="submit" className="vmenu-send-btn" aria-label="Отправить">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
               <path fill="currentColor" d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z" />

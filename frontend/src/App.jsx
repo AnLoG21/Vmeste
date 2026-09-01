@@ -13347,7 +13347,11 @@ export default function App() {
             <div
               className={[
                 "tg-body",
-                selectedChatId ? "tg-body--mobile-thread" : "tg-body--mobile-list",
+                currentView === "vmenu"
+                  ? `tg-body--vmenu${selectedChatId ? " tg-body--mobile-thread" : " tg-body--mobile-list"}`
+                  : selectedChatId
+                    ? "tg-body--mobile-thread"
+                    : "tg-body--mobile-list",
               ].join(" ")}
             >
               <aside className="tg-sidebar">
@@ -13394,6 +13398,7 @@ export default function App() {
                   </button>
                 </div>
                 )}
+                <div className="tg-sidebar-scroll">
                 {filteredSidebarChats.length > 0 && currentView === "vmenu" ? (
                   <div className="vmenu-chat-section-label">Переписки</div>
                 ) : null}
@@ -13589,6 +13594,7 @@ export default function App() {
                   : filteredSidebarChats.length === 0 && (
                     <p className="tg-empty">{chatFolder === "clients" ? "Пока нет чатов с клиентами — они появятся здесь автоматически." : "Нет чатов в этой папке."}</p>
                   )}
+                </div>
               </aside>
               <div className={`tg-main ${tgMainDark ? "tg-main--dark" : ""}`} style={tgMainStyle}>
                 <div className="tg-main-head">

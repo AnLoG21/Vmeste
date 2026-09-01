@@ -9,7 +9,14 @@ from urllib.parse import urljoin, urlparse
 from html import unescape
 
 from .cuisine_data import detect_cuisine_slug, normalize_cuisine_slug
-from .recipe_parser import _normalize_unit, _parse_amount_unit_tail, _parse_ingredient_line, _split_comma_ingredient, strip_html
+from .recipe_parser import (
+    _gastronom_step_body_text,
+    _normalize_unit,
+    _parse_amount_unit_tail,
+    _parse_ingredient_line,
+    _split_comma_ingredient,
+    strip_html,
+)
 
 SitePatch = dict
 
@@ -358,6 +365,25 @@ def _parse_kulina(html: str) -> list[dict]:
 
 def _parse_gastronom_steps(html: str, base_url: str) -> list[dict]:
     out: list[dict] = []
+
+    heads = list(
+        re.finditer(
+            r"<h([1-6])[^>]*>\s*(?:Шаг|Step)\s*(\d+)\s*</h\1>(.*?)(?=<h[1-6]\b|$)",
+            html,
+            re.I | re.S,
+        )
+    )
+    if heads:
+        for m in heads:
+            inner = m.group(3)
+            img_m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', inner, re.I)
+            img = urljoin(base_url, unescape(img_m.group(1))) if img_m else ""
+            text = _gastronom_step_body_text(inner)
+            if text or img:
+                out.append({"text": text, "image_url": img})
+        if out:
+            return out
+
     for m in re.finditer(
         r'itemprop=["\']recipeInstructions["\'][^>]*>(.*?)</(?:ul|ol)>',
         html,
@@ -367,27 +393,11 @@ def _parse_gastronom_steps(html: str, base_url: str) -> list[dict]:
             inner = li.group(1)
             img_m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', inner, re.I)
             img = urljoin(base_url, unescape(img_m.group(1))) if img_m else ""
-            text = strip_html(re.sub(r"<img[^>]*>", "", inner, flags=re.I))
-            text = re.sub(r"^Шаг\s+\d+\s*[:.)-]?\s*", "", text, flags=re.I).strip()
+            text = _gastronom_step_body_text(inner)
             if text or img:
                 out.append({"text": text, "image_url": img})
     if out:
         return out
-
-    markers = list(re.finditer(r"(?:>|^|\s)(?:Шаг|Step)\s*(\d+)", html, re.I))
-    if len(markers) > 1:
-        for i, m in enumerate(markers):
-            start = m.start()
-            end = markers[i + 1].start() if i + 1 < len(markers) else min(len(html), start + 12000)
-            block = html[start:end]
-            img_m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', block, re.I)
-            img = urljoin(base_url, unescape(img_m.group(1))) if img_m else ""
-            text = strip_html(re.sub(r"<img[^>]*>", "", block, flags=re.I))
-            text = re.sub(r"^(?:Шаг|Step)\s*\d+\s*[:.)-]?\s*", "", text, flags=re.I).strip()
-            if text or img:
-                out.append({"text": text[:2000], "image_url": img})
-        if out:
-            return out
 
     for m in re.finditer(
         r'class="[^"]*(?:recipe-step|cooking-step|instruction|step-item)[^"]*"[^>]*>(.*?)</(?:li|div|article|section|p)>',
@@ -397,7 +407,7 @@ def _parse_gastronom_steps(html: str, base_url: str) -> list[dict]:
         inner = m.group(1)
         img_m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', inner, re.I)
         img = urljoin(base_url, unescape(img_m.group(1))) if img_m else ""
-        text = strip_html(re.sub(r"<img[^>]*>", "", inner, flags=re.I))
+        text = _gastronom_step_body_text(inner)
         if text or img:
             out.append({"text": text, "image_url": img})
     return out

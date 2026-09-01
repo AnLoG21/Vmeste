@@ -365,9 +365,18 @@ def _step_image_url(block) -> str:
 
 
 def _clean_step_text(text: str) -> str:
+    text = re.sub(r"<[^>]*$", "", text or "")
     text = strip_html(text)
-    text = re.sub(r"^Шаг\s+\d+\s*[:.)-]?\s*", "", text, flags=re.I).strip()
+    text = re.sub(r"^>\s*", "", text)
+    text = re.sub(r"^(?:Шаг|Step)\s+\d+\s*[:.)-]?\s*", "", text, flags=re.I).strip()
+    text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+def _gastronom_step_body_text(html_fragment: str) -> str:
+    chunk = re.split(r"<h[1-6]\b", html_fragment, maxsplit=1, flags=re.I)[0]
+    chunk = re.sub(r"<img[^>]*>", "", chunk, flags=re.I)
+    return _clean_step_text(chunk)
 
 
 def _split_long_step_text(text: str) -> list[str]:

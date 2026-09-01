@@ -7,41 +7,136 @@
   padding-bottom: 0;
 }
 
-.vmenu-app .tg-chats-card--vmenu {
+/* Портал чатов — селекторы через .vmenu-chats-host (контент вне прямого потомка .vmenu-app) */
+.vmenu-chats-host .tg-chats-card.tg-chats-card--vmenu.card.full-width,
+.vmenu-app .tg-chats-card.tg-chats-card--vmenu.card.full-width {
   border: none;
   box-shadow: none;
   margin: 0;
   height: 100%;
-  min-height: 0;
+  min-height: 0 !important;
+  max-height: 100% !important;
   display: flex;
   flex-direction: column;
   padding: 0;
+  overflow: hidden;
 }
 
+.vmenu-chats-host .tg-chats-card--vmenu .tg-body,
 .vmenu-app .tg-chats-card--vmenu .tg-body {
   flex: 1;
-  min-height: 0;
+  min-height: 0 !important;
+  max-height: 100%;
   height: 100%;
   overflow: hidden;
 }
 
+.vmenu-chats-host .tg-body--vmenu,
+.vmenu-app .tg-body--vmenu {
+  display: grid;
+  grid-template-columns: minmax(0, 400px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+  min-height: 0;
+  max-height: 100%;
+  height: 100%;
+}
+
+.vmenu-chats-host .tg-chats-card--vmenu .tg-sidebar,
 .vmenu-app .tg-chats-card--vmenu .tg-sidebar {
   width: min(400px, 34vw);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
   max-height: 100%;
+  min-width: 0;
 }
 
+.vmenu-chats-host .tg-chats-card--vmenu .tg-sidebar-head,
+.vmenu-app .tg-chats-card--vmenu .tg-sidebar-head {
+  flex-shrink: 0;
+  min-height: 52px;
+  box-sizing: border-box;
+}
+
+.vmenu-chats-host .tg-chats-card--vmenu .tg-chat-search,
+.vmenu-app .tg-chats-card--vmenu .tg-chat-search {
+  flex-shrink: 0;
+  width: auto;
+  max-width: calc(100% - 20px);
+  margin-left: 10px;
+  margin-right: 10px;
+  position: static;
+  z-index: auto;
+}
+
+.vmenu-chats-host .tg-chats-card--vmenu .tg-sidebar-scroll,
+.vmenu-app .tg-chats-card--vmenu .tg-sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.vmenu-chats-host .tg-chats-card--vmenu .tg-chat-list,
+.vmenu-chats-host .tg-chats-card--vmenu .vmenu-chat-contacts,
 .vmenu-app .tg-chats-card--vmenu .tg-chat-list,
 .vmenu-app .tg-chats-card--vmenu .vmenu-chat-contacts {
-  flex: 1;
-  overflow-y: auto;
+  flex: none;
+  overflow: visible;
   min-height: 0;
 }
 
+.vmenu-chats-host .tg-chats-card--vmenu .tg-main,
 .vmenu-app .tg-chats-card--vmenu .tg-main {
   min-height: 0;
+  max-height: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.vmenu-chats-host .tg-chats-card--vmenu .tg-main-head,
+.vmenu-chats-host .tg-chats-card--vmenu .tg-main-head-bar,
+.vmenu-app .tg-chats-card--vmenu .tg-main-head,
+.vmenu-app .tg-chats-card--vmenu .tg-main-head-bar {
+  flex-shrink: 0;
+  min-height: 52px;
+  box-sizing: border-box;
+}
+
+.vmenu-chats-host .tg-chats-card--vmenu .tg-thread,
+.vmenu-app .tg-chats-card--vmenu .tg-thread {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (min-width: 901px) {
+  .vmenu-chats-host .tg-body--vmenu.tg-body--mobile-thread .tg-sidebar,
+  .vmenu-app .tg-body--vmenu.tg-body--mobile-thread .tg-sidebar {
+    display: flex !important;
+  }
+
+  .vmenu-chats-host .tg-body--vmenu.tg-body--mobile-thread .tg-main,
+  .vmenu-app .tg-body--vmenu.tg-body--mobile-thread .tg-main {
+    display: flex !important;
+  }
+
+  .vmenu-chats-host .tg-body--vmenu .tg-chat-back-btn,
+  .vmenu-app .tg-body--vmenu .tg-chat-back-btn {
+    display: none !important;
+  }
+}
+
+.vmenu-app--chats .vmenu-chats-host {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -62,47 +157,11 @@
   max-height: calc(100dvh - 88px);
   overflow: hidden;
   padding-bottom: 68px;
+  box-sizing: border-box;
 }
 
 .vmenu-app--follows {
   max-width: min(2880px, 98vw);
-}
-
-.vmenu-app--chats .vmenu-chats-host {
-  flex: 1;
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
-}
-
-.vmenu-app .tg-chats-card--vmenu.card.full-width {
-  max-height: 100%;
-  overflow: hidden;
-  margin-bottom: 0;
-}
-
-.vmenu-app .tg-chats-card--vmenu .tg-sidebar-head,
-.vmenu-app .tg-chats-card--vmenu .tg-chat-search,
-.vmenu-app .tg-chats-card--vmenu .vmenu-chat-section-label {
-  flex-shrink: 0;
-}
-
-.vmenu-app .tg-chats-card--vmenu .tg-main {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.vmenu-app .tg-chats-card--vmenu .tg-main-head,
-.vmenu-app .tg-chats-card--vmenu .tg-main-head-bar {
-  flex-shrink: 0;
-}
-
-.vmenu-app .tg-chats-card--vmenu .tg-thread {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
 }
 
 .vmenu-app button {
