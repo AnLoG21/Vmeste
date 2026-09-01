@@ -10990,17 +10990,19 @@ export default function App() {
           SMS (SMS.ru)
         </label>
         {orgMessagingForm.enable_sms ? (
-          <label className="field-label" htmlFor="org-sms-api-id">
-            api_id организации (если пусто — ключ платформы)
-          </label>
-          <input
-            id="org-sms-api-id"
-            type="password"
-            autoComplete="new-password"
-            value={orgMessagingForm.sms_api_id}
-            onChange={(e) => setOrgMessagingForm((p) => ({ ...p, sms_api_id: e.target.value }))}
-            placeholder={orgMessagingForm.has_sms_org ? "••••••••" : ""}
-          />
+          <>
+            <label className="field-label" htmlFor="org-sms-api-id">
+              api_id организации (если пусто — ключ платформы)
+            </label>
+            <input
+              id="org-sms-api-id"
+              type="password"
+              autoComplete="new-password"
+              value={orgMessagingForm.sms_api_id}
+              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, sms_api_id: e.target.value }))}
+              placeholder={orgMessagingForm.has_sms_org ? "••••••••" : ""}
+            />
+          </>
         ) : null}
         <button type="submit">Сохранить каналы</button>
         <p className="status">{orgMessagingSaveStatus}</p>
