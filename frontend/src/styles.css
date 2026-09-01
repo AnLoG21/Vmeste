@@ -6508,14 +6508,146 @@ body.theme-dark .field-label {
   width: auto;
 }
 
+.org-settings-card .form {
+  gap: 14px;
+}
+
+.org-settings-card .field-label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #5c4a3a;
+  line-height: 1.35;
+}
+
+.org-settings-card .field-label > input,
+.org-settings-card .field-label > textarea,
+.org-settings-card .field-label > select {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+  color: #1a1208;
+}
+
+.org-settings-card .field-label > .field-hint {
+  font-weight: 400;
+  font-size: 0.78rem;
+  color: #7a6a5c;
+  line-height: 1.4;
+}
+
+.org-settings-card .field-label[for],
+.org-settings-card p.field-label {
+  margin-bottom: 0;
+}
+
+.org-settings-card .field-label[for] + input,
+.org-settings-card .field-label[for] + textarea,
+.org-settings-card .field-label[for] + select,
+.org-settings-card .field-label[for] + .org-field-stack,
+.org-settings-card p.field-label + textarea,
+.org-settings-card p.field-label + .org-hours-grid {
+  margin-top: 6px;
+}
+
+.org-settings-card .voice-settings-form .field-label {
+  margin-bottom: 2px;
+}
+
+.org-settings-card .org-widget-embed {
+  margin: 16px 0;
+  padding: 16px;
+  border-radius: 12px;
+  background: #fffaf5;
+  border: 1px solid #ffe1ca;
+}
+
+.org-settings-card .org-widget-code {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+  min-height: 96px;
+}
+
 .org-phone-row {
   display: flex;
   gap: 8px;
   margin-bottom: 8px;
+  align-items: center;
 }
 
 .org-phone-row input {
   flex: 1;
+  min-width: 0;
+}
+
+.org-phone-row .ghost-btn,
+.org-phone-row .org-icon-btn {
+  width: auto;
+  flex-shrink: 0;
+}
+
+.org-icon-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid #e0c2a8;
+  background: #fff;
+  color: #7a6a5c;
+  cursor: pointer;
+  font-weight: 400;
+}
+
+.org-icon-btn:hover {
+  background: #fff3e8;
+  color: #c85a00;
+}
+
+.org-icon-btn--danger:hover {
+  background: #ffebee;
+  color: #c62828;
+  border-color: #ef9a9a;
+}
+
+.org-text-btn {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px dashed #d4b896;
+  background: #fffdfb;
+  color: #0f6e56;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.org-text-btn:hover {
+  background: #f0faf6;
+  border-color: #9fd4c0;
+}
+
+.org-gallery-upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 12px;
 }
 
 .org-gallery-grid {
@@ -6530,6 +6662,91 @@ body.theme-dark .field-label {
   aspect-ratio: 1;
   object-fit: cover;
   border-radius: 8px;
+}
+
+.org-gallery-item {
+  position: relative;
+}
+
+.org-gallery-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.org-gallery-open img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+  border-radius: 8px;
+  border: 1px solid #e8dfd4;
+}
+
+.org-gallery-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.org-gallery-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  align-self: flex-start;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #b8ddd0;
+  background: #f4fbf8;
+  color: #0f6e56;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.org-gallery-upload-btn:hover:not(:disabled) {
+  background: #e8f5f0;
+}
+
+.org-gallery-upload-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.org-settings-card .field-hint--below-label,
+.voice-settings-form .field-hint--below-label {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: #8a7a6a;
+  line-height: 1.35;
+}
+
+.voice-settings-form .field-label + textarea,
+.voice-settings-form .field-label + input,
+.voice-settings-form .field-label + select,
+.voice-settings-form .field-hint--below-label + textarea,
+.voice-settings-form .field-hint--below-label + input {
+  margin-top: 6px;
+}
+
+.org-settings-card h3 {
+  margin-top: 28px;
+  margin-bottom: 8px;
+}
+
+.org-settings-card h3:first-of-type {
+  margin-top: 16px;
 }
 
 .photo-lightbox-backdrop {

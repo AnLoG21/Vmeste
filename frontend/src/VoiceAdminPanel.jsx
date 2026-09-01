@@ -353,50 +353,54 @@ export default function VoiceAdminPanel({ authFetch, API_URL, apiOrigin = "", on
           (Яндекс SpeechKit). Без галочки включить робота нельзя.
         </label>
 
-        <label className="field-label">
+        <label className="field-label" htmlFor="voice-inbound-phone">
           Телефон салона (для справки)
-          <span className="field-hint">Тот же номер, который укажете в SIP-поле ниже</span>
-          <input
-            type="tel"
-            autoComplete="tel"
-            value={form.inbound_phone ?? ""}
-            onChange={(e) => patchForm((p) => ({ ...p, inbound_phone: e.target.value }))}
-            placeholder="+7 495 123-45-67"
-          />
         </label>
+        <p className="field-hint field-hint--below-label">Тот же номер, который укажете в SIP-поле ниже</p>
+        <input
+          id="voice-inbound-phone"
+          type="tel"
+          autoComplete="tel"
+          value={form.inbound_phone ?? ""}
+          onChange={(e) => patchForm((p) => ({ ...p, inbound_phone: e.target.value }))}
+          placeholder="+7 495 123-45-67"
+        />
 
-        <label className="field-label">
+        <label className="field-label" htmlFor="voice-transfer-phone">
           Перевод на живого администратора
-          <span className="field-hint">Если клиент просит человека</span>
-          <input
-            type="tel"
-            autoComplete="tel"
-            value={form.transfer_phone ?? ""}
-            onChange={(e) => patchForm((p) => ({ ...p, transfer_phone: e.target.value }))}
-            placeholder="+7 495 …"
-          />
         </label>
+        <p className="field-hint field-hint--below-label">Если клиент просит человека</p>
+        <input
+          id="voice-transfer-phone"
+          type="tel"
+          autoComplete="tel"
+          value={form.transfer_phone ?? ""}
+          onChange={(e) => patchForm((p) => ({ ...p, transfer_phone: e.target.value }))}
+          placeholder="+7 495 …"
+        />
 
-        <label className="field-label">
+        <label className="field-label" htmlFor="voice-disclosure">
           Уведомление звонящего (152-ФЗ)
-          <span className="field-hint">Произносится в начале звонка перед приветствием</span>
-          <textarea
-            rows={2}
-            value={form.caller_disclosure ?? ""}
-            onChange={(e) => patchForm((p) => ({ ...p, caller_disclosure: e.target.value }))}
-            placeholder="Разговор обрабатывается голосовым ассистентом…"
-          />
         </label>
+        <p className="field-hint field-hint--below-label">Произносится в начале звонка перед приветствием</p>
+        <textarea
+          id="voice-disclosure"
+          rows={2}
+          value={form.caller_disclosure ?? ""}
+          onChange={(e) => patchForm((p) => ({ ...p, caller_disclosure: e.target.value }))}
+          placeholder="Разговор обрабатывается голосовым ассистентом…"
+        />
 
-        <label className="field-label">
+        <label className="field-label" htmlFor="voice-greeting">
           Первая фраза при звонке
-          <textarea
-            rows={3}
-            value={form.greeting_text ?? ""}
-            onChange={(e) => patchForm((p) => ({ ...p, greeting_text: e.target.value }))}
-            placeholder="Здравствуйте! Это салон … Помогу записаться."
-          />
         </label>
+        <textarea
+          id="voice-greeting"
+          rows={3}
+          value={form.greeting_text ?? ""}
+          onChange={(e) => patchForm((p) => ({ ...p, greeting_text: e.target.value }))}
+          placeholder="Здравствуйте! Это салон … Помогу записаться."
+        />
 
         <label className="field-label" htmlFor="voice-ats">
           Способ подключения телефона

@@ -2408,6 +2408,7 @@ export default function App() {
   const [mapOrgCarouselIndex, setMapOrgCarouselIndex] = useState(0);
   const [mapMarkersTick, setMapMarkersTick] = useState(0);
   const [orgPhotoLightbox, setOrgPhotoLightbox] = useState(null);
+  const orgGalleryInputRef = useRef(null);
 
   const [staffReviewModal, setStaffReviewModal] = useState(null);
 
@@ -10836,27 +10837,29 @@ export default function App() {
                 отдельный бот.
               </p>
             ) : null}
-            <label className="field-label">
+            <label className="field-label" htmlFor="org-tg-bot-token">
               Bot token{orgMessagingForm.has_platform_telegram ? " (свой, необязательно)" : ""}
-              <input
-                type="password"
-                autoComplete="new-password"
-                value={orgMessagingForm.telegram_bot_token}
-                onChange={(e) => setOrgMessagingForm((p) => ({ ...p, telegram_bot_token: e.target.value }))}
-                placeholder={
-                  orgMessagingForm.has_org_telegram_token || orgMessagingForm.has_platform_telegram ? "••••••••" : ""
-                }
-              />
             </label>
-            <label className="field-label">
+            <input
+              id="org-tg-bot-token"
+              type="password"
+              autoComplete="new-password"
+              value={orgMessagingForm.telegram_bot_token}
+              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, telegram_bot_token: e.target.value }))}
+              placeholder={
+                orgMessagingForm.has_org_telegram_token || orgMessagingForm.has_platform_telegram ? "••••••••" : ""
+              }
+            />
+            <label className="field-label" htmlFor="org-tg-chat-id">
               Chat ID (чат организации)
-              <input
-                type="text"
-                value={orgMessagingForm.telegram_notify_chat_id}
-                onChange={(e) => setOrgMessagingForm((p) => ({ ...p, telegram_notify_chat_id: e.target.value }))}
-                placeholder="Привяжите через бота или вставьте вручную"
-              />
             </label>
+            <input
+              id="org-tg-chat-id"
+              type="text"
+              value={orgMessagingForm.telegram_notify_chat_id}
+              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, telegram_notify_chat_id: e.target.value }))}
+              placeholder="Привяжите через бота или вставьте вручную"
+            />
             <div className="row-2">
               <button type="button" className="ghost-btn" onClick={loadOrgTelegramLink}>
                 Привязать через бота
@@ -10915,24 +10918,26 @@ export default function App() {
         </label>
         {orgMessagingForm.enable_max ? (
           <>
-            <label className="field-label">
+            <label className="field-label" htmlFor="org-max-bot-token">
               Bot token
-              <input
-                type="password"
-                autoComplete="new-password"
-                value={orgMessagingForm.max_bot_token}
-                onChange={(e) => setOrgMessagingForm((p) => ({ ...p, max_bot_token: e.target.value }))}
-                placeholder={orgMessagingForm.has_max ? "••••••••" : ""}
-              />
             </label>
-            <label className="field-label">
+            <input
+              id="org-max-bot-token"
+              type="password"
+              autoComplete="new-password"
+              value={orgMessagingForm.max_bot_token}
+              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, max_bot_token: e.target.value }))}
+              placeholder={orgMessagingForm.has_max ? "••••••••" : ""}
+            />
+            <label className="field-label" htmlFor="org-max-chat-id">
               Chat ID
-              <input
-                type="text"
-                value={orgMessagingForm.max_notify_chat_id}
-                onChange={(e) => setOrgMessagingForm((p) => ({ ...p, max_notify_chat_id: e.target.value }))}
-              />
             </label>
+            <input
+              id="org-max-chat-id"
+              type="text"
+              value={orgMessagingForm.max_notify_chat_id}
+              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, max_notify_chat_id: e.target.value }))}
+            />
           </>
         ) : null}
         <label className="checkbox">
@@ -10945,32 +10950,35 @@ export default function App() {
         </label>
         {orgMessagingForm.enable_whatsapp ? (
           <>
-            <label className="field-label">
+            <label className="field-label" htmlFor="org-wa-api-url">
               API URL
-              <input
-                type="text"
-                value={orgMessagingForm.wa_api_url}
-                onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_api_url: e.target.value }))}
-              />
             </label>
-            <label className="field-label">
+            <input
+              id="org-wa-api-url"
+              type="text"
+              value={orgMessagingForm.wa_api_url}
+              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_api_url: e.target.value }))}
+            />
+            <label className="field-label" htmlFor="org-wa-id-instance">
               idInstance
-              <input
-                type="text"
-                value={orgMessagingForm.wa_id_instance}
-                onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_id_instance: e.target.value }))}
-              />
             </label>
-            <label className="field-label">
+            <input
+              id="org-wa-id-instance"
+              type="text"
+              value={orgMessagingForm.wa_id_instance}
+              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_id_instance: e.target.value }))}
+            />
+            <label className="field-label" htmlFor="org-wa-api-token">
               apiTokenInstance
-              <input
-                type="password"
-                autoComplete="new-password"
-                value={orgMessagingForm.wa_api_token}
-                onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_api_token: e.target.value }))}
-                placeholder={orgMessagingForm.has_whatsapp ? "••••••••" : ""}
-              />
             </label>
+            <input
+              id="org-wa-api-token"
+              type="password"
+              autoComplete="new-password"
+              value={orgMessagingForm.wa_api_token}
+              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_api_token: e.target.value }))}
+              placeholder={orgMessagingForm.has_whatsapp ? "••••••••" : ""}
+            />
           </>
         ) : null}
         <label className="checkbox">
@@ -10982,16 +10990,17 @@ export default function App() {
           SMS (SMS.ru)
         </label>
         {orgMessagingForm.enable_sms ? (
-          <label className="field-label">
+          <label className="field-label" htmlFor="org-sms-api-id">
             api_id организации (если пусто — ключ платформы)
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={orgMessagingForm.sms_api_id}
-              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, sms_api_id: e.target.value }))}
-              placeholder={orgMessagingForm.has_sms_org ? "••••••••" : ""}
-            />
           </label>
+          <input
+            id="org-sms-api-id"
+            type="password"
+            autoComplete="new-password"
+            value={orgMessagingForm.sms_api_id}
+            onChange={(e) => setOrgMessagingForm((p) => ({ ...p, sms_api_id: e.target.value }))}
+            placeholder={orgMessagingForm.has_sms_org ? "••••••••" : ""}
+          />
         ) : null}
         <button type="submit">Сохранить каналы</button>
         <p className="status">{orgMessagingSaveStatus}</p>
@@ -11002,7 +11011,7 @@ export default function App() {
   function renderOrganizationSettings() {
     if (!canManageOrgSettings) return null;
     return (
-      <section className="card profile-card">
+      <section className="card profile-card org-settings-card">
         <h2>Организация</h2>
         {me?.role === "staff" && staffEffectivePerms.can_delegate_permissions && (
           <p className="muted">
@@ -11018,15 +11027,16 @@ export default function App() {
               уведомлений (Telegram и др.), куда уходят алерты о заказах и ошибках синка.
             </p>
             <form onSubmit={saveProviderOrganization} className="form">
-              <label className="field-label">
+              <label className="field-label" htmlFor="org-mp-name">
                 Название организации
-                <input
-                  placeholder="Название организации"
-                  value={orgAddressForm.organization_name}
-                  onChange={(e) => setOrgAddressForm({ ...orgAddressForm, organization_name: e.target.value })}
-                  required
-                />
               </label>
+              <input
+                id="org-mp-name"
+                placeholder="Название организации"
+                value={orgAddressForm.organization_name}
+                onChange={(e) => setOrgAddressForm({ ...orgAddressForm, organization_name: e.target.value })}
+                required
+              />
               <button type="submit">Сохранить</button>
               <p className="status">{profileOrgStatus}</p>
             </form>
@@ -11138,27 +11148,27 @@ export default function App() {
               ) : null}
               {orgAcquiringForm.payment_provider === "yookassa" ? (
                 <>
-                  <label className="field-label" htmlFor="org-yk-shop">
-                    ЮKassa Shop ID
-                    <input
-                      id="org-yk-shop"
-                      type="text"
-                      autoComplete="off"
-                      value={orgAcquiringForm.yookassa_shop_id}
-                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, yookassa_shop_id: e.target.value }))}
-                    />
-                  </label>
-                  <label className="field-label" htmlFor="org-yk-secret">
-                    ЮKassa Secret Key
-                    <input
-                      id="org-yk-secret"
-                      type="password"
-                      autoComplete="new-password"
-                      value={orgAcquiringForm.yookassa_secret_key}
-                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, yookassa_secret_key: e.target.value }))}
-                      placeholder={orgAcquiringForm.has_yookassa ? "••••••••" : ""}
-                    />
-                  </label>
+              <label className="field-label" htmlFor="org-yk-shop">
+                ЮKassa Shop ID
+              </label>
+              <input
+                id="org-yk-shop"
+                type="text"
+                autoComplete="off"
+                value={orgAcquiringForm.yookassa_shop_id}
+                onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, yookassa_shop_id: e.target.value }))}
+              />
+              <label className="field-label" htmlFor="org-yk-secret">
+                ЮKassa Secret Key
+              </label>
+              <input
+                id="org-yk-secret"
+                type="password"
+                autoComplete="new-password"
+                value={orgAcquiringForm.yookassa_secret_key}
+                onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, yookassa_secret_key: e.target.value }))}
+                placeholder={orgAcquiringForm.has_yookassa ? "••••••••" : ""}
+              />
                   <p className="muted small">
                     HTTP-уведомления payment.succeeded → /api/subscriptions/webhook/yookassa/
                   </p>
@@ -11360,18 +11370,19 @@ export default function App() {
               </label>
               {orgMessagingForm.winback_enabled ? (
                 <>
-                  <label>
+                  <label className="field-label" htmlFor="org-winback-weeks">
                     Через сколько недель без визита
-                    <input
-                      type="number"
-                      min="1"
-                      max="52"
-                      value={orgMessagingForm.winback_weeks || 4}
-                      onChange={(e) =>
-                        setOrgMessagingForm((p) => ({ ...p, winback_weeks: e.target.value }))
-                      }
-                    />
                   </label>
+                  <input
+                    id="org-winback-weeks"
+                    type="number"
+                    min="1"
+                    max="52"
+                    value={orgMessagingForm.winback_weeks || 4}
+                    onChange={(e) =>
+                      setOrgMessagingForm((p) => ({ ...p, winback_weeks: e.target.value }))
+                    }
+                  />
                   <BookingMessageField
                     id="org-msg-winback"
                     label="Текст «давно не был»"
@@ -11441,16 +11452,14 @@ export default function App() {
                     {typeof window !== "undefined" ? window.location.origin : ""}/w/{me.organization_slug}
                   </a>
                 </p>
-                <label className="field-label">
-                  Код для сайта
-                  <textarea
-                    readOnly
-                    rows={4}
-                    className="org-widget-code"
-                    value={`<iframe src="${typeof window !== "undefined" ? window.location.origin : "https://vsevmeste.space"}/w/${me.organization_slug}" width="100%" height="720" style="border:0;border-radius:12px;max-width:480px" title="Онлайн-запись"></iframe>`}
-                    onFocus={(e) => e.target.select()}
-                  />
-                </label>
+                <p className="field-label">Код для сайта</p>
+                <textarea
+                  readOnly
+                  rows={4}
+                  className="org-widget-code"
+                  value={`<iframe src="${typeof window !== "undefined" ? window.location.origin : "https://vsevmeste.space"}/w/${me.organization_slug}" width="100%" height="720" style="border:0;border-radius:12px;max-width:480px" title="Онлайн-запись"></iframe>`}
+                  onFocus={(e) => e.target.select()}
+                />
               </div>
             ) : null}
 
@@ -11595,27 +11604,22 @@ export default function App() {
                   />
 
                   <button
-
                     type="button"
-
-                    className="ghost-btn"
-
+                    className="org-icon-btn org-icon-btn--danger"
+                    aria-label="Удалить телефон"
                     onClick={() =>
-
                       setOrgProfileForm((p) => ({
-
                         ...p,
-
                         phones: p.phones.filter((_, i) => i !== idx),
-
                       }))
-
                     }
-
                   >
-
-                    ✕
-
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                      <path
+                        fill="currentColor"
+                        d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                      />
+                    </svg>
                   </button>
 
                 </div>
@@ -11623,17 +11627,11 @@ export default function App() {
               ))}
 
               <button
-
                 type="button"
-
-                className="ghost-btn"
-
+                className="org-text-btn"
                 onClick={() => setOrgProfileForm((p) => ({ ...p, phones: [...p.phones, ""] }))}
-
               >
-
                 + Телефон
-
               </button>
 
               <label className="field-label">Сайты</label>
@@ -11654,7 +11652,8 @@ export default function App() {
                   />
                   <button
                     type="button"
-                    className="ghost-btn"
+                    className="org-icon-btn org-icon-btn--danger"
+                    aria-label="Удалить сайт"
                     onClick={() =>
                       setOrgProfileForm((p) => ({
                         ...p,
@@ -11662,14 +11661,19 @@ export default function App() {
                       }))
                     }
                   >
-                    ✕
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                      <path
+                        fill="currentColor"
+                        d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                      />
+                    </svg>
                   </button>
                 </div>
               ))}
 
               <button
                 type="button"
-                className="ghost-btn"
+                className="org-text-btn"
                 onClick={() => setOrgProfileForm((p) => ({ ...p, websites: [...p.websites, ""] }))}
               >
                 + Сайт
@@ -11691,14 +11695,16 @@ export default function App() {
 
               />
 
-              <label className="field-label">
+              <p className="field-label">
                 Фото организации ({orgGalleryPhotos.length}/{ORG_GALLERY_MAX_PHOTOS})
-              </label>
+              </p>
               <p className="muted small">Не более {ORG_GALLERY_MAX_PHOTOS} фото. Сначала показываются они, затем фото из отзывов.</p>
               <input
+                ref={orgGalleryInputRef}
                 type="file"
                 accept="image/*"
                 multiple
+                hidden
                 disabled={orgGalleryPhotos.length >= ORG_GALLERY_MAX_PHOTOS}
                 onChange={async (e) => {
                   const files = [...(e.target.files || [])];
@@ -11710,21 +11716,55 @@ export default function App() {
                   e.target.value = "";
                 }}
               />
+              <button
+                type="button"
+                className="org-gallery-upload-btn"
+                disabled={orgGalleryPhotos.length >= ORG_GALLERY_MAX_PHOTOS}
+                onClick={() => orgGalleryInputRef.current?.click()}
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"
+                  />
+                </svg>
+                Добавить фото
+              </button>
 
               {orgGalleryPhotos.length > 0 && (
 
                 <div className="org-gallery-grid">
 
-                  {orgGalleryPhotos.map((ph) => (
+                  {orgGalleryPhotos.map((ph, photoIdx) => (
 
                     <div key={ph.id} className="org-gallery-item">
 
-                      <img src={ph.thumb_url || ph.url} alt="" loading="lazy" decoding="async" />
+                      <button
+                        type="button"
+                        className="org-gallery-open"
+                        aria-label="Открыть фото"
+                        onClick={() =>
+                          openOrgPhotoLightbox(
+                            orgGalleryPhotos.map((p) => ({ id: p.id, url: p.url || p.thumb_url })),
+                            photoIdx,
+                          )
+                        }
+                      >
+                        <img src={ph.thumb_url || ph.url} alt="" loading="lazy" decoding="async" />
+                      </button>
 
-                      <button type="button" className="ghost-btn" onClick={() => deleteOrgGalleryPhoto(ph.id)}>
-
-                        Удалить
-
+                      <button
+                        type="button"
+                        className="org-icon-btn org-icon-btn--danger org-gallery-delete"
+                        aria-label="Удалить фото"
+                        onClick={() => deleteOrgGalleryPhoto(ph.id)}
+                      >
+                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                          <path
+                            fill="currentColor"
+                            d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                          />
+                        </svg>
                       </button>
 
                     </div>
