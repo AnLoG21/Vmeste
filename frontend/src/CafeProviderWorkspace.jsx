@@ -4,6 +4,7 @@ import CafeQrPrintSheet from "./CafeQrPrintSheet.jsx";
 import CafeDeliveryZonesEditor from "./CafeDeliveryZonesEditor.jsx";
 import "./cafeGuest.css";
 import "./cafeProvider.css";
+import { EmptyState } from "./EmptyState.jsx";
 
 const emptyCatForm = { name: "", is_novelties: false };
 const emptyItemForm = {
@@ -1019,6 +1020,12 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
               </div>
             </form>
           )}
+
+          {!categories.length && !catFormOpen ? (
+            <EmptyState title="Меню пока пустое">
+              <p className="muted">Добавьте категорию и блюда — гости увидят их в QR-меню и при заказе.</p>
+            </EmptyState>
+          ) : null}
 
           {categories.map((cat) => (
             <div key={cat.id} className="cafe-guest-card cafe-cat-card">

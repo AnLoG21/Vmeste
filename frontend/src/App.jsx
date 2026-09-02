@@ -21,6 +21,8 @@ import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import ServiceEditor, { buildServiceDraftFromService, serviceDraftEqualsService } from "./ServiceEditor.jsx";
 import BookingMessageField from "./BookingMessageField.jsx";
+import StaffServicesAssignment from "./StaffServicesAssignment.jsx";
+import { MapOrgContactsBlock, MapOrgHoursBlock, PhotoLightboxReviewCaption } from "./mapOrgBlocks.jsx";
 import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
 import SalonLoyaltyPackagesPanel from "./SalonLoyaltyPackagesPanel.jsx";
 import OrgReviewComposer from "./OrgReviewComposer.jsx";
@@ -57,7 +59,6 @@ import {
   defaultOrgWorkingHours,
   formatOrgWorkingHoursText,
   filterServiceGroupsFromCatalog,
-  getOrgWorkingHoursStatus,
   matchProviderServiceByFilter,
   normalizeOrgWorkingHours,
   sphereMapIconHref,
@@ -91,140 +92,6 @@ import PasswordInput from "./PasswordInput.jsx";
 import { showToast } from "./toast.js";
 import { navigateView, viewFromPath } from "./viewRoutes.js";
 import { setNoIndexAppMeta, setPageMeta } from "./seo/setPageMeta.js";
-
-function formatWebsiteHref(url) {
-  const s = String(url || "").trim();
-  if (!s) return "";
-  if (/^https?:\/\//i.test(s)) return s;
-  return `https://${s}`;
-}
-
-function MapOrgContactsBlock({ phones, websites }) {
-  const [open, setOpen] = useState(false);
-  const phoneList = Array.isArray(phones) ? phones.filter(Boolean) : [];
-  const siteList = Array.isArray(websites) ? websites.filter(Boolean) : [];
-  if (!phoneList.length && !siteList.length) return null;
-
-  return (
-    <div className="map-org-contacts">
-      <button
-        type="button"
-        className="staff-perms-toggle muted small-label map-org-contacts-toggle"
-        onClick={() => setOpen((v) => !v)}
-      >
-        Контакты{open ? " ▲" : " ▼"}
-      </button>
-      {open ? (
-        <div className="map-org-contacts-body">
-          {phoneList.map((ph) => (
-            <a key={ph} href={`tel:${ph.replace(/[^\d+]/g, "")}`} className="map-org-phone-link">
-              {ph}
-            </a>
-          ))}
-          {siteList.map((site) => (
-            <a
-              key={site}
-              href={formatWebsiteHref(site)}
-              className="map-org-website-link"
-              target="_blank"
-              rel="noreferrer noopener"
-            >
-              {site.replace(/^https?:\/\//i, "")}
-            </a>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function PhotoLightboxReviewCaption({ photo }) {
-  const [expanded, setExpanded] = useState(false);
-  const text = String(photo?.text || "").trim();
-  const isLong = text.split(/\n/).length > 2 || text.length > 90;
-  const rating = Math.min(5, Math.max(0, Number(photo?.rating) || 0));
-
-  useEffect(() => {
-    setExpanded(false);
-  }, [photo?.id, photo?.url]);
-
-  return (
-    <div className="photo-lightbox-review">
-      <p className="photo-lightbox-review-head">
-        <span className="photo-lightbox-stars-filled" aria-hidden>
-          {"★".repeat(rating)}
-        </span>
-        <span className="photo-lightbox-stars-empty" aria-hidden>
-          {"☆".repeat(5 - rating)}
-        </span>
-        {photo.client_name ? ` · ${photo.client_name}` : ""}
-      </p>
-      {text ? (
-        <p
-          className={[
-            "photo-lightbox-review-text",
-            !expanded && "photo-lightbox-review-text--clamped",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-        >
-          {text}
-        </p>
-      ) : null}
-      {text && isLong ? (
-        <button
-          type="button"
-          className="staff-perms-toggle muted small-label photo-lightbox-review-expand"
-          onClick={() => setExpanded((v) => !v)}
-        >
-          {expanded ? "Свернуть отзыв ▲" : "Развернуть отзыв ▼"}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function MapOrgHoursBlock({ workingHours }) {
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [tick, setTick] = useState(() => Date.now());
-
-  useEffect(() => {
-    const id = window.setInterval(() => setTick(Date.now()), 30000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  const status = useMemo(
-    () => getOrgWorkingHoursStatus(workingHours, new Date(tick)),
-    [workingHours, tick],
-  );
-
-  if (!workingHours) return null;
-
-  return (
-    <div className="map-org-hours">
-      <p
-        className={[
-          "map-org-hours-status",
-          status.isRed && "map-org-hours-status--closed",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
-        {status.mainText}
-      </p>
-      <button
-        type="button"
-        className="staff-perms-toggle muted small-label map-org-hours-toggle"
-        onClick={() => setScheduleOpen((v) => !v)}
-      >
-        График работы{scheduleOpen ? " ▲" : " ▼"}
-      </button>
-      {scheduleOpen ? (
-        <pre className="map-org-hours-text">{status.fullScheduleText}</pre>
-      ) : null}
-    </div>
-  );
-}
 
 const NOMINATIM_HEADERS = { Accept: "application/json", "Accept-Language": "ru,ru-RU;q=0.9,en;q=0.5" };
 function savedIntervalsStorageKey(providerId) {
@@ -1673,105 +1540,6 @@ function groupSavedIntervalsByStaff(intervals, orgStaff) {
     if (a.staff_id != null && b.staff_id == null) return -1;
     return String(a.staff_label).localeCompare(String(b.staff_label), "ru");
   });
-}
-
-function StaffServicesAssignment({ link, categories, services, onSave }) {
-  const [treeOpen, setTreeOpen] = useState({});
-  const visibleServiceIds = new Set(services.map((s) => Number(s.id)));
-  const visibleCategoryIds = new Set(categories.map((c) => Number(c.id)));
-  const svcSet = new Set(
-    (link.assigned_service_ids || []).map(Number).filter((id) => visibleServiceIds.has(id)),
-  );
-  const catSet = new Set(
-    (link.assigned_category_ids || []).map(Number).filter((id) => visibleCategoryIds.has(id)),
-  );
-
-  function emit(nextSvc, nextCat) {
-    onSave(link.id, [...nextSvc], [...nextCat]);
-  }
-
-  function toggleCategory(catId) {
-    const catServices = services.filter((s) => Number(s.category) === Number(catId)).map((s) => Number(s.id));
-    const nextCat = new Set(catSet);
-    const nextSvc = new Set(svcSet);
-    if (nextCat.has(Number(catId))) {
-      nextCat.delete(Number(catId));
-      catServices.forEach((id) => nextSvc.delete(id));
-    } else {
-      nextCat.add(Number(catId));
-      catServices.forEach((id) => nextSvc.add(id));
-    }
-    emit(nextSvc, nextCat);
-  }
-
-  function toggleService(svc) {
-    const sid = Number(svc.id);
-    const cid = svc.category ? Number(svc.category) : null;
-    const nextSvc = new Set(svcSet);
-    const nextCat = new Set(catSet);
-    if (nextSvc.has(sid)) nextSvc.delete(sid);
-    else nextSvc.add(sid);
-    if (cid) {
-      const catServices = services.filter((s) => Number(s.category) === cid);
-      const allOn = catServices.length > 0 && catServices.every((s) => nextSvc.has(Number(s.id)));
-      if (allOn) nextCat.add(cid);
-      else nextCat.delete(cid);
-    }
-    emit(nextSvc, nextCat);
-  }
-
-  const uncategorized = services.filter((s) => !s.category);
-
-  return (
-    <div className="staff-services-tree">
-      {categories.map((cat) => {
-        const catServices = services.filter((s) => Number(s.category) === Number(cat.id));
-        const isOpen = treeOpen[cat.id] ?? true;
-        const catChecked = catSet.has(Number(cat.id));
-        return (
-          <div key={cat.id} className="staff-svc-cat">
-            <div className="staff-svc-cat-row">
-              <label className="checkbox staff-svc-check">
-                <input type="checkbox" checked={catChecked} onChange={() => toggleCategory(cat.id)} />
-              </label>
-              <button type="button" className="tree-toggle staff-svc-toggle" onClick={() => setTreeOpen((p) => ({ ...p, [cat.id]: !isOpen }))}>
-                {isOpen ? "▼" : "▶"} {cat.name}
-              </button>
-            </div>
-            {isOpen && (
-              <div className="staff-svc-children">
-                {catServices.map((srv) => (
-                  <label key={srv.id} className="checkbox staff-svc-item">
-                    <input type="checkbox" checked={svcSet.has(Number(srv.id))} onChange={() => toggleService(srv)} />
-                    {srv.name}
-                  </label>
-                ))}
-                {catServices.length === 0 && <p className="muted small">Нет услуг в категории</p>}
-              </div>
-            )}
-          </div>
-        );
-      })}
-      {uncategorized.length > 0 && (
-        <div className="staff-svc-cat">
-          <div className="staff-svc-cat-row">
-            <span className="muted small-label">Без категории</span>
-          </div>
-          <div className="staff-svc-children">
-            {uncategorized.map((srv) => (
-              <label key={srv.id} className="checkbox staff-svc-item">
-                <input type="checkbox" checked={svcSet.has(Number(srv.id))} onChange={() => toggleService(srv)} />
-                {srv.name}
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-      {categories.length === 0 && uncategorized.length === 0 && (
-        <p className="muted small">В разделе «Услуги и категории» включите услуги (галочка «Оказываем»), чтобы назначать их сотрудникам.</p>
-      )}
-    </div>
-  );
 }
 
 function consumeOAuthCallback() {
@@ -3480,7 +3248,7 @@ export default function App() {
             startClientMyLocationTracking();
           });
         })
-        .catch(() => {});
+        .catch(() => showToast("Не удалось загрузить карту.", { tone: "error" }));
     }, 280);
     return () => {
       clearTimeout(t);
@@ -4263,7 +4031,7 @@ export default function App() {
           });
         });
       })
-      .catch(() => {});
+      .catch(() => showToast("Не удалось загрузить карту.", { tone: "error" }));
   }
 
   async function geocodeAddress(addressValue) {
@@ -4648,7 +4416,7 @@ export default function App() {
       );
 
       if (yandexAutocompleteEnabled) {
-        await loadYandexMaps().catch(() => {});
+        await loadYandexMaps().catch(() => showToast("Не удалось загрузить подсказки адреса.", { tone: "error" }));
       }
 
       const yaPromise =
@@ -4893,7 +4661,7 @@ export default function App() {
           });
         });
       })
-      .catch(() => {});
+      .catch(() => showToast("Не удалось загрузить карту.", { tone: "error" }));
   }
 
   function destroyBranchDetailMap() {
@@ -4948,7 +4716,7 @@ export default function App() {
           branchDetailMapRef.current.geoObjects.add(branchDetailPlacemarkRef.current);
         });
       })
-      .catch(() => {});
+      .catch(() => showToast("Не удалось загрузить карту.", { tone: "error" }));
   }
 
   function initBranchEditMapFromCoords(lat, lon) {
@@ -4991,7 +4759,7 @@ export default function App() {
           });
         });
       })
-      .catch(() => {});
+      .catch(() => showToast("Не удалось загрузить карту.", { tone: "error" }));
   }
 
   function initBranchAddMapFromCoords(lat, lon) {
@@ -5034,7 +4802,7 @@ export default function App() {
           });
         });
       })
-      .catch(() => {});
+      .catch(() => showToast("Не удалось загрузить карту.", { tone: "error" }));
   }
 
   function onProfileAddressInput(value) {

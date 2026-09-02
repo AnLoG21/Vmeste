@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { InspectionItemBlock, InspectionPhotoLightbox, money } from "./InspectionApproveView.jsx";
+import { EmptyState } from "./EmptyState.jsx";
 
 const SEVERITY_OPTIONS = [
   { value: "critical", label: "Критично" },
@@ -459,7 +460,9 @@ export default function InspectionWorkspace({
         <aside className="inspection-list">
           <h3>Отчёты</h3>
           {list.length === 0 ? (
-            <p className="muted small">Пока нет отчётов.</p>
+            <EmptyState title="Пока нет отчётов">
+              <p className="muted small">Создайте первый отчёт осмотра — клиент получит ссылку на согласование.</p>
+            </EmptyState>
           ) : (
             <ul>
               {list.map((r) => (

@@ -8,6 +8,7 @@ import {
   normalizeDesign,
   renderProductCardSlide,
 } from "./productCardTemplates.js";
+import { EmptyState } from "./EmptyState.jsx";
 import CardSlideCanvasEditor from "./CardSlideCanvasEditor.jsx";
 import { hasCanvasScene, renderCanvasDesignToBlob } from "./cardSlideCanvas.js";
 import {
@@ -3635,7 +3636,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
               </tbody>
             </table>
             {!filteredHistory.length ? (
-              <p className="muted">Пока нет выгрузок. Создайте карточку или нажмите «Подтянуть с площадки».</p>
+              <EmptyState title="Каталог пуст">
+                <p className="muted">Создайте карточку товара или нажмите «Подтянуть с площадки».</p>
+              </EmptyState>
             ) : null}
           </div>
           {rowMenuId && rowMenuPos
