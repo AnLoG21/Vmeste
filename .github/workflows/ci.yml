@@ -66,6 +66,7 @@ jobs:
           users.test_working_hours
           users.test_oauth_find_user
           users.test_oauth_credentials
+          vmenu.tests_units
           --verbosity=2
 
   frontend-build:

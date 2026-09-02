@@ -235,18 +235,17 @@ export function VmenuRecipeCard({ recipe, authFetch, API_URL, me, onOpenUser, on
 }
 
 export function VmenuRecipeDetail({ recipeId, authFetch, API_URL, me, onBack, onOpenUser, onDeleted }) {
+  const stableAuthFetch = useStableAuthFetch(authFetch);
   const [recipe, setRecipe] = useState(null);
   const [servings, setServings] = useState(4);
   const [status, setStatus] = useState("Загрузка…");
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
   const [carouselIdx, setCarouselIdx] = useState(0);
-  const [servingsInit, setServingsInit] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [ingUnitPick, setIngUnitPick] = useState({});
 
   useEffect(() => {
-    setServingsInit(false);
     setCarouselIdx(0);
     setIngUnitPick({});
   }, [recipeId]);
@@ -256,33 +255,37 @@ export function VmenuRecipeDetail({ recipeId, authFetch, API_URL, me, onBack, on
     setSaved(Boolean(recipe?.saved));
   }, [recipe?.liked, recipe?.saved]);
 
-  async function load() {
-    setStatus("Загрузка…");
-    try {
-      const params = { servings: String(servings) };
-      const data = await loadRecipe(authFetch, API_URL, recipeId, params);
-      setRecipe(data);
-      setLiked(Boolean(data.liked));
-      setSaved(Boolean(data.saved));
-      if (!servingsInit) {
-        setServings(data.servings || 4);
-        setServingsInit(true);
-      }
-      setStatus("");
-    } catch (e) {
-      setStatus(e.message);
-    }
-  }
-
   useEffect(() => {
-    void load();
-  }, [recipeId, servings]);
+    let cancelled = false;
+    async function fetchRecipe() {
+      setStatus("Загрузка…");
+      try {
+        const data = await loadRecipe(stableAuthFetch, API_URL, recipeId);
+        if (cancelled) return;
+        setRecipe(data);
+        setServings(data.servings || 4);
+        setLiked(Boolean(data.liked));
+        setSaved(Boolean(data.saved));
+        setStatus("");
+      } catch (e) {
+        if (!cancelled) setStatus(e.message);
+      }
+    }
+    void fetchRecipe();
+    return () => {
+      cancelled = true;
+    };
+  }, [recipeId, API_URL, stableAuthFetch]);
+
+  function bumpServings(delta) {
+    setServings((s) => Math.max(1, Math.min(20, s + delta)));
+  }
 
   if (!recipe && status) return <p className="status">{status}</p>;
   if (!recipe) return null;
 
   const photos = [recipe.cover_url, ...(recipe.extra_photo_urls || [])].filter(Boolean);
-  const baseIngredients = recipe.scaled_ingredients?.length ? recipe.scaled_ingredients : recipe.ingredients || [];
+  const baseIngredients = recipe.ingredients || [];
   const ingredients = baseIngredients.map((ing, i) => {
     const key = ing.id ?? i;
     const scaled = scaleIngredients([ing], recipe.servings, servings, null)[0];
@@ -370,16 +373,40 @@ export function VmenuRecipeDetail({ recipeId, authFetch, API_URL, me, onBack, on
         <span className="muted">{recipe.view_count || 0} просмотров</span>
       </div>
       <div className="vmenu-portions">
-        <label>
-          Порции: {servings}
+        <div className="vmenu-portions-head">
+          <span className="vmenu-portions-label">Порции</span>
+          <span className="vmenu-portions-value">{servings}</span>
+        </div>
+        <div className="vmenu-portions-controls">
+          <button
+            type="button"
+            className="vmenu-portions-step"
+            aria-label="Уменьшить порции"
+            disabled={servings <= 1}
+            onClick={() => bumpServings(-1)}
+          >
+            −
+          </button>
           <input
+            className="vmenu-portions-range"
             type="range"
             min={1}
             max={20}
+            step={1}
             value={servings}
             onChange={(e) => setServings(Number(e.target.value))}
+            aria-label="Количество порций"
           />
-        </label>
+          <button
+            type="button"
+            className="vmenu-portions-step"
+            aria-label="Увеличить порции"
+            disabled={servings >= 20}
+            onClick={() => bumpServings(1)}
+          >
+            +
+          </button>
+        </div>
       </div>
       <h3>Ингредиенты</h3>
       <ul className="vmenu-ing-list vmenu-ing-list--detail">

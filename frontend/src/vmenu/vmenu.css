@@ -711,9 +711,102 @@
   display: grid;
   gap: 10px;
   margin: 12px 0;
-  padding: 10px;
+  padding: 12px;
   background: #f7f5f1;
   border-radius: 10px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.vmenu-portions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vmenu-portions-label {
+  font-weight: 600;
+}
+
+.vmenu-portions-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #0f6e56;
+}
+
+.vmenu-portions-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.vmenu-portions-step {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2ddd4;
+  border-radius: 10px;
+  background: #fff;
+  color: #0f6e56;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.vmenu-portions-step:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.vmenu-portions-range {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  height: 28px;
+  touch-action: pan-y;
+  accent-color: #0f6e56;
+  cursor: pointer;
+}
+
+.vmenu-tab.vmenu-detail {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.vmenu-detail-hero,
+.vmenu-detail-gallery,
+.vmenu-detail-gallery img,
+.vmenu-detail-video,
+.vmenu-step-img {
+  max-width: 100%;
+}
+
+.vmenu-detail-video,
+.vmenu-step-img {
+  max-width: 100%;
+}
+
+.vmenu-detail p,
+.vmenu-steps-list li p,
+.vmenu-source-link {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.vmenu-meta-chips {
+  max-width: 100%;
+}
+
+.vmenu-detail .vmenu-card-actions {
+  max-width: 100%;
 }
 
 .vmenu-ing-list,
@@ -822,6 +915,11 @@
 
 .vmenu-detail-title-row h2 {
   margin: 0;
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .vmenu-profile-top {
@@ -1836,8 +1934,9 @@
   .vmenu-ing-detail-name {
     flex: 1 1 auto;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
   .vmenu-ing-detail-amount {
     flex: 0 0 auto;
