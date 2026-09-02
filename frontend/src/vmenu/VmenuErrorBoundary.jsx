@@ -1,4 +1,5 @@
 import { Component } from "react";
+import { reportClientError } from "../monitoring.js";
 
 export class VmenuErrorBoundary extends Component {
   constructor(props) {
@@ -11,7 +12,7 @@ export class VmenuErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
-    console.error("Vmenu render error", error, info);
+    reportClientError(error, { componentStack: info?.componentStack, scope: "vmenu" });
   }
 
   render() {

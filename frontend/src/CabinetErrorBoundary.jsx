@@ -1,4 +1,5 @@
 import { Component } from "react";
+import { reportClientError } from "./monitoring.js";
 
 export class CabinetErrorBoundary extends Component {
   constructor(props) {
@@ -11,10 +12,7 @@ export class CabinetErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
-    console.error("Cabinet render error", error, info);
-    if (typeof window !== "undefined" && typeof window.__vmesteReportError === "function") {
-      window.__vmesteReportError(error, { componentStack: info?.componentStack });
-    }
+    reportClientError(error, { componentStack: info?.componentStack, scope: "cabinet" });
   }
 
   componentDidUpdate(prevProps) {

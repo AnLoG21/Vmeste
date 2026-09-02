@@ -67,6 +67,8 @@ jobs:
           users.test_oauth_find_user
           users.test_oauth_credentials
           vmenu.tests_units
+          subscriptions.tests_promos
+          notifications.tests_channels
           --verbosity=2
 
   frontend-build:

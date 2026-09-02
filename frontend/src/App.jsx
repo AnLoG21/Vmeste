@@ -64,6 +64,7 @@ import {
 import { loadYandexMaps } from "./yandexMapsLoader.js";
 import { MailRuIcon, OkIcon, VkIcon, YandexIcon } from "./AuthSocialIcons.jsx";
 import { API_URL, AUTH_URL, BASE_URL, REFRESH_URL } from "./config.js";
+import { createAuthFetch } from "./authFetch.js";
 import { mediaFullUrl, mediaThumbUrl } from "./mediaUrls.js";
 import { SITE_LEGAL } from "./legal/siteLegal.js";
 import {
@@ -2346,6 +2347,8 @@ export default function App() {
   const telegramLoginHostRef = useRef(null);
 
   const [accessToken, setAccessToken] = useState(oauthBoot.access || localStorage.getItem("vmeste_access") || "");
+  const accessTokenRef = useRef(accessToken);
+  accessTokenRef.current = accessToken;
   const [refreshToken, setRefreshToken] = useState(oauthBoot.refresh || localStorage.getItem("vmeste_refresh") || "");
   const [loginForm, setLoginForm] = useState({ username: "", password: "", email: "" });
   const [credentialsForm, setCredentialsForm] = useState({ username: "", password: "", password_confirm: "" });
@@ -4279,7 +4282,7 @@ export default function App() {
     openAuth("reset");
   }
 
-  async function refreshAccessToken() {
+  const refreshAccessToken = useCallback(async () => {
     if (!refreshToken) return null;
     const response = await fetch(REFRESH_URL, {
       method: "POST",
@@ -4300,28 +4303,12 @@ export default function App() {
       localStorage.setItem("vmeste_refresh", data.refresh);
     }
     return data.access;
-  }
+  }, [refreshToken]);
 
-  async function authFetch(url, options = {}) {
-    const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
-    const doRequest = async (tokenValue) => {
-      const headers = {
-        Authorization: `Bearer ${tokenValue}`,
-        ...(options.headers || {}),
-      };
-      if (!isFormData && options.body != null && options.body !== "" && !headers["Content-Type"]) {
-        headers["Content-Type"] = "application/json";
-      }
-      return fetch(url, { ...options, headers });
-    };
-
-    let response = await doRequest(accessToken);
-    if (response.status !== 401) return response;
-    const newToken = await refreshAccessToken();
-    if (!newToken) return response;
-    response = await doRequest(newToken);
-    return response;
-  }
+  const authFetch = useMemo(
+    () => createAuthFetch(() => accessTokenRef.current, refreshAccessToken),
+    [refreshAccessToken],
+  );
 
   async function loadMe() {
     const response = await authFetch(`${API_URL}/users/me/`);

@@ -269,3 +269,7 @@ OLLAMA_API_URL = os.environ.get("OLLAMA_API_URL", "http://localhost:11434").stri
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "").strip()
 MARKETPLACE_VIDEO_ENABLED = os.environ.get("MARKETPLACE_VIDEO_ENABLED", "1") in ("1", "true", "True", "yes")
 
+from config.sentry_init import init_sentry
+
+init_sentry()
+

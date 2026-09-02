@@ -1,0 +1,38 @@
+name: Health monitor
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  probe:
+    name: Probe production health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check API health
+        env:
+          HEALTH_URL: ${{ vars.HEALTH_URL || 'https://vsevmeste.space/api/health/' }}
+          WEBHOOK: ${{ secrets.OPS_ALERT_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$HEALTH_URL" || echo 000)"
+          if [ "$code" != "200" ]; then
+            echo "Health check failed: HTTP $code"
+            cat /tmp/health.json || true
+            if [ -n "$WEBHOOK" ]; then
+              curl -sS -X POST "$WEBHOOK" \
+                -H "Content-Type: application/json" \
+                -d "{\"source\":\"vmeste\",\"event\":\"health_check_failed\",\"detail\":\"$HEALTH_URL HTTP $code\"}" || true
+            fi
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, sys
+          data = json.load(open("/tmp/health.json"))
+          if not data.get("checks", {}).get("db"):
+              print("DB check failed:", data)
+              sys.exit(1)
+          print("OK", data.get("status"))
+          PY
