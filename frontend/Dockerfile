@@ -1,8 +1,10 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 ARG VITE_API_URL=http://localhost:8000/api
+ARG VITE_SENTRY_DSN=
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 ENV VITE_API_URL=${VITE_API_URL}
+ENV VITE_SENTRY_DSN=${VITE_SENTRY_DSN}
 # Keep install layer cacheable; production mode only for the Vite step.
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 ENV NPM_CONFIG_FUND=false
