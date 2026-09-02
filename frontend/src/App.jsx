@@ -25,13 +25,14 @@ import StaffServicesAssignment from "./StaffServicesAssignment.jsx";
 import { MapOrgContactsBlock, MapOrgHoursBlock, PhotoLightboxReviewCaption } from "./mapOrgBlocks.jsx";
 import OrgMessengerChannelsForm from "./OrgMessengerChannelsForm.jsx";
 import OrgAcquiringFields from "./OrgAcquiringFields.jsx";
+import OrgBookingMessagesSection from "./OrgBookingMessagesSection.jsx";
+import OrgCalendarSection from "./OrgCalendarSection.jsx";
+import OrganizationAddressBranchesPanel from "./OrganizationAddressBranchesPanel.jsx";
 import { LoadErrorBanner } from "./LoadErrorBanner.jsx";
 import {
   trimAddrSeg,
   composePipeTailFromDetails,
   parseAddressDetailsPipeTail,
-  composeBranchDisplay,
-  parseBranchRecordForForm,
   emptyLocationFormState,
 } from "./orgBranchUtils.js";
 import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
@@ -5022,6 +5023,8 @@ export default function App() {
       reqs.push(authFetch(`${API_URL}/catalog/categories/`), authFetch(`${API_URL}/catalog/services/`));
     }
     const results = await Promise.all(reqs);
+    const failed = results.some((r) => !r.ok);
+    setCabinetLoadError(failed ? "Не удалось загрузить часть данных кабинета." : "");
     const staffData = results[0].ok ? await results[0].json() : orgStaff;
     if (results[0].ok) setOrgStaff(staffData);
     if (results[1].ok) setConversations(await results[1].json());
@@ -10014,56 +10017,12 @@ export default function App() {
           <>
             {me?.provider_sphere !== "cafe_restaurant" ? (
               <>
-            <h3 id="org-booking-messages">Сообщения при работе с записями</h3>
-            <form
+            <OrgBookingMessagesSection
+              messages={orgBookingMessages}
+              onChange={setOrgBookingMessages}
               onSubmit={saveOrgBookingMessages}
-              className={[
-                "form booking-messages-form",
-                orgSettingsHighlight && "org-settings-highlight",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              <BookingMessageField
-                  id="org-msg-confirm"
-                  presetKey="confirm"
-                  label="Подтверждение записи"
-                  value={orgBookingMessages.confirm}
-                  onChange={(v) => setOrgBookingMessages((p) => ({ ...p, confirm: v }))}
-                  highlighted={orgSettingsHighlight === "confirm"}
-                />
-                <BookingMessageField
-                  id="org-msg-cancel"
-                  presetKey="cancel"
-                  label="Отмена записи"
-                  value={orgBookingMessages.cancel}
-                  onChange={(v) => setOrgBookingMessages((p) => ({ ...p, cancel: v }))}
-                  highlighted={orgSettingsHighlight === "cancel"}
-                />
-                <BookingMessageField
-                  id="org-msg-done"
-                  presetKey="done"
-                  label="Услуга оказана"
-                  value={orgBookingMessages.done}
-                  onChange={(v) => setOrgBookingMessages((p) => ({ ...p, done: v }))}
-                  highlighted={orgSettingsHighlight === "done"}
-                />
-              <button type="submit">Сохранить сообщения</button>
-            </form>
-            <aside className="booking-messages-hint" aria-labelledby="booking-messages-hint-title">
-              <h4 id="booking-messages-hint-title">Как это работает</h4>
-              <p>
-                Перетащите метку <strong>«Дата и время записи»</strong> в поле сообщения или нажмите на неё под полем —
-                в тексте она отобразится такой же кнопкой, а не кодом.
-              </p>
-              <p>
-                Когда вы подтверждаете, отменяете или завершаете запись, метка автоматически заменяется на дату и время
-                клиента, например <strong>17.05.2026 14:30</strong>.
-              </p>
-              <p className="muted small booking-messages-hint-example">
-                Пример: «Ваша запись подтверждена на» + метка «Дата и время записи» + «. Ждём вас!»
-              </p>
-            </aside>
+              settingsHighlight={orgSettingsHighlight}
+            />
 
             <h3>Предоплата при записи</h3>
             <p className="muted small">
@@ -10079,64 +10038,12 @@ export default function App() {
               />
             </form>
 
-            <h3>Календарь записей</h3>
-            <p className="muted small">
-              Подпишите календарь записей по ссылке — события появятся в Google Календаре, Яндекс Календаре или Apple
-              Календаре и будут обновляться автоматически.
-            </p>
-            {orgCalendarLinks ? (
-              <div className="form org-calendar-block">
-                <label className="field-label" htmlFor="org-ics-url">
-                  Ссылка календаря (ICS)
-                </label>
-                <div className="org-calendar-copy-row">
-                  <input
-                    id="org-ics-url"
-                    type="text"
-                    readOnly
-                    value={orgCalendarLinks.ics_url || ""}
-                    onFocus={(e) => e.target.select()}
-                  />
-                  <button
-                    type="button"
-                    className="ghost-btn"
-                    onClick={async () => {
-                      const url = orgCalendarLinks.ics_url || "";
-                      try {
-                        await navigator.clipboard.writeText(url);
-                        setOrgCalendarStatus("Ссылка скопирована");
-                      } catch {
-                        setOrgCalendarStatus("Не удалось скопировать — выделите поле вручную");
-                      }
-                    }}
-                  >
-                    Скопировать
-                  </button>
-                </div>
-                <div className="org-calendar-actions">
-                  <a
-                    className="landing-btn landing-btn--outline"
-                    href={orgCalendarLinks.google_url || "#"}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Google Календарь
-                  </a>
-                  <a className="landing-btn landing-btn--outline" href={orgCalendarLinks.webcal_url || "#"}>
-                    Яндекс / Apple
-                  </a>
-                </div>
-                {orgCalendarLinks.yandex_hint ? (
-                  <p className="muted small">{orgCalendarLinks.yandex_hint}</p>
-                ) : null}
-                <button type="button" className="ghost-btn" onClick={rotateOrgCalendarToken}>
-                  Сменить ссылку
-                </button>
-                <p className="status">{orgCalendarStatus}</p>
-              </div>
-            ) : (
-              <p className="muted small">Загрузка ссылки…</p>
-            )}
+            <OrgCalendarSection
+              links={orgCalendarLinks}
+              status={orgCalendarStatus}
+              onRotateToken={rotateOrgCalendarToken}
+              onCopyStatus={setOrgCalendarStatus}
+            />
 
             <h3>Напоминания и мессенджеры</h3>
             <p className="muted small">
@@ -10606,242 +10513,45 @@ export default function App() {
 
             </form>
 
-<h3>Адрес организации (основной)</h3>
-            {!orgMainEditOpen ? (
-              <div className="org-main-display">
-                <p className="org-display-line"><strong>{orgAddressForm.organization_name || "—"}</strong></p>
-                <p className="org-display-line">{composeOrgDisplayFromMe(me) || "Адрес не указан."}</p>
-                <div id="profile-address-map" className="map-box" />
-                <button type="button" className="ghost-btn" onClick={() => { syncOrgAddressFormFromMe(); setOrgMainEditOpen(true); }}>Изменить</button>
-                <p className="status">{profileOrgStatus}</p>
-              </div>
-            ) : (
-              <form onSubmit={saveProviderOrganization} className="form org-main-edit-form">
-                <input
-                  placeholder="Название организации"
-                  value={orgAddressForm.organization_name}
-                  onChange={(e) => setOrgAddressForm({ ...orgAddressForm, organization_name: e.target.value })}
-                  required
-                />
-                <input
-                  placeholder="Адрес (улица, дом)"
-                  value={orgAddressForm.organization_address}
-                  onChange={(e) => onProfileAddressInput(e.target.value)}
-                  onBlur={(e) => geocodeProfileAddress(e.target.value)}
-                  required
-                />
-                {detectedCity && <p className="hint">Город поиска: {detectedCity}</p>}
-                {addressSuggestions.length > 0 && (
-                  <div className="suggestions">
-                    {addressSuggestions.map((item, idx) => (
-                      <button
-                        key={`${item.value}-${idx}`}
-                        type="button"
-                        className="suggestion-item"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => pickProfileSuggestion(item)}
-                      >
-                        {item.value}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <div id="profile-address-map" className="map-box" />
-                <div className="address-details-grid">
-                  <input placeholder="Подъезд" value={orgAddressForm.entrance} onChange={(e) => setOrgAddressForm({ ...orgAddressForm, entrance: e.target.value })} />
-                  <input placeholder="Этаж" value={orgAddressForm.floor} onChange={(e) => setOrgAddressForm({ ...orgAddressForm, floor: e.target.value })} />
-                  <input placeholder="Квартира/офис" value={orgAddressForm.apartment} onChange={(e) => setOrgAddressForm({ ...orgAddressForm, apartment: e.target.value })} />
-                  <input placeholder="Домофон" value={orgAddressForm.intercom} onChange={(e) => setOrgAddressForm({ ...orgAddressForm, intercom: e.target.value })} />
-                </div>
-                <input
-                  placeholder="Доп. ориентир (необязательно)"
-                  value={orgAddressForm.organization_address_details}
-                  onChange={(e) => setOrgAddressForm({ ...orgAddressForm, organization_address_details: e.target.value })}
-                />
-                <div className="row-2">
-                  <button type="submit">Сохранить</button>
-                  <button
-                    type="button"
-                    className="ghost-btn"
-                    onClick={() => {
-                      syncOrgAddressFormFromMe();
-                      setOrgMainEditOpen(false);
-                      setProfileOrgStatus("");
-                    }}
-                  >
-                    Отмена
-                  </button>
-                </div>
-                <p className="status">{profileOrgStatus}</p>
-              </form>
-            )}
-
-            <h3>Филиалы</h3>
-            <button
-              type="button"
-              className="ghost-btn org-branch-add-toggle"
-
-              onClick={() => {
-                setOrgBranchAddOpen((v) => {
-                  const next = !v;
-                  if (next) {
-                    setSelectedOrgBranchId(null);
-                    setOrgBranchEditOpen(false);
-                    setLocationForm(emptyLocationFormState());
-                    setBranchGeoStatus("");
-                    setAddressSuggestions([]);
-                  }
-                  return next;
-                });
+            <OrganizationAddressBranchesPanel
+              orgName={orgAddressForm.organization_name}
+              orgDisplayAddress={composeOrgDisplayFromMe(me)}
+              orgAddressForm={orgAddressForm}
+              onOrgAddressFormChange={setOrgAddressForm}
+              orgMainEditOpen={orgMainEditOpen}
+              onOrgMainEditOpenChange={setOrgMainEditOpen}
+              profileOrgStatus={profileOrgStatus}
+              onSaveOrganization={saveProviderOrganization}
+              onSyncOrgFromMe={syncOrgAddressFormFromMe}
+              onCancelOrgMainEdit={() => {
+                syncOrgAddressFormFromMe();
+                setOrgMainEditOpen(false);
+                setProfileOrgStatus("");
               }}
-            >
-              {orgBranchAddOpen ? "Закрыть форму добавления" : "Добавить филиал"}
-            </button>
-            {orgBranchAddOpen && (
-              <form onSubmit={createProviderBranch} className="form org-branch-add-form">
-                <input placeholder="Название филиала" value={locationForm.title} onChange={(e) => setLocationForm({ ...locationForm, title: e.target.value })} required />
-                <input
-                  placeholder="Адрес филиала"
-                  value={locationForm.address}
-                  onChange={(e) => onBranchAddressInput(e.target.value)}
-                  onBlur={() => geocodeBranchAddress()}
-                  required
-                />
-                {detectedCity && <p className="hint">Город поиска: {detectedCity}</p>}
-                {addressSuggestions.length > 0 && (
-                  <div className="suggestions">
-                    {addressSuggestions.map((item, idx) => (
-                      <button
-                        key={`branch-add-${item.value}-${idx}`}
-                        type="button"
-                        className="suggestion-item"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => pickBranchLocationSuggestion(item)}
-                      >
-                        {item.value}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <button type="button" className="ghost-btn" onClick={geocodeBranchAddress}>Найти адрес на карте</button>
-                <div id="branch-add-map" className="map-box" />
-                <div className="address-details-grid">
-                  <input placeholder="Подъезд" value={locationForm.entrance} onChange={(e) => setLocationForm({ ...locationForm, entrance: e.target.value })} />
-                  <input placeholder="Этаж" value={locationForm.floor} onChange={(e) => setLocationForm({ ...locationForm, floor: e.target.value })} />
-                  <input placeholder="Квартира/офис" value={locationForm.apartment} onChange={(e) => setLocationForm({ ...locationForm, apartment: e.target.value })} />
-                  <input placeholder="Домофон" value={locationForm.intercom} onChange={(e) => setLocationForm({ ...locationForm, intercom: e.target.value })} />
-                </div>
-                <input
-                  placeholder="Доп. ориентир (необязательно)"
-                  value={locationForm.address_details}
-                  onChange={(e) => setLocationForm({ ...locationForm, address_details: e.target.value })}
-                />
-                <button type="submit">Сохранить филиал</button>
-              </form>
-            )}
-            <ul className="list org-branch-list">
-              {location.map((loc) => (
-                <li key={loc.id}>
-                  <button
-                    type="button"
-                    className={`org-branch-pick ${Number(selectedOrgBranchId) === Number(loc.id) ? "active" : ""}`}
-                    onClick={() => {
-                      setSelectedOrgBranchId(loc.id);
-                      setOrgBranchAddOpen(false);
-                      setOrgBranchEditOpen(false);
-                      setBranchGeoStatus("");
-                    }}
-                  >
-                    <span className="org-branch-pick-title">{loc.title}</span>
-                    <span className="org-branch-pick-addr muted">{composeBranchDisplay(loc)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {location.length === 0 && !orgBranchAddOpen && <p className="muted">Пока нет филиалов.</p>}
-            {selectedOrgBranchId != null && !orgBranchAddOpen && (() => {
-              const br = location.find((l) => Number(l.id) === Number(selectedOrgBranchId));
-              if (!br) return null;
-              return (
-                <div className="org-branch-detail">
-                  <h4>{br.title}</h4>
-                  <p className="org-branch-detail-addr">{composeBranchDisplay(br)}</p>
-                  {!orgBranchEditOpen ? (
-                    <>
-                      <div id="branch-detail-map" className="map-box" />
-                      <div className="row-2">
-                        <button
-                          type="button"
-                          className="ghost-btn"
-                          onClick={() => {
-                            setAddressSuggestions([]);
-                            setOrgBranchEditOpen(true);
-                            setLocationForm(parseBranchRecordForForm(br));
-                          }}
-                        >
-                          Изменить
-                        </button>
-                        <button type="button" className="ghost-btn" onClick={() => deleteProviderBranch(br.id)}>Удалить</button>
-                      </div>
-                    </>
-                  ) : (
-                    <form onSubmit={saveProviderBranchEdit} className="form">
-                      <input placeholder="Название филиала" value={locationForm.title} onChange={(e) => setLocationForm({ ...locationForm, title: e.target.value })} required />
-                      <input
-                        placeholder="Адрес"
-                        value={locationForm.address}
-                        onChange={(e) => onBranchAddressInput(e.target.value)}
-                        onBlur={() => geocodeBranchAddress()}
-                        required
-                      />
-                      {detectedCity && <p className="hint">Город поиска: {detectedCity}</p>}
-                      {addressSuggestions.length > 0 && (
-                        <div className="suggestions">
-                          {addressSuggestions.map((item, idx) => (
-                            <button
-                              key={`branch-edit-${item.value}-${idx}`}
-                              type="button"
-                              className="suggestion-item"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => pickBranchLocationSuggestion(item)}
-                            >
-                              {item.value}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      <button type="button" className="ghost-btn" onClick={geocodeBranchAddress}>Найти адрес на карте</button>
-                      <div id="branch-edit-map" className="map-box" />
-                      <div className="address-details-grid">
-                        <input placeholder="Подъезд" value={locationForm.entrance} onChange={(e) => setLocationForm({ ...locationForm, entrance: e.target.value })} />
-                        <input placeholder="Этаж" value={locationForm.floor} onChange={(e) => setLocationForm({ ...locationForm, floor: e.target.value })} />
-                        <input placeholder="Квартира/офис" value={locationForm.apartment} onChange={(e) => setLocationForm({ ...locationForm, apartment: e.target.value })} />
-                        <input placeholder="Домофон" value={locationForm.intercom} onChange={(e) => setLocationForm({ ...locationForm, intercom: e.target.value })} />
-                      </div>
-                      <input
-                        placeholder="Доп. ориентир (необязательно)"
-                        value={locationForm.address_details}
-                        onChange={(e) => setLocationForm({ ...locationForm, address_details: e.target.value })}
-                      />
-                      <div className="row-2">
-                        <button type="submit">Сохранить</button>
-                        <button
-                          type="button"
-                          className="ghost-btn"
-                          onClick={() => {
-                            setOrgBranchEditOpen(false);
-                            setLocationForm(parseBranchRecordForForm(br));
-                          }}
-                        >
-                          Отмена
-                        </button>
-                      </div>
-                    </form>
-                  )}
-                </div>
-              );
-            })()}
-            <p className="status">{branchGeoStatus}</p>
+              onProfileAddressInput={onProfileAddressInput}
+              onGeocodeProfileAddress={geocodeProfileAddress}
+              onPickProfileSuggestion={pickProfileSuggestion}
+              detectedCity={detectedCity}
+              addressSuggestions={addressSuggestions}
+              branches={location}
+              locationForm={locationForm}
+              onLocationFormChange={setLocationForm}
+              selectedBranchId={selectedOrgBranchId}
+              onSelectedBranchIdChange={setSelectedOrgBranchId}
+              branchAddOpen={orgBranchAddOpen}
+              onBranchAddOpenChange={setOrgBranchAddOpen}
+              branchEditOpen={orgBranchEditOpen}
+              onBranchEditOpenChange={setOrgBranchEditOpen}
+              branchGeoStatus={branchGeoStatus}
+              onCreateBranch={createProviderBranch}
+              onSaveBranchEdit={saveProviderBranchEdit}
+              onDeleteBranch={deleteProviderBranch}
+              onBranchAddressInput={onBranchAddressInput}
+              onGeocodeBranchAddress={geocodeBranchAddress}
+              onPickBranchSuggestion={pickBranchLocationSuggestion}
+              onClearAddressSuggestions={() => setAddressSuggestions([])}
+              onClearBranchGeoStatus={() => setBranchGeoStatus("")}
+            />
           </>
         )}
       </section>
@@ -12183,6 +11893,9 @@ export default function App() {
         {accessToken && canViewOrgReviews() && currentView === "reviews" && renderProviderReviewsBlock()}
         {accessToken && me?.role === "provider" && currentView === "bookings" && me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" && (
           <>
+            {cabinetLoadError ? (
+              <LoadErrorBanner message={cabinetLoadError} onRetry={() => void loadSellerData()} />
+            ) : null}
             {renderBookingsBlock("Записи клиентов")}
             {me?.provider_sphere === "hair_salon" ? (
               <WaitlistPanel authFetch={authFetch} API_URL={API_URL} mode="org" />
@@ -12199,6 +11912,9 @@ export default function App() {
           renderSlotCalendar(true)}
         {accessToken && me?.role === "staff" && currentView === "bookings" && staffHasPerm("manage_bookings") && me?.provider_sphere !== "cafe_restaurant" && me?.employer_sphere !== "cafe_restaurant" && (
           <>
+            {cabinetLoadError ? (
+              <LoadErrorBanner message={cabinetLoadError} onRetry={() => void loadStaffWorkspace()} />
+            ) : null}
             {renderBookingsBlock("Записи")}
             {(me?.employer_sphere === "hair_salon" || me?.provider_sphere === "hair_salon") ? (
               <WaitlistPanel authFetch={authFetch} API_URL={API_URL} mode="org" />
@@ -13613,6 +13329,12 @@ export default function App() {
           me?.employer_sphere !== "marketplaces" &&
           (me?.role === "provider" || (me?.role === "staff" && staffHasPerm("manage_services"))) && (
           <div className="services-layout">
+            {cabinetLoadError ? (
+              <LoadErrorBanner
+                message={cabinetLoadError}
+                onRetry={() => void (me?.role === "provider" ? loadSellerData() : loadStaffWorkspace())}
+              />
+            ) : null}
             <section className="card">
               {renderServiceTree()}
             </section>
