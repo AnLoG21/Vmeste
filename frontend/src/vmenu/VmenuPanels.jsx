@@ -41,6 +41,7 @@ import { ALL_UNITS, compatibleUnits, formatAmount, scaleIngredients } from "./vm
 import VmenuLogo from "./VmenuLogo.jsx";
 import { VmenuPostMenu } from "./VmenuPostMenu.jsx";
 import { useStableAuthFetch } from "./useStableAuthFetch.js";
+import { LoadErrorBanner } from "../LoadErrorBanner.jsx";
 import { VmenuComments } from "./VmenuComments.jsx";
 
 function VmenuRecipeMetaChips({ recipe }) {
@@ -463,23 +464,27 @@ export function VmenuRecipeDetail({ recipeId, authFetch, API_URL, me, onBack, on
 }
 
 export function VmenuFeedTab({ authFetch, API_URL, me, onOpenUser, onOpenRecipe }) {
+  const stableAuthFetch = useStableAuthFetch(authFetch);
   const [items, setItems] = useState([]);
-  const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   async function load() {
-    setStatus("Загрузка…");
+    setLoading(true);
+    setLoadError("");
     try {
-      const data = await loadFeed(authFetch, API_URL);
+      const data = await loadFeed(stableAuthFetch, API_URL);
       setItems(data.items || []);
-      setStatus("");
     } catch (e) {
-      setStatus(e.message);
+      setLoadError(e.message || "Не удалось загрузить ленту");
+    } finally {
+      setLoading(false);
     }
   }
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [API_URL, stableAuthFetch]);
 
   function onDeleted(id) {
     setItems((prev) => prev.filter((r) => r.id !== id));
@@ -491,8 +496,11 @@ export function VmenuFeedTab({ authFetch, API_URL, me, onOpenUser, onOpenRecipe 
         <VmenuLogo size={32} />
         <h2>Вменю</h2>
       </header>
-      {status ? <p className="status">{status}</p> : null}
-      {!items.length && !status ? <p className="muted">Подпишитесь на авторов — их рецепты появятся здесь первыми.</p> : null}
+      {loading ? <p className="status">Загрузка…</p> : null}
+      {loadError ? <LoadErrorBanner message={loadError} onRetry={() => void load()} /> : null}
+      {!loading && !loadError && !items.length ? (
+        <p className="muted">Подпишитесь на авторов — их рецепты появятся здесь первыми.</p>
+      ) : null}
       <div className="vmenu-feed">
         {items.map((r) => (
           <VmenuRecipeCard
@@ -513,6 +521,7 @@ export function VmenuFeedTab({ authFetch, API_URL, me, onOpenUser, onOpenRecipe 
 }
 
 export function VmenuSearchTab({ authFetch, API_URL, me, onOpenUser, onOpenRecipe }) {
+  const stableAuthFetch = useStableAuthFetch(authFetch);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("rating");
   const [category, setCategory] = useState("");
@@ -522,11 +531,12 @@ export function VmenuSearchTab({ authFetch, API_URL, me, onOpenUser, onOpenRecip
   const [items, setItems] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [searchError, setSearchError] = useState("");
 
   useEffect(() => {
-    void loadCategories(authFetch, API_URL).then((d) => setCategories(d || []));
-    void loadCuisines(authFetch, API_URL).then((d) => setCuisines(d || []));
-  }, [authFetch, API_URL]);
+    void loadCategories(stableAuthFetch, API_URL).then((d) => setCategories(d || []));
+    void loadCuisines(stableAuthFetch, API_URL).then((d) => setCuisines(d || []));
+  }, [API_URL, stableAuthFetch]);
 
   useEffect(() => {
     const query = q.trim();
@@ -536,19 +546,27 @@ export function VmenuSearchTab({ authFetch, API_URL, me, onOpenUser, onOpenRecip
       return;
     }
     const timer = setTimeout(() => {
-      void searchRecipes(authFetch, API_URL, { q: query, sort, category, cuisine, limit: 8 }).then((data) => {
-        setSuggestions(data.items || []);
-        setSuggestOpen(true);
-      });
+      void searchRecipes(stableAuthFetch, API_URL, { q: query, sort, category, cuisine, limit: 8 })
+        .then((data) => {
+          setSuggestions(data.items || []);
+          setSuggestOpen(true);
+        })
+        .catch(() => setSuggestions([]));
     }, 280);
     return () => clearTimeout(timer);
-  }, [q, sort, category, cuisine, authFetch, API_URL]);
+  }, [q, sort, category, cuisine, API_URL, stableAuthFetch]);
 
   async function runSearch(e) {
     e?.preventDefault();
     setSuggestOpen(false);
-    const data = await searchRecipes(authFetch, API_URL, { q, sort, category, cuisine });
-    setItems(data.items || []);
+    setSearchError("");
+    try {
+      const data = await searchRecipes(stableAuthFetch, API_URL, { q, sort, category, cuisine });
+      setItems(data.items || []);
+    } catch (err) {
+      setSearchError(err.message || "Не удалось выполнить поиск");
+      setItems([]);
+    }
   }
 
   function pickSuggestion(recipe) {
@@ -623,6 +641,7 @@ export function VmenuSearchTab({ authFetch, API_URL, me, onOpenUser, onOpenRecip
           </button>
         </div>
       </form>
+      {searchError ? <LoadErrorBanner message={searchError} onRetry={() => void runSearch()} /> : null}
       <div className="vmenu-feed">
         {items.map((r) => (
           <VmenuRecipeCard
@@ -645,6 +664,7 @@ export function VmenuBookTab({ authFetch, API_URL, me, onCreate, onOpenRecipe, o
   const stableAuthFetch = useStableAuthFetch(authFetch);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [openCats, setOpenCats] = useState({});
   const [openCuisines, setOpenCuisines] = useState({});
   const [removeTarget, setRemoveTarget] = useState(null);
@@ -652,9 +672,12 @@ export function VmenuBookTab({ authFetch, API_URL, me, onCreate, onOpenRecipe, o
 
   async function reload(silent = false) {
     if (!silent && !loadedOnceRef.current) setLoading(true);
+    setLoadError("");
     try {
       const d = await loadBook(stableAuthFetch, API_URL);
       setItems(d.items || []);
+    } catch (e) {
+      setLoadError(e.message || "Не удалось загрузить книгу");
     } finally {
       loadedOnceRef.current = true;
       setLoading(false);
@@ -698,6 +721,7 @@ export function VmenuBookTab({ authFetch, API_URL, me, onCreate, onOpenRecipe, o
         </button>
       </div>
       {loading ? <p className="muted">Загрузка…</p> : null}
+      {loadError ? <LoadErrorBanner message={loadError} onRetry={() => void reload(false)} /> : null}
       <div className="vmenu-book-tree">
         {Object.entries(grouped).map(([cat, cuisines]) => (
           <div key={cat} className="vmenu-book-cat">
@@ -769,19 +793,43 @@ export function VmenuBookTab({ authFetch, API_URL, me, onCreate, onOpenRecipe, o
           </div>
         ))}
       </div>
-      {!loading && !items.length ? <p className="muted">Сохраняйте рецепты или создавайте свои.</p> : null}
+      {!loading && !loadError && !items.length ? <p className="muted">Сохраняйте рецепты или создавайте свои.</p> : null}
     </div>
   );
 }
 
 export function VmenuProfileTab({ authFetch, API_URL, me, onOpenUser, onOpenFollows, onCreate, onOpenSettings, onOpenRecipe }) {
+  const stableAuthFetch = useStableAuthFetch(authFetch);
   const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  async function load() {
+    setLoading(true);
+    setLoadError("");
+    try {
+      const profile = await loadMyProfile(stableAuthFetch, API_URL);
+      setData(profile);
+    } catch (e) {
+      setLoadError(e.message || "Не удалось загрузить профиль");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    void loadMyProfile(authFetch, API_URL).then(setData);
-  }, [authFetch, API_URL]);
+    void load();
+  }, [API_URL, stableAuthFetch]);
 
-  if (!data) return <p className="status">Загрузка…</p>;
+  if (loading) return <p className="status">Загрузка…</p>;
+  if (loadError) {
+    return (
+      <div className="vmenu-tab vmenu-profile-tab">
+        <LoadErrorBanner message={loadError} onRetry={() => void load()} />
+      </div>
+    );
+  }
+  if (!data) return null;
 
   return (
     <div className="vmenu-tab vmenu-profile-tab">

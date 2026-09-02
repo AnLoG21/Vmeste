@@ -59,6 +59,7 @@ jobs:
           booking.tests_loyalty
           booking.tests_loyalty_pay
           booking.tests_actions
+          booking.tests_waitlist
           payments.tests
           marketplaces.tests
           marketplaces.tests_analytics

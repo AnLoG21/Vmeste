@@ -8322,6 +8322,31 @@ html.native-app .page-logged .hero.top-row {
   }
 }
 
+/* Load error inline banner */
+.load-error-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #f5c6c6;
+  background: #ffebee;
+}
+
+.load-error-banner-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: #b71c1c;
+  font-size: 0.92rem;
+}
+
+.load-error-banner-retry {
+  flex-shrink: 0;
+}
+
 /* Toasts */
 .vmeste-toast-host {
   position: fixed;
