@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createRecipe,
   deleteRecipe,
@@ -40,6 +40,7 @@ import {
 import { ALL_UNITS, compatibleUnits, formatAmount, scaleIngredients } from "./vmenuUnits.js";
 import VmenuLogo from "./VmenuLogo.jsx";
 import { VmenuPostMenu } from "./VmenuPostMenu.jsx";
+import { useStableAuthFetch } from "./useStableAuthFetch.js";
 import { VmenuComments } from "./VmenuComments.jsx";
 
 function VmenuRecipeMetaChips({ recipe }) {
@@ -614,25 +615,28 @@ export function VmenuSearchTab({ authFetch, API_URL, me, onOpenUser, onOpenRecip
 }
 
 export function VmenuBookTab({ authFetch, API_URL, me, onCreate, onOpenRecipe, onEditRecipe }) {
+  const stableAuthFetch = useStableAuthFetch(authFetch);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openCats, setOpenCats] = useState({});
   const [openCuisines, setOpenCuisines] = useState({});
   const [removeTarget, setRemoveTarget] = useState(null);
+  const loadedOnceRef = useRef(false);
 
-  async function reload() {
-    setLoading(true);
+  async function reload(silent = false) {
+    if (!silent && !loadedOnceRef.current) setLoading(true);
     try {
-      const d = await loadBook(authFetch, API_URL);
+      const d = await loadBook(stableAuthFetch, API_URL);
       setItems(d.items || []);
     } finally {
+      loadedOnceRef.current = true;
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    void reload();
-  }, [authFetch, API_URL]);
+    void reload(false);
+  }, [API_URL, stableAuthFetch]);
 
   async function confirmRemove() {
     if (!removeTarget) return;
@@ -641,7 +645,7 @@ export function VmenuBookTab({ authFetch, API_URL, me, onCreate, onOpenRecipe, o
     if (isOwner) await deleteRecipe(authFetch, API_URL, r.id);
     else await toggleSave(authFetch, API_URL, r.id, true);
     setRemoveTarget(null);
-    await reload();
+    await reload(true);
   }
 
   const grouped = groupBookItems(items);

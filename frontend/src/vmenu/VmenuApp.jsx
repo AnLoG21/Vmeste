@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./vmenu.css";
 import VmenuLogo from "./VmenuLogo.jsx";
 import { vmenuFetch, VMENU_DRAFT_KEY } from "./vmenuApi.js";
+import { VmenuErrorBoundary } from "./VmenuErrorBoundary.jsx";
 import { readVmenuUrlState, writeVmenuUrlState } from "./vmenuUrl.js";
 import {
   VmenuBookTab,
@@ -274,22 +275,24 @@ export default function VmenuApp({
   }
 
   return (
-    <section className={`vmenu-app card${tab === "chats" ? " vmenu-app--chats" : ""}${tab === "follows" ? " vmenu-app--follows" : ""}`}>
-      <div className="vmenu-app-body">{renderMain()}</div>
-      <nav className="vmenu-bottom-nav" aria-label="Вменю">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={tab === t.id && screen === "main" ? "active" : ""}
-            onClick={() => switchTab(t.id)}
-          >
-            <span aria-hidden>{t.icon}</span>
-            <span>{t.label}</span>
-          </button>
-        ))}
-      </nav>
-    </section>
+    <VmenuErrorBoundary>
+      <section className={`vmenu-app card${tab === "chats" ? " vmenu-app--chats" : ""}${tab === "follows" ? " vmenu-app--follows" : ""}`}>
+        <div className="vmenu-app-body">{renderMain()}</div>
+        <nav className="vmenu-bottom-nav" aria-label="Вменю">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={tab === t.id && screen === "main" ? "active" : ""}
+              onClick={() => switchTab(t.id)}
+            >
+              <span aria-hidden>{t.icon}</span>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </nav>
+      </section>
+    </VmenuErrorBoundary>
   );
 }
 

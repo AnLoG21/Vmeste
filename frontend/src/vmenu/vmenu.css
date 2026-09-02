@@ -486,7 +486,6 @@
   padding-left: 12px;
   min-width: 0;
   max-width: 100%;
-  overflow-x: hidden;
 }
 
 .vmenu-tab--book,
@@ -495,6 +494,11 @@
 .vmenu-book-subcat {
   min-width: 0;
   max-width: 100%;
+}
+
+.vmenu-tab--book {
+  width: 100%;
+  box-sizing: border-box;
   overflow-x: hidden;
 }
 
@@ -518,9 +522,9 @@
 .vmenu-book-subcat-head > span:nth-child(2) {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .vmenu-book-subcat-head:hover {
@@ -1372,9 +1376,9 @@
 .vmenu-book-cat-head > span:nth-child(2) {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .vmenu-book-recipes {
@@ -1385,24 +1389,32 @@
 
 .vmenu-book-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   margin-bottom: 6px;
   min-width: 0;
   max-width: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+.vmenu-book-row:has(.vmenu-post-menu--open) {
+  z-index: 40;
 }
 
 .vmenu-book-row-main {
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   min-width: 0;
+  max-width: 100%;
   text-align: left;
   border: none;
   background: transparent;
   padding: 6px 0;
   cursor: pointer;
+  overflow: hidden;
 }
 
 .vmenu-book-thumb {
@@ -1421,24 +1433,28 @@
 .vmenu-book-row-title {
   flex: 1;
   min-width: 0;
+  max-width: 100%;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   font-size: 0.92rem;
 }
 
 .vmenu-book-row-title-text {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 100%;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .vmenu-book-icon-btn {
   width: 32px;
   height: 32px;
   flex-shrink: 0;
+  margin-top: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1490,6 +1506,7 @@
   background: transparent;
   color: #5c6b78;
   border: 1px solid #e2ddd4;
+  margin-top: 6px;
 }
 
 .vmenu-post-menu-dropdown {
@@ -1503,6 +1520,11 @@
   background: #fff;
   border: 1px solid #e2ddd4;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.vmenu-post-menu-dropdown--fixed {
+  position: fixed;
+  z-index: 10050;
 }
 
 .vmenu-post-menu-delete {

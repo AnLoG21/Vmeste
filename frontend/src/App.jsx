@@ -14,6 +14,7 @@ import ClientActivityFeed from "./ClientActivityFeed.jsx";
 import WaitlistPanel, { JoinWaitlistButton } from "./WaitlistPanel.jsx";
 import MarketplaceWorkspace from "./MarketplaceWorkspace.jsx";
 import VmenuApp, { ServicesHub } from "./vmenu/VmenuApp.jsx";
+import { CabinetErrorBoundary } from "./CabinetErrorBoundary.jsx";
 import VmenuLogo from "./vmenu/VmenuLogo.jsx";
 import InspectionWorkspace from "./InspectionWorkspace.jsx";
 import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
@@ -12264,6 +12265,7 @@ export default function App() {
 
   return (
     <div className={`page${accessToken ? " page-logged" : " page--guest"}`}>
+      <CabinetErrorBoundary resetKey={accessToken ? `${me?.id || 0}:${currentView}` : "guest"}>
       <header className={`hero top-row${!accessToken ? " page-header-guest" : ""}`}>
         <button
           type="button"
@@ -16392,6 +16394,7 @@ export default function App() {
           onPrepareStep={preparePlatformTourStep}
         />
       </div>
+      </CabinetErrorBoundary>
     </div>
   );
 }
