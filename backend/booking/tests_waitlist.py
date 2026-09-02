@@ -26,8 +26,13 @@ class WaitlistNotifyTests(SimpleTestCase):
         entry.provider.organization_name = "Салон"
         entry.service.name = "Стрижка"
 
+        ordered_qs = MagicMock()
+        service_filtered_qs = MagicMock()
+        ordered_qs.filter.return_value = service_filtered_qs
+        service_filtered_qs.first.return_value = entry
+
         chain = mock_objects.filter.return_value
-        chain.select_related.return_value.order_by.return_value.first.return_value = entry
+        chain.select_related.return_value.order_by.return_value = ordered_qs
         mock_messaging.return_value = MagicMock()
 
         count = notify_waitlist_after_slot_freed(provider_id=1, service_id=2)
