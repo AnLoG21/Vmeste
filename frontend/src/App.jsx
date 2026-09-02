@@ -23,6 +23,17 @@ import ServiceEditor, { buildServiceDraftFromService, serviceDraftEqualsService 
 import BookingMessageField from "./BookingMessageField.jsx";
 import StaffServicesAssignment from "./StaffServicesAssignment.jsx";
 import { MapOrgContactsBlock, MapOrgHoursBlock, PhotoLightboxReviewCaption } from "./mapOrgBlocks.jsx";
+import OrgMessengerChannelsForm from "./OrgMessengerChannelsForm.jsx";
+import OrgAcquiringFields from "./OrgAcquiringFields.jsx";
+import { LoadErrorBanner } from "./LoadErrorBanner.jsx";
+import {
+  trimAddrSeg,
+  composePipeTailFromDetails,
+  parseAddressDetailsPipeTail,
+  composeBranchDisplay,
+  parseBranchRecordForForm,
+  emptyLocationFormState,
+} from "./orgBranchUtils.js";
 import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
 import SalonLoyaltyPackagesPanel from "./SalonLoyaltyPackagesPanel.jsx";
 import OrgReviewComposer from "./OrgReviewComposer.jsx";
@@ -282,11 +293,6 @@ const ADDR_COUNTRY_SEGMENTS = new Set([
   "russian federation",
   "российская федерация",
 ]);
-
-function trimAddrSeg(s) {
-  if (s == null || s === "") return "";
-  return String(s).trim().replace(/\s+/g, " ");
-}
 
 function dedupeAddrSegments(parts) {
   const out = [];
@@ -569,43 +575,6 @@ function translateLatinStreetToken(seg) {
   return t;
 }
 
-function composePipeTailFromDetails({ entrance, floor, apartment, intercom, extra }) {
-  const details = [];
-  if (entrance) details.push(`подъезд ${entrance}`);
-  if (floor) details.push(`этаж ${floor}`);
-  if (apartment) details.push(`кв. ${apartment}`);
-  if (intercom) details.push(`домофон ${intercom}`);
-  if (extra) details.push(extra);
-  return details.join(", ");
-}
-
-/** Разбор хвоста после « | » при загрузке организации/старых филиалов. */
-function parseAddressDetailsPipeTail(tail) {
-  const out = { entrance: "", floor: "", apartment: "", intercom: "", extraDetails: "" };
-  const s = tail == null ? "" : String(tail).trim();
-  if (!s) return out;
-  const parts = s.split(",").map(trimAddrSeg).filter(Boolean);
-  const extra = [];
-  let matchedStructured = false;
-  for (const p of parts) {
-    if (/^подъезд\s+/i.test(p)) {
-      out.entrance = p.replace(/^подъезд\s+/i, "").trim();
-      matchedStructured = true;
-    } else if (/^этаж\s+/i.test(p)) {
-      out.floor = p.replace(/^этаж\s+/i, "").trim();
-      matchedStructured = true;
-    } else if (/^кв\.?\s+/i.test(p)) {
-      out.apartment = p.replace(/^кв\.?\s+/i, "").trim();
-      matchedStructured = true;
-    } else if (/^домофон\s+/i.test(p)) {
-      out.intercom = p.replace(/^домофон\s+/i, "").trim();
-      matchedStructured = true;
-    } else extra.push(p);
-  }
-  out.extraDetails = matchedStructured ? extra.join(", ") : parts.join(", ");
-  return out;
-}
-
 /** Один сегмент «улица, Moscow» от геокодера → два сегмента. */
 function splitMixedScriptCommaSegment(seg) {
   const t = trimAddrSeg(seg);
@@ -624,71 +593,6 @@ function finalizeAddressSuggestionFromParts(parts) {
   p = stripTrailingAdminSegmentsFromAddress(p);
   p = stripLeadingAdminWhenStreetOrHousePresent(p);
   return shortenAddressToStreetHouse(p);
-}
-
-function composeBranchDisplay(br) {
-  if (!br) return "";
-  const tail = composePipeTailFromDetails({
-    entrance: br.entrance,
-    floor: br.floor,
-    apartment: br.apartment,
-    intercom: br.intercom,
-    extra: br.address_details,
-  });
-  const base = br.address || "";
-  return tail ? `${base} | ${tail}` : base;
-}
-
-function parseBranchRecordForForm(br) {
-  const raw = String(br.address || "").trim();
-  const sep = " | ";
-  const idx = raw.indexOf(sep);
-  const base = idx >= 0 ? raw.slice(0, idx).trim() : raw;
-  const tail = idx >= 0 ? raw.slice(idx + sep.length).trim() : "";
-  const fromApi = {
-    entrance: br.entrance || "",
-    floor: br.floor || "",
-    apartment: br.apartment || "",
-    intercom: br.intercom || "",
-    address_details: br.address_details || "",
-  };
-  const hasCol =
-    fromApi.entrance || fromApi.floor || fromApi.apartment || fromApi.intercom || fromApi.address_details;
-  if (!hasCol && tail) {
-    const p = parseAddressDetailsPipeTail(tail);
-    return {
-      title: br.title || "",
-      address: base,
-      latitude: String(br.latitude ?? ""),
-      longitude: String(br.longitude ?? ""),
-      entrance: p.entrance,
-      floor: p.floor,
-      apartment: p.apartment,
-      intercom: p.intercom,
-      address_details: p.extraDetails,
-    };
-  }
-  return {
-    title: br.title || "",
-    address: base,
-    latitude: String(br.latitude ?? ""),
-    longitude: String(br.longitude ?? ""),
-    ...fromApi,
-  };
-}
-
-function emptyLocationFormState() {
-  return {
-    title: "",
-    address: "",
-    latitude: "55.751244",
-    longitude: "37.618423",
-    entrance: "",
-    floor: "",
-    apartment: "",
-    intercom: "",
-    address_details: "",
-  };
 }
 
 /**
@@ -1604,6 +1508,7 @@ export default function App() {
   const [status, setStatus] = useState("");
   const [authStatus, setAuthStatus] = useState("");
   const [sellerStatus, setSellerStatus] = useState("");
+  const [cabinetLoadError, setCabinetLoadError] = useState("");
   const [clientStatus, setClientStatus] = useState("");
   const [pendingInspectionId, setPendingInspectionId] = useState(null);
   const [verifyStatus, setVerifyStatus] = useState("");
@@ -5001,6 +4906,8 @@ export default function App() {
       authFetch(`${API_URL}/locations/`),
       authFetch(`${API_URL}/booking/staff/`),
     ]);
+    const failed = [catRes, servRes, slotRes, bookingRes, locRes, staffRes].some((r) => !r.ok);
+    setCabinetLoadError(failed ? "Не удалось загрузить часть данных кабинета." : "");
     if (catRes.ok) setCategories(await catRes.json());
     if (servRes.ok) setServices(await servRes.json());
     const slotsData = slotRes.ok ? normalizeSlotsList(await slotRes.json()) : [];
@@ -10049,203 +9956,14 @@ export default function App() {
     );
   }
 
-  function renderOrgMessengerChannels() {
-    return (
-      <>
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={Boolean(orgMessagingForm.enable_telegram)}
-            onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_telegram: e.target.checked }))}
-          />
-          Telegram
-        </label>
-        {orgMessagingForm.enable_telegram ? (
-          <>
-            {orgMessagingForm.has_platform_telegram ? (
-              <p className="muted small">
-                Используется бот платформы. Достаточно указать Chat ID организации. Свой token — только если нужен
-                отдельный бот.
-              </p>
-            ) : null}
-            <label className="field-label" htmlFor="org-tg-bot-token">
-              Bot token{orgMessagingForm.has_platform_telegram ? " (свой, необязательно)" : ""}
-            </label>
-            <input
-              id="org-tg-bot-token"
-              type="password"
-              autoComplete="new-password"
-              value={orgMessagingForm.telegram_bot_token}
-              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, telegram_bot_token: e.target.value }))}
-              placeholder={
-                orgMessagingForm.has_org_telegram_token || orgMessagingForm.has_platform_telegram ? "••••••••" : ""
-              }
-            />
-            <label className="field-label" htmlFor="org-tg-chat-id">
-              Chat ID (чат организации)
-            </label>
-            <input
-              id="org-tg-chat-id"
-              type="text"
-              value={orgMessagingForm.telegram_notify_chat_id}
-              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, telegram_notify_chat_id: e.target.value }))}
-              placeholder="Привяжите через бота или вставьте вручную"
-            />
-            <div className="row-2">
-              <button type="button" className="ghost-btn" onClick={loadOrgTelegramLink}>
-                Привязать через бота
-              </button>
-              <button type="button" className="ghost-btn" onClick={refreshOrgTelegramLink}>
-                Проверить привязку
-              </button>
-              {orgTelegramLinkInfo?.linked || orgMessagingForm.telegram_notify_chat_id ? (
-                <button type="button" className="ghost-btn" onClick={unlinkOrgTelegram}>
-                  Отвязать
-                </button>
-              ) : null}
-            </div>
-            {orgTelegramLinkInfo ? (
-              <div>
-                <p
-                  className={`telegram-bind-status ${
-                    orgTelegramLinkInfo.linked || orgMessagingForm.telegram_notify_chat_id
-                      ? "telegram-bind-status--ok"
-                      : "telegram-bind-status--bad"
-                  }`}
-                >
-                  <span className="telegram-bind-mark" aria-hidden="true">
-                    {orgTelegramLinkInfo.linked || orgMessagingForm.telegram_notify_chat_id ? "✓" : "✕"}
-                  </span>
-                  <span>
-                    {orgTelegramLinkInfo.linked || orgMessagingForm.telegram_notify_chat_id
-                      ? `Привязан. Chat ID: ${orgMessagingForm.telegram_notify_chat_id || orgTelegramLinkInfo.telegram_notify_chat_id}${
-                          orgTelegramLinkInfo.bot_username ? ` @${orgTelegramLinkInfo.bot_username}` : ""
-                        }`
-                      : "Не привязан."}
-                  </span>
-                </p>
-                {orgTelegramLinkInfo.deep_link ? (
-                  <a href={orgTelegramLinkInfo.deep_link} target="_blank" rel="noreferrer">
-                    Открыть бота и нажать Start
-                  </a>
-                ) : (
-                  <p className="muted small">{orgTelegramLinkInfo.hint}</p>
-                )}
-                <p className="muted small">
-                  Или напишите боту /start или /chatid — он пришлёт Chat ID для ручного ввода выше. Если бот молчит (VPS
-                  может не видеть Telegram), нажмите «Проверить привязку» после Start.
-                </p>
-              </div>
-            ) : null}
-          </>
-        ) : null}
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={Boolean(orgMessagingForm.enable_max)}
-            onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_max: e.target.checked }))}
-          />
-          MAX
-        </label>
-        {orgMessagingForm.enable_max ? (
-          <>
-            <label className="field-label" htmlFor="org-max-bot-token">
-              Bot token
-            </label>
-            <input
-              id="org-max-bot-token"
-              type="password"
-              autoComplete="new-password"
-              value={orgMessagingForm.max_bot_token}
-              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, max_bot_token: e.target.value }))}
-              placeholder={orgMessagingForm.has_max ? "••••••••" : ""}
-            />
-            <label className="field-label" htmlFor="org-max-chat-id">
-              Chat ID
-            </label>
-            <input
-              id="org-max-chat-id"
-              type="text"
-              value={orgMessagingForm.max_notify_chat_id}
-              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, max_notify_chat_id: e.target.value }))}
-            />
-          </>
-        ) : null}
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={Boolean(orgMessagingForm.enable_whatsapp)}
-            onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_whatsapp: e.target.checked }))}
-          />
-          WhatsApp (Green-API)
-        </label>
-        {orgMessagingForm.enable_whatsapp ? (
-          <>
-            <label className="field-label" htmlFor="org-wa-api-url">
-              API URL
-            </label>
-            <input
-              id="org-wa-api-url"
-              type="text"
-              value={orgMessagingForm.wa_api_url}
-              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_api_url: e.target.value }))}
-            />
-            <label className="field-label" htmlFor="org-wa-id-instance">
-              idInstance
-            </label>
-            <input
-              id="org-wa-id-instance"
-              type="text"
-              value={orgMessagingForm.wa_id_instance}
-              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_id_instance: e.target.value }))}
-            />
-            <label className="field-label" htmlFor="org-wa-api-token">
-              apiTokenInstance
-            </label>
-            <input
-              id="org-wa-api-token"
-              type="password"
-              autoComplete="new-password"
-              value={orgMessagingForm.wa_api_token}
-              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, wa_api_token: e.target.value }))}
-              placeholder={orgMessagingForm.has_whatsapp ? "••••••••" : ""}
-            />
-          </>
-        ) : null}
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={Boolean(orgMessagingForm.enable_sms)}
-            onChange={(e) => setOrgMessagingForm((p) => ({ ...p, enable_sms: e.target.checked }))}
-          />
-          SMS (SMS.ru)
-        </label>
-        {orgMessagingForm.enable_sms ? (
-          <>
-            <label className="field-label" htmlFor="org-sms-api-id">
-              api_id организации (если пусто — ключ платформы)
-            </label>
-            <input
-              id="org-sms-api-id"
-              type="password"
-              autoComplete="new-password"
-              value={orgMessagingForm.sms_api_id}
-              onChange={(e) => setOrgMessagingForm((p) => ({ ...p, sms_api_id: e.target.value }))}
-              placeholder={orgMessagingForm.has_sms_org ? "••••••••" : ""}
-            />
-          </>
-        ) : null}
-        <button type="submit">Сохранить каналы</button>
-        <p className="status">{orgMessagingSaveStatus}</p>
-      </>
-    );
-  }
-
   function renderOrganizationSettings() {
     if (!canManageOrgSettings) return null;
     return (
       <section className="card profile-card org-settings-card">
         <h2>Организация</h2>
+        {cabinetLoadError ? (
+          <LoadErrorBanner message={cabinetLoadError} onRetry={() => void loadSellerData()} />
+        ) : null}
         {me?.role === "staff" && staffEffectivePerms.can_delegate_permissions && (
           <p className="muted">
             {me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces"
@@ -10280,7 +9998,15 @@ export default function App() {
               сообщения пойдут в этот чат организации. Push приходит на устройства с приложением.
             </p>
             <form onSubmit={saveOrgMessaging} className="form">
-              {renderOrgMessengerChannels()}
+              <OrgMessengerChannelsForm
+                form={orgMessagingForm}
+                onChange={setOrgMessagingForm}
+                saveStatus={orgMessagingSaveStatus}
+                telegramLinkInfo={orgTelegramLinkInfo}
+                onLoadTelegramLink={loadOrgTelegramLink}
+                onRefreshTelegramLink={refreshOrgTelegramLink}
+                onUnlinkTelegram={unlinkOrgTelegram}
+              />
             </form>
           </>
         )}
@@ -10345,162 +10071,12 @@ export default function App() {
               эквайера организации, не на счёт платформы. Неоплаченная запись снимается через 10 минут.
             </p>
             <form onSubmit={saveOrgAcquiring} className="form">
-              <label className="field-label" htmlFor="org-pay-provider">Эквайер</label>
-              <select
-                id="org-pay-provider"
-                value={orgAcquiringForm.payment_provider}
-                onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, payment_provider: e.target.value }))}
-              >
-                <option value="yookassa">ЮKassa</option>
-                <option value="tbank">Т‑Банк (Тинькофф)</option>
-                <option value="cloudpayments">CloudPayments</option>
-                <option value="robokassa">Robokassa</option>
-              </select>
-              <label className="field-label" htmlFor="org-prepay-mode">Режим предоплаты</label>
-              <select
-                id="org-prepay-mode"
-                value={orgAcquiringForm.prepay_mode}
-                onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, prepay_mode: e.target.value }))}
-              >
-                <option value="off">Выключена</option>
-                <option value="percent">Частичная (процент от стоимости)</option>
-                <option value="full">Полная стоимость услуги</option>
-              </select>
-              {orgAcquiringForm.prepay_mode === "percent" ? (
-                <label className="field-label" htmlFor="org-prepay-percent">
-                  Процент предоплаты
-                  <input
-                    id="org-prepay-percent"
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={orgAcquiringForm.prepay_percent}
-                    onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, prepay_percent: e.target.value }))}
-                  />
-                </label>
-              ) : null}
-              {orgAcquiringForm.payment_provider === "yookassa" ? (
-                <>
-              <label className="field-label" htmlFor="org-yk-shop">
-                ЮKassa Shop ID
-              </label>
-              <input
-                id="org-yk-shop"
-                type="text"
-                autoComplete="off"
-                value={orgAcquiringForm.yookassa_shop_id}
-                onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, yookassa_shop_id: e.target.value }))}
+              <OrgAcquiringFields
+                form={orgAcquiringForm}
+                onChange={setOrgAcquiringForm}
+                saveStatus={orgAcquiringSaveStatus}
+                providerSphere={me?.provider_sphere}
               />
-              <label className="field-label" htmlFor="org-yk-secret">
-                ЮKassa Secret Key
-              </label>
-              <input
-                id="org-yk-secret"
-                type="password"
-                autoComplete="new-password"
-                value={orgAcquiringForm.yookassa_secret_key}
-                onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, yookassa_secret_key: e.target.value }))}
-                placeholder={orgAcquiringForm.has_yookassa ? "••••••••" : ""}
-              />
-                  <p className="muted small">
-                    HTTP-уведомления payment.succeeded → /api/subscriptions/webhook/yookassa/
-                  </p>
-                </>
-              ) : null}
-              {orgAcquiringForm.payment_provider === "tbank" ? (
-                <>
-                  <label className="field-label">
-                    Terminal Key
-                    <input
-                      type="text"
-                      autoComplete="off"
-                      value={orgAcquiringForm.tbank_terminal_key}
-                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, tbank_terminal_key: e.target.value }))}
-                    />
-                  </label>
-                  <label className="field-label">
-                    Password
-                    <input
-                      type="password"
-                      autoComplete="new-password"
-                      value={orgAcquiringForm.tbank_password}
-                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, tbank_password: e.target.value }))}
-                      placeholder={orgAcquiringForm.has_tbank ? "••••••••" : ""}
-                    />
-                  </label>
-                  <p className="muted small">NotificationURL → /api/subscriptions/webhook/tbank/</p>
-                </>
-              ) : null}
-              {orgAcquiringForm.payment_provider === "cloudpayments" ? (
-                <>
-                  <label className="field-label">
-                    Public ID
-                    <input
-                      type="text"
-                      autoComplete="off"
-                      value={orgAcquiringForm.cloudpayments_public_id}
-                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, cloudpayments_public_id: e.target.value }))}
-                    />
-                  </label>
-                  <label className="field-label">
-                    API Secret
-                    <input
-                      type="password"
-                      autoComplete="new-password"
-                      value={orgAcquiringForm.cloudpayments_api_secret}
-                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, cloudpayments_api_secret: e.target.value }))}
-                      placeholder={orgAcquiringForm.has_cloudpayments ? "••••••••" : ""}
-                    />
-                  </label>
-                  <p className="muted small">Check/Pay уведомления → /api/subscriptions/webhook/cloudpayments/</p>
-                </>
-              ) : null}
-              {orgAcquiringForm.payment_provider === "robokassa" ? (
-                <>
-                  <label className="field-label">
-                    Merchant Login
-                    <input
-                      type="text"
-                      autoComplete="off"
-                      value={orgAcquiringForm.robokassa_merchant_login}
-                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, robokassa_merchant_login: e.target.value }))}
-                    />
-                  </label>
-                  <label className="field-label">
-                    Пароль #1
-                    <input
-                      type="password"
-                      autoComplete="new-password"
-                      value={orgAcquiringForm.robokassa_password1}
-                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, robokassa_password1: e.target.value }))}
-                      placeholder={orgAcquiringForm.has_robokassa ? "••••••••" : ""}
-                    />
-                  </label>
-                  <label className="field-label">
-                    Пароль #2
-                    <input
-                      type="password"
-                      autoComplete="new-password"
-                      value={orgAcquiringForm.robokassa_password2}
-                      onChange={(e) => setOrgAcquiringForm((p) => ({ ...p, robokassa_password2: e.target.value }))}
-                      placeholder={orgAcquiringForm.has_robokassa ? "••••••••" : ""}
-                    />
-                  </label>
-                  <p className="muted small">Result URL → /api/subscriptions/webhook/robokassa/</p>
-                </>
-              ) : null}
-              {me?.provider_sphere === "cafe_restaurant" ? (
-                <p className="muted small">
-                  Для кафе можно оставить поля пустыми, если ключи уже указаны в настройках зала — они подставятся автоматически.
-                </p>
-              ) : null}
-              {orgAcquiringForm.prepay_mode !== "off" && !orgAcquiringForm.has_payment_keys ? (
-                <p className="status">
-                  Предоплата включена, но ключи выбранного эквайера не указаны — клиент не сможет записаться, пока не заполните их.
-                </p>
-              ) : null}
-              <button type="submit">Сохранить эквайринг</button>
-              <p className="status">{orgAcquiringSaveStatus}</p>
             </form>
 
             <h3>Календарь записей</h3>
@@ -10645,7 +10221,15 @@ export default function App() {
                   <p className="status">{orgMessagingSaveStatus}</p>
                 </>
               )}
-              {renderOrgMessengerChannels()}
+              <OrgMessengerChannelsForm
+                form={orgMessagingForm}
+                onChange={setOrgMessagingForm}
+                saveStatus={orgMessagingSaveStatus}
+                telegramLinkInfo={orgTelegramLinkInfo}
+                onLoadTelegramLink={loadOrgTelegramLink}
+                onRefreshTelegramLink={refreshOrgTelegramLink}
+                onUnlinkTelegram={unlinkOrgTelegram}
+              />
             </form>
 
             {(me?.provider_sphere === "hair_salon" || me?.provider_sphere === "service_center") && (
@@ -10665,7 +10249,15 @@ export default function App() {
                   «Зал и меню → Режимы, доставка и оплата».
                 </p>
                 <form onSubmit={saveOrgMessaging} className="form">
-                  {renderOrgMessengerChannels()}
+                  <OrgMessengerChannelsForm
+                form={orgMessagingForm}
+                onChange={setOrgMessagingForm}
+                saveStatus={orgMessagingSaveStatus}
+                telegramLinkInfo={orgTelegramLinkInfo}
+                onLoadTelegramLink={loadOrgTelegramLink}
+                onRefreshTelegramLink={refreshOrgTelegramLink}
+                onUnlinkTelegram={unlinkOrgTelegram}
+              />
                 </form>
               </>
             )}
