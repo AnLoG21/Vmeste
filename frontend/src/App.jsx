@@ -20,14 +20,15 @@ import InspectionWorkspace from "./InspectionWorkspace.jsx";
 import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import ServiceEditor, { buildServiceDraftFromService, serviceDraftEqualsService } from "./ServiceEditor.jsx";
-import BookingMessageField from "./BookingMessageField.jsx";
-import StaffServicesAssignment from "./StaffServicesAssignment.jsx";
 import { MapOrgContactsBlock, MapOrgHoursBlock, PhotoLightboxReviewCaption } from "./mapOrgBlocks.jsx";
 import OrgMessengerChannelsForm from "./OrgMessengerChannelsForm.jsx";
 import OrgAcquiringFields from "./OrgAcquiringFields.jsx";
 import OrgBookingMessagesSection from "./OrgBookingMessagesSection.jsx";
 import OrgCalendarSection from "./OrgCalendarSection.jsx";
 import OrganizationAddressBranchesPanel from "./OrganizationAddressBranchesPanel.jsx";
+import OrgMessagingRemindersSection from "./OrgMessagingRemindersSection.jsx";
+import OrgClientCardSection from "./OrgClientCardSection.jsx";
+import StaffManagementPanel from "./StaffManagementPanel.jsx";
 import { LoadErrorBanner } from "./LoadErrorBanner.jsx";
 import {
   trimAddrSeg,
@@ -54,17 +55,11 @@ import {
 } from "./subnavBookmarks.js";
 import {
   orgSphereOf,
-  staffPermLabelsForSphere,
-  sphereUsesServiceAssignment,
-  STAFF_PERM_DEFAULTS,
-  CAFE_STAFF_ROLE_PRESETS,
-  applyCafeRolePreset,
 } from "./staffPermissions.js";
 import { getDevicePosition } from "./geoPosition.js";
 import "./landing.css";
 import {
   ORG_GALLERY_MAX_PHOTOS,
-  ORG_WEEKDAYS,
   buildOrgCarouselItems,
   buildYmapOrgPlacemark,
   resetOrgPinLayoutClass,
@@ -1557,8 +1552,6 @@ export default function App() {
   const [mapOrgCarouselIndex, setMapOrgCarouselIndex] = useState(0);
   const [mapMarkersTick, setMapMarkersTick] = useState(0);
   const [orgPhotoLightbox, setOrgPhotoLightbox] = useState(null);
-  const orgGalleryInputRef = useRef(null);
-
   const [staffReviewModal, setStaffReviewModal] = useState(null);
 
   function openOrgPhotoLightbox(items, index = 0) {
@@ -10045,99 +10038,16 @@ export default function App() {
               onCopyStatus={setOrgCalendarStatus}
             />
 
-            <h3>Напоминания и мессенджеры</h3>
-            <p className="muted small">
-              Напоминания за 24 ч и 2 ч до записи: клиентам и организации. Каналы — Telegram, MAX, WhatsApp (Green-API), SMS.
-              SMS: ключ платформы или свой SMS.ru api_id. Клиент может отключить напоминания в своих настройках.
-              Для салона — отдельно «давно не был».
-            </p>
-            <form onSubmit={saveOrgMessaging} className="form">
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={Boolean(orgMessagingForm.remind_clients)}
-                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, remind_clients: e.target.checked }))}
-                />
-                Напоминания клиентам
-              </label>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={Boolean(orgMessagingForm.remind_org)}
-                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, remind_org: e.target.checked }))}
-                />
-                Напоминания организации (себе)
-              </label>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={Boolean(orgMessagingForm.notify_org_on_new)}
-                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, notify_org_on_new: e.target.checked }))}
-                />
-                Уведомлять о новой записи
-              </label>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={Boolean(orgMessagingForm.winback_enabled)}
-                  onChange={(e) => setOrgMessagingForm((p) => ({ ...p, winback_enabled: e.target.checked }))}
-                />
-                Напоминать «давно не был»
-              </label>
-              {orgMessagingForm.winback_enabled ? (
-                <>
-                  <label className="field-label" htmlFor="org-winback-weeks">
-                    Через сколько недель без визита
-                  </label>
-                  <input
-                    id="org-winback-weeks"
-                    type="number"
-                    min="1"
-                    max="52"
-                    value={orgMessagingForm.winback_weeks || 4}
-                    onChange={(e) =>
-                      setOrgMessagingForm((p) => ({ ...p, winback_weeks: e.target.value }))
-                    }
-                  />
-                  <BookingMessageField
-                    id="org-msg-winback"
-                    label="Текст «давно не был»"
-                    value={orgMessagingForm.winback_template || ""}
-                    onChange={(v) => setOrgMessagingForm((p) => ({ ...p, winback_template: v }))}
-                    placeholder="Давно не виделись в {org}! … {weeks} нед. назад."
-                    tokens={["org", "weeks", "client"]}
-                  />
-                </>
-              ) : null}
-              {orgMessagingForm.notify_org_on_new ? (
-                <>
-                  <BookingMessageField
-                    id="org-msg-new-booking"
-                    label="Текст уведомления о новой записи"
-                    value={orgMessagingForm.new_booking_template || ""}
-                    onChange={(v) => setOrgMessagingForm((p) => ({ ...p, new_booking_template: v }))}
-                    placeholder="Новая запись в {org}: {service} — {date}."
-                    tokens={["org", "service", "date"]}
-                  />
-                  <button type="submit">Сохранить</button>
-                  <p className="status">{orgMessagingSaveStatus}</p>
-                </>
-              ) : (
-                <>
-                  <button type="submit">Сохранить напоминания</button>
-                  <p className="status">{orgMessagingSaveStatus}</p>
-                </>
-              )}
-              <OrgMessengerChannelsForm
-                form={orgMessagingForm}
-                onChange={setOrgMessagingForm}
-                saveStatus={orgMessagingSaveStatus}
-                telegramLinkInfo={orgTelegramLinkInfo}
-                onLoadTelegramLink={loadOrgTelegramLink}
-                onRefreshTelegramLink={refreshOrgTelegramLink}
-                onUnlinkTelegram={unlinkOrgTelegram}
-              />
-            </form>
+            <OrgMessagingRemindersSection
+              form={orgMessagingForm}
+              onChange={setOrgMessagingForm}
+              onSubmit={saveOrgMessaging}
+              saveStatus={orgMessagingSaveStatus}
+              telegramLinkInfo={orgTelegramLinkInfo}
+              onLoadTelegramLink={loadOrgTelegramLink}
+              onRefreshTelegramLink={refreshOrgTelegramLink}
+              onUnlinkTelegram={unlinkOrgTelegram}
+            />
 
             {(me?.provider_sphere === "hair_salon" || me?.provider_sphere === "service_center") && (
               <VoiceAdminPanel
@@ -10169,349 +10079,24 @@ export default function App() {
               </>
             )}
 
-            <h3>Карточка для клиентов</h3>
-
-            <p className="muted small">Режим работы, телефоны, фото и дополнительная информация отображаются при выборе организации на карте.</p>
-
-            {me?.role === "provider" && me?.provider_sphere !== "cafe_restaurant" && me?.organization_slug ? (
-              <div className="org-widget-embed card-inset">
-                <h3>Виджет записи на сайт</h3>
-                <p className="muted small">
-                  Ссылка для клиентов и iframe для встраивания на сайт салона. Сценарий: мастер → услуга → слоты, запись по телефону.
-                </p>
-                <p>
-                  <a href={`/w/${me.organization_slug}`} target="_blank" rel="noreferrer">
-                    {typeof window !== "undefined" ? window.location.origin : ""}/w/{me.organization_slug}
-                  </a>
-                </p>
-                <p className="field-label">Код для сайта</p>
-                <textarea
-                  readOnly
-                  rows={4}
-                  className="org-widget-code"
-                  value={`<iframe src="${typeof window !== "undefined" ? window.location.origin : "https://vsevmeste.space"}/w/${me.organization_slug}" width="100%" height="720" style="border:0;border-radius:12px;max-width:480px" title="Онлайн-запись"></iframe>`}
-                  onFocus={(e) => e.target.select()}
-                />
-              </div>
-            ) : null}
-
-            <form onSubmit={saveOrgProfileInfo} className="form org-profile-form">
-
-              <p className="field-label">Режим работы</p>
-
-              <div className="org-hours-grid">
-
-                {ORG_WEEKDAYS.map(({ key, label }) => (
-
-                  <div key={key} className="org-hours-row">
-
-                    <label className="checkbox org-hours-closed">
-
-                      <input
-
-                        type="checkbox"
-
-                        checked={Boolean(orgProfileForm.working_hours[key]?.closed)}
-
-                        onChange={(e) =>
-
-                          setOrgProfileForm((p) => ({
-
-                            ...p,
-
-                            working_hours: {
-
-                              ...p.working_hours,
-
-                              [key]: { ...p.working_hours[key], closed: e.target.checked },
-
-                            },
-
-                          }))
-
-                        }
-
-                      />
-
-                      {label} — выходной
-
-                    </label>
-
-                    <div className="org-hours-times">
-
-                      <input
-
-                        type="time"
-
-                        disabled={orgProfileForm.working_hours[key]?.closed}
-
-                        value={orgProfileForm.working_hours[key]?.open || "09:00"}
-
-                        onChange={(e) =>
-
-                          setOrgProfileForm((p) => ({
-
-                            ...p,
-
-                            working_hours: {
-
-                              ...p.working_hours,
-
-                              [key]: { ...p.working_hours[key], open: e.target.value },
-
-                            },
-
-                          }))
-
-                        }
-
-                      />
-
-                      <span>—</span>
-
-                      <input
-
-                        type="time"
-
-                        disabled={orgProfileForm.working_hours[key]?.closed}
-
-                        value={orgProfileForm.working_hours[key]?.close || "18:00"}
-
-                        onChange={(e) =>
-
-                          setOrgProfileForm((p) => ({
-
-                            ...p,
-
-                            working_hours: {
-
-                              ...p.working_hours,
-
-                              [key]: { ...p.working_hours[key], close: e.target.value },
-
-                            },
-
-                          }))
-
-                        }
-
-                      />
-
-                    </div>
-
-                  </div>
-
-                ))}
-
-              </div>
-
-              <label className="field-label">Телефоны</label>
-
-              {orgProfileForm.phones.map((ph, idx) => (
-
-                <div key={idx} className="org-phone-row">
-
-                  <input
-
-                    type="tel"
-
-                    placeholder="+7 …"
-
-                    value={ph}
-
-                    onChange={(e) =>
-
-                      setOrgProfileForm((p) => {
-
-                        const phones = [...p.phones];
-
-                        phones[idx] = e.target.value;
-
-                        return { ...p, phones };
-
-                      })
-
-                    }
-
-                  />
-
-                  <button
-                    type="button"
-                    className="org-icon-btn org-icon-btn--danger"
-                    aria-label="Удалить телефон"
-                    onClick={() =>
-                      setOrgProfileForm((p) => ({
-                        ...p,
-                        phones: p.phones.filter((_, i) => i !== idx),
-                      }))
-                    }
-                  >
-                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                      <path
-                        fill="currentColor"
-                        d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-                      />
-                    </svg>
-                  </button>
-
-                </div>
-
-              ))}
-
-              <button
-                type="button"
-                className="org-text-btn"
-                onClick={() => setOrgProfileForm((p) => ({ ...p, phones: [...p.phones, ""] }))}
-              >
-                + Телефон
-              </button>
-
-              <label className="field-label">Сайты</label>
-
-              {orgProfileForm.websites.map((site, idx) => (
-                <div key={idx} className="org-phone-row">
-                  <input
-                    type="url"
-                    placeholder="https://example.ru"
-                    value={site}
-                    onChange={(e) =>
-                      setOrgProfileForm((p) => {
-                        const websites = [...p.websites];
-                        websites[idx] = e.target.value;
-                        return { ...p, websites };
-                      })
-                    }
-                  />
-                  <button
-                    type="button"
-                    className="org-icon-btn org-icon-btn--danger"
-                    aria-label="Удалить сайт"
-                    onClick={() =>
-                      setOrgProfileForm((p) => ({
-                        ...p,
-                        websites: p.websites.filter((_, i) => i !== idx),
-                      }))
-                    }
-                  >
-                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                      <path
-                        fill="currentColor"
-                        d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-
-              <button
-                type="button"
-                className="org-text-btn"
-                onClick={() => setOrgProfileForm((p) => ({ ...p, websites: [...p.websites, ""] }))}
-              >
-                + Сайт
-              </button>
-
-              <label className="field-label" htmlFor="org-card-note">Дополнительно (для клиентов)</label>
-
-              <textarea
-
-                id="org-card-note"
-
-                rows={3}
-
-                placeholder="Например: парковка во дворе, вход со двора"
-
-                value={orgProfileForm.card_note}
-
-                onChange={(e) => setOrgProfileForm((p) => ({ ...p, card_note: e.target.value }))}
-
-              />
-
-              <p className="field-label">
-                Фото организации ({orgGalleryPhotos.length}/{ORG_GALLERY_MAX_PHOTOS})
-              </p>
-              <p className="muted small">Не более {ORG_GALLERY_MAX_PHOTOS} фото. Сначала показываются они, затем фото из отзывов.</p>
-              <input
-                ref={orgGalleryInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                hidden
-                disabled={orgGalleryPhotos.length >= ORG_GALLERY_MAX_PHOTOS}
-                onChange={async (e) => {
-                  const files = [...(e.target.files || [])];
-                  const slotsLeft = ORG_GALLERY_MAX_PHOTOS - orgGalleryPhotos.length;
-                  for (const f of files.slice(0, slotsLeft)) {
-                    const ok = await uploadOrgGalleryPhoto(f);
-                    if (!ok) break;
-                  }
-                  e.target.value = "";
-                }}
-              />
-              <button
-                type="button"
-                className="org-gallery-upload-btn"
-                disabled={orgGalleryPhotos.length >= ORG_GALLERY_MAX_PHOTOS}
-                onClick={() => orgGalleryInputRef.current?.click()}
-              >
-                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-                  <path
-                    fill="currentColor"
-                    d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"
-                  />
-                </svg>
-                Добавить фото
-              </button>
-
-              {orgGalleryPhotos.length > 0 && (
-
-                <div className="org-gallery-grid">
-
-                  {orgGalleryPhotos.map((ph, photoIdx) => (
-
-                    <div key={ph.id} className="org-gallery-item">
-
-                      <button
-                        type="button"
-                        className="org-gallery-open"
-                        aria-label="Открыть фото"
-                        onClick={() =>
-                          openOrgPhotoLightbox(
-                            orgGalleryPhotos.map((p) => ({ id: p.id, url: p.url || p.thumb_url })),
-                            photoIdx,
-                          )
-                        }
-                      >
-                        <img src={ph.thumb_url || ph.url} alt="" loading="lazy" decoding="async" />
-                      </button>
-
-                      <button
-                        type="button"
-                        className="org-icon-btn org-icon-btn--danger org-gallery-delete"
-                        aria-label="Удалить фото"
-                        onClick={() => deleteOrgGalleryPhoto(ph.id)}
-                      >
-                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                          <path
-                            fill="currentColor"
-                            d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-                          />
-                        </svg>
-                      </button>
-
-                    </div>
-
-                  ))}
-
-                </div>
-
-              )}
-
-              <button type="submit">Сохранить карточку</button>
-
-              <p className="status">{orgProfileSaveStatus}</p>
-
-            </form>
+            <OrgClientCardSection
+              form={orgProfileForm}
+              onChange={setOrgProfileForm}
+              onSubmit={saveOrgProfileInfo}
+              saveStatus={orgProfileSaveStatus}
+              galleryPhotos={orgGalleryPhotos}
+              onUploadGalleryPhotos={async (files) => {
+                const slotsLeft = ORG_GALLERY_MAX_PHOTOS - orgGalleryPhotos.length;
+                for (const f of files.slice(0, slotsLeft)) {
+                  const ok = await uploadOrgGalleryPhoto(f);
+                  if (!ok) break;
+                }
+              }}
+              onDeleteGalleryPhoto={deleteOrgGalleryPhoto}
+              onOpenGalleryLightbox={openOrgPhotoLightbox}
+              organizationSlug={me?.organization_slug}
+              showBookingWidget={me?.role === "provider" && me?.provider_sphere !== "cafe_restaurant"}
+            />
 
             <OrganizationAddressBranchesPanel
               orgName={orgAddressForm.organization_name}
@@ -10560,143 +10145,27 @@ export default function App() {
 
   function renderStaffManagement() {
     if (!canAccessStaffPage) return null;
-    const orgSphere = orgSphereOf(me);
-    const permLabels = staffPermLabelsForSphere(orgSphere);
-    const showServiceAssignment = sphereUsesServiceAssignment(orgSphere);
     return (
-      <section className="card profile-card">
-        <h2>Сотрудники</h2>
-        {me?.role === "staff" && staffEffectivePerms.can_delegate_permissions && (
-          <p className="muted">Адрес организации и филиалы настраивает руководитель в разделе «Организация». Здесь — команда, должности и права доступа.</p>
-        )}
-        {me?.role === "provider" && (
-          <p className="muted">Руководитель настраивает всё. Сотрудник с правом «Может настраивать права других» видит этот раздел и может менять права коллег.</p>
-        )}
-        {canInviteStaff && (
-          <form onSubmit={inviteStaff} className="form">
-            <input
-              placeholder="Email или логин сотрудника"
-              value={staffInviteForm.invite_identifier}
-              onChange={(e) => setStaffInviteForm({ ...staffInviteForm, invite_identifier: e.target.value })}
-            />
-            <button type="submit">Добавить сотрудника</button>
-          </form>
-        )}
-        <p className="status">{staffInviteStatus}</p>
-        <ul className="list staff-list">
-          {orgStaff.map((link) => {
-            const permBase = {
-              ...STAFF_PERM_DEFAULTS,
-              ...(link.permissions || {}),
-            };
-            const rowName = formatStaffClientName(link.staff_user);
-            const permsOpen = staffPermsOpenId === link.id;
-            const canEditPerms =
-              me?.role === "provider" || Boolean(staffEffectivePerms.can_delegate_permissions);
-            return (
-              <li key={link.id} className="staff-block">
-                <div className="staff-row">
-                  <span>
-                    {rowName}
-                    {link.invitation_status === "pending"
-                      ? " — ожидает подтверждения"
-                      : link.is_active
-                        ? ""
-                        : " — отключён"}
-                  </span>
-                </div>
-                <div className="staff-job-deact-row">
-                  <div className="staff-job-col">
-                    <label className="muted small-label">Должность</label>
-                    <input
-                      className="job-title-input"
-                      placeholder="Например, администратор"
-                      defaultValue={link.job_title || ""}
-                      onBlur={(e) => {
-                        const v = e.target.value.trim();
-                        if (v !== (link.job_title || "").trim()) patchStaffMeta(link.id, { job_title: v });
-                      }}
-                    />
-                  </div>
-                  {me?.role === "provider" && link.is_active && link.invitation_status !== "pending" && (
-                    <div className="staff-deact-cell">
-                      <button type="button" className="staff-deactivate-btn ghost-btn" onClick={() => deactivateStaff(link.id)}>
-                        Отключить
-                      </button>
-                    </div>
-                  )}
-                </div>
-                {link.is_active && canEditPerms && (
-                  <div className="staff-perms">
-                    <button
-                      type="button"
-                      className="staff-perms-toggle muted small-label"
-                      onClick={() => setStaffPermsOpenId((id) => (id === link.id ? null : link.id))}
-                    >
-                      Права доступа{permsOpen ? " ▲" : " ▼"}
-                    </button>
-                    {permsOpen && (
-                      <div className="perm-grid">
-                        {orgSphere === "cafe_restaurant" && (
-                          <div className="staff-cafe-presets">
-                            <p className="muted small-label">Быстрый пресет</p>
-                            <div className="row-2">
-                              {CAFE_STAFF_ROLE_PRESETS.map((preset) => (
-                                <button
-                                  key={preset.id}
-                                  type="button"
-                                  className="ghost-btn"
-                                  title={preset.hint}
-                                  onClick={() => {
-                                    const next = applyCafeRolePreset(permBase, preset.id);
-                                    void patchStaffMeta(link.id, { permissions: next });
-                                  }}
-                                >
-                                  {preset.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {permLabels.map(([key, label]) => (
-                          <label key={key} className="checkbox perm-item">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(permBase[key])}
-                              onChange={() => toggleStaffPermission(link, key)}
-                            />
-                            {label}
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {link.is_active && canEditPerms && showServiceAssignment && (
-                  <div className="staff-perms">
-                    <button
-                      type="button"
-                      className="staff-perms-toggle muted small-label"
-                      onClick={() => setStaffServicesOpenId((id) => (id === link.id ? null : link.id))}
-                    >
-                      Услуги сотрудника{staffServicesOpenId === link.id ? " ▲" : " ▼"}
-                    </button>
-                    {staffServicesOpenId === link.id && (
-                      <StaffServicesAssignment
-                        link={link}
-                        categories={staffAssignableCategories}
-                        services={staffAssignableServices}
-                        onSave={patchStaffServiceAssignment}
-                      />
-                    )}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-        {orgStaff.length === 0 && <p className="muted">Пока нет привязанных сотрудников.</p>}
-      </section>
+      <StaffManagementPanel
+        me={me}
+        staffEffectivePerms={staffEffectivePerms}
+        canInviteStaff={canInviteStaff}
+        staffInviteForm={staffInviteForm}
+        onStaffInviteFormChange={setStaffInviteForm}
+        onInviteStaff={inviteStaff}
+        staffInviteStatus={staffInviteStatus}
+        orgStaff={orgStaff}
+        staffPermsOpenId={staffPermsOpenId}
+        onStaffPermsOpenIdChange={setStaffPermsOpenId}
+        staffServicesOpenId={staffServicesOpenId}
+        onStaffServicesOpenIdChange={setStaffServicesOpenId}
+        onPatchStaffMeta={patchStaffMeta}
+        onDeactivateStaff={deactivateStaff}
+        onToggleStaffPermission={toggleStaffPermission}
+        staffAssignableCategories={staffAssignableCategories}
+        staffAssignableServices={staffAssignableServices}
+        onPatchStaffServiceAssignment={patchStaffServiceAssignment}
+      />
     );
   }
 
