@@ -1,11 +1,12 @@
 import StaffServicesAssignment from "./StaffServicesAssignment.jsx";
+import StaffInviteWizard from "./StaffInviteWizard.jsx";
 import { EmptyState } from "./EmptyState.jsx";
 import {
-  applyCafeRolePreset,
-  CAFE_STAFF_ROLE_PRESETS,
+  applyStaffRolePreset,
   orgSphereOf,
   sphereUsesServiceAssignment,
   staffPermLabelsForSphere,
+  staffRolePresetsForSphere,
   STAFF_PERM_DEFAULTS,
 } from "./staffPermissions.js";
 
@@ -48,6 +49,7 @@ export default function StaffManagementPanel({
 }) {
   const orgSphere = orgSphereOf(me);
   const permLabels = staffPermLabelsForSphere(orgSphere);
+  const rolePresets = staffRolePresetsForSphere(orgSphere);
   const showServiceAssignment = sphereUsesServiceAssignment(orgSphere);
 
   return (
@@ -66,16 +68,16 @@ export default function StaffManagementPanel({
         </p>
       )}
       {canInviteStaff ? (
-        <form onSubmit={onInviteStaff} className="form">
-          <input
-            placeholder="Email или логин сотрудника"
-            value={staffInviteForm.invite_identifier}
-            onChange={(e) => onStaffInviteFormChange({ ...staffInviteForm, invite_identifier: e.target.value })}
-          />
-          <button type="submit">Добавить сотрудника</button>
-        </form>
-      ) : null}
-      <p className="status">{staffInviteStatus}</p>
+        <StaffInviteWizard
+          sphere={orgSphere}
+          form={staffInviteForm}
+          onChange={onStaffInviteFormChange}
+          onSubmit={onInviteStaff}
+          status={staffInviteStatus}
+        />
+      ) : (
+        <p className="status">{staffInviteStatus}</p>
+      )}
       <ul className="list staff-list">
         {orgStaff.map((link) => {
           const permBase = {
@@ -133,27 +135,29 @@ export default function StaffManagementPanel({
                   </button>
                   {permsOpen ? (
                     <div className="perm-grid">
-                      {orgSphere === "cafe_restaurant" ? (
-                        <div className="staff-cafe-presets">
-                          <p className="muted small-label">Быстрый пресет</p>
-                          <div className="row-2">
-                            {CAFE_STAFF_ROLE_PRESETS.map((preset) => (
-                              <button
-                                key={preset.id}
-                                type="button"
-                                className="ghost-btn"
-                                title={preset.hint}
-                                onClick={() => {
-                                  const next = applyCafeRolePreset(permBase, preset.id);
-                                  void onPatchStaffMeta(link.id, { permissions: next });
-                                }}
-                              >
-                                {preset.label}
-                              </button>
-                            ))}
-                          </div>
+                      <div className="staff-cafe-presets">
+                        <p className="muted small-label">Быстрый пресет роли</p>
+                        <div className="staff-role-presets staff-role-presets--compact">
+                          {rolePresets.map((preset) => (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              className="ghost-btn"
+                              title={preset.hint}
+                              onClick={() => {
+                                const next = applyStaffRolePreset(permBase, orgSphere, preset.id);
+                                const patch = { permissions: next };
+                                if (preset.jobTitle && !(link.job_title || "").trim()) {
+                                  patch.job_title = preset.jobTitle;
+                                }
+                                void onPatchStaffMeta(link.id, patch);
+                              }}
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
                         </div>
-                      ) : null}
+                      </div>
                       {permLabels.map(([key, label]) => (
                         <label key={key} className="checkbox perm-item">
                           <input

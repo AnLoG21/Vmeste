@@ -24,7 +24,13 @@ from .booking_windows import (
     release_manual_hold,
     resolve_selected_options,
 )
-from .models import AvailabilitySlot, Booking, ProviderStaff, ProviderStaffPortfolioPhoto
+from .models import (
+    AvailabilitySlot,
+    Booking,
+    ProviderStaff,
+    ProviderStaffPortfolioPhoto,
+    default_staff_permissions,
+)
 from .serializers import AvailabilitySlotSerializer, BookingSerializer, ProviderStaffSerializer
 
 User = get_user_model()
@@ -260,6 +266,13 @@ class ProviderStaffViewSet(viewsets.ModelViewSet):
             email = (request.data.get("invite_email") or "").strip()
             username = (request.data.get("invite_username") or "").strip()
         display_name = (request.data.get("display_name") or "").strip() or ""
+        job_title = (request.data.get("job_title") or "").strip()[:120]
+        raw_perms = request.data.get("permissions")
+        perms = default_staff_permissions()
+        if isinstance(raw_perms, dict):
+            for key in list(perms.keys()):
+                if key in raw_perms:
+                    perms[key] = bool(raw_perms.get(key))
         if not email and not username:
             return Response(
                 {"detail": "Укажи email или логин сотрудника."},
@@ -301,13 +314,25 @@ class ProviderStaffViewSet(viewsets.ModelViewSet):
             ):
                 existing.invitation_status = ProviderStaff.InvitationStatus.PENDING
                 existing.is_active = False
-                existing.save(update_fields=["invitation_status", "is_active"])
+                update_fields = ["invitation_status", "is_active"]
+                if job_title:
+                    existing.job_title = job_title
+                    update_fields.append("job_title")
+                if display_name:
+                    existing.display_name = display_name
+                    update_fields.append("display_name")
+                if isinstance(raw_perms, dict):
+                    existing.permissions = perms
+                    update_fields.append("permissions")
+                existing.save(update_fields=update_fields)
                 ser = self.get_serializer(existing)
                 return Response(ser.data, status=status.HTTP_200_OK)
         link = ProviderStaff.objects.create(
             provider=provider,
             staff=staff_user,
             display_name=display_name,
+            job_title=job_title,
+            permissions=perms,
             invitation_status=ProviderStaff.InvitationStatus.PENDING,
             is_active=False,
         )

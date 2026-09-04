@@ -79,36 +79,247 @@ export const STAFF_PERM_DEFAULTS = {
   cafe_settings: false,
 };
 
-/** Пресеты прав для кафе — меньше путаницы кухня / зал / хостес. */
+/** Все ключи прав → false (база перед наложением пресета). */
+export function blankStaffPermissions() {
+  const out = {};
+  for (const key of Object.keys(STAFF_PERM_DEFAULTS)) out[key] = false;
+  return out;
+}
+
+/**
+ * Пресеты «роль → права» по сферам.
+ * `perms` — только отличия от blank (true); остальные ключи сферы остаются false,
+ * ключи чужих сфер не трогаем при merge на существующего сотрудника.
+ */
+const SALON_PRESETS = [
+  {
+    id: "master",
+    label: "Мастер",
+    jobTitle: "Мастер",
+    hint: "Записи и чаты с клиентами. Без интервалов и каталога.",
+    perms: {
+      manage_bookings: true,
+      manage_chats: true,
+      manage_client_chats: true,
+    },
+  },
+  {
+    id: "receptionist",
+    label: "Администратор ресепшн",
+    jobTitle: "Администратор",
+    hint: "Записи, календарь, чаты. Без управления сотрудниками.",
+    perms: {
+      manage_bookings: true,
+      manage_intervals: true,
+      manage_chats: true,
+      manage_client_chats: true,
+    },
+  },
+  {
+    id: "admin",
+    label: "Управляющий",
+    jobTitle: "Управляющий",
+    hint: "Записи, услуги, интервалы, чаты, приглашение сотрудников.",
+    perms: {
+      manage_bookings: true,
+      manage_intervals: true,
+      manage_services: true,
+      manage_chats: true,
+      manage_client_chats: true,
+      manage_staff: true,
+    },
+  },
+];
+
+const SERVICE_PRESETS = [
+  {
+    id: "mechanic",
+    label: "Механик",
+    jobTitle: "Механик",
+    hint: "Записи, приёмка, чаты с клиентами.",
+    perms: {
+      manage_bookings: true,
+      manage_inspections: true,
+      manage_chats: true,
+      manage_client_chats: true,
+    },
+  },
+  {
+    id: "receptionist",
+    label: "Администратор",
+    jobTitle: "Администратор",
+    hint: "Записи, интервалы, приёмка, чаты.",
+    perms: {
+      manage_bookings: true,
+      manage_intervals: true,
+      manage_inspections: true,
+      manage_chats: true,
+      manage_client_chats: true,
+    },
+  },
+  {
+    id: "admin",
+    label: "Управляющий",
+    jobTitle: "Управляющий",
+    hint: "Полный контур сервиса + приглашение сотрудников.",
+    perms: {
+      manage_bookings: true,
+      manage_intervals: true,
+      manage_services: true,
+      manage_inspections: true,
+      manage_chats: true,
+      manage_client_chats: true,
+      manage_staff: true,
+    },
+  },
+];
+
 export const CAFE_STAFF_ROLE_PRESETS = [
   {
     id: "hall",
     label: "Зал (официант)",
+    jobTitle: "Официант",
     hint: "Заказы, статусы зала, посадка. Без кухни и меню.",
-    perms: { cafe_orders: true, cafe_kitchen: false, cafe_seating: true, cafe_delivery: false, cafe_menu: false, cafe_settings: false },
+    perms: {
+      cafe_orders: true,
+      cafe_seating: true,
+      manage_chats: true,
+      manage_client_chats: true,
+    },
   },
   {
     id: "kitchen",
     label: "Кухня",
-    hint: "Только кухня: готовится / готов. Без записи заказов за столом.",
-    perms: { cafe_orders: false, cafe_kitchen: true, cafe_seating: false, cafe_delivery: false, cafe_menu: false, cafe_settings: false },
+    jobTitle: "Повар",
+    hint: "Только кухня: готовится / готов.",
+    perms: {
+      cafe_kitchen: true,
+      manage_chats: true,
+    },
   },
   {
     id: "hostess",
     label: "Хостес",
-    hint: "Посадка и карта столов. Заказы — у официанта.",
-    perms: { cafe_orders: false, cafe_kitchen: false, cafe_seating: true, cafe_delivery: false, cafe_menu: false, cafe_settings: false },
+    jobTitle: "Хостес",
+    hint: "Посадка и карта столов.",
+    perms: {
+      cafe_seating: true,
+      manage_chats: true,
+      manage_client_chats: true,
+    },
   },
   {
     id: "courier",
     label: "Курьер",
+    jobTitle: "Курьер",
     hint: "Доставка: статусы курьера.",
-    perms: { cafe_orders: false, cafe_kitchen: false, cafe_seating: false, cafe_delivery: true, cafe_menu: false, cafe_settings: false },
+    perms: {
+      cafe_delivery: true,
+      manage_chats: true,
+    },
+  },
+  {
+    id: "admin",
+    label: "Управляющий",
+    jobTitle: "Управляющий",
+    hint: "Зал, меню, настройки QR + приглашение сотрудников.",
+    perms: {
+      cafe_orders: true,
+      cafe_kitchen: true,
+      cafe_seating: true,
+      cafe_delivery: true,
+      cafe_menu: true,
+      cafe_settings: true,
+      manage_chats: true,
+      manage_client_chats: true,
+      manage_staff: true,
+    },
   },
 ];
 
-export function applyCafeRolePreset(basePerms, presetId) {
-  const preset = CAFE_STAFF_ROLE_PRESETS.find((p) => p.id === presetId);
+const MARKETPLACE_PRESETS = [
+  {
+    id: "orders",
+    label: "Менеджер заказов",
+    jobTitle: "Менеджер заказов",
+    hint: "Заказы и отзывы маркетплейсов, чаты.",
+    perms: {
+      marketplace_manage_orders: true,
+      manage_chats: true,
+      manage_client_chats: true,
+    },
+  },
+  {
+    id: "catalog",
+    label: "Менеджер каталога",
+    jobTitle: "Менеджер каталога",
+    hint: "Каталог и выгрузка, чаты.",
+    perms: {
+      marketplace_manage_catalog: true,
+      manage_chats: true,
+    },
+  },
+  {
+    id: "admin",
+    label: "Управляющий",
+    jobTitle: "Управляющий",
+    hint: "Заказы, каталог, ключи API, приглашение сотрудников.",
+    perms: {
+      marketplace_view_keys: true,
+      marketplace_manage_orders: true,
+      marketplace_manage_catalog: true,
+      manage_chats: true,
+      manage_client_chats: true,
+      manage_staff: true,
+    },
+  },
+];
+
+/** @returns {{ id: string, label: string, jobTitle?: string, hint: string, perms: Record<string, boolean> }[]} */
+export function staffRolePresetsForSphere(sphere) {
+  if (sphere === "cafe_restaurant") return CAFE_STAFF_ROLE_PRESETS;
+  if (sphere === "marketplaces") return MARKETPLACE_PRESETS;
+  if (sphere === "service_center") return SERVICE_PRESETS;
+  if (sphere === "hair_salon") return SALON_PRESETS;
+  return SALON_PRESETS;
+}
+
+/**
+ * Собирает полный объект permissions для приглашения:
+ * blank → defaults только для «нейтральных»? No — blank + preset perms for sphere keys.
+ * Чужие сферы оставляем как в STAFF_PERM_DEFAULTS (безопасно на бэке).
+ */
+export function buildPermissionsFromPreset(sphere, presetId) {
+  const allowed = new Set(staffPermLabelsForSphere(sphere).map(([k]) => k));
+  const next = { ...STAFF_PERM_DEFAULTS };
+  for (const key of Object.keys(next)) {
+    if (allowed.has(key)) next[key] = false;
+  }
+  const preset = staffRolePresetsForSphere(sphere).find((p) => p.id === presetId);
+  if (!preset) return next;
+  for (const [key, val] of Object.entries(preset.perms || {})) {
+    if (allowed.has(key) || key in STAFF_PERM_DEFAULTS) next[key] = Boolean(val);
+  }
+  return next;
+}
+
+/**
+ * На существующего сотрудника: для ключей текущей сферы берём preset,
+ * остальные ключи (чужие сферы) сохраняем из base.
+ */
+export function applyStaffRolePreset(basePerms, sphere, presetId) {
+  const preset = staffRolePresetsForSphere(sphere).find((p) => p.id === presetId);
   if (!preset) return basePerms;
-  return { ...basePerms, ...preset.perms };
+  const allowed = new Set(staffPermLabelsForSphere(sphere).map(([k]) => k));
+  const next = { ...STAFF_PERM_DEFAULTS, ...(basePerms || {}) };
+  for (const key of allowed) next[key] = false;
+  for (const [key, val] of Object.entries(preset.perms || {})) {
+    if (allowed.has(key)) next[key] = Boolean(val);
+  }
+  return next;
+}
+
+/** @deprecated используйте applyStaffRolePreset(base, "cafe_restaurant", id) */
+export function applyCafeRolePreset(basePerms, presetId) {
+  return applyStaffRolePreset(basePerms, "cafe_restaurant", presetId);
 }

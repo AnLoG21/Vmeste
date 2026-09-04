@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { API_URL } from "./config.js";
+import { orgSphereOf, STAFF_PERM_DEFAULTS } from "./staffPermissions.js";
+import { emptyInvite } from "./StaffInviteWizard.jsx";
 
 /**
  * Staff invite CRUD / card / permissions for App.
@@ -13,21 +15,32 @@ export function useStaffInvite({
   loadStaffWorkspace,
   setChatActivity,
 }) {
-  const [staffInviteForm, setStaffInviteForm] = useState({ invite_identifier: "" });
+  const [staffInviteForm, setStaffInviteForm] = useState(() => emptyInvite(orgSphereOf(me)));
   const [staffInviteStatus, setStaffInviteStatus] = useState("");
   const [staffPermsOpenId, setStaffPermsOpenId] = useState(null);
   const [staffServicesOpenId, setStaffServicesOpenId] = useState(null);
 
+  const sphere = orgSphereOf(me);
+  useEffect(() => {
+    setStaffInviteForm((prev) => {
+      if ((prev.invite_identifier || "").trim()) return prev;
+      return emptyInvite(sphere);
+    });
+  }, [sphere]);
+
   async function inviteStaff(event) {
     event.preventDefault();
     setStaffInviteStatus("Добавляем...");
-    const body = {};
     const idf = (staffInviteForm.invite_identifier || "").trim();
-    if (idf) body.invite_identifier = idf;
-    if (!body.invite_identifier) {
+    if (!idf) {
       setStaffInviteStatus("Укажи email или логин сотрудника.");
       return;
     }
+    const body = {
+      invite_identifier: idf,
+      job_title: (staffInviteForm.job_title || "").trim(),
+      permissions: staffInviteForm.permissions || {},
+    };
     const response = await authFetch(`${API_URL}/booking/staff/`, {
       method: "POST",
       body: JSON.stringify(body),
@@ -39,7 +52,7 @@ export function useStaffInvite({
       return;
     }
     setStaffInviteStatus("Приглашение отправлено. Сотрудник увидит запрос в чатах.");
-    setStaffInviteForm({ invite_identifier: "" });
+    setStaffInviteForm(emptyInvite(orgSphereOf(me)));
     if (me?.role === "provider") loadSellerData();
     else loadStaffWorkspace();
     const actRes = await authFetch(`${API_URL}/chat/activity/`);
@@ -160,12 +173,7 @@ export function useStaffInvite({
 
   function toggleStaffPermission(link, key) {
     const merged = {
-      manage_bookings: true,
-      manage_intervals: false,
-      manage_services: false,
-      manage_chats: true,
-      manage_staff: false,
-      can_delegate_permissions: false,
+      ...STAFF_PERM_DEFAULTS,
       ...(link.permissions || {}),
     };
     const next = { ...merged, [key]: !merged[key] };

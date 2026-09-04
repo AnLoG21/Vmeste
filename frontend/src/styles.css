@@ -9690,6 +9690,65 @@ body.theme-dark .password-eye-btn:hover {
   margin-bottom: 8px;
 }
 
+.staff-invite-wizard {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.staff-invite-wizard__title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+}
+
+.staff-invite-wizard__perms {
+  margin: 0.5rem 0 0.75rem;
+}
+
+.staff-role-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+  margin: 0.35rem 0 0.85rem;
+}
+
+.staff-role-presets--compact {
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+}
+
+.staff-role-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+}
+
+.staff-role-preset:hover {
+  border-color: color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.staff-role-preset--active {
+  border-color: #2e7d32;
+  background: rgba(46, 125, 50, 0.08);
+}
+
+.staff-role-preset__label {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.staff-role-preset__hint {
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
 .inspection-items {
   list-style: none;
   margin: 0 0 16px;
