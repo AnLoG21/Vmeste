@@ -24,6 +24,12 @@ if [[ -d /var/lib/docker/containers ]]; then
   find /var/lib/docker/containers -name '*-json.log' -size +50M -print -exec truncate -s 0 {} \; 2>/dev/null || true
 fi
 
+# Asterisk on-disk logs (messages.log / queue_log) in any docker volume.
+if [[ -d /var/lib/docker/volumes ]]; then
+  find /var/lib/docker/volumes -type f \( -name 'messages.log' -o -name 'messages' -o -name 'queue_log' -o -name 'full' \) \
+    -size +50M -print -exec truncate -s 0 {} \; 2>/dev/null || true
+fi
+
 echo "[free-disk] after:"
 df -h / /var/lib/docker 2>/dev/null || df -h /
 docker system df 2>/dev/null || true

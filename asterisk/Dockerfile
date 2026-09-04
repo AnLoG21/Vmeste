@@ -13,4 +13,5 @@ COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["asterisk", "-f", "-U", "asterisk", "-G", "asterisk", "-vvv"]
+# Avoid -vvv: verbose console floods messages.log and fills the VPS disk.
+CMD ["asterisk", "-f", "-U", "asterisk", "-G", "asterisk"]

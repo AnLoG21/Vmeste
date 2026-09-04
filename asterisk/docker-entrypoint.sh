@@ -23,4 +23,19 @@ if [ -f /etc/asterisk/manager.conf ]; then
   fi
 fi
 
+# Cap on-disk Asterisk logs (messages.log / queue_log previously grew to 10G+).
+LOGDIR="${ASTERISK_LOG_DIR:-/var/log/asterisk}"
+MAX_BYTES="${ASTERISK_LOG_MAX_BYTES:-52428800}" # 50 MiB per file
+mkdir -p "$LOGDIR"
+for f in messages messages.log queue_log full full.log security security.log; do
+  path="$LOGDIR/$f"
+  if [ -f "$path" ]; then
+    size=$(wc -c < "$path" 2>/dev/null || echo 0)
+    if [ "${size:-0}" -gt "$MAX_BYTES" ]; then
+      echo "[asterisk] truncating oversized log $path (${size} bytes)"
+      : > "$path"
+    fi
+  fi
+done
+
 exec "$@"
