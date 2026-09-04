@@ -40,16 +40,12 @@ import SlotIntervalCalendar, { buildIntervalPopoverFixedStyle } from "./SlotInte
 import { LoadErrorBanner } from "./LoadErrorBanner.jsx";
 import {
   composePipeTailFromDetails,
-  parseAddressDetailsPipeTail,
   emptyLocationFormState,
 } from "./orgBranchUtils.js";
 import {
-  NOMINATIM_HEADERS,
   simplifyCommaAddressLine,
-  mapPhotonFeatureToSuggestion,
   getCity,
   buildShortAddress,
-  mergeStructuredOrgPartsFromMe,
 } from "./addressFormat.js";
 import {
   CHAT_PINS_STORAGE_KEY,
@@ -72,15 +68,7 @@ import {
   formatBookingDateTime,
   formatBookingDateTimeParts,
 } from "./bookingDisplay.jsx";
-import {
-  reverseGeocodeByCoords,
-  federalCityFromReverse,
-  nominatimSearchRU,
-  photonSuggestSearch,
-  buildNominatimQuery,
-  yandexGeocodeSuggestItems,
-  yandexMapsNativeSuggestItems,
-} from "./addressGeocode.js";
+import { reverseGeocodeByCoords } from "./addressGeocode.js";
 import {
   todayIsoDate,
   currentLocalMonthKey,
@@ -128,14 +116,12 @@ import { API_URL, AUTH_URL, BASE_URL, REFRESH_URL } from "./config.js";
 import { createAuthFetch } from "./authFetch.js";
 import { SITE_LEGAL } from "./legal/siteLegal.js";
 import {
-  blobToFile,
   groupChatMedia,
   guessAttachAccept,
-  loadChatComposeMode,
-  pickRecorderMime,
   resolveAttachmentUrl,
-  saveChatComposeMode,
 } from "./chatMedia.js";
+import { useOrgAddress } from "./useOrgAddress.js";
+import { useChatRecording } from "./useChatRecording.js";
 import {
   initPushNotifications,
   maybeRequestWebNotificationPermission,
@@ -201,34 +187,6 @@ function isMobileChatLayout() {
   if (typeof window === "undefined") return false;
   if (document.documentElement.classList.contains("native-app")) return true;
   return window.matchMedia("(max-width: 900px)").matches;
-}
-
-function detectCameraFacingFromTrack(track, deviceLabel = "") {
-  const settings = track?.getSettings?.() || {};
-  if (settings.facingMode === "user" || settings.facingMode === "environment") {
-    return settings.facingMode;
-  }
-  const label = `${deviceLabel || ""} ${track?.label || ""}`.toLowerCase();
-  if (/back|rear|environment|задн|тыл|world/.test(label)) return "environment";
-  if (/front|user|face|перед|фронт|selfie/.test(label)) return "user";
-  return null;
-}
-
-async function pickOtherVideoDevice(currentDeviceId, wantFacing) {
-  if (!navigator.mediaDevices?.enumerateDevices) return null;
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  const cams = devices.filter((d) => d.kind === "videoinput" && d.deviceId);
-  if (cams.length < 2) return null;
-  const others = cams.filter((d) => d.deviceId !== currentDeviceId);
-  if (!others.length) return null;
-  const byFacing = others.find((d) => detectCameraFacingFromTrack(null, d.label) === wantFacing);
-  if (byFacing) return byFacing;
-  // Round-robin to next camera in the list
-  const idx = Math.max(
-    0,
-    cams.findIndex((d) => d.deviceId === currentDeviceId)
-  );
-  return cams[(idx + 1) % cams.length] || others[0];
 }
 
 function consumeOAuthCallback() {
@@ -299,9 +257,6 @@ export default function App() {
   const [verifyStatus, setVerifyStatus] = useState("");
   const [resendStatus, setResendStatus] = useState("");
   const [verifyEmailNotice, setVerifyEmailNotice] = useState(null);
-  const [addressSuggestions, setAddressSuggestions] = useState([]);
-  const [detectedCity, setDetectedCity] = useState("");
-
   const [categories, setCategories] = useState([]);
   const [services, setServices] = useState([]);
   const [slots, setSlots] = useState([]);
@@ -592,15 +547,8 @@ export default function App() {
   );
   const [chatInfoHeadMenuOpen, setChatInfoHeadMenuOpen] = useState(false);
   const [chatInfoPhotoMenuId, setChatInfoPhotoMenuId] = useState(null);
-  const [chatComposeMode, setChatComposeMode] = useState(() => loadChatComposeMode());
   const [chatPendingFiles, setChatPendingFiles] = useState([]);
   const [chatPendingKind, setChatPendingKind] = useState("");
-  const [chatRecordingKind, setChatRecordingKind] = useState(null);
-  const [chatRecordLocked, setChatRecordLocked] = useState(false);
-  const [chatRecordLiftHint, setChatRecordLiftHint] = useState(false);
-  const [chatRecordSecs, setChatRecordSecs] = useState(0);
-  const [chatRecordLevels, setChatRecordLevels] = useState(() => Array(24).fill(0.12));
-  const [chatMediaPreview, setChatMediaPreview] = useState(null);
   const [calendarDayDetail, setCalendarDayDetail] = useState(null);
   const menuWrapRef = useRef(null);
   const tgAttachMenuRef = useRef(null);
@@ -612,70 +560,20 @@ export default function App() {
   const chatNearBottomRef = useRef(true);
   const chatLoadingOlderRef = useRef(false);
   const chatHasMoreOlderRef = useRef(false);
-  const chatMediaRecorderRef = useRef(null);
-  const chatRecordChunksRef = useRef([]);
-  const chatRecordStreamRef = useRef(null);
-  const chatRecordStartedAtRef = useRef(0);
-  const chatHoldTimerRef = useRef(null);
-  const chatDidHoldRef = useRef(false);
-  const chatPointerStartYRef = useRef(0);
-  const chatRecordLiftHintRef = useRef(false);
-  const chatRecordLockedRef = useRef(false);
-  const chatRecordTickRef = useRef(null);
-  const chatAudioCtxRef = useRef(null);
-  const chatAnalyserRef = useRef(null);
-  const chatLevelRafRef = useRef(null);
-  const chatLiveVideoRef = useRef(null);
-  const chatPreviewMediaRef = useRef(null);
-  const chatRecordMimeRef = useRef("audio/webm");
-  const chatRecordKindRef = useRef(null);
-  const chatCameraFacingRef = useRef("user");
-  const chatKeepRecordingRef = useRef(false);
-  const chatCameraStreamRef = useRef(null);
-  const chatMirrorPipelineRef = useRef(null);
-  const [chatCameraFacing, setChatCameraFacing] = useState("user");
-  const [chatCameraSwitching, setChatCameraSwitching] = useState(false);
   const [chatSettingsTitle, setChatSettingsTitle] = useState("");
   const [groupForm, setGroupForm] = useState({ title: "", staff_ids: [] });
   const [chatFabOpen, setChatFabOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ first_name: "", last_name: "", patronymic: "", phone: "" });
   const [passwordForm, setPasswordForm] = useState({ old_password: "", new_password: "", new_password_confirm: "" });
   const [emailForm, setEmailForm] = useState({ new_email: "" });
-  const [locationForm, setLocationForm] = useState({
-    title: "",
-    address: "",
-    latitude: "55.751244",
-    longitude: "37.618423",
-    entrance: "",
-    floor: "",
-    apartment: "",
-    intercom: "",
-    address_details: "",
-  });
   const mapRef = useRef(null);
   const placemarkRef = useRef(null);
   const profileMapRef = useRef(null);
   const profilePlacemarkRef = useRef(null);
-  const suggestTimerRef = useRef(null);
-  const suggestRequestSeqRef = useRef(0);
-  const geoCityPromiseRef = useRef(null);
-  const geoCityDeniedRef = useRef(false);
-  const [orgAddressForm, setOrgAddressForm] = useState({
-    organization_name: "",
-    organization_address: "",
-    organization_address_details: "",
-    entrance: "",
-    floor: "",
-    apartment: "",
-    intercom: "",
-    organization_latitude: "55.751244",
-    organization_longitude: "37.618423",
-  });
   const [profileOrgStatus, setProfileOrgStatus] = useState("");
   const [deleteAccountForm, setDeleteAccountForm] = useState({ password: "", confirm: "" });
   const [deleteAccountStatus, setDeleteAccountStatus] = useState("");
   const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
-  const [branchGeoStatus, setBranchGeoStatus] = useState("");
   const [orgMainEditOpen, setOrgMainEditOpen] = useState(false);
   const [selectedOrgBranchId, setSelectedOrgBranchId] = useState(null);
   const [orgBranchAddOpen, setOrgBranchAddOpen] = useState(false);
@@ -686,6 +584,72 @@ export default function App() {
   const branchEditPlacemarkRef = useRef(null);
   const branchAddMapRef = useRef(null);
   const branchAddPlacemarkRef = useRef(null);
+
+  const {
+    addressSuggestions,
+    setAddressSuggestions,
+    detectedCity,
+    setDetectedCity,
+    orgAddressForm,
+    setOrgAddressForm,
+    locationForm,
+    setLocationForm,
+    branchGeoStatus,
+    setBranchGeoStatus,
+    syncOrgAddressFormFromMe,
+    onProfileAddressInput,
+    onBranchAddressInput,
+    onAddressInput,
+    pickProfileSuggestion,
+    pickBranchLocationSuggestion,
+    pickSuggestion,
+    geocodeProfileAddress,
+    geocodeBranchAddress,
+    geocodeAddress,
+    detectCityByGeolocation,
+  } = useOrgAddress({
+    me,
+    orgMainEditOpen,
+    orgBranchEditOpen,
+    profileMapRef,
+    profilePlacemarkRef,
+    branchAddMapRef,
+    branchAddPlacemarkRef,
+    branchEditMapRef,
+    branchEditPlacemarkRef,
+    mapRef,
+    placemarkRef,
+    setForm,
+  });
+
+  const postChatMessageRef = useRef(async () => false);
+  const {
+    chatComposeMode,
+    chatRecordingKind,
+    chatRecordLocked,
+    chatRecordLiftHint,
+    chatRecordSecs,
+    chatRecordLevels,
+    chatMediaPreview,
+    chatCameraFacing,
+    chatCameraSwitching,
+    chatLiveVideoRef,
+    chatPreviewMediaRef,
+    stopChatRecording,
+    cancelChatRecording,
+    discardChatMediaPreview,
+    sendChatMediaPreview,
+    switchChatCamera,
+    onComposeActionPointerDown,
+    onComposeActionPointerMove,
+    onComposeActionPointerUp,
+  } = useChatRecording({
+    selectedChatId,
+    chatInput,
+    chatPendingFiles,
+    postChatMessage: (...args) => postChatMessageRef.current(...args),
+    setChatStatus,
+  });
   const [chatLocalPrefs, setChatLocalPrefs] = useState({});
   const [chatSettingsAvatar, setChatSettingsAvatar] = useState("");
   const [chatSettingsWallpaper, setChatSettingsWallpaper] = useState("#e8f4ea");
@@ -1337,17 +1301,6 @@ export default function App() {
   }, [chatMessages]);
 
   useEffect(() => {
-    if (chatRecordingKind !== "video_note") return undefined;
-    attachLiveCameraPreview();
-    const t1 = window.setTimeout(attachLiveCameraPreview, 50);
-    const t2 = window.setTimeout(attachLiveCameraPreview, 250);
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-    };
-  }, [chatRecordingKind, chatCameraFacing]);
-
-  useEffect(() => {
     chatHasMoreOlderRef.current = chatHasMoreOlder;
   }, [chatHasMoreOlder]);
 
@@ -1425,72 +1378,6 @@ export default function App() {
     });
     setEmailForm({ new_email: me.email || "" });
   }, [me]);
-
-  function syncOrgAddressFormFromMe() {
-    if (!me || me.role !== "provider") return;
-    const merged = mergeStructuredOrgPartsFromMe(me);
-    const hasApiStructured =
-      String(me.organization_entrance || "").trim() ||
-      String(me.organization_floor || "").trim() ||
-      String(me.organization_apartment || "").trim() ||
-      String(me.organization_intercom || "").trim() ||
-      String(me.organization_address_extra || "").trim();
-
-    const raw = me.organization_address || "";
-    const sep = " | ";
-    const splitIdx = raw.indexOf(sep);
-    const baseFromRaw = splitIdx >= 0 ? raw.slice(0, splitIdx).trim() : raw.trim();
-    const tailFromRaw = splitIdx >= 0 ? raw.slice(splitIdx + sep.length).trim() : "";
-
-    if (hasApiStructured) {
-      const addrSource = splitIdx >= 0 ? baseFromRaw : String(me.organization_address || "").trim();
-      setOrgAddressForm((prev) => ({
-        ...prev,
-        organization_name: me.organization_name || "",
-        organization_address: simplifyCommaAddressLine(addrSource) || addrSource || prev.organization_address,
-        entrance: merged.entrance,
-        floor: merged.floor,
-        apartment: merged.apartment,
-        intercom: merged.intercom,
-        organization_address_details: merged.extra,
-        organization_latitude: String(me.organization_latitude ?? prev.organization_latitude ?? "55.751244"),
-        organization_longitude: String(me.organization_longitude ?? prev.organization_longitude ?? "37.618423"),
-      }));
-      return;
-    }
-
-    const parsed = parseAddressDetailsPipeTail(tailFromRaw);
-    setOrgAddressForm((prev) => ({
-      ...prev,
-      organization_name: me.organization_name || "",
-      organization_address: simplifyCommaAddressLine(baseFromRaw) || baseFromRaw || prev.organization_address,
-      entrance: parsed.entrance,
-      floor: parsed.floor,
-      apartment: parsed.apartment,
-      intercom: parsed.intercom,
-      organization_address_details: parsed.extraDetails,
-      organization_latitude: String(me.organization_latitude ?? prev.organization_latitude ?? "55.751244"),
-      organization_longitude: String(me.organization_longitude ?? prev.organization_longitude ?? "37.618423"),
-    }));
-  }
-
-  useEffect(() => {
-    if (orgMainEditOpen) return;
-    syncOrgAddressFormFromMe();
-  }, [
-    orgMainEditOpen,
-    me?.id,
-    me?.role,
-    me?.organization_address,
-    me?.organization_name,
-    me?.organization_latitude,
-    me?.organization_longitude,
-    me?.organization_entrance,
-    me?.organization_floor,
-    me?.organization_apartment,
-    me?.organization_intercom,
-    me?.organization_address_extra,
-  ]);
 
   useEffect(() => {
     if (!chatsSurfaceActive || !conversations.length) return;
@@ -2723,154 +2610,6 @@ export default function App() {
       .catch(() => showToast("Не удалось загрузить карту.", { tone: "error" }));
   }
 
-  async function geocodeAddress(addressValue) {
-    const ymaps = window.ymaps;
-    if (!ymaps || !mapRef.current || !addressValue?.trim()) return;
-    const trimmed = addressValue.trim();
-    const fromGeo = await ensureCityHintFromGeo();
-    const cityHint = detectedCity || fromGeo;
-    const queries = [buildNominatimQuery(trimmed, cityHint), buildNominatimQuery(trimmed, ""), trimmed];
-    let data = [];
-    for (const q of queries) {
-      if (!q) continue;
-      data = await nominatimSearchRU(q, 1);
-      if (data.length) break;
-    }
-    if (!data.length) return;
-    const first = data[0];
-    const lat = Number(first.lat);
-    const lon = Number(first.lon);
-    const normalizedAddress = simplifyCommaAddressLine(
-      buildShortAddress(first.address) || first.display_name || addressValue
-    );
-    const city = getCity(first.address);
-    setForm((prev) => ({
-      ...prev,
-      organization_latitude: lat.toFixed(6),
-      organization_longitude: lon.toFixed(6),
-      organization_address: normalizedAddress,
-    }));
-    if (city) setDetectedCity(city);
-    const coords = [lat, lon];
-    mapRef.current.setCenter(coords, 14);
-    if (!placemarkRef.current) {
-      placemarkRef.current = new ymaps.Placemark(coords);
-      mapRef.current.geoObjects.add(placemarkRef.current);
-    } else {
-      placemarkRef.current.geometry.setCoordinates(coords);
-    }
-  }
-
-  function ensureCityHintFromGeo() {
-    if (geoCityDeniedRef.current || !navigator.geolocation) return Promise.resolve("");
-    if (geoCityPromiseRef.current) return geoCityPromiseRef.current;
-    geoCityPromiseRef.current = new Promise((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const geo = await reverseGeocodeByCoords(position.coords.latitude, position.coords.longitude);
-          const city = getCity(geo?.address) || federalCityFromReverse(geo?.address);
-          if (city) setDetectedCity(city);
-          geoCityPromiseRef.current = null;
-          resolve(city || "");
-        },
-        (err) => {
-          if (err && err.code === 1) geoCityDeniedRef.current = true;
-          geoCityPromiseRef.current = null;
-          resolve("");
-        },
-        { timeout: 9500, enableHighAccuracy: false }
-      );
-    });
-    return geoCityPromiseRef.current;
-  }
-
-  async function fetchAddressSuggestions(query) {
-    const trimmed = (query || "").trim();
-    if (trimmed.length < 2) {
-      setAddressSuggestions([]);
-      return;
-    }
-    const seq = ++suggestRequestSeqRef.current;
-    const YANDEX_SUGGEST_CAP_MS = 4500;
-    try {
-      void ensureCityHintFromGeo();
-      const cityHint = detectedCity;
-
-      async function loadPhotonSuggestionItems() {
-        const primaryQ = buildNominatimQuery(trimmed, cityHint);
-        let items = await photonSuggestSearch(primaryQ, 10);
-        if (items.length === 0) {
-          const secondQ = buildNominatimQuery(trimmed, "");
-          if (secondQ !== primaryQ) items = await photonSuggestSearch(secondQ, 10);
-        }
-        if (items.length === 0 && primaryQ !== trimmed) {
-          items = await photonSuggestSearch(trimmed, 10);
-        }
-        return items;
-      }
-
-      /** Без ключей Яндекса подсказки только через Photon (komoot) — бесплатно для типичного объёма. */
-      const yandexAutocompleteEnabled = Boolean(
-        import.meta.env.VITE_YANDEX_SUGGEST_API_KEY || import.meta.env.VITE_YANDEX_MAPS_API_KEY
-      );
-
-      if (yandexAutocompleteEnabled) {
-        await loadYandexMaps().catch(() => showToast("Не удалось загрузить подсказки адреса.", { tone: "error" }));
-      }
-
-      const yaPromise =
-        window.ymaps && yandexAutocompleteEnabled
-          ? Promise.race([
-              (async () => {
-                const fromSuggest = await yandexMapsNativeSuggestItems(trimmed, cityHint);
-                if (fromSuggest?.length) return fromSuggest;
-                const fromGeocode = await yandexGeocodeSuggestItems(trimmed, cityHint);
-                return fromGeocode && fromGeocode.length ? fromGeocode : [];
-              })(),
-              new Promise((resolve) => {
-                setTimeout(() => resolve([]), YANDEX_SUGGEST_CAP_MS);
-              }),
-            ])
-          : Promise.resolve([]);
-
-      const [yaItems, photonItems] = await Promise.all([yaPromise, loadPhotonSuggestionItems()]);
-      if (suggestRequestSeqRef.current !== seq) return;
-      setAddressSuggestions(photonItems.length ? photonItems : yaItems);
-    } catch (_error) {
-      if (suggestRequestSeqRef.current === seq) setAddressSuggestions([]);
-    }
-  }
-
-  function onAddressInput(value) {
-    setForm((prev) => ({ ...prev, organization_address: value }));
-    if (suggestTimerRef.current) clearTimeout(suggestTimerRef.current);
-    suggestTimerRef.current = setTimeout(() => {
-      fetchAddressSuggestions(value);
-    }, 280);
-  }
-
-  function pickSuggestion(item) {
-    const ymaps = window.ymaps;
-    const line = simplifyCommaAddressLine(String(item.value || "").trim()) || String(item.value || "").trim();
-    setForm((prev) => ({
-      ...prev,
-      organization_address: line,
-      organization_latitude: item.lat.toFixed(6),
-      organization_longitude: item.lon.toFixed(6),
-    }));
-    if (item.city) setDetectedCity(item.city);
-    setAddressSuggestions([]);
-    if (!ymaps || !mapRef.current) return;
-    const coords = [item.lat, item.lon];
-    mapRef.current.setCenter(coords, 14);
-    if (!placemarkRef.current) {
-      placemarkRef.current = new ymaps.Placemark(coords);
-      mapRef.current.geoObjects.add(placemarkRef.current);
-    } else {
-      placemarkRef.current.geometry.setCoordinates(coords);
-    }
-  }
-
   function destroyProfileMap() {
     if (profileMapRef.current) {
       try {
@@ -3202,144 +2941,6 @@ export default function App() {
         });
       })
       .catch(() => showToast("Не удалось загрузить карту.", { tone: "error" }));
-  }
-
-  function onProfileAddressInput(value) {
-    setOrgAddressForm((prev) => ({ ...prev, organization_address: value }));
-    if (suggestTimerRef.current) clearTimeout(suggestTimerRef.current);
-    suggestTimerRef.current = setTimeout(() => {
-      fetchAddressSuggestions(value);
-    }, 280);
-  }
-
-  function onBranchAddressInput(value) {
-    setLocationForm((prev) => ({ ...prev, address: value }));
-    if (suggestTimerRef.current) clearTimeout(suggestTimerRef.current);
-    suggestTimerRef.current = setTimeout(() => {
-      fetchAddressSuggestions(value);
-    }, 280);
-  }
-
-  function pickBranchLocationSuggestion(item) {
-    const ymaps = window.ymaps;
-    setLocationForm((prev) => ({
-      ...prev,
-      address: item.value,
-      latitude: item.lat.toFixed(6),
-      longitude: item.lon.toFixed(6),
-      entrance: "",
-      floor: "",
-      apartment: "",
-      intercom: "",
-      address_details: "",
-    }));
-    if (item.city) setDetectedCity(item.city);
-    setAddressSuggestions([]);
-    if (!ymaps) return;
-    const coords = [item.lat, item.lon];
-    const mapEl = orgBranchEditOpen ? branchEditMapRef.current : branchAddMapRef.current;
-    const placemark = orgBranchEditOpen ? branchEditPlacemarkRef.current : branchAddPlacemarkRef.current;
-    if (!mapEl) return;
-    mapEl.setCenter(coords, 14);
-    if (placemark) {
-      placemark.geometry.setCoordinates(coords);
-    } else {
-      const pm = new ymaps.Placemark(coords);
-      if (orgBranchEditOpen) {
-        branchEditPlacemarkRef.current = pm;
-        branchEditMapRef.current.geoObjects.add(pm);
-      } else {
-        branchAddPlacemarkRef.current = pm;
-        branchAddMapRef.current.geoObjects.add(pm);
-      }
-    }
-  }
-
-  function pickProfileSuggestion(item) {
-    const ymaps = window.ymaps;
-    const line = simplifyCommaAddressLine(String(item.value || "").trim()) || String(item.value || "").trim();
-    setOrgAddressForm((prev) => ({
-      ...prev,
-      organization_address: line,
-      organization_latitude: item.lat.toFixed(6),
-      organization_longitude: item.lon.toFixed(6),
-    }));
-    if (item.city) setDetectedCity(item.city);
-    setAddressSuggestions([]);
-    if (!ymaps || !profileMapRef.current) return;
-    const coords = [item.lat, item.lon];
-    profileMapRef.current.setCenter(coords, 14);
-    if (!profilePlacemarkRef.current) {
-      profilePlacemarkRef.current = new ymaps.Placemark(coords);
-      profileMapRef.current.geoObjects.add(profilePlacemarkRef.current);
-    } else {
-      profilePlacemarkRef.current.geometry.setCoordinates(coords);
-    }
-  }
-
-  async function geocodeProfileAddress(addressValue) {
-    const ymaps = window.ymaps;
-    if (!ymaps || !profileMapRef.current || !addressValue?.trim()) return;
-    const trimmed = addressValue.trim();
-    const fromGeo = await ensureCityHintFromGeo();
-    const cityHint = detectedCity || fromGeo;
-    const queries = [buildNominatimQuery(trimmed, cityHint), buildNominatimQuery(trimmed, ""), trimmed];
-    let data = [];
-    for (const q of queries) {
-      if (!q) continue;
-      data = await nominatimSearchRU(q, 1);
-      if (data.length) break;
-    }
-    if (!data.length) return;
-    const first = data[0];
-    const lat = Number(first.lat);
-    const lon = Number(first.lon);
-    const normalizedAddress = simplifyCommaAddressLine(
-      buildShortAddress(first.address) || first.display_name || addressValue
-    );
-    const city = getCity(first.address);
-    setOrgAddressForm((prev) => ({
-      ...prev,
-      organization_latitude: lat.toFixed(6),
-      organization_longitude: lon.toFixed(6),
-      organization_address: normalizedAddress,
-    }));
-    if (city) setDetectedCity(city);
-    const coords = [lat, lon];
-    profileMapRef.current.setCenter(coords, 14);
-    if (!profilePlacemarkRef.current) {
-      profilePlacemarkRef.current = new ymaps.Placemark(coords);
-      profileMapRef.current.geoObjects.add(profilePlacemarkRef.current);
-    } else {
-      profilePlacemarkRef.current.geometry.setCoordinates(coords);
-    }
-  }
-
-  function buildSearchText(rawText) {
-    if (!rawText) return "";
-    if (!detectedCity) return rawText;
-    const lower = rawText.toLowerCase();
-    const cityLower = detectedCity.toLowerCase();
-    if (lower.includes(cityLower)) return rawText;
-    const startsWithDigit = /^\d/.test(rawText);
-    if (startsWithDigit || rawText.split(" ").length <= 4) {
-      return `${detectedCity}, ${rawText}`;
-    }
-    return rawText;
-  }
-
-  async function detectCityByGeolocation() {
-    if (detectedCity || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        const geo = await reverseGeocodeByCoords(latitude, longitude);
-        const city = getCity(geo?.address) || federalCityFromReverse(geo?.address);
-        if (city) setDetectedCity(city);
-      },
-      () => {},
-      { timeout: 7000, enableHighAccuracy: false }
-    );
   }
 
   function composeAddressWithDetails(baseAddress, sourceForm = form) {
@@ -3995,6 +3596,8 @@ export default function App() {
     return true;
   }
 
+  postChatMessageRef.current = postChatMessage;
+
   async function sendChatMessage(event) {
     event.preventDefault();
     if (chatPendingFiles.length) {
@@ -4042,571 +3645,6 @@ export default function App() {
       return { file, kind };
     });
     setChatPendingFiles((prev) => [...prev, ...next]);
-  }
-
-  function toggleChatComposeMode() {
-    const next = chatComposeMode === "voice" ? "video_note" : "voice";
-    setChatComposeMode(next);
-    saveChatComposeMode(next);
-  }
-
-  function clearChatRecordMeters() {
-    if (chatRecordTickRef.current) {
-      clearInterval(chatRecordTickRef.current);
-      chatRecordTickRef.current = null;
-    }
-    if (chatLevelRafRef.current) {
-      cancelAnimationFrame(chatLevelRafRef.current);
-      chatLevelRafRef.current = null;
-    }
-    if (chatAudioCtxRef.current) {
-      try {
-        chatAudioCtxRef.current.close();
-      } catch {
-        /* ignore */
-      }
-      chatAudioCtxRef.current = null;
-      chatAnalyserRef.current = null;
-    }
-    setChatRecordSecs(0);
-    setChatRecordLevels(Array(24).fill(0.12));
-    setChatRecordLiftHint(false);
-  }
-
-  function stopMirrorPipeline() {
-    const pipe = chatMirrorPipelineRef.current;
-    chatMirrorPipelineRef.current = null;
-    if (!pipe) return;
-    if (pipe.raf) {
-      try {
-        cancelAnimationFrame(pipe.raf);
-      } catch {
-        /* ignore */
-      }
-    }
-    if (pipe.videoEl) {
-      try {
-        pipe.videoEl.srcObject = null;
-      } catch {
-        /* ignore */
-      }
-    }
-    if (pipe.canvasStream) {
-      try {
-        pipe.canvasStream.getTracks().forEach((t) => t.stop());
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  /** Continuous canvas capture — camera switch must NOT restart MediaRecorder. */
-  async function startCanvasRecordPipeline(cameraStream, mirror) {
-    stopMirrorPipeline();
-    if (!cameraStream) return null;
-
-    const videoEl = document.createElement("video");
-    videoEl.muted = true;
-    videoEl.playsInline = true;
-    videoEl.setAttribute("playsinline", "true");
-    videoEl.srcObject = cameraStream;
-    await new Promise((resolve) => {
-      const done = () => resolve();
-      if (videoEl.readyState >= 1) done();
-      else {
-        videoEl.onloadedmetadata = done;
-        window.setTimeout(done, 1200);
-      }
-    });
-    await videoEl.play().catch(() => {});
-
-    const size = 480;
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d", { alpha: false });
-    const pipe = {
-      videoEl,
-      canvas,
-      canvasStream: null,
-      raf: 0,
-      mirror: Boolean(mirror),
-    };
-
-    const draw = () => {
-      const vw = videoEl.videoWidth || size;
-      const vh = videoEl.videoHeight || size;
-      if (vw > 0 && vh > 0 && ctx) {
-        ctx.save();
-        if (pipe.mirror) {
-          ctx.translate(size, 0);
-          ctx.scale(-1, 1);
-        }
-        const scale = Math.max(size / vw, size / vh);
-        const dw = vw * scale;
-        const dh = vh * scale;
-        ctx.drawImage(videoEl, (size - dw) / 2, (size - dh) / 2, dw, dh);
-        ctx.restore();
-      }
-      pipe.raf = requestAnimationFrame(draw);
-    };
-    draw();
-
-    const canvasStream = canvas.captureStream(30);
-    pipe.canvasStream = canvasStream;
-    chatMirrorPipelineRef.current = pipe;
-
-    return new MediaStream([
-      ...canvasStream.getVideoTracks(),
-      ...cameraStream.getAudioTracks(),
-    ]);
-  }
-
-  async function retargetCanvasPipeline(cameraStream, mirror) {
-    const pipe = chatMirrorPipelineRef.current;
-    if (!pipe?.videoEl) {
-      return startCanvasRecordPipeline(cameraStream, mirror);
-    }
-    pipe.mirror = Boolean(mirror);
-    // Force pick-up of replaced camera track (same MediaStream object)
-    pipe.videoEl.srcObject = null;
-    pipe.videoEl.srcObject = cameraStream;
-    await new Promise((resolve) => {
-      const done = () => resolve();
-      if (pipe.videoEl.readyState >= 1) done();
-      else {
-        pipe.videoEl.onloadedmetadata = done;
-        window.setTimeout(done, 800);
-      }
-    });
-    await pipe.videoEl.play().catch(() => {});
-    return null;
-  }
-
-  function attachLiveCameraPreview() {
-    const stream = chatCameraStreamRef.current;
-    const el = chatLiveVideoRef.current;
-    if (!stream || !el) return;
-    if (el.srcObject !== stream) {
-      el.srcObject = stream;
-    }
-    el.muted = true;
-    el.playsInline = true;
-    el.setAttribute("playsinline", "true");
-    el.play?.().catch(() => {});
-  }
-
-  function stopChatRecordTracks() {
-    stopMirrorPipeline();
-    const recordStream = chatRecordStreamRef.current;
-    chatRecordStreamRef.current = null;
-    const cameraStream = chatCameraStreamRef.current;
-    chatCameraStreamRef.current = null;
-    if (recordStream) {
-      try {
-        recordStream.getTracks().forEach((t) => t.stop());
-      } catch {
-        /* ignore */
-      }
-    }
-    if (cameraStream) {
-      try {
-        cameraStream.getTracks().forEach((t) => t.stop());
-      } catch {
-        /* ignore */
-      }
-    }
-    if (chatLiveVideoRef.current) {
-      try {
-        chatLiveVideoRef.current.srcObject = null;
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  function finishChatRecordingToPreview() {
-    const chunks = chatRecordChunksRef.current.slice();
-    const mime = chatRecordMimeRef.current || "application/octet-stream";
-    const kind = chatRecordKindRef.current || "voice";
-    const elapsed = Date.now() - chatRecordStartedAtRef.current;
-    chatMediaRecorderRef.current = null;
-    chatRecordChunksRef.current = [];
-    setChatRecordingKind(null);
-    chatRecordLockedRef.current = false;
-    setChatRecordLocked(false);
-    clearChatRecordMeters();
-    stopChatRecordTracks();
-    if (elapsed < 400 || !chunks.length) {
-      return;
-    }
-    const blob = new Blob(chunks, { type: mime });
-    if (!blob.size) return;
-    const url = URL.createObjectURL(blob);
-    setChatMediaPreview({
-      blob,
-      url,
-      kind: kind === "video_note" ? "video_note" : "voice",
-      mime,
-      durationSec: Math.max(1, Math.round(elapsed / 1000)),
-      displayFlip: false,
-      fileMirrored: true,
-    });
-  }
-
-  function bindChatMediaRecorder(stream) {
-    const mime = chatRecordMimeRef.current;
-    const recorder = mime
-      ? new MediaRecorder(stream, { mimeType: mime })
-      : new MediaRecorder(stream);
-    if (!mime && recorder.mimeType) chatRecordMimeRef.current = recorder.mimeType;
-    chatMediaRecorderRef.current = recorder;
-    recorder.ondataavailable = (ev) => {
-      if (ev.data && ev.data.size > 0) chatRecordChunksRef.current.push(ev.data);
-    };
-    recorder.onstop = () => {
-      if (chatKeepRecordingRef.current) {
-        chatMediaRecorderRef.current = null;
-        return;
-      }
-      finishChatRecordingToPreview();
-    };
-    recorder.start(250);
-    return recorder;
-  }
-
-  async function switchChatCamera() {
-    if (chatRecordingKind !== "video_note" || chatCameraSwitching) return;
-    const cameraStream = chatCameraStreamRef.current;
-    if (!cameraStream) return;
-    const wantFacing = chatCameraFacingRef.current === "user" ? "environment" : "user";
-    setChatCameraSwitching(true);
-    try {
-      const oldVideo = cameraStream.getVideoTracks()[0] || null;
-      const currentId = oldVideo?.getSettings?.().deviceId || "";
-      const nextCam = await pickOtherVideoDevice(currentId, wantFacing);
-      if (!nextCam?.deviceId) {
-        setChatStatus("Вторая камера не найдена на этом устройстве.");
-        return;
-      }
-
-      // Keep MediaRecorder running on canvas stream; only swap camera video feeding the canvas
-      cameraStream.getVideoTracks().forEach((t) => {
-        try {
-          cameraStream.removeTrack(t);
-        } catch {
-          /* ignore */
-        }
-        try {
-          t.stop();
-        } catch {
-          /* ignore */
-        }
-      });
-
-      let fresh = null;
-      let newVideo = null;
-      const videoTries = [
-        {
-          deviceId: { exact: nextCam.deviceId },
-          width: { ideal: 480 },
-          height: { ideal: 480 },
-        },
-        {
-          facingMode: { exact: wantFacing },
-          width: { ideal: 480 },
-          height: { ideal: 480 },
-        },
-        {
-          facingMode: { ideal: wantFacing },
-          width: { ideal: 480 },
-          height: { ideal: 480 },
-        },
-      ];
-      let lastErr = null;
-      for (const video of videoTries) {
-        try {
-          fresh = await navigator.mediaDevices.getUserMedia({ audio: false, video });
-          newVideo = fresh.getVideoTracks()[0] || null;
-          if (newVideo) break;
-          fresh.getTracks().forEach((t) => t.stop());
-          fresh = null;
-        } catch (err) {
-          lastErr = err;
-          fresh = null;
-          newVideo = null;
-        }
-      }
-      if (!newVideo || !fresh) {
-        throw lastErr || new Error("no video");
-      }
-
-      const newId = newVideo.getSettings?.().deviceId || "";
-      if (currentId && newId && currentId === newId) {
-        fresh.getTracks().forEach((t) => t.stop());
-        throw new Error("same camera");
-      }
-
-      cameraStream.addTrack(newVideo);
-      fresh.getAudioTracks().forEach((t) => t.stop());
-
-      const actualFacing =
-        detectCameraFacingFromTrack(newVideo, nextCam.label) || wantFacing;
-      chatCameraFacingRef.current = actualFacing;
-      setChatCameraFacing(actualFacing);
-
-      await retargetCanvasPipeline(cameraStream, actualFacing === "user");
-      attachLiveCameraPreview();
-    } catch {
-      setChatStatus("Не удалось переключить камеру.");
-      const cam = chatCameraStreamRef.current;
-      if (cam && !cam.getVideoTracks().length) {
-        try {
-          const fallback = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: {
-              facingMode: { ideal: chatCameraFacingRef.current || "user" },
-              width: { ideal: 480 },
-              height: { ideal: 480 },
-            },
-          });
-          const vt = fallback.getVideoTracks()[0];
-          if (vt) cam.addTrack(vt);
-          fallback.getAudioTracks().forEach((t) => t.stop());
-          const facing = chatCameraFacingRef.current || "user";
-          await retargetCanvasPipeline(cam, facing === "user");
-          attachLiveCameraPreview();
-        } catch {
-          /* ignore */
-        }
-      }
-    } finally {
-      setChatCameraSwitching(false);
-    }
-  }
-
-  async function startChatRecording(kind) {
-    if (chatRecordingKind || chatMediaPreview || !selectedChatId) return;
-    try {
-      const facing = chatCameraFacingRef.current || "user";
-      const constraints =
-        kind === "video_note"
-          ? {
-              audio: true,
-              video: {
-                facingMode: { ideal: facing },
-                width: { ideal: 480 },
-                height: { ideal: 480 },
-              },
-            }
-          : { audio: true };
-      const cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
-      chatCameraStreamRef.current = kind === "video_note" ? cameraStream : null;
-      const actualFacing =
-        kind === "video_note"
-          ? detectCameraFacingFromTrack(cameraStream.getVideoTracks()[0]) || facing || "user"
-          : facing;
-      if (kind === "video_note") {
-        chatCameraFacingRef.current = actualFacing;
-        setChatCameraFacing(actualFacing);
-      }
-      const recordStream =
-        kind === "video_note"
-          ? await startCanvasRecordPipeline(cameraStream, actualFacing === "user")
-          : cameraStream;
-      if (!recordStream) throw new Error("no record stream");
-      chatRecordStreamRef.current = recordStream;
-      chatRecordChunksRef.current = [];
-      const mime = pickRecorderMime(kind);
-      chatRecordMimeRef.current = mime || (kind === "video_note" ? "video/webm" : "audio/webm");
-      chatRecordKindRef.current = kind;
-      chatKeepRecordingRef.current = false;
-      bindChatMediaRecorder(recordStream);
-      chatRecordStartedAtRef.current = Date.now();
-      setChatRecordingKind(kind);
-      chatRecordLockedRef.current = false;
-      setChatRecordLocked(false);
-      setChatRecordSecs(0);
-      chatRecordTickRef.current = setInterval(() => {
-        setChatRecordSecs(Math.floor((Date.now() - chatRecordStartedAtRef.current) / 1000));
-      }, 250);
-
-      try {
-        const Ctx = window.AudioContext || window.webkitAudioContext;
-        if (Ctx) {
-          const ctx = new Ctx();
-          const source = ctx.createMediaStreamSource(cameraStream);
-          const analyser = ctx.createAnalyser();
-          analyser.fftSize = 64;
-          source.connect(analyser);
-          chatAudioCtxRef.current = ctx;
-          chatAnalyserRef.current = analyser;
-          const data = new Uint8Array(analyser.frequencyBinCount);
-          const tickLevels = () => {
-            if (!chatAnalyserRef.current) return;
-            chatAnalyserRef.current.getByteFrequencyData(data);
-            const step = Math.max(1, Math.floor(data.length / 24));
-            const next = [];
-            for (let i = 0; i < 24; i += 1) {
-              next.push(Math.min(1, (data[i * step] || 0) / 180));
-            }
-            setChatRecordLevels(next);
-            chatLevelRafRef.current = requestAnimationFrame(tickLevels);
-          };
-          tickLevels();
-        }
-      } catch {
-        /* analyser optional */
-      }
-    } catch (_e) {
-      setChatStatus("Нет доступа к микрофону/камере.");
-      setChatRecordingKind(null);
-      chatRecordLockedRef.current = false; setChatRecordLocked(false);
-      clearChatRecordMeters();
-      stopChatRecordTracks();
-    }
-  }
-
-  function stopChatRecording() {
-    const rec = chatMediaRecorderRef.current;
-    if (rec && rec.state !== "inactive") {
-      try {
-        if (typeof rec.requestData === "function") rec.requestData();
-        rec.stop();
-      } catch {
-        setChatRecordingKind(null);
-        chatRecordLockedRef.current = false; setChatRecordLocked(false);
-        clearChatRecordMeters();
-        stopChatRecordTracks();
-      }
-    } else {
-      setChatRecordingKind(null);
-      chatRecordLockedRef.current = false; setChatRecordLocked(false);
-      clearChatRecordMeters();
-      stopChatRecordTracks();
-    }
-  }
-
-  function cancelChatRecording() {
-    const rec = chatMediaRecorderRef.current;
-    chatRecordChunksRef.current = [];
-    chatRecordStartedAtRef.current = Date.now();
-    if (rec && rec.state !== "inactive") {
-      try {
-        rec.onstop = () => {
-          chatMediaRecorderRef.current = null;
-          setChatRecordingKind(null);
-          chatRecordLockedRef.current = false; setChatRecordLocked(false);
-          clearChatRecordMeters();
-          stopChatRecordTracks();
-        };
-        rec.stop();
-      } catch {
-        setChatRecordingKind(null);
-        chatRecordLockedRef.current = false; setChatRecordLocked(false);
-        clearChatRecordMeters();
-        stopChatRecordTracks();
-      }
-    } else {
-      setChatRecordingKind(null);
-      chatRecordLockedRef.current = false; setChatRecordLocked(false);
-      clearChatRecordMeters();
-      stopChatRecordTracks();
-    }
-  }
-
-  function discardChatMediaPreview() {
-    if (chatMediaPreview?.url) URL.revokeObjectURL(chatMediaPreview.url);
-    setChatMediaPreview(null);
-  }
-
-  async function sendChatMediaPreview() {
-    if (!chatMediaPreview) return;
-    const { blob, kind, mime, durationSec, displayFlip } = chatMediaPreview;
-    const file = await blobToFile(
-      blob,
-      kind === "video_note" ? `video_note_${Date.now()}.webm` : `voice_${Date.now()}.webm`,
-      mime
-    );
-    discardChatMediaPreview();
-    await postChatMessage({
-      file,
-      kind,
-      durationSec,
-      displayFlip: kind === "video_note" ? Boolean(displayFlip) : null,
-    });
-  }
-
-  function onComposeActionPointerDown(e) {
-    if (chatInput.trim() || chatPendingFiles.length || chatMediaPreview) return;
-    e.preventDefault();
-    try {
-      e.currentTarget.setPointerCapture?.(e.pointerId);
-    } catch {
-      /* ignore */
-    }
-    chatDidHoldRef.current = false;
-    chatPointerStartYRef.current = e.clientY ?? e.touches?.[0]?.clientY ?? 0;
-    chatRecordLiftHintRef.current = false;
-    setChatRecordLiftHint(false);
-    if (chatHoldTimerRef.current) clearTimeout(chatHoldTimerRef.current);
-    // Short tap toggles voice/circle; hold ~0.45s starts recording (clicks often last >200ms).
-    chatHoldTimerRef.current = setTimeout(() => {
-      chatDidHoldRef.current = true;
-      startChatRecording(chatComposeMode);
-    }, 450);
-  }
-
-  function onComposeActionPointerMove(e) {
-    if (!chatRecordingKind || chatRecordLockedRef.current) return;
-    const y = e.clientY ?? e.touches?.[0]?.clientY ?? chatPointerStartYRef.current;
-    const dy = chatPointerStartYRef.current - y;
-    const lifted = dy > 40;
-    chatRecordLiftHintRef.current = lifted;
-    setChatRecordLiftHint(lifted);
-    if (dy > 90) {
-      chatRecordLockedRef.current = true;
-      chatRecordLiftHintRef.current = false;
-      setChatRecordLocked(true);
-      setChatRecordLiftHint(false);
-    }
-  }
-
-  function onComposeActionPointerUp(e) {
-    if (chatHoldTimerRef.current) {
-      clearTimeout(chatHoldTimerRef.current);
-      chatHoldTimerRef.current = null;
-    }
-    try {
-      e?.currentTarget?.releasePointerCapture?.(e.pointerId);
-    } catch {
-      /* ignore */
-    }
-    if (chatRecordingKind) {
-      if (chatRecordLockedRef.current) return;
-      if (chatRecordLiftHintRef.current) {
-        chatRecordLockedRef.current = true;
-        chatRecordLiftHintRef.current = false;
-        setChatRecordLocked(true);
-        setChatRecordLiftHint(false);
-        return;
-      }
-      stopChatRecording();
-      return;
-    }
-    if (!chatDidHoldRef.current) toggleChatComposeMode();
-  }
-
-  function onCircleSeekPointer(e, mediaEl) {
-    if (!mediaEl || !Number.isFinite(mediaEl.duration) || mediaEl.duration <= 0) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const x = (e.clientX ?? e.touches?.[0]?.clientX) - cx;
-    const y = (e.clientY ?? e.touches?.[0]?.clientY) - cy;
-    let angle = Math.atan2(y, x); // -PI..PI, 0 at east
-    angle = (angle + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2); // 0 at north, clockwise
-    mediaEl.currentTime = (angle / (Math.PI * 2)) * mediaEl.duration;
   }
 
   function persistChatVisualSettings() {
@@ -5496,53 +4534,6 @@ export default function App() {
     setOrgMainEditOpen(false);
     loadMe();
     loadSellerData();
-  }
-
-  async function geocodeBranchAddress() {
-    const q = locationForm.address?.trim();
-    if (!q) {
-      setBranchGeoStatus("Укажи адрес филиала.");
-      return;
-    }
-    setBranchGeoStatus("Ищем на карте…");
-    const fromGeo = await ensureCityHintFromGeo();
-    const cityHint = detectedCity || fromGeo;
-    const queries = [buildNominatimQuery(q, cityHint), buildNominatimQuery(q, ""), q];
-    let data = [];
-    for (const queryStr of queries) {
-      if (!queryStr) continue;
-      data = await nominatimSearchRU(queryStr, 1);
-      if (data.length) break;
-    }
-    if (!data.length) {
-      setBranchGeoStatus("Адрес не найден.");
-      return;
-    }
-    const first = data[0];
-    const lat = Number(first.lat);
-    const lon = Number(first.lon);
-    setLocationForm((prev) => ({
-      ...prev,
-      latitude: lat.toFixed(6),
-      longitude: lon.toFixed(6),
-      address: simplifyCommaAddressLine(
-        buildShortAddress(first.address) || first.display_name || prev.address
-      ),
-    }));
-    const city = getCity(first.address);
-    if (city) setDetectedCity(city);
-    setBranchGeoStatus("Адрес найден на карте.");
-    const ymaps = window.ymaps;
-    if (ymaps && branchAddMapRef.current && branchAddPlacemarkRef.current) {
-      const coords = [lat, lon];
-      branchAddMapRef.current.setCenter(coords, 14);
-      branchAddPlacemarkRef.current.geometry.setCoordinates(coords);
-    }
-    if (ymaps && branchEditMapRef.current && branchEditPlacemarkRef.current) {
-      const coords = [lat, lon];
-      branchEditMapRef.current.setCenter(coords, 14);
-      branchEditPlacemarkRef.current.geometry.setCoordinates(coords);
-    }
   }
 
   async function createProviderBranch(event) {
