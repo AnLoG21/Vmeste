@@ -41,19 +41,29 @@ const App = lazy(lazyAppImport);
 class AppChunkErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { failed: false };
+    this.state = { failed: false, error: null };
   }
 
-  static getDerivedStateFromError() {
-    return { failed: true };
+  static getDerivedStateFromError(error) {
+    return { failed: true, error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error("App render failed", error, info?.componentStack);
   }
 
   render() {
     if (this.state.failed) {
+      const detail = this.state.error?.message || String(this.state.error || "");
       return (
         <main className="landing page page--guest" style={{ padding: "2rem 1.25rem" }}>
           <h1>Ошибка интерфейса</h1>
           <p className="landing-hero-lead">Попробуйте обновить страницу.</p>
+          {detail ? (
+            <pre className="muted small" style={{ whiteSpace: "pre-wrap", maxWidth: 640 }}>
+              {detail}
+            </pre>
+          ) : null}
           <button type="button" className="primary-btn" onClick={() => window.location.reload()}>
             Обновить
           </button>

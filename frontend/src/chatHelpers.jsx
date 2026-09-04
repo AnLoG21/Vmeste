@@ -1,6 +1,7 @@
 import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
 import { BASE_URL } from "./config.js";
 import { formatRecordClock, mediaUrl, resolveAttachmentUrl } from "./chatMedia.js";
+import { mediaFullUrl, mediaThumbUrl } from "./mediaUrls.js";
 
 export const CHAT_PINS_STORAGE_KEY = "vmeste_chat_pins_v1";
 export const MAX_PINNED_CHATS = 5;

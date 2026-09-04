@@ -23,10 +23,12 @@ export class CabinetErrorBoundary extends Component {
 
   render() {
     if (this.state.failed) {
+      const detail = this.state.error?.message || "";
       return (
         <main className="card full-width" style={{ margin: "1rem auto", maxWidth: 560, padding: "1.25rem" }}>
           <h2>Ошибка интерфейса</h2>
           <p className="muted">Раздел не загрузился. Попробуйте обновить страницу или вернуться на главную.</p>
+          {detail ? <p className="muted small">{detail}</p> : null}
           <div className="row-2" style={{ marginTop: 12 }}>
             <button type="button" className="primary-btn" onClick={() => window.location.reload()}>
               Обновить

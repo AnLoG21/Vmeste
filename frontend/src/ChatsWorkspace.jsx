@@ -225,7 +225,7 @@ export default function ChatsWorkspace({
                     const showPresenceDot = Boolean(peerM) && !c.is_group && !c.is_saved_messages && (
                       currentView === "vmenu" ? c.is_user_direct : !c.is_client_correspondence
                     );
-                    const pinsList = chatFolder === "clients" ? chatPins.clients : chatPins.org;
+                    const pinsList = (chatFolder === "clients" ? chatPins?.clients : chatPins?.org) || [];
                     const isPinned = currentView !== "vmenu" && pinsList.map(Number).includes(Number(c.id));
                     const unreadN = Number(c.unread_message_count) || 0;
                     return (

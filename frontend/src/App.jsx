@@ -514,7 +514,8 @@ export default function App() {
   const [manualHoldStatus, setManualHoldStatus] = useState("");
   const [manualHoldBusy, setManualHoldBusy] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [bookingsMonth, setBookingsMonth] = useState(currentLocalMonthKey);
+  const [bookingsMonth, setBookingsMonth] = useState(() => currentLocalMonthKey());
+
   const [intervalToast, setIntervalToast] = useState(null);
   const intervalToastTimerRef = useRef(null);
   const [savedIntervals, setSavedIntervals] = useState([]);
