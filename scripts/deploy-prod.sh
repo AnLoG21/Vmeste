@@ -47,8 +47,16 @@ ensure_base_image node:20-alpine
 ensure_base_image nginx:1.27-alpine
 docker compose -f "$COMPOSE_FILE" stop celery_worker celery_beat || true
 docker compose -f "$COMPOSE_FILE" build web
-docker compose -f "$COMPOSE_FILE" build --no-cache frontend
+# Cached frontend rebuild is enough after CI already validated the build.
+# Set FRONTEND_NO_CACHE=1 for a clean rebuild when Vite env args change.
+if [[ "${FRONTEND_NO_CACHE:-0}" == "1" ]]; then
+  docker compose -f "$COMPOSE_FILE" build --no-cache frontend
+else
+  docker compose -f "$COMPOSE_FILE" build frontend
+fi
 docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans web frontend caddy celery_worker celery_beat
+# Keep tunnel up if the profile/service exists (HTTPS via Cloudflare).
+docker compose -f "$COMPOSE_FILE" up -d cloudflared 2>/dev/null || true
 
 if [ -f .env ] && grep -qE '^ASTERISK_INTERNAL_SECRET=.+' .env; then
   echo "[deploy] Asterisk telephony profile (SIP 5060/udp)…"

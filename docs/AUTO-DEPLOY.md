@@ -36,10 +36,12 @@ chmod 600 ~/.ssh/authorized_keys
 
 | Secret | Пример | Описание |
 |--------|--------|----------|
-| `VPS_HOST` | `1.2.3.4` или `vsevmeste.space` | IP или хост VPS |
+| `VPS_HOST` | `161.104.33.232` | **Прямой IP VPS**, не `vsevmeste.space` (Cloudflare не проксирует SSH) |
 | `VPS_USER` | `root` | SSH-пользователь |
 | `VPS_SSH_KEY` | весь текст `-----BEGIN OPENSSH PRIVATE KEY-----` … | Приватный ключ |
 | `VPS_PORT` | `22` | Опционально, по умолчанию 22 |
+
+**Важно:** в Selectel (группа безопасности VPS) должен быть открыт **TCP 22** с интернета (хотя бы `0.0.0.0/0` или диапазоны GitHub Actions). Если порт закрыт, Actions падает за 3–5 секунд на шаге «Deploy over SSH», при этом сайт по HTTPS через Cloudflare может работать.
 
 ### 3. Репозиторий на сервере
 
@@ -82,7 +84,16 @@ docker compose -f docker-compose.prod.yml up -d --build frontend web caddy
 
 ## Если пайплайн падает
 
+- **Шаг SSH падает за 3–5 секунд** — чаще всего **порт 22 закрыт** или `VPS_HOST` = домен за Cloudflare. Проверка с ПК: `Test-NetConnection -ComputerName <IP> -Port 22` → `TcpTestSucceeded : True`. Откройте TCP 22 в группе безопасности Selectel и укажите в секрете прямой IP.
 - **Permission denied (publickey)** — неверный `VPS_SSH_KEY` / ключ не в `authorized_keys`.
 - **Permission denied docker** — пользователь не в группе `docker`.
 - **Disk full** — `docker system df`, затем `docker image prune -a` (осторожно).
 - Логи Actions: вкладка failed job → Deploy over SSH.
+
+### Временный обход без Actions
+
+На сервере (консоль Selectel / уже открытый SSH):
+
+```bash
+cd /opt/vmeste && ./scripts/deploy-prod.sh
+```
