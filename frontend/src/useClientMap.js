@@ -5,7 +5,7 @@ import { showToast } from "./toast.js";
 
 /**
  * Client discover map: Yandex init/destroy, placemarks, my-location tracking.
- * Discover filters and map-org sheet UI state stay in App; pass setDetectedCity from useOrgAddress.
+ * Map-org sheet state lives in useMapOrgSheet; pass setDetectedCity from useOrgAddress.
  */
 export function useClientMap({
   currentView,

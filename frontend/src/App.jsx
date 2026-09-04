@@ -18,7 +18,6 @@ import { CabinetErrorBoundary } from "./CabinetErrorBoundary.jsx";
 import CabinetChrome from "./CabinetChrome.jsx";
 import InspectionWorkspace from "./InspectionWorkspace.jsx";
 import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
-import { buildServiceDraftFromService, serviceDraftEqualsService } from "./ServiceEditor.jsx";
 import ProviderReviewsPanel from "./ProviderReviewsPanel.jsx";
 import ServiceCatalogTree from "./ServiceCatalogTree.jsx";
 import ClientMapPanel from "./ClientMapPanel.jsx";
@@ -82,13 +81,9 @@ import PlatformTour from "./PlatformTour.jsx";import {
   writePlatformTourDone,
 } from "./platformTour.js";
 import {
-  BOOKMARK_CATALOG,
   SUBNAV_BOOKMARKS_KEY,
   loadSubnavBookmarks,
 } from "./subnavBookmarks.js";
-import {
-  orgSphereOf,
-} from "./staffPermissions.js";
 import { getDevicePosition } from "./geoPosition.js";
 import "./landing.css";
 import {
@@ -96,14 +91,12 @@ import {
   defaultOrgWorkingHours,
   formatOrgWorkingHoursText,
   filterServiceGroupsFromCatalog,
-  matchProviderServiceByFilter,
   normalizeOrgWorkingHours,
   uniqueDiscoverOrgs,
 } from "./clientOrgFeatures.js";
 import { loadYandexMaps } from "./yandexMapsLoader.js";
 import { API_URL, AUTH_URL, BASE_URL, REFRESH_URL } from "./config.js";
 import { createAuthFetch } from "./authFetch.js";
-import { SITE_LEGAL } from "./legal/siteLegal.js";
 import {
   groupChatMedia,
   resolveAttachmentUrl,
@@ -113,9 +106,14 @@ import { useChatRecording } from "./useChatRecording.js";
 import { useChatMessaging } from "./useChatMessaging.js";
 import { useChatExtras } from "./useChatExtras.js";
 import { useClientMap } from "./useClientMap.js";
+import { useMapOrgSheet } from "./useMapOrgSheet.js";
 import { useCabinetData } from "./useCabinetData.js";
 import { useBookingActions } from "./useBookingActions.js";
 import { useIntervalHandlers } from "./useIntervalHandlers.js";
+import { useAuthOnboarding } from "./useAuthOnboarding.js";
+import { useStaffInvite } from "./useStaffInvite.js";
+import { useServicesEditor } from "./useServicesEditor.js";
+import { useCabinetNavigation } from "./useCabinetNavigation.js";
 import {
   initPushNotifications,
   maybeRequestWebNotificationPermission,
@@ -157,12 +155,6 @@ const emptyRegisterForm = {
   confirm_provider_authority: false,
   provider_license_number: "",
 };
-
-function isMobileChatLayout() {
-  if (typeof window === "undefined") return false;
-  if (document.documentElement.classList.contains("native-app")) return true;
-  return window.matchMedia("(max-width: 900px)").matches;
-}
 
 function consumeOAuthCallback() {
   if (typeof window === "undefined") return { access: "", refresh: "", error: "" };
@@ -253,18 +245,9 @@ export default function App() {
   const [clientFilterServiceGroups, setClientFilterServiceGroups] = useState([]);
   const [clientBookModalOpen, setClientBookModalOpen] = useState(false);
   const [bookAvailableDates, setBookAvailableDates] = useState([]);
-  const mapOrgCarouselTouchX = useRef(null);
-  const [mapOrgPopup, setMapOrgPopup] = useState(null);
-  const [mapOrgSheetCollapsed, setMapOrgSheetCollapsed] = useState(false);
-  const [mapOrgSummary, setMapOrgSummary] = useState(null);
-  const [mapOrgReviewsOpen, setMapOrgReviewsOpen] = useState(false);
-  const [mapOrgReviews, setMapOrgReviews] = useState([]);
-  const [mapOrgReviewsOrdering, setMapOrgReviewsOrdering] = useState("-created_at");
-  const [mapOrgProfile, setMapOrgProfile] = useState(null);
-  const [mapOrgStaff, setMapOrgStaff] = useState([]);
-  const [mapOrgCarouselIndex, setMapOrgCarouselIndex] = useState(0);
   const [orgPhotoLightbox, setOrgPhotoLightbox] = useState(null);
-  const [staffReviewModal, setStaffReviewModal] = useState(null);
+  const openOrgOnMapRef = useRef(async () => {});
+  const fitClientDiscoverMapViewportRef = useRef(() => {});
 
   function openOrgPhotoLightbox(items, index = 0) {
     if (!items?.length) return;
@@ -283,7 +266,6 @@ export default function App() {
   }
 
   const orgPhotoLightboxTouchX = useRef(0);
-  const mapOrgSheetTouchY = useRef(null);
 
   useEffect(() => {
     if (!orgPhotoLightbox?.items?.length) return undefined;
@@ -399,19 +381,14 @@ export default function App() {
     clientPackageId: "",
   });
   const [bookLoyaltyInfo, setBookLoyaltyInfo] = useState(null);
-  const [mapOrgPackages, setMapOrgPackages] = useState([]);
   const [bookClientPackages, setBookClientPackages] = useState([]);
 
   const [categoryOpen, setCategoryOpen] = useState({});
   const [subcategoryOpen, setSubcategoryOpen] = useState({});
-  const [catalogStatus, setCatalogStatus] = useState(null);
-  const [catalogSeeding, setCatalogSeeding] = useState(false);
   const [intervalEditModal, setIntervalEditModal] = useState(null);
   const [calendarMonth, setCalendarMonth] = useState(new Date().toISOString().slice(0, 7));
   const [bookingsMonth, setBookingsMonth] = useState(() => currentLocalMonthKey());
 
-  const [serviceDrafts, setServiceDrafts] = useState({});
-  const [serviceSavingAll, setServiceSavingAll] = useState(false);
   const [dragIntervalId, setDragIntervalId] = useState(null);
   const [intervalPopoverId, setIntervalPopoverId] = useState(null);
   const intervalPopoverAnchorRef = useRef(null);
@@ -450,10 +427,6 @@ export default function App() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [intervalPopoverId, closeIntervalPopover]);
 
-  const [staffInviteForm, setStaffInviteForm] = useState({ invite_identifier: "" });
-  const [staffInviteStatus, setStaffInviteStatus] = useState("");
-  const [staffPermsOpenId, setStaffPermsOpenId] = useState(null);
-  const [staffServicesOpenId, setStaffServicesOpenId] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [vmenuChatContacts, setVmenuChatContacts] = useState([]);
   const [selectedChatId, setSelectedChatId] = useState(null);
@@ -904,30 +877,6 @@ export default function App() {
   }, [accessToken, me, needsOnboarding, needsCredentialsSetup]);
 
   useEffect(() => {
-    handleVerifyEmailFromUrl();
-    handleConfirmPasswordChangeFromUrl();
-    handlePasswordResetFromUrl();
-    const params = new URLSearchParams(window.location.search);
-    if (oauthBoot.error) {
-      setAuthStatus(oauthBoot.error);
-      openAuth("login");
-    }
-    if (params.get("register") === "1" || params.get("auth") === "register") {
-      openAuth("register");
-      params.delete("register");
-      params.delete("auth");
-      const q = params.toString();
-      window.history.replaceState({}, document.title, `${window.location.pathname}${q ? `?${q}` : ""}${window.location.hash || ""}`);
-    } else if (params.get("login") === "1" || params.get("auth") === "login") {
-      openAuth("login");
-      params.delete("login");
-      params.delete("auth");
-      const q = params.toString();
-      window.history.replaceState({}, document.title, `${window.location.pathname}${q ? `?${q}` : ""}${window.location.hash || ""}`);
-    }
-  }, []);
-
-  useEffect(() => {
     if (!accessToken && !showAuthModal) return;
     loadRoles();
     loadSpheres();
@@ -984,36 +933,6 @@ export default function App() {
     window.history.replaceState({}, document.title, window.location.pathname);
     return () => window.clearTimeout(t);
   }, [accessToken]);
-
-  function openAuth(mode) {
-    destroyRegMap();
-    setAuthMode(mode);
-    setShowAuthModal(true);
-    setRegisterStep(1);
-    // Не тащим «Для бизнеса» во вход/клиентскую регистрацию — иначе OAuth создаёт исполнителя.
-    setForm({ ...emptyRegisterForm });
-    if (mode === "register") {
-      setVerifyEmailNotice(null);
-      setResendStatus("");
-    }
-    fetch(`${API_URL}/users/auth/providers/`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data) setAuthProviders(data);
-      })
-      .catch(() => showToast("Не удалось загрузить способы входа.", { tone: "error" }));
-  }
-
-  function closeAuth() {
-    destroyRegMap();
-    setShowAuthModal(false);
-    setVerifyEmailNotice(null);
-    setResendStatus("");
-    if (authMode === "reset") {
-      setPasswordResetToken("");
-      setResetForm({ new_password: "", new_password_confirm: "" });
-    }
-  }
 
   async function resendVerificationForEmail(email) {
     const normalized = String(email || "").trim();
@@ -1142,7 +1061,7 @@ export default function App() {
       const providerId = ev?.detail?.providerId;
       if (providerId) {
         const loc = allLocations.find((l) => Number(l.provider) === Number(providerId));
-        if (loc) void openOrgOnMap(loc);
+        if (loc) void openOrgOnMapRef.current(loc);
       }
     };
     window.addEventListener("vmeste:open-cafe-orders", onCafe);
@@ -1275,16 +1194,6 @@ export default function App() {
   }, [chatMsgSearchOpen]);
 
   useEffect(() => {
-    if (!customColorPickerOpen) return;
-    function onDocMouseDown(e) {
-      if (e.target.closest(".tg-color-popover") || e.target.closest(".tg-color-picker-toggle")) return;
-      setCustomColorPickerOpen(false);
-    }
-    document.addEventListener("mousedown", onDocMouseDown, true);
-    return () => document.removeEventListener("mousedown", onDocMouseDown, true);
-  }, [customColorPickerOpen]);
-
-  useEffect(() => {
     const t = setTimeout(() => setClientDiscoverSearch(clientMapSearchInput), 420);
     return () => clearTimeout(t);
   }, [clientMapSearchInput]);
@@ -1396,11 +1305,6 @@ export default function App() {
     loadProviderReviewsList(providerReviewsOrdering);
     markReviewsSeen();
   }, [accessToken, currentView, me?.role, providerReviewsOrdering, staffEffectivePerms]);
-
-  useEffect(() => {
-    if (!accessToken || currentView !== "services" || me?.role !== "provider") return;
-    loadCatalogStatus();
-  }, [accessToken, currentView, me?.role, me?.provider_sphere]);
 
   useEffect(() => {
     if (!accessToken || me?.role !== "provider") return;
@@ -1650,14 +1554,6 @@ export default function App() {
   useEffect(() => {
     const isProviderFlow =
       needsOnboarding ? me?.role === "provider" : form.role === "provider";
-    if ((showAuthModal || needsOnboarding) && (authMode === "register" || needsOnboarding) && isProviderFlow) {
-      initMap();
-    }
-  }, [showAuthModal, authMode, registerStep, form.role, form.provider_sphere, needsOnboarding, me?.role]);
-
-  useEffect(() => {
-    const isProviderFlow =
-      needsOnboarding ? me?.role === "provider" : form.role === "provider";
     if (
       (showAuthModal || needsOnboarding) &&
       (authMode === "register" || needsOnboarding) &&
@@ -1668,20 +1564,6 @@ export default function App() {
     }
   }, [showAuthModal, authMode, form.role, registerStep, needsOnboarding, me?.role]);
 
-  useEffect(() => {
-    if (currentView !== "services" || me?.role !== "provider") return;
-    setServiceDrafts((prev) => {
-      const next = { ...prev };
-      for (const s of services) {
-        if (!next[s.id]) next[s.id] = buildServiceDraftFromService(s);
-      }
-      for (const id of Object.keys(next)) {
-        if (!services.some((s) => String(s.id) === String(id))) delete next[id];
-      }
-      return next;
-    });
-  }, [services, currentView, me?.role]);
-
   async function loadRoles() {
     const response = await fetch(`${API_URL}/users/roles/`);
     if (response.ok) setRoles(await response.json());
@@ -1690,55 +1572,6 @@ export default function App() {
   async function loadSpheres() {
     const response = await fetch(`${API_URL}/users/spheres/`);
     if (response.ok) setSpheres(await response.json());
-  }
-
-  async function handleVerifyEmailFromUrl() {
-    const params = new URLSearchParams(window.location.search);
-    const isVerifyPath = window.location.pathname.includes("/verify-email");
-    const token = params.get("verify_email") || (isVerifyPath ? params.get("token") : "");
-    if (!token) return;
-    const response = await fetch(`${API_URL}/users/verify-email/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
-    });
-    setVerifyStatus(response.ok ? "Email подтвержден. Теперь можно войти." : "Ссылка подтверждения недействительна.");
-    if (response.ok) {
-      setAuthMode("login");
-      setShowAuthModal(true);
-      window.history.replaceState({}, document.title, "/");
-    }
-  }
-
-  async function handleConfirmPasswordChangeFromUrl() {
-    if (!window.location.pathname.includes("/confirm-password-change")) return;
-    const token = new URLSearchParams(window.location.search).get("token");
-    if (!token) return;
-    const response = await fetch(`${API_URL}/users/confirm-password-change/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
-    });
-    const data = await response.json().catch(() => ({}));
-    const detail = data.detail || (response.ok
-      ? "Пароль изменён. Теперь можно войти."
-      : "Ссылка подтверждения недействительна.");
-    setVerifyStatus(detail);
-    setAuthStatus(detail);
-    if (response.ok) {
-      window.history.replaceState({}, document.title, "/");
-    }
-    openAuth("login");
-  }
-
-  function handlePasswordResetFromUrl() {
-    if (!window.location.pathname.includes("/reset-password")) return;
-    const token = new URLSearchParams(window.location.search).get("token");
-    if (!token) return;
-    setPasswordResetToken(token);
-    setResetForm({ new_password: "", new_password_confirm: "" });
-    setAuthStatus("Задайте новый пароль.");
-    openAuth("reset");
   }
 
   const refreshAccessToken = useCallback(async () => {
@@ -1892,7 +1725,59 @@ export default function App() {
     setChatFabOpen,
   });
 
-  const openOrgOnMapRef = useRef(async () => {});
+  useEffect(() => {
+    if (!customColorPickerOpen) return;
+    function onDocMouseDown(e) {
+      if (e.target.closest(".tg-color-popover") || e.target.closest(".tg-color-picker-toggle")) return;
+      setCustomColorPickerOpen(false);
+    }
+    document.addEventListener("mousedown", onDocMouseDown, true);
+    return () => document.removeEventListener("mousedown", onDocMouseDown, true);
+  }, [customColorPickerOpen]);
+
+  const {
+    mapOrgCarouselTouchX,
+    mapOrgSheetTouchY,
+    mapOrgPopup,
+    setMapOrgPopup,
+    mapOrgSheetCollapsed,
+    mapOrgSummary,
+    mapOrgReviewsOpen,
+    mapOrgReviews,
+    setMapOrgReviews,
+    mapOrgReviewsOrdering,
+    setMapOrgReviewsOrdering,
+    mapOrgProfile,
+    mapOrgStaff,
+    mapOrgCarouselIndex,
+    setMapOrgCarouselIndex,
+    mapOrgPackages,
+    staffReviewModal,
+    setStaffReviewModal,
+    onClientLocationSelect,
+    loadMapOrgSummary,
+    loadMapOrgReviews,
+    closeMapOrgSheet,
+    collapseMapOrgSheet,
+    expandMapOrgSheet,
+    openOrgOnMap,
+  } = useMapOrgSheet({
+    authFetch,
+    accessToken,
+    me,
+    allLocations,
+    clientDiscoverFiltersRef,
+    clientBookingForm,
+    setClientBookingForm,
+    setProviderServices,
+    setBookProviderStaff,
+    setClientBookWindows,
+    setBookLoyaltyInfo,
+    setBookClientPackages,
+    fitClientDiscoverMapViewport: (...args) => fitClientDiscoverMapViewportRef.current?.(...args),
+  });
+  openOrgOnMapRef.current = openOrgOnMap;
+
   const {
     fitClientDiscoverMapViewport,
     waitForClientDiscoverMap,
@@ -1908,6 +1793,7 @@ export default function App() {
     setDetectedCity,
     openOrgOnMap: (loc) => openOrgOnMapRef.current(loc),
   });
+  fitClientDiscoverMapViewportRef.current = fitClientDiscoverMapViewport;
 
   function staffJobTitleForUser(userId) {
     const link = orgStaff.find((l) => Number(l.staff) === Number(userId));
@@ -2010,6 +1896,57 @@ export default function App() {
     closeIntervalPopover,
   });
 
+  const {
+    staffInviteForm,
+    setStaffInviteForm,
+    staffInviteStatus,
+    staffPermsOpenId,
+    setStaffPermsOpenId,
+    staffServicesOpenId,
+    setStaffServicesOpenId,
+    inviteStaff,
+    deactivateStaff,
+    patchStaffMeta,
+    uploadStaffCard,
+    deleteStaffPortfolioPhoto,
+    patchStaffServiceAssignment,
+    toggleStaffPermission,
+  } = useStaffInvite({
+    authFetch,
+    me,
+    setOrgStaff,
+    loadSellerData,
+    loadStaffWorkspace,
+    setChatActivity,
+  });
+
+  const {
+    catalogStatus,
+    catalogSeeding,
+    serviceDrafts,
+    serviceSavingAll,
+    dirtyServiceCount,
+    staffAssignableServices,
+    staffAssignableCategories,
+    seedProviderCatalog,
+    updateServiceDraft,
+    uploadServicePhotos,
+    deleteServicePhoto,
+    saveAllServiceChanges,
+  } = useServicesEditor({
+    authFetch,
+    accessToken,
+    me,
+    currentView,
+    services,
+    setServices,
+    categories,
+    setSellerStatus,
+    loadSellerData,
+    setCategoryOpen,
+    setSubcategoryOpen,
+  });
+
   async function loadMe() {
     const response = await authFetch(`${API_URL}/users/me/`);
     if (response.ok) setMe(await response.json());
@@ -2025,6 +1962,88 @@ export default function App() {
     setShowAuthModal(false);
     return true;
   }
+
+  const {
+    openAuth,
+    closeAuth,
+    destroyRegMap,
+    initMap,
+    onSubmit,
+    continueProviderRegistration,
+    completeCredentialsSetup,
+    completeOnboarding,
+    startDemo,
+    confirmPasswordReset,
+    handleVerifyEmailFromUrl,
+    handleConfirmPasswordChangeFromUrl,
+    handlePasswordResetFromUrl,
+  } = useAuthOnboarding({
+    authFetch,
+    accessToken,
+    me,
+    form,
+    setForm,
+    emptyRegisterForm,
+    setLoginForm,
+    credentialsForm,
+    setCredentialsForm,
+    setCredentialsBusy,
+    passwordResetToken,
+    setPasswordResetToken,
+    resetForm,
+    setResetForm,
+    setPasswordResetBusy,
+    authMode,
+    setAuthMode,
+    setShowAuthModal,
+    setRegisterStep,
+    setAuthProviders,
+    setAuthStatus,
+    setStatus,
+    setVerifyStatus,
+    setVerifyEmailNotice,
+    setResendStatus,
+    setAccessToken,
+    setRefreshToken,
+    setMe,
+    setCurrentView,
+    mapRef,
+    placemarkRef,
+    setDetectedCity,
+    onboardingPrefillIdRef,
+  });
+
+  useEffect(() => {
+    handleVerifyEmailFromUrl();
+    handleConfirmPasswordChangeFromUrl();
+    handlePasswordResetFromUrl();
+    const params = new URLSearchParams(window.location.search);
+    if (oauthBoot.error) {
+      setAuthStatus(oauthBoot.error);
+      openAuth("login");
+    }
+    if (params.get("register") === "1" || params.get("auth") === "register") {
+      openAuth("register");
+      params.delete("register");
+      params.delete("auth");
+      const q = params.toString();
+      window.history.replaceState({}, document.title, `${window.location.pathname}${q ? `?${q}` : ""}${window.location.hash || ""}`);
+    } else if (params.get("login") === "1" || params.get("auth") === "login") {
+      openAuth("login");
+      params.delete("login");
+      params.delete("auth");
+      const q = params.toString();
+      window.history.replaceState({}, document.title, `${window.location.pathname}${q ? `?${q}` : ""}${window.location.hash || ""}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    const isProviderFlow =
+      needsOnboarding ? me?.role === "provider" : form.role === "provider";
+    if ((showAuthModal || needsOnboarding) && (authMode === "register" || needsOnboarding) && isProviderFlow) {
+      initMap();
+    }
+  }, [showAuthModal, authMode, registerStep, form.role, form.provider_sphere, needsOnboarding, me?.role]);
 
   useEffect(() => {
     window.__vmesteOnTelegramAuth = async (user) => {
@@ -2119,26 +2138,6 @@ export default function App() {
     logout();
   }
 
-  async function startDemo(sphere) {
-    const response = await fetch(`${API_URL}/users/demo-login/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sphere }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(data.detail || "Не удалось открыть демо.");
-    }
-    setAccessToken(data.access);
-    setRefreshToken(data.refresh);
-    localStorage.setItem("vmeste_access", data.access);
-    localStorage.setItem("vmeste_refresh", data.refresh);
-    localStorage.setItem("vmeste_demo", "1");
-    setShowAuthModal(false);
-    setCurrentView(sphere === "cafe_restaurant" ? "cafe" : sphere === "marketplaces" ? "marketplaces" : "bookings");
-    setAuthStatus("");
-  }
-
   async function deleteMyAccount(event) {
     event?.preventDefault?.();
     setDeleteAccountStatus("");
@@ -2169,326 +2168,10 @@ export default function App() {
     setAuthStatus("Аккаунт удалён. Данные обезличены.");
   }
 
-  async function onSubmit(event) {
-    event.preventDefault();
-    setAuthStatus("");
-    if (form.password !== form.password_confirm) {
-      setStatus("Пароли не совпадают.");
-      return;
-    }
-    if (!form.age_confirmed) {
-      setStatus("Подтвердите, что вам исполнилось 18 лет.");
-      return;
-    }
-    if (!form.accept_privacy || !form.accept_offer) {
-      setStatus("Нужно принять оферту и политику конфиденциальности.");
-      return;
-    }
-    if (form.role === "provider" && !form.confirm_provider_authority) {
-      setStatus("Подтвердите право оказывать услуги (и лицензию, если она требуется).");
-      return;
-    }
-    setStatus("Сохраняем...");
-    const payload = {
-      ...form,
-      organization_address: simplifyCommaAddressLine(form.organization_address.trim()) || form.organization_address.trim(),
-      accept_privacy: Boolean(form.accept_privacy),
-      accept_offer: Boolean(form.accept_offer),
-      age_confirmed: Boolean(form.age_confirmed),
-      confirm_provider_authority: Boolean(form.confirm_provider_authority),
-      provider_license_number: (form.provider_license_number || "").trim(),
-      privacy_version: SITE_LEGAL.privacyVersion,
-      offer_version: SITE_LEGAL.offerVersion,
-    };
-    const response = await fetch(`${API_URL}/users/register/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      if (error.email) {
-        setStatus(Array.isArray(error.email) ? error.email[0] : error.email);
-      } else if (error.username) {
-        setStatus(Array.isArray(error.username) ? error.username[0] : error.username);
-      } else if (error.confirm_provider_authority) {
-        setStatus(Array.isArray(error.confirm_provider_authority) ? error.confirm_provider_authority[0] : error.confirm_provider_authority);
-      } else if (error.accept_privacy || error.accept_offer || error.age_confirmed) {
-        setStatus("Нужно подтвердить возраст и принять оферту с политикой конфиденциальности.");
-      } else {
-        setStatus(error.detail || "Проверь поля регистрации.");
-      }
-      return;
-    }
-    const data = await response.json().catch(() => ({}));
-    const savedUsername = form.username;
-    const savedPassword = form.password;
-    const savedEmail = form.email;
-    setForm(emptyRegisterForm);
-    setRegisterStep(1);
-    setLoginForm({ username: savedUsername, password: savedPassword });
-    setVerifyEmailNotice({
-      email: savedEmail,
-      detail:
-        data.detail || "Регистрация успешна. Проверьте почту для подтверждения email.",
-    });
-    setResendStatus("");
-    setStatus("");
-    setAuthMode("login");
-  }
-
-  function continueProviderRegistration() {
-    const requiredFields = [
-      ["Фамилия", form.last_name],
-      ["Имя", form.first_name],
-      ["Логин", form.username],
-      ["Email", form.email],
-      ["Пароль", form.password],
-    ];
-    const missing = requiredFields.find(([, value]) => !String(value || "").trim());
-    if (missing) {
-      setAuthStatus(`Заполните поле «${missing[0]}».`);
-      return;
-    }
-    if (form.password !== form.password_confirm) {
-      setAuthStatus("Пароли не совпадают.");
-      return;
-    }
-    if (!form.age_confirmed || !form.accept_privacy || !form.accept_offer) {
-      setAuthStatus("Подтвердите возраст и примите оферту с политикой конфиденциальности.");
-      return;
-    }
-    setAuthStatus("");
-    setRegisterStep(2);
-  }
-
-  async function completeCredentialsSetup(event) {
-    event.preventDefault();
-    setAuthStatus("");
-    const username = String(credentialsForm.username || "").trim();
-    const password = String(credentialsForm.password || "");
-    const passwordConfirm = String(credentialsForm.password_confirm || "");
-    if (username.length < 3) {
-      setAuthStatus("Логин должен быть не короче 3 символов.");
-      return;
-    }
-    if (password.length < 8) {
-      setAuthStatus("Пароль должен быть не короче 8 символов.");
-      return;
-    }
-    if (password !== passwordConfirm) {
-      setAuthStatus("Пароли не совпадают.");
-      return;
-    }
-    setCredentialsBusy(true);
-    const response = await authFetch(`${API_URL}/users/me/setup-credentials/`, {
-      method: "POST",
-      body: JSON.stringify({
-        username,
-        password,
-        password_confirm: passwordConfirm,
-      }),
-    });
-    const data = await response.json().catch(() => ({}));
-    setCredentialsBusy(false);
-    if (!response.ok) {
-      setAuthStatus(
-        data.detail ||
-          data.username?.[0] ||
-          data.password?.[0] ||
-          data.password_confirm?.[0] ||
-          formatApiError(data, response.status) ||
-          "Не удалось сохранить логин и пароль."
-      );
-      return;
-    }
-    setMe(data);
-    setCredentialsForm({ username: "", password: "", password_confirm: "" });
-    setAuthStatus(data.detail || "Логин и пароль сохранены.");
-    setLoginForm((p) => ({ ...p, username }));
-  }
-
-  async function completeOnboarding(event) {
-    event.preventDefault();
-    setAuthStatus("");
-    setStatus("");
-    if (!me?.id) return;
-    if (!String(form.first_name || "").trim() || !String(form.last_name || "").trim()) {
-      setAuthStatus("Укажите имя и фамилию.");
-      return;
-    }
-    if (me.role === "provider") {
-      if (!String(form.provider_sphere || "").trim()) {
-        setAuthStatus("Выберите сферу услуг.");
-        return;
-      }
-      if (!String(form.organization_name || "").trim()) {
-        setAuthStatus("Укажите название организации.");
-        return;
-      }
-      if (form.provider_sphere !== "marketplaces" && !String(form.organization_address || "").trim()) {
-        setAuthStatus("Укажите адрес организации.");
-        return;
-      }
-      if (!form.confirm_provider_authority && !me.provider_authority_confirmed) {
-        setAuthStatus("Подтвердите право оказывать услуги.");
-        return;
-      }
-    }
-    setStatus("Сохраняем...");
-    const payload = {
-      first_name: String(form.first_name || "").trim(),
-      last_name: String(form.last_name || "").trim(),
-      patronymic: String(form.patronymic || "").trim(),
-      phone: String(form.phone || "").trim(),
-    };
-    if (!(me.email || "").trim() && String(form.email || "").trim()) {
-      payload.email = String(form.email || "").trim();
-    }
-    if (me.role === "provider") {
-      payload.provider_sphere = form.provider_sphere;
-      payload.organization_name = String(form.organization_name || "").trim();
-      if (form.provider_sphere === "marketplaces") {
-        payload.organization_address = "";
-        payload.organization_latitude = null;
-        payload.organization_longitude = null;
-        payload.organization_entrance = "";
-        payload.organization_floor = "";
-        payload.organization_apartment = "";
-        payload.organization_intercom = "";
-        payload.organization_address_extra = "";
-      } else {
-        payload.organization_address =
-          simplifyCommaAddressLine(String(form.organization_address || "").trim()) ||
-          String(form.organization_address || "").trim();
-        payload.organization_latitude = form.organization_latitude;
-        payload.organization_longitude = form.organization_longitude;
-        payload.organization_entrance = form.entrance || "";
-        payload.organization_floor = form.floor || "";
-        payload.organization_apartment = form.apartment || "";
-        payload.organization_intercom = form.intercom || "";
-        payload.organization_address_extra = form.organization_address_details || "";
-      }
-      payload.provider_license_number = String(form.provider_license_number || "").trim();
-      payload.confirm_provider_authority = Boolean(form.confirm_provider_authority);
-    }
-    const response = await authFetch(`${API_URL}/users/me/`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      setStatus("");
-      setAuthStatus(
-        data.detail ||
-          data.email?.[0] ||
-          data.organization_name?.[0] ||
-          data.provider_sphere?.[0] ||
-          "Не удалось сохранить данные. Проверьте поля."
-      );
-      return;
-    }
-    setMe((prev) => ({ ...prev, ...data }));
-    setForm(emptyRegisterForm);
-    setRegisterStep(1);
-    destroyRegMap();
-    setShowAuthModal(false);
-    setStatus("");
-    setAuthStatus("");
-    onboardingPrefillIdRef.current = null;
-    if (data.role === "provider" && data.provider_sphere === "cafe_restaurant") setCurrentView("cafe_orders");
-    if (
-      data.role === "staff" &&
-      (data.employer_sphere === "cafe_restaurant" || data.provider_sphere === "cafe_restaurant")
-    ) {
-      setCurrentView("cafe_orders");
-    }
-    else if (data.role === "provider" && data.provider_sphere === "marketplaces") setCurrentView("marketplaces");
-    else if (data.role === "provider") setCurrentView("bookings");
-  }
-
   async function resendVerification() {
     setResendStatus("Отправляем письмо...");
     const email = me?.email || verifyEmailNotice?.email || form.email || "";
     await resendVerificationForEmail(email);
-  }
-
-  function destroyRegMap() {
-    if (mapRef.current) {
-      try {
-        mapRef.current.destroy();
-      } catch {
-        // ignore map cleanup errors
-      }
-    }
-    mapRef.current = null;
-    placemarkRef.current = null;
-  }
-
-  function initMap() {
-    const mapElement = document.getElementById("reg-map");
-    if (!mapElement) {
-      if (mapRef.current) destroyRegMap();
-      return;
-    }
-    if (mapRef.current) return;
-    const centerLat = Number(form.organization_latitude);
-    const centerLon = Number(form.organization_longitude);
-    const hasPoint = Number.isFinite(centerLat) && Number.isFinite(centerLon);
-    void loadYandexMaps()
-      .then(() => {
-        const ymaps = window.ymaps;
-        if (!ymaps || mapRef.current) return;
-        ymaps.ready(() => {
-          const currentMapElement = document.getElementById("reg-map");
-          if (!currentMapElement) {
-            if (mapRef.current) destroyRegMap();
-            return;
-          }
-          if (mapRef.current) return;
-          const center = hasPoint ? [centerLat, centerLon] : [55.751244, 37.618423];
-          const hadPin =
-            Boolean(String(form.organization_address || "").trim()) ||
-            (hasPoint &&
-              !(
-                Math.abs(centerLat - 55.751244) < 1e-6 &&
-                Math.abs(centerLon - 37.618423) < 1e-6
-              ));
-          const map = new ymaps.Map(currentMapElement, {
-            center,
-            zoom: hadPin ? 14 : 11,
-          });
-          mapRef.current = map;
-          if (hadPin) {
-            placemarkRef.current = new ymaps.Placemark(center);
-            map.geoObjects.add(placemarkRef.current);
-          }
-          map.events.add("click", (e) => {
-            const coords = e.get("coords");
-            const [lat, lon] = coords;
-            reverseGeocodeByCoords(lat, lon).then((result) => {
-              const shortAddress = buildShortAddress(result?.address);
-              const city = getCity(result?.address);
-              setForm((prev) => ({
-                ...prev,
-                organization_latitude: lat.toFixed(6),
-                organization_longitude: lon.toFixed(6),
-                organization_address: simplifyCommaAddressLine(
-                  shortAddress || result?.display_name || prev.organization_address
-                ),
-              }));
-              if (city) setDetectedCity(city);
-            });
-            if (!placemarkRef.current) {
-              placemarkRef.current = new ymaps.Placemark(coords);
-              mapRef.current.geoObjects.add(placemarkRef.current);
-            } else {
-              placemarkRef.current.geometry.setCoordinates(coords);
-            }
-          });
-        });
-      })
-      .catch(() => showToast("Не удалось загрузить карту.", { tone: "error" }));
   }
 
   function destroyProfileMap() {
@@ -2816,288 +2499,27 @@ export default function App() {
     loadChatActivity();
   }
 
-  async function inviteStaff(event) {
-    event.preventDefault();
-    setStaffInviteStatus("Добавляем...");
-    const body = {};
-    const idf = (staffInviteForm.invite_identifier || "").trim();
-    if (idf) body.invite_identifier = idf;
-    if (!body.invite_identifier) {
-      setStaffInviteStatus("Укажи email или логин сотрудника.");
-      return;
-    }
-    const response = await authFetch(`${API_URL}/booking/staff/`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      const msg = typeof err === "object" && err ? Object.values(err).flat().find(Boolean) : null;
-      setStaffInviteStatus(msg || "Не удалось добавить сотрудника.");
-      return;
-    }
-    setStaffInviteStatus("Приглашение отправлено. Сотрудник увидит запрос в чатах.");
-    setStaffInviteForm({ invite_identifier: "" });
-    if (me?.role === "provider") loadSellerData();
-    else loadStaffWorkspace();
-    loadChatActivity();
-  }
-
-  async function deactivateStaff(linkId) {
-    const response = await authFetch(`${API_URL}/booking/staff/${linkId}/`, {
-      method: "PATCH",
-      body: JSON.stringify({ is_active: false }),
-    });
-    if (!response.ok) {
-      setStaffInviteStatus("Не удалось отключить сотрудника.");
-      return;
-    }
-    setStaffInviteStatus("Сотрудник отключён.");
-    loadSellerData();
-  }
-
-  async function patchStaffMeta(linkId, patch) {
-    const response = await authFetch(`${API_URL}/booking/staff/${linkId}/`, {
-      method: "PATCH",
-      body: JSON.stringify(patch),
-    });
-    if (!response.ok) {
-      setStaffInviteStatus("Не удалось сохранить изменения.");
-      return;
-    }
-    setStaffInviteStatus("Сохранено.");
-    if (me?.role === "provider") loadSellerData();
-    else loadStaffWorkspace();
-  }
-
-  async function uploadStaffCard(linkId, { avatarFile, portfolioFiles, bio } = {}) {
-    const fd = new FormData();
-    if (bio != null) fd.append("bio", String(bio));
-    if (avatarFile) fd.append("avatar", avatarFile);
-    if (Array.isArray(portfolioFiles)) {
-      for (const f of portfolioFiles) {
-        if (f) fd.append("portfolio_photos", f);
-      }
-    }
-    if (bio == null && !avatarFile && (!Array.isArray(portfolioFiles) || portfolioFiles.length === 0)) return;
-
-    const response = await authFetch(`${API_URL}/booking/staff/${linkId}/card/`, {
-      method: "POST",
-      body: fd,
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      setStaffInviteStatus(err.detail || "Не удалось сохранить карточку сотрудника.");
-      return false;
-    }
-    const data = await response.json().catch(() => ({}));
-    if (data?.staff) {
-      setOrgStaff((prev) =>
-        (prev || []).map((l) => (Number(l.id) === Number(linkId) ? { ...l, ...data.staff } : l)),
-      );
-    }
-    setStaffInviteStatus("Карточка сохранена.");
-    if (me?.role === "provider") loadSellerData();
-    else if (me?.role === "staff") loadStaffWorkspace();
-    return true;
-  }
-
-  async function deleteStaffPortfolioPhoto(linkId, photoId) {
-    const response = await authFetch(
-      `${API_URL}/booking/staff/${linkId}/portfolio/${encodeURIComponent(photoId)}/`,
-      { method: "DELETE" },
-    );
-    if (!response.ok) {
-      setStaffInviteStatus("Не удалось удалить фото.");
-      return;
-    }
-    const data = await response.json().catch(() => null);
-    if (data) {
-      setOrgStaff((prev) =>
-        (prev || []).map((l) => (Number(l.id) === Number(linkId) ? { ...l, ...data } : l)),
-      );
-    } else if (me?.role === "staff") {
-      loadStaffWorkspace();
-    } else {
-      loadSellerData();
-    }
-    setStaffInviteStatus("Фото удалено.");
-  }
-
-  async function patchStaffPermissions(linkId, permissions) {
-    const response = await authFetch(`${API_URL}/booking/staff/${linkId}/`, {
-      method: "PATCH",
-      body: JSON.stringify({ permissions }),
-    });
-    if (!response.ok) {
-      setStaffInviteStatus("Не удалось сохранить права.");
-      return;
-    }
-    setStaffInviteStatus("Права обновлены.");
-    if (me?.role === "provider") loadSellerData();
-    else loadStaffWorkspace();
-  }
-
-  async function patchStaffServiceAssignment(linkId, serviceIds, categoryIds) {
-    const response = await authFetch(`${API_URL}/booking/staff/${linkId}/`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        assigned_service_ids: serviceIds,
-        assigned_category_ids: categoryIds,
-      }),
-    });
-    if (!response.ok) {
-      setStaffInviteStatus("Не удалось сохранить услуги сотрудника.");
-      return;
-    }
-    setStaffInviteStatus("Услуги сотрудника обновлены.");
-    if (me?.role === "provider") loadSellerData();
-    else loadStaffWorkspace();
-  }
-
-  function toggleStaffPermission(link, key) {
-    const merged = {
-      manage_bookings: true,
-      manage_intervals: false,
-      manage_services: false,
-      manage_chats: true,
-      manage_staff: false,
-      can_delegate_permissions: false,
-      ...(link.permissions || {}),
-    };
-    const next = { ...merged, [key]: !merged[key] };
-    patchStaffPermissions(link.id, next);
-  }
-
-
-  function isBookmarkAvailable(id) {
-    const role = me?.role;
-    if (!role) return false;
-    const def = BOOKMARK_CATALOG.find((b) => b.id === id);
-    if (!def || !def.roles.includes(role)) return false;
-    if (id === "reviews" && !canViewOrgReviews()) return false;
-    if (id === "analytics" && role === "staff") {
-      const sphere = orgSphereOf(me);
-      if (sphere === "cafe_restaurant") {
-        if (
-          !staffHasPerm("cafe_orders") &&
-          !staffHasPerm("cafe_kitchen") &&
-          !staffHasPerm("cafe_settings")
-        ) {
-          return false;
-        }
-      } else if (sphere === "marketplaces") {
-        if (!staffHasPerm("marketplace_manage_orders") && !staffHasPerm("marketplace_manage_catalog")) {
-          return false;
-        }
-      } else if (!staffHasPerm("manage_bookings")) {
-        return false;
-      }
-    }
-    if (role === "staff") {
-      if (id === "bookings" && !staffHasPerm("manage_bookings")) return false;
-      if (id === "intervals" && !staffHasPerm("manage_intervals")) return false;
-      if (id === "services" && !staffHasPerm("manage_services")) return false;
-      if (id === "chats" && !staffHasPerm("manage_chats") && !staffHasPerm("manage_client_chats")) return false;
-    }
-    if (id === "organization" && !canManageOrgSettings) return false;
-    if (id === "staff" && !canAccessStaffPage) return false;
-    if (id === "activity" && role !== "client") return false;
-    if (me?.provider_sphere === "cafe_restaurant" || me?.employer_sphere === "cafe_restaurant") {
-      if (
-        id === "intervals" ||
-        id === "bookings" ||
-        id === "services" ||
-        id === "my_bookings" ||
-        id === "booking_history"
-      ) {
-        return false;
-      }
-      if ((id === "cafe" || id === "cafe_orders") && !isCafeOrgUser) return false;
-      if (id === "cafe" && role === "staff" && !staffHasPerm("cafe_menu") && !staffHasPerm("cafe_settings") && !staffHasPerm("cafe_seating")) {
-        return false;
-      }
-      if (
-        id === "cafe_orders" &&
-        role === "staff" &&
-        !staffHasPerm("cafe_orders") &&
-        !staffHasPerm("cafe_kitchen") &&
-        !staffHasPerm("cafe_seating") &&
-        !staffHasPerm("cafe_delivery")
-      ) {
-        return false;
-      }
-    } else if (id === "cafe" || id === "cafe_orders") {
-      return false;
-    }
-    if (id === "cafe_my_orders" || id === "loyalty") {
-      return role === "client";
-    }
-    if (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces") {
-      if (id === "intervals" || id === "bookings" || id === "services" || id === "my_bookings") return false;
-      if (id === "analytics" || id === "reviews") {
-        // Маркетплейсы: открываем внутренние вкладки кабинета
-        return role === "provider" || role === "staff";
-      }
-      if (id === "marketplaces") {
-        if (role === "provider") return me?.provider_sphere === "marketplaces";
-        if (role === "staff") {
-          return (
-            staffHasPerm("marketplace_manage_orders") ||
-            staffHasPerm("marketplace_manage_catalog") ||
-            staffHasPerm("marketplace_view_keys")
-          );
-        }
-        return false;
-      }
-    } else if (id === "marketplaces") {
-      return false;
-    }
-    if (id === "inspections") {
-      if (role === "client") return true;
-      if (role === "provider") return me?.provider_sphere === "service_center";
-      if (role === "staff") {
-        return (
-          (staffHasPerm("manage_inspections") || staffHasPerm("manage_bookings")) &&
-          (me?.provider_sphere === "service_center" || me?.employer_sphere === "service_center")
-        );
-      }
-      return false;
-    }
-    if (id === "service_apps" || id === "vmenu") return Boolean(accessToken);
-    return true;
-  }
-
-  function navigateBookmark(id) {
-    setMenuOpen(false);
-    if (id === "chats" && isMobileChatLayout()) setSelectedChatId(null);
-    if (id === "reviews") {
-      if (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces") {
-        setMarketplaceInitialTab("reviews");
-        setCurrentView("marketplaces");
-        return;
-      }
-      openProviderReviews();
-      return;
-    }
-    if (id === "analytics" && (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces")) {
-      setMarketplaceInitialTab("analytics");
-      setCurrentView("marketplaces");
-      return;
-    }
-    if (id === "cafe") setCafeWorkspaceTab("floor");
-    setCurrentView(id);
-  }
-
-  function toggleSubnavBookmark(id) {
-    setSubnavBookmarks((prev) => {
-      if (prev.includes(id)) {
-        if (prev.length <= 1) return prev;
-        return prev.filter((x) => x !== id);
-      }
-      return [...prev, id];
-    });
-  }
+  const openProviderReviewsRef = useRef(() => {});
+  const {
+    isBookmarkAvailable,
+    navigateBookmark,
+    toggleSubnavBookmark,
+  } = useCabinetNavigation({
+    me,
+    accessToken,
+    isCafeOrgUser,
+    canViewOrgReviews,
+    canManageOrgSettings,
+    canAccessStaffPage,
+    staffHasPerm,
+    setMenuOpen,
+    setSelectedChatId,
+    setMarketplaceInitialTab,
+    setCurrentView,
+    setCafeWorkspaceTab,
+    openProviderReviews: () => openProviderReviewsRef.current(),
+    setSubnavBookmarks,
+  });
 
   const platformTourSphere = me?.provider_sphere || me?.employer_sphere || "";
   const platformTourSteps = buildPlatformTourSteps({
@@ -3127,177 +2549,6 @@ export default function App() {
     setPlatformTourStep(0);
     setPlatformTourPhase("welcome");
     setMenuOpen(false);
-  }
-
-  async function loadCatalogStatus() {
-    const res = await authFetch(`${API_URL}/catalog/seed-catalog/`);
-    if (res.ok) setCatalogStatus(await res.json());
-  }
-
-  async function seedProviderCatalog() {
-    if (!me?.provider_sphere) {
-      setSellerStatus("Укажите сферу услуг в настройках организации.");
-      return;
-    }
-    setCatalogSeeding(true);
-    setSellerStatus("");
-    const res = await authFetch(`${API_URL}/catalog/seed-catalog/`, {
-      method: "POST",
-      body: JSON.stringify({ sphere: me.provider_sphere }),
-    });
-    setCatalogSeeding(false);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      setSellerStatus(formatApiError(err, res.status) || "Не удалось загрузить каталог.");
-      return;
-    }
-    const data = await res.json();
-    setCatalogStatus(data);
-    const created = data.stats?.services_created ?? 0;
-    setSellerStatus(
-      created > 0
-        ? `Каталог загружен: ${created} услуг. Включите нужные позиции и укажите цены.`
-        : "Каталог обновлён. Проверьте цены и включите нужные услуги.",
-    );
-    await loadSellerData();
-    const openCats = {};
-    for (const c of categories) openCats[c.id] = false;
-    setCategoryOpen((prev) => ({ ...openCats, ...prev }));
-    setSubcategoryOpen((prev) => ({ ...prev }));
-  }
-
-  function updateServiceDraft(serviceId, patch) {
-    setServiceDrafts((prev) => {
-      const base =
-        prev[serviceId] ?? buildServiceDraftFromService(services.find((s) => Number(s.id) === Number(serviceId)) || {});
-      return { ...prev, [serviceId]: { ...base, ...patch } };
-    });
-  }
-
-  async function uploadServicePhotos(serviceId, fileList) {
-    const files = Array.from(fileList || []).filter(Boolean);
-    if (!files.length) return;
-    const fd = new FormData();
-    files.forEach((f) => fd.append("photos", f));
-    const res = await authFetch(`${API_URL}/catalog/services/${serviceId}/photos/`, {
-      method: "POST",
-      body: fd,
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      setSellerStatus(err.detail || "Не удалось загрузить фото услуги.");
-      return;
-    }
-    const data = await res.json();
-    setServices((prev) =>
-      prev.map((s) =>
-        Number(s.id) === Number(serviceId)
-          ? { ...s, photos: data.photos || s.photos, gallery: data.gallery || s.gallery }
-          : s,
-      ),
-    );
-    setSellerStatus("Фото услуги добавлены.");
-  }
-
-  async function deleteServicePhoto(serviceId, photoId) {
-    const res = await authFetch(`${API_URL}/catalog/services/${serviceId}/photos/${photoId}/`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      setSellerStatus("Не удалось удалить фото.");
-      return;
-    }
-    setServices((prev) =>
-      prev.map((s) => {
-        if (Number(s.id) !== Number(serviceId)) return s;
-        const photos = (s.photos || []).filter((p) => Number(p.id) !== Number(photoId));
-        const gallery = (s.gallery || []).filter(
-          (p) => !(p.source === "service" && Number(p.id) === Number(photoId)),
-        );
-        return { ...s, photos, gallery };
-      }),
-    );
-  }
-
-  const dirtyServiceCount = useMemo(
-    () => services.filter((s) => !serviceDraftEqualsService(serviceDrafts[s.id], s)).length,
-    [services, serviceDrafts],
-  );
-
-  const staffAssignableServices = useMemo(
-    () =>
-      services.filter((s) => {
-        const draft = serviceDrafts[s.id];
-        if (draft) return Boolean(draft.is_active);
-        return Boolean(s.is_active);
-      }),
-    [services, serviceDrafts],
-  );
-
-  const staffAssignableCategories = useMemo(() => {
-    const categoryIds = new Set(
-      staffAssignableServices.map((s) => Number(s.category)).filter((id) => Number.isFinite(id) && id > 0),
-    );
-    return categories.filter((cat) => categoryIds.has(Number(cat.id)));
-  }, [categories, staffAssignableServices]);
-
-  async function saveAllServiceChanges() {
-    const dirty = services.filter((s) => !serviceDraftEqualsService(serviceDrafts[s.id], s));
-    if (!dirty.length) {
-      setSellerStatus("Нет изменений для сохранения.");
-      return;
-    }
-    setServiceSavingAll(true);
-    setSellerStatus("");
-    const results = await Promise.all(
-      dirty.map((s) => {
-        const d = serviceDrafts[s.id];
-        return authFetch(`${API_URL}/catalog/services/${s.id}/`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            price: Number(d.price),
-            duration_minutes: Number(d.duration_minutes),
-            is_active: d.is_active,
-          }),
-        });
-      }),
-    );
-    setServiceSavingAll(false);
-    const failed = results.filter((r) => !r.ok).length;
-    if (failed) {
-      setSellerStatus(`Не удалось сохранить ${failed} из ${dirty.length} услуг.`);
-      return;
-    }
-    setServices((prev) =>
-      prev.map((s) => {
-        const d = serviceDrafts[s.id];
-        if (!dirty.some((x) => x.id === s.id)) return s;
-        return {
-          ...s,
-          price: Number(d.price),
-          duration_minutes: Number(d.duration_minutes),
-          is_active: d.is_active,
-        };
-      }),
-    );
-    setServiceDrafts((prev) => {
-      const next = { ...prev };
-      for (const s of dirty) {
-        next[s.id] = { ...serviceDrafts[s.id] };
-      }
-      return next;
-    });
-    setSellerStatus(`Сохранено услуг: ${dirty.length}.`);
-  }
-
-  async function updateService(id, patch) {
-    const response = await authFetch(`${API_URL}/catalog/services/${id}/`, {
-      method: "PATCH",
-      body: JSON.stringify(patch),
-    });
-    if (!response.ok) return setSellerStatus("Ошибка обновления услуги.");
-    setSellerStatus("Услуга обновлена.");
-    loadSellerData();
   }
 
   async function updateProfile(event) {
@@ -3357,39 +2608,6 @@ export default function App() {
     const data = await response.json().catch(() => ({}));
     setPasswordResetBusy(false);
     setAuthStatus(data.detail || (response.ok ? "Если аккаунт есть, мы отправили ссылку на почту." : "Не удалось отправить ссылку."));
-  }
-
-  async function confirmPasswordReset(event) {
-    event.preventDefault();
-    if (!passwordResetToken) {
-      setAuthStatus("Ссылка недействительна. Запросите сброс ещё раз.");
-      return;
-    }
-    setPasswordResetBusy(true);
-    const response = await fetch(`${API_URL}/users/confirm-password-reset/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: passwordResetToken,
-        new_password: resetForm.new_password,
-        new_password_confirm: resetForm.new_password_confirm,
-      }),
-    });
-    const data = await response.json().catch(() => ({}));
-    setPasswordResetBusy(false);
-    const detail = data.detail || formatApiError(data, response.status) || (response.ok ? "Пароль обновлён." : "Не удалось сохранить пароль.");
-    setAuthStatus(detail);
-    if (!response.ok) return setStatus(detail);
-    showToast(detail, { tone: "success", ms: 10000 });
-    setPasswordResetToken("");
-    setResetForm({ new_password: "", new_password_confirm: "" });
-    window.history.replaceState({}, document.title, "/");
-    if (accessToken) {
-      setShowAuthModal(false);
-      setStatus(detail);
-    } else {
-      openAuth("login");
-    }
   }
 
   async function changeEmail(event) {
@@ -3519,168 +2737,6 @@ export default function App() {
     setBranchGeoStatus("Филиал удалён.");
     loadSellerData();
   }
-
-  async function onClientLocationSelect(locationId, presetDate = "") {
-    const loc = allLocations.find((x) => String(x.id) === String(locationId));
-    if (!loc) {
-      setClientBookingForm((p) => ({
-        ...p,
-        locationId: "",
-        provider: "",
-        staffId: "any",
-        serviceId: "",
-        windowKey: "",
-      }));
-      setProviderServices([]);
-      setBookProviderStaff([]);
-      setClientBookWindows([]);
-      return;
-    }
-    const pid = String(loc.provider);
-    const bookDate = presetDate || clientDiscoverFiltersRef.current?.slot_date || clientBookingForm.bookDate || todayIsoDate();
-    const filterService = String(clientDiscoverFiltersRef.current?.service || "").trim();
-    setClientBookingForm((p) => ({
-      ...p,
-      locationId: String(loc.id),
-      provider: pid,
-      staffId: "any",
-      serviceId: "",
-      optionIds: [],
-      windowKey: "",
-      bookDate,
-    }));
-    const [servicesRes, staffRes] = await Promise.all([
-      authFetch(`${API_URL}/catalog/services/?provider=${encodeURIComponent(pid)}`),
-      authFetch(`${API_URL}/booking/staff/?provider=${encodeURIComponent(pid)}`),
-    ]);
-    if (servicesRes.ok) {
-      const list = (await servicesRes.json()).filter((s) => s.is_active);
-      setProviderServices(list);
-      const matched = matchProviderServiceByFilter(list, filterService);
-      if (matched) {
-        setClientBookingForm((p) => ({
-          ...p,
-          locationId: String(loc.id),
-          provider: pid,
-          serviceId: String(matched.id),
-          windowKey: "",
-          bookDate,
-        }));
-      }
-    } else {
-      setProviderServices([]);
-    }
-    if (staffRes.ok) {
-      const staffList = await staffRes.json();
-      setBookProviderStaff(Array.isArray(staffList) ? staffList : []);
-    } else {
-      setBookProviderStaff([]);
-    }
-    setClientBookWindows([]);
-    setBookLoyaltyInfo(null);
-    setBookClientPackages([]);
-    setClientBookingForm((p) => ({ ...p, loyaltyPoints: "", usePackage: true, clientPackageId: "" }));
-    if (me?.role === "client" && accessToken) {
-      authFetch(`${API_URL}/booking/loyalty/me/?provider=${encodeURIComponent(pid)}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => setBookLoyaltyInfo(data))
-        .catch(() => setBookLoyaltyInfo(null));
-      authFetch(`${API_URL}/booking/client-packages/`)
-        .then((r) => (r.ok ? r.json() : []))
-        .then((list) => {
-          const mine = (Array.isArray(list) ? list : []).filter(
-            (p) =>
-              Number(p.provider) === Number(pid) &&
-              p.status === "active" &&
-              Number(p.visits_remaining) > 0,
-          );
-          setBookClientPackages(mine);
-          if (mine.length) {
-            setClientBookingForm((p) => ({
-              ...p,
-              usePackage: true,
-              clientPackageId: String(mine[0].id),
-            }));
-          }
-        })
-        .catch(() => setBookClientPackages([]));
-    }
-  }
-
-  async function loadMapOrgSummary(providerId) {
-    const res = await authFetch(`${API_URL}/reviews/summary/?provider=${encodeURIComponent(providerId)}`);
-    if (res.ok) setMapOrgSummary(await res.json());
-  }
-
-  async function loadMapOrgProfile(providerId) {
-    const res = await authFetch(`${API_URL}/users/organization-profile/?provider=${encodeURIComponent(providerId)}`);
-    if (!res.ok) {
-      setMapOrgProfile(null);
-      return null;
-    }
-    const data = await res.json();
-    setMapOrgProfile(data);
-    setMapOrgCarouselIndex(0);
-    return data;
-  }
-
-  async function loadMapOrgStaff(providerId) {
-    const res = await authFetch(`${API_URL}/booking/staff/?provider=${encodeURIComponent(providerId)}`);
-    if (!res.ok) {
-      setMapOrgStaff([]);
-      return;
-    }
-    const data = await res.json();
-    setMapOrgStaff(Array.isArray(data) ? data : data.results || []);
-  }
-
-  function closeMapOrgSheet() {
-    setMapOrgPopup(null);
-    setMapOrgSheetCollapsed(false);
-    setMapOrgProfile(null);
-    setMapOrgStaff([]);
-    setMapOrgReviewsOpen(false);
-    setMapOrgReviews([]);
-    setStaffReviewModal(null);
-    window.setTimeout(fitClientDiscoverMapViewport, 0);
-    window.setTimeout(fitClientDiscoverMapViewport, 120);
-  }
-
-  function collapseMapOrgSheet() {
-    setMapOrgSheetCollapsed(true);
-    window.setTimeout(fitClientDiscoverMapViewport, 0);
-  }
-
-  function expandMapOrgSheet() {
-    setMapOrgSheetCollapsed(false);
-    window.setTimeout(fitClientDiscoverMapViewport, 0);
-  }
-
-  async function openOrgOnMap(loc) {
-    setMapOrgPopup(loc);
-    setMapOrgSheetCollapsed(false);
-    setMapOrgCarouselIndex(0);
-    const profile = await loadMapOrgProfile(loc.provider);
-    if (profile?.reviews_count > 0) {
-      setMapOrgReviewsOpen(true);
-      await loadMapOrgReviews(loc.provider, mapOrgReviewsOrdering);
-    } else {
-      setMapOrgReviewsOpen(false);
-      setMapOrgReviews([]);
-    }
-    loadMapOrgSummary(loc.provider);
-    // Публично показываем карточки сотрудников организации
-    void loadMapOrgStaff(loc.provider);
-    setMapOrgPackages([]);
-    if (accessToken && me?.role === "client") {
-      authFetch(`${API_URL}/booking/packages/?provider=${loc.provider}`)
-        .then((r) => (r.ok ? r.json() : []))
-        .then((list) => setMapOrgPackages(Array.isArray(list) ? list.filter((p) => p.is_active !== false) : []))
-        .catch(() => setMapOrgPackages([]));
-    }
-    window.setTimeout(fitClientDiscoverMapViewport, 0);
-  }
-  openOrgOnMapRef.current = openOrgOnMap;
 
   async function saveOrgProfileInfo(event) {
     event?.preventDefault?.();
@@ -3896,18 +2952,6 @@ export default function App() {
     if (res.ok) setOrgGalleryPhotos((p) => p.filter((x) => Number(x.id) !== Number(id)));
   }
 
-  async function loadMapOrgReviews(providerId, ordering, staffLinkId = null) {
-    const params = new URLSearchParams({
-      provider: String(providerId),
-      ordering: ordering || "-created_at",
-    });
-    if (staffLinkId != null && staffLinkId !== "") {
-      params.set("staff", String(staffLinkId));
-    }
-    const res = await authFetch(`${API_URL}/reviews/?${params.toString()}`);
-    if (res.ok) setMapOrgReviews(normalizeReviewsList(await res.json()));
-  }
-
   async function loadProviderReviewsList(ordering = providerReviewsOrdering) {
     const res = await authFetch(
       `${API_URL}/reviews/?ordering=${encodeURIComponent(ordering || "-created_at")}`,
@@ -3940,6 +2984,7 @@ export default function App() {
     loadProviderReviewsList(providerReviewsOrdering);
     markReviewsSeen();
   }
+  openProviderReviewsRef.current = openProviderReviews;
 
   async function refreshReviewsAfterSubmit(providerId) {
     if (me?.role === "client") await loadMyReviews();
