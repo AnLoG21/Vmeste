@@ -21,14 +21,9 @@ import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import ServiceEditor, { buildServiceDraftFromService, serviceDraftEqualsService } from "./ServiceEditor.jsx";
 import { MapOrgContactsBlock, MapOrgHoursBlock, PhotoLightboxReviewCaption } from "./mapOrgBlocks.jsx";
-import OrgMessengerChannelsForm from "./OrgMessengerChannelsForm.jsx";
-import OrgAcquiringFields from "./OrgAcquiringFields.jsx";
-import OrgBookingMessagesSection from "./OrgBookingMessagesSection.jsx";
-import OrgCalendarSection from "./OrgCalendarSection.jsx";
-import OrganizationAddressBranchesPanel from "./OrganizationAddressBranchesPanel.jsx";
-import OrgMessagingRemindersSection from "./OrgMessagingRemindersSection.jsx";
-import OrgClientCardSection from "./OrgClientCardSection.jsx";
 import StaffManagementPanel from "./StaffManagementPanel.jsx";
+import GeneralSettingsPanel from "./GeneralSettingsPanel.jsx";
+import OrganizationSettingsPanel from "./OrganizationSettingsPanel.jsx";
 import BookingCalendar from "./BookingCalendar.jsx";
 import BookingHistory from "./BookingHistory.jsx";
 import SlotIntervalCalendar, { buildIntervalPopoverFixedStyle } from "./SlotIntervalCalendar.jsx";
@@ -41,7 +36,6 @@ import {
 import {
   NOMINATIM_HEADERS,
   simplifyCommaAddressLine,
-  composeOrgDisplayFromMe,
   mapPhotonFeatureToSuggestion,
   getCity,
   buildShortAddress,
@@ -109,7 +103,6 @@ import {
 import ChatVideoNotePlayer from "./ChatVideoNotePlayer.jsx";
 import SalonLoyaltyPackagesPanel from "./SalonLoyaltyPackagesPanel.jsx";
 import OrgReviewComposer from "./OrgReviewComposer.jsx";
-import VoiceAdminPanel from "./VoiceAdminPanel.jsx";
 import MiniDatePicker from "./MiniDatePicker.jsx";
 import PlatformTour from "./PlatformTour.jsx";
 import {
@@ -7444,399 +7437,108 @@ export default function App() {
   }, [vmenuChatContacts, chatSearchQuery]);
 
   function renderGeneralSettings() {
-    const role = me?.role;
-    const bookmarkOptions = BOOKMARK_CATALOG.filter((b) => role && b.roles.includes(role) && isBookmarkAvailable(b.id));
     return (
-      <section className="card profile-card">
-        <h2>Настройки</h2>
-        <div className="form">
-          <h3>Оформление</h3>
-          <p className="muted">Тёмная тема сохраняется в этом браузере.</p>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={appTheme === "dark"}
-              onChange={(e) => setAppTheme(e.target.checked ? "dark" : "light")}
-            />
-            Тёмная тема
-          </label>
-        </div>
-        {(me?.role === "provider" || me?.role === "staff") && (
-          <div className="form">
-            <h3>Обучение</h3>
-            <p className="muted">Краткий тур по разделам платформы для вашей организации.</p>
-            <button type="button" className="ghost-btn" onClick={replayPlatformTour}>
-              Показать обучение
-            </button>
-          </div>
-        )}
-        <div className="form">
-          <h3>Закладки главного меню</h3>
-          <p className="muted">
-            Отмеченные пункты показываются сверху. Удерживайте строку и перетащите, чтобы изменить порядок.
-          </p>
-          <div className="bookmark-settings-list">
-            {[
-              ...subnavBookmarks
-                .map((id) => bookmarkOptions.find((b) => b.id === id))
-                .filter(Boolean),
-              ...bookmarkOptions.filter((b) => !subnavBookmarks.includes(b.id)),
-            ].map((b) => {
-              const checked = subnavBookmarks.includes(b.id);
-              return (
-              <label
-                key={b.id}
-                className={["checkbox bookmark-settings-item", checked && "bookmark-settings-item--on"].filter(Boolean).join(" ")}
-                draggable={checked}
-                onDragStart={(e) => {
-                  if (!checked) return;
-                  e.dataTransfer.setData("text/plain", b.id);
-                  e.dataTransfer.effectAllowed = "move";
-                }}
-                onDragOver={(e) => {
-                  if (!checked) return;
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const fromId = e.dataTransfer.getData("text/plain");
-                  if (!fromId || fromId === b.id || !subnavBookmarks.includes(b.id)) return;
-                  setSubnavBookmarks((prev) => {
-                    const next = [...prev];
-                    const from = next.indexOf(fromId);
-                    const to = next.indexOf(b.id);
-                    if (from < 0 || to < 0) return prev;
-                    next.splice(from, 1);
-                    next.splice(to, 0, fromId);
-                    return next;
-                  });
-                }}
-              >
-                {checked ? <span className="bookmark-drag-handle" aria-hidden="true">⋮⋮</span> : null}
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggleSubnavBookmark(b.id)}
-                />
-                <span>{bookmarkLabel(b.id, role, me?.provider_sphere)}</span>
-              </label>
-            );
-            })}
-          </div>
-          <button
-            type="button"
-            className="ghost-btn"
-            onClick={() => setSubnavBookmarks(defaultSubnavBookmarks(role, me?.provider_sphere))}
-          >
-            Сбросить по умолчанию
-          </button>
-        </div>
-        <form onSubmit={changePassword} className="form">
-          <h3>{me?.has_usable_password === false ? "Задать пароль" : "Смена пароля"}</h3>
-          {me?.has_usable_password !== false ? (
-            <PasswordInput
-              value={passwordForm.old_password}
-              onChange={(e) => setPasswordForm({ ...passwordForm, old_password: e.target.value })}
-              placeholder="Старый пароль"
-              autoComplete="current-password"
-            />
-          ) : null}
-          <PasswordInput
-            value={passwordForm.new_password}
-            onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
-            placeholder="Новый пароль"
-            autoComplete="new-password"
-          />
-          <PasswordInput
-            value={passwordForm.new_password_confirm}
-            onChange={(e) => setPasswordForm({ ...passwordForm, new_password_confirm: e.target.value })}
-            placeholder="Повтори новый пароль"
-            autoComplete="new-password"
-          />
-          <button type="submit">{me?.has_usable_password === false ? "Сохранить пароль" : "Сменить пароль"}</button>
-          <p className="muted small">
-            Не помните текущий пароль? Отправим ссылку на сброс{me?.email ? ` на ${me.email}` : ""}.
-          </p>
-          <button
-            type="button"
-            className="ghost-btn"
-            disabled={passwordResetBusy || me?.is_demo}
-            onClick={requestPasswordResetFromSettings}
-          >
-            {passwordResetBusy ? "Отправляем…" : "Сбросить через почту"}
-          </button>
-        </form>
-        <form onSubmit={changeEmail} className="form">
-          <h3>Смена почты</h3>
-          <input type="email" value={emailForm.new_email} onChange={(e) => setEmailForm({ new_email: e.target.value })} placeholder="Новый email" />
-          <button type="submit">Сменить email</button>
-        </form>
-        {!me?.email_verified && (
-          <>
-            <p className="status">Подтверди email для полноценной работы.</p>
-            <button type="button" onClick={resendVerification}>Отправить письмо повторно</button>
-            <p className="status">{resendStatus}</p>
-          </>
-        )}
-        {me?.role === "client" || me?.role === "staff" ? (
-          <form onSubmit={saveClientNotifyPrefs} className="form">
-            <h3>Уведомления о записях</h3>
-            <p className="muted small">
-              {me?.role === "staff"
-                ? "Push всегда; Telegram — если привяжете чат. Напоминания приходят по записям, где вы мастер, когда организация включила канал."
-                : "Push всегда; SMS и мессенджеры — если организация включила каналы и указала ключи."}
-            </p>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={Boolean(clientNotifyForm.notify_booking_reminders)}
-                onChange={(e) => setClientNotifyForm((p) => ({ ...p, notify_booking_reminders: e.target.checked }))}
-              />
-              Напоминания за 24 ч и 2 ч до визита
-            </label>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={Boolean(clientNotifyForm.notify_booking_status)}
-                onChange={(e) => setClientNotifyForm((p) => ({ ...p, notify_booking_status: e.target.checked }))}
-              />
-              Статусы: подтверждение, отмена, услуга оказана
-            </label>
-            <button type="submit">Сохранить уведомления</button>
-            <p className="status">{clientNotifyStatus}</p>
-            <h4>Telegram</h4>
-            <p className="muted small">
-              Привяжите чат через бота платформы — напоминания придут в Telegram, если организация включила канал.
-            </p>
-            <div className="row-2">
-              <button type="button" className="ghost-btn" onClick={loadTelegramLink}>
-                Показать код / ссылку
-              </button>
-              {telegramLinkInfo?.linked ? (
-                <button type="button" className="ghost-btn" onClick={unlinkTelegram}>
-                  Отвязать
-                </button>
-              ) : null}
-            </div>
-            {telegramLinkInfo ? (
-              <div>
-                <p
-                  className={`telegram-bind-status ${
-                    telegramLinkInfo.linked ? "telegram-bind-status--ok" : "telegram-bind-status--bad"
-                  }`}
-                >
-                  <span className="telegram-bind-mark" aria-hidden="true">
-                    {telegramLinkInfo.linked ? "✓" : "✕"}
-                  </span>
-                  <span>
-                    {telegramLinkInfo.linked ? "Привязан." : "Не привязан."} Код:{" "}
-                    <code>{telegramLinkInfo.link_token}</code>
-                  </span>
-                </p>
-                {telegramLinkInfo.deep_link ? (
-                  <a href={telegramLinkInfo.deep_link} target="_blank" rel="noreferrer">
-                    Открыть бота
-                  </a>
-                ) : (
-                  <p className="muted small">{telegramLinkInfo.hint}</p>
-                )}
-              </div>
-            ) : null}
-          </form>
-        ) : null}
-      </section>
+      <GeneralSettingsPanel
+        me={me}
+        appTheme={appTheme}
+        setAppTheme={setAppTheme}
+        replayPlatformTour={replayPlatformTour}
+        subnavBookmarks={subnavBookmarks}
+        setSubnavBookmarks={setSubnavBookmarks}
+        isBookmarkAvailable={isBookmarkAvailable}
+        toggleSubnavBookmark={toggleSubnavBookmark}
+        passwordForm={passwordForm}
+        setPasswordForm={setPasswordForm}
+        changePassword={changePassword}
+        passwordResetBusy={passwordResetBusy}
+        requestPasswordResetFromSettings={requestPasswordResetFromSettings}
+        emailForm={emailForm}
+        setEmailForm={setEmailForm}
+        changeEmail={changeEmail}
+        resendVerification={resendVerification}
+        resendStatus={resendStatus}
+        clientNotifyForm={clientNotifyForm}
+        setClientNotifyForm={setClientNotifyForm}
+        saveClientNotifyPrefs={saveClientNotifyPrefs}
+        clientNotifyStatus={clientNotifyStatus}
+        telegramLinkInfo={telegramLinkInfo}
+        loadTelegramLink={loadTelegramLink}
+        unlinkTelegram={unlinkTelegram}
+      />
     );
   }
 
   function renderOrganizationSettings() {
-    if (!canManageOrgSettings) return null;
     return (
-      <section className="card profile-card org-settings-card">
-        <h2>Организация</h2>
-        {cabinetLoadError ? (
-          <LoadErrorBanner message={cabinetLoadError} onRetry={() => void loadSellerData()} />
-        ) : null}
-        {me?.role === "staff" && staffEffectivePerms.can_delegate_permissions && (
-          <p className="muted">
-            {me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces"
-              ? "Название организации настраивает руководитель. Команду и права — в разделе «Сотрудники»."
-              : "Адрес организации и филиалы настраивает руководитель. Команду, должности и права — в разделе «Сотрудники»."}
-          </p>
-        )}
-        {me?.role === "provider" && me?.provider_sphere === "marketplaces" && (
-          <>
-            <p className="muted">
-              Ключи площадок, товары и заказы — в разделе «Маркетплейсы». Здесь — название организации и каналы
-              уведомлений (Telegram и др.), куда уходят алерты о заказах и ошибках синка.
-            </p>
-            <form onSubmit={saveProviderOrganization} className="form">
-              <label className="field-label" htmlFor="org-mp-name">
-                Название организации
-              </label>
-              <input
-                id="org-mp-name"
-                placeholder="Название организации"
-                value={orgAddressForm.organization_name}
-                onChange={(e) => setOrgAddressForm({ ...orgAddressForm, organization_name: e.target.value })}
-                required
-              />
-              <button type="submit">Сохранить</button>
-              <p className="status">{profileOrgStatus}</p>
-            </form>
-
-            <h3>Уведомления и мессенджеры</h3>
-            <p className="muted small">
-              Подключите Telegram (рекомендуется): в «Маркетплейсы → Управление» включите «Telegram» и типы алертов —
-              сообщения пойдут в этот чат организации. Push приходит на устройства с приложением.
-            </p>
-            <form onSubmit={saveOrgMessaging} className="form">
-              <OrgMessengerChannelsForm
-                form={orgMessagingForm}
-                onChange={setOrgMessagingForm}
-                saveStatus={orgMessagingSaveStatus}
-                telegramLinkInfo={orgTelegramLinkInfo}
-                onLoadTelegramLink={loadOrgTelegramLink}
-                onRefreshTelegramLink={refreshOrgTelegramLink}
-                onUnlinkTelegram={unlinkOrgTelegram}
-              />
-            </form>
-          </>
-        )}
-        {me?.role === "provider" && me?.provider_sphere !== "marketplaces" && (
-          <>
-            {me?.provider_sphere !== "cafe_restaurant" ? (
-              <>
-            <OrgBookingMessagesSection
-              messages={orgBookingMessages}
-              onChange={setOrgBookingMessages}
-              onSubmit={saveOrgBookingMessages}
-              settingsHighlight={orgSettingsHighlight}
-            />
-
-            <h3>Предоплата при записи</h3>
-            <p className="muted small">
-              Чтобы снизить неприходы, включите частичную или полную предоплату. Деньги идут в магазин выбранного
-              эквайера организации, не на счёт платформы. Неоплаченная запись снимается через 10 минут.
-            </p>
-            <form onSubmit={saveOrgAcquiring} className="form">
-              <OrgAcquiringFields
-                form={orgAcquiringForm}
-                onChange={setOrgAcquiringForm}
-                saveStatus={orgAcquiringSaveStatus}
-                providerSphere={me?.provider_sphere}
-              />
-            </form>
-
-            <OrgCalendarSection
-              links={orgCalendarLinks}
-              status={orgCalendarStatus}
-              onRotateToken={rotateOrgCalendarToken}
-              onCopyStatus={setOrgCalendarStatus}
-            />
-
-            <OrgMessagingRemindersSection
-              form={orgMessagingForm}
-              onChange={setOrgMessagingForm}
-              onSubmit={saveOrgMessaging}
-              saveStatus={orgMessagingSaveStatus}
-              telegramLinkInfo={orgTelegramLinkInfo}
-              onLoadTelegramLink={loadOrgTelegramLink}
-              onRefreshTelegramLink={refreshOrgTelegramLink}
-              onUnlinkTelegram={unlinkOrgTelegram}
-            />
-
-            {(me?.provider_sphere === "hair_salon" || me?.provider_sphere === "service_center") && (
-              <VoiceAdminPanel
-                authFetch={authFetch}
-                API_URL={API_URL}
-                apiOrigin={String(API_URL || "").replace(/\/api\/?$/, "")}
-                onOpenSubscriptions={() => setCurrentView("subscriptions")}
-              />
-            )}
-              </>
-            ) : (
-              <>
-                <h3>Уведомления</h3>
-                <p className="muted small">
-                  Подключите Telegram или другие каналы для оповещений по заказам кафе. Настройки онлайн-оплаты — во вкладке
-                  «Зал и меню → Режимы, доставка и оплата».
-                </p>
-                <form onSubmit={saveOrgMessaging} className="form">
-                  <OrgMessengerChannelsForm
-                form={orgMessagingForm}
-                onChange={setOrgMessagingForm}
-                saveStatus={orgMessagingSaveStatus}
-                telegramLinkInfo={orgTelegramLinkInfo}
-                onLoadTelegramLink={loadOrgTelegramLink}
-                onRefreshTelegramLink={refreshOrgTelegramLink}
-                onUnlinkTelegram={unlinkOrgTelegram}
-              />
-                </form>
-              </>
-            )}
-
-            <OrgClientCardSection
-              form={orgProfileForm}
-              onChange={setOrgProfileForm}
-              onSubmit={saveOrgProfileInfo}
-              saveStatus={orgProfileSaveStatus}
-              galleryPhotos={orgGalleryPhotos}
-              onUploadGalleryPhotos={async (files) => {
-                const slotsLeft = ORG_GALLERY_MAX_PHOTOS - orgGalleryPhotos.length;
-                for (const f of files.slice(0, slotsLeft)) {
-                  const ok = await uploadOrgGalleryPhoto(f);
-                  if (!ok) break;
-                }
-              }}
-              onDeleteGalleryPhoto={deleteOrgGalleryPhoto}
-              onOpenGalleryLightbox={openOrgPhotoLightbox}
-              organizationSlug={me?.organization_slug}
-              showBookingWidget={me?.role === "provider" && me?.provider_sphere !== "cafe_restaurant"}
-            />
-
-            <OrganizationAddressBranchesPanel
-              orgName={orgAddressForm.organization_name}
-              orgDisplayAddress={composeOrgDisplayFromMe(me)}
-              orgAddressForm={orgAddressForm}
-              onOrgAddressFormChange={setOrgAddressForm}
-              orgMainEditOpen={orgMainEditOpen}
-              onOrgMainEditOpenChange={setOrgMainEditOpen}
-              profileOrgStatus={profileOrgStatus}
-              onSaveOrganization={saveProviderOrganization}
-              onSyncOrgFromMe={syncOrgAddressFormFromMe}
-              onCancelOrgMainEdit={() => {
-                syncOrgAddressFormFromMe();
-                setOrgMainEditOpen(false);
-                setProfileOrgStatus("");
-              }}
-              onProfileAddressInput={onProfileAddressInput}
-              onGeocodeProfileAddress={geocodeProfileAddress}
-              onPickProfileSuggestion={pickProfileSuggestion}
-              detectedCity={detectedCity}
-              addressSuggestions={addressSuggestions}
-              branches={location}
-              locationForm={locationForm}
-              onLocationFormChange={setLocationForm}
-              selectedBranchId={selectedOrgBranchId}
-              onSelectedBranchIdChange={setSelectedOrgBranchId}
-              branchAddOpen={orgBranchAddOpen}
-              onBranchAddOpenChange={setOrgBranchAddOpen}
-              branchEditOpen={orgBranchEditOpen}
-              onBranchEditOpenChange={setOrgBranchEditOpen}
-              branchGeoStatus={branchGeoStatus}
-              onCreateBranch={createProviderBranch}
-              onSaveBranchEdit={saveProviderBranchEdit}
-              onDeleteBranch={deleteProviderBranch}
-              onBranchAddressInput={onBranchAddressInput}
-              onGeocodeBranchAddress={geocodeBranchAddress}
-              onPickBranchSuggestion={pickBranchLocationSuggestion}
-              onClearAddressSuggestions={() => setAddressSuggestions([])}
-              onClearBranchGeoStatus={() => setBranchGeoStatus("")}
-            />
-          </>
-        )}
-      </section>
+      <OrganizationSettingsPanel
+        canManageOrgSettings={canManageOrgSettings}
+        me={me}
+        staffEffectivePerms={staffEffectivePerms}
+        cabinetLoadError={cabinetLoadError}
+        loadSellerData={loadSellerData}
+        saveProviderOrganization={saveProviderOrganization}
+        orgAddressForm={orgAddressForm}
+        setOrgAddressForm={setOrgAddressForm}
+        profileOrgStatus={profileOrgStatus}
+        saveOrgMessaging={saveOrgMessaging}
+        orgMessagingForm={orgMessagingForm}
+        setOrgMessagingForm={setOrgMessagingForm}
+        orgMessagingSaveStatus={orgMessagingSaveStatus}
+        orgTelegramLinkInfo={orgTelegramLinkInfo}
+        loadOrgTelegramLink={loadOrgTelegramLink}
+        refreshOrgTelegramLink={refreshOrgTelegramLink}
+        unlinkOrgTelegram={unlinkOrgTelegram}
+        orgBookingMessages={orgBookingMessages}
+        setOrgBookingMessages={setOrgBookingMessages}
+        saveOrgBookingMessages={saveOrgBookingMessages}
+        orgSettingsHighlight={orgSettingsHighlight}
+        saveOrgAcquiring={saveOrgAcquiring}
+        orgAcquiringForm={orgAcquiringForm}
+        setOrgAcquiringForm={setOrgAcquiringForm}
+        orgAcquiringSaveStatus={orgAcquiringSaveStatus}
+        orgCalendarLinks={orgCalendarLinks}
+        orgCalendarStatus={orgCalendarStatus}
+        rotateOrgCalendarToken={rotateOrgCalendarToken}
+        setOrgCalendarStatus={setOrgCalendarStatus}
+        authFetch={authFetch}
+        API_URL={API_URL}
+        setCurrentView={setCurrentView}
+        orgProfileForm={orgProfileForm}
+        setOrgProfileForm={setOrgProfileForm}
+        saveOrgProfileInfo={saveOrgProfileInfo}
+        orgProfileSaveStatus={orgProfileSaveStatus}
+        orgGalleryPhotos={orgGalleryPhotos}
+        uploadOrgGalleryPhoto={uploadOrgGalleryPhoto}
+        deleteOrgGalleryPhoto={deleteOrgGalleryPhoto}
+        openOrgPhotoLightbox={openOrgPhotoLightbox}
+        orgMainEditOpen={orgMainEditOpen}
+        setOrgMainEditOpen={setOrgMainEditOpen}
+        syncOrgAddressFormFromMe={syncOrgAddressFormFromMe}
+        setProfileOrgStatus={setProfileOrgStatus}
+        onProfileAddressInput={onProfileAddressInput}
+        geocodeProfileAddress={geocodeProfileAddress}
+        pickProfileSuggestion={pickProfileSuggestion}
+        detectedCity={detectedCity}
+        addressSuggestions={addressSuggestions}
+        location={location}
+        locationForm={locationForm}
+        setLocationForm={setLocationForm}
+        selectedOrgBranchId={selectedOrgBranchId}
+        setSelectedOrgBranchId={setSelectedOrgBranchId}
+        orgBranchAddOpen={orgBranchAddOpen}
+        setOrgBranchAddOpen={setOrgBranchAddOpen}
+        orgBranchEditOpen={orgBranchEditOpen}
+        setOrgBranchEditOpen={setOrgBranchEditOpen}
+        branchGeoStatus={branchGeoStatus}
+        createProviderBranch={createProviderBranch}
+        saveProviderBranchEdit={saveProviderBranchEdit}
+        deleteProviderBranch={deleteProviderBranch}
+        onBranchAddressInput={onBranchAddressInput}
+        geocodeBranchAddress={geocodeBranchAddress}
+        pickBranchLocationSuggestion={pickBranchLocationSuggestion}
+        setAddressSuggestions={setAddressSuggestions}
+        setBranchGeoStatus={setBranchGeoStatus}
+      />
     );
   }
 
