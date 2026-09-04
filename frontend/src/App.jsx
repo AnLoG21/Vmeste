@@ -30,6 +30,9 @@ import GeneralSettingsPanel from "./GeneralSettingsPanel.jsx";
 import OrganizationSettingsPanel from "./OrganizationSettingsPanel.jsx";
 import BookingCalendar from "./BookingCalendar.jsx";
 import BookingHistory from "./BookingHistory.jsx";
+import BookingSlotActions from "./BookingSlotActions.jsx";
+import ProfileCabinetPanel from "./ProfileCabinetPanel.jsx";
+import AuthModal from "./AuthModal.jsx";
 import SlotIntervalCalendar, { buildIntervalPopoverFixedStyle } from "./SlotIntervalCalendar.jsx";
 import { LoadErrorBanner } from "./LoadErrorBanner.jsx";
 import {
@@ -86,7 +89,6 @@ import {
   mergeBookingsWithManualHolds,
   formatApiError,
   normalizeReviewsList,
-  bookingPayStillOpen,
   StarRating,
   formatTimeHm,
   clientWindowKey,
@@ -128,10 +130,8 @@ import {
   uniqueDiscoverOrgs,
 } from "./clientOrgFeatures.js";
 import { loadYandexMaps } from "./yandexMapsLoader.js";
-import { MailRuIcon, OkIcon, VkIcon, YandexIcon } from "./AuthSocialIcons.jsx";
 import { API_URL, AUTH_URL, BASE_URL, REFRESH_URL } from "./config.js";
 import { createAuthFetch } from "./authFetch.js";
-import { mediaFullUrl, mediaThumbUrl } from "./mediaUrls.js";
 import { SITE_LEGAL } from "./legal/siteLegal.js";
 import {
   blobToFile,
@@ -148,8 +148,7 @@ import {
   resetPushRegistration,
   showLocalBrowserNotification,
 } from "./pushNotifications.js";
-import { ensurePhonePlus7, phoneFieldProps } from "./phone.js";
-import PasswordInput from "./PasswordInput.jsx";
+import { ensurePhonePlus7 } from "./phone.js";
 import { showToast } from "./toast.js";
 import { navigateView, viewFromPath } from "./viewRoutes.js";
 import { setNoIndexAppMeta, setPageMeta } from "./seo/setPageMeta.js";
@@ -6788,170 +6787,25 @@ export default function App() {
   }
 
   function renderBookingSlotActions(it) {
-    if (!it?.id) return null;
-    if (it?.is_manual_hold || it?.status === "manual_hold") {
-      if (!canManageBookings()) return null;
-      return (
-        <div className="booking-actions-bar" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            className="booking-action-btn booking-action-btn--cancel"
-            title="Снять ручную бронь"
-            onClick={(e) => {
-              e.stopPropagation();
-              void releaseManualHold(it.slot_id || it.id);
-            }}
-          >
-            ✕
-          </button>
-        </div>
-      );
-    }
-    const isOrg = canManageBookings();
-    const isClient = me?.role === "client";
-    const cancelled = it.status === "cancelled";
-    const done = it.status === "done";
     return (
-      <div className="booking-actions-bar" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-        {isOrg && !cancelled && it.status === "new" && it.payment_status !== "pending" && (
-          <button type="button" className="booking-action-btn booking-action-btn--confirm" title="Подтвердить" onClick={(e) => orgBookingAction(it.id, "confirm", e)}>
-            ✓
-          </button>
-        )}
-        {isOrg && !cancelled && (it.status === "confirmed" || it.status === "new") && it.payment_status !== "pending" && (
-          <button
-            type="button"
-            className="booking-action-btn"
-            title="Клиент пришёл"
-            onClick={(e) => orgBookingAction(it.id, "mark-arrived", e)}
-          >
-            ↓
-          </button>
-        )}
-        {isOrg && !cancelled && !done && it.status !== "no_show" && (it.status === "confirmed" || it.status === "new" || it.status === "arrived") && (
-          <button
-            type="button"
-            className="booking-action-btn booking-action-btn--cancel"
-            title="Не пришёл (no-show)"
-            onClick={(e) => orgBookingAction(it.id, "mark-no-show", e)}
-          >
-            ∅
-          </button>
-        )}
-        {isOrg && !cancelled && it.client && (me?.provider_sphere === "service_center" || me?.employer_sphere === "service_center" || me?.role === "staff") && (
-          it.inspection?.id ? (
-            <button
-              type="button"
-              className="ghost-btn small"
-              title="Открыть приёмку по записи"
-              onClick={(e) => {
-                e.stopPropagation();
-                openInspectionFromBooking(it);
-              }}
-            >
-              Приёмка
-              {it.inspection.repair_status === "ready"
-                ? " · готов"
-                : it.inspection.repair_status === "in_progress"
-                  ? " · в работе"
-                  : it.inspection.status === "approved"
-                    ? " · утв."
-                    : it.inspection.status === "sent"
-                      ? " · ждёт"
-                      : ""}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="ghost-btn small"
-              title="Создать отчёт приёмки"
-              onClick={(e) => {
-                e.stopPropagation();
-                void startInspectionFromBooking(it);
-              }}
-            >
-              Приёмка
-            </button>
-          )
-        )}
-        {isClient && !cancelled && it.inspection?.id && (
-          <button
-            type="button"
-            className="ghost-btn small"
-            title="Открыть диагностику / статус ремонта"
-            onClick={(e) => {
-              e.stopPropagation();
-              setPendingInspectionId(Number(it.inspection.id));
-              setCurrentView("inspections");
-            }}
-          >
-            {it.inspection.repair_status === "ready"
-              ? "Готов"
-              : it.inspection.repair_status === "in_progress"
-                ? "В работе"
-                : it.inspection.status === "sent"
-                  ? "Согласовать"
-                  : "Диагностика"}
-          </button>
-        )}
-        {isOrg && !cancelled && (
-          <button type="button" className="booking-action-btn booking-action-btn--chat" title="Чат с клиентом" onClick={(e) => { e.stopPropagation(); openChatWithClient(it.client); }}>
-            💬
-          </button>
-        )}
-        {isOrg && !cancelled && (
-          <button type="button" className="booking-action-btn booking-action-btn--cancel" title="Отменить" onClick={(e) => orgBookingAction(it.id, "cancel-by-org", e)}>
-            ✕
-          </button>
-        )}
-        {isOrg && !cancelled && !done && (
-          <button
-            type="button"
-            className="ghost-btn small booking-action-done"
-            disabled={!bookingHasStarted(it)}
-            title={
-              bookingHasStarted(it)
-                ? "Отметить, что услуга оказана"
-                : "Можно отметить только после начала записи по времени"
-            }
-            onClick={(e) => orgBookingAction(it.id, "mark-done", e)}
-          >
-            Услуга оказана
-          </button>
-        )}
-        {isClient && !cancelled && bookingPayStillOpen(it) && (
-          <button
-            type="button"
-            className="ghost-btn small"
-            title="Оплатить предоплату"
-            onClick={(e) => resumeBookingPayment(it.id, e)}
-          >
-            Оплатить
-          </button>
-        )}
-        {isClient && !cancelled && (
-          <button type="button" className="booking-action-btn booking-action-btn--chat" title="Чат с организацией" onClick={(e) => { e.stopPropagation(); openChatWithProvider(it.provider); }}>
-            💬
-          </button>
-        )}
-        {isClient && !cancelled && (
-          <button type="button" className="booking-action-btn booking-action-btn--cancel" title="Отменить запись" onClick={(e) => clientCancelBooking(it.id, e)}>
-            ✕
-          </button>
-        )}
-        {isClient && done && !bookingHasReview(it.id) && (
-          <button
-            type="button"
-            className="ghost-btn small"
-            onClick={(e) => {
-              e.stopPropagation();
-              openClientReviewModal(it);
-            }}
-          >
-            Отзыв
-          </button>
-        )}
-      </div>
+      <BookingSlotActions
+        it={it}
+        me={me}
+        canManageBookings={canManageBookings}
+        releaseManualHold={releaseManualHold}
+        orgBookingAction={orgBookingAction}
+        openInspectionFromBooking={openInspectionFromBooking}
+        startInspectionFromBooking={startInspectionFromBooking}
+        setPendingInspectionId={setPendingInspectionId}
+        setCurrentView={setCurrentView}
+        openChatWithClient={openChatWithClient}
+        bookingHasStarted={bookingHasStarted}
+        resumeBookingPayment={resumeBookingPayment}
+        openChatWithProvider={openChatWithProvider}
+        clientCancelBooking={clientCancelBooking}
+        bookingHasReview={bookingHasReview}
+        openClientReviewModal={openClientReviewModal}
+      />
     );
   }
 
@@ -7731,654 +7585,81 @@ export default function App() {
         )}
 
         {(showAuthModal && (!accessToken || authMode === "reset" || needsOnboarding || needsCredentialsSetup)) && createPortal(
-          <div className="auth-modal-overlay" role="presentation">
-            <div className="auth-modal" role="dialog" aria-modal="true">
-              {needsOnboarding || needsCredentialsSetup ? null : (
-              <button type="button" className="auth-modal-close" onClick={closeAuth} aria-label="Закрыть">×</button>
-              )}
-              {verifyEmailNotice ? (
-                <div className="auth-verify-panel">
-                  <h2>Подтвердите email</h2>
-                  <p className="auth-verify-lead">{verifyEmailNotice.detail}</p>
-                  <p>
-                    Мы отправили письмо на{" "}
-                    <strong>{verifyEmailNotice.email}</strong>. Перейдите по ссылке в письме, затем
-                    войдите в аккаунт.
-                  </p>
-                  <p className="hint">Не видите письмо? Проверьте папку «Спам» или «Промоакции».</p>
-                  <div className="auth-verify-actions">
-                    <button type="button" onClick={() => resendVerificationForEmail(verifyEmailNotice.email)}>
-                      Отправить письмо ещё раз
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost-btn"
-                      onClick={() => {
-                        setVerifyEmailNotice(null);
-                        setResendStatus("");
-                      }}
-                    >
-                      Перейти ко входу
-                    </button>
-                  </div>
-                  {resendStatus ? <p className="status">{resendStatus}</p> : null}
-                </div>
-              ) : needsCredentialsSetup ? (
-                <>
-                  <h2>Логин и пароль</h2>
-                  <form onSubmit={completeCredentialsSetup} className="form">
-                    <p className="muted small">
-                      После входа через соцсеть задайте свой логин и пароль — ими можно будет входить
-                      рядом с VK, Яндекс или Telegram.
-                    </p>
-                    <input
-                      placeholder="Логин"
-                      value={credentialsForm.username}
-                      onChange={(e) => setCredentialsForm({ ...credentialsForm, username: e.target.value })}
-                      required
-                      minLength={3}
-                      autoComplete="username"
-                      autoFocus
-                    />
-                    <PasswordInput
-                      placeholder="Пароль"
-                      value={credentialsForm.password}
-                      onChange={(e) => setCredentialsForm({ ...credentialsForm, password: e.target.value })}
-                      required
-                      autoComplete="new-password"
-                    />
-                    <PasswordInput
-                      placeholder="Повторите пароль"
-                      value={credentialsForm.password_confirm}
-                      onChange={(e) => setCredentialsForm({ ...credentialsForm, password_confirm: e.target.value })}
-                      required
-                      autoComplete="new-password"
-                    />
-                    <button type="submit" disabled={credentialsBusy}>
-                      {credentialsBusy ? "Сохраняем…" : "Сохранить и продолжить"}
-                    </button>
-                    {authStatus ? <p className="status">{authStatus}</p> : null}
-                  </form>
-                </>
-              ) : (
-                <>
-              <h2>
-                {needsOnboarding
-                  ? me?.role === "provider"
-                    ? "Данные организации"
-                    : "Завершите регистрацию"
-                  : authMode === "reset"
-                    ? "Новый пароль"
-                    : authMode === "forgot"
-                      ? "Сброс пароля"
-                      : authMode === "login"
-                        ? "Вход"
-                        : "Регистрация"}
-              </h2>
-              {authMode === "reset" ? (
-                <form onSubmit={confirmPasswordReset} className="form">
-                  <p className="muted small">Придумайте новый пароль для входа во Вместе.</p>
-                  <PasswordInput
-                    placeholder="Новый пароль"
-                    value={resetForm.new_password}
-                    onChange={(e) => setResetForm({ ...resetForm, new_password: e.target.value })}
-                    required
-                    autoComplete="new-password"
-                  />
-                  <PasswordInput
-                    placeholder="Повторите новый пароль"
-                    value={resetForm.new_password_confirm}
-                    onChange={(e) => setResetForm({ ...resetForm, new_password_confirm: e.target.value })}
-                    required
-                    autoComplete="new-password"
-                  />
-                  <button type="submit" disabled={passwordResetBusy}>
-                    {passwordResetBusy ? "Сохраняем…" : "Сохранить пароль"}
-                  </button>
-                </form>
-              ) : authMode === "forgot" ? (
-                <form onSubmit={requestPasswordResetFromLogin} className="form">
-                  <p className="muted small">Укажите почту аккаунта — пришлём ссылку для нового пароля.</p>
-                  <input
-                    type="email"
-                    placeholder="Email"
-                    value={loginForm.email}
-                    onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
-                    required
-                    autoComplete="email"
-                  />
-                  <button type="submit" disabled={passwordResetBusy}>
-                    {passwordResetBusy ? "Отправляем…" : "Выслать ссылку"}
-                  </button>
-                  <button type="button" className="ghost-btn" onClick={() => { setAuthMode("login"); setAuthStatus(""); }}>
-                    Назад ко входу
-                  </button>
-                </form>
-              ) : authMode === "login" ? (
-                <form onSubmit={onLogin} className="form">
-                  <input placeholder="Логин" value={loginForm.username} onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })} required />
-                  <PasswordInput
-                    placeholder="Пароль"
-                    value={loginForm.password}
-                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                    required
-                    autoComplete="current-password"
-                  />
-                  <button type="submit">Войти</button>
-                  <button type="button" className="ghost-btn" onClick={() => { setAuthMode("forgot"); setAuthStatus(""); }}>
-                    Не помню пароль
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={needsOnboarding ? completeOnboarding : onSubmit} className="form">
-                  {registerStep === 1 && (
-                    <>
-                      {needsOnboarding ? (
-                        <p className="muted small">VK и другие сервисы не подставляют все поля — укажите недостающие данные.</p>
-                      ) : (
-                        <>
-                      <div className="auth-role-tabs" role="tablist" aria-label="Тип аккаунта">
-                        {[
-                          { key: "client", label: "Клиент" },
-                          { key: "provider", label: "Для бизнеса" },
-                          { key: "staff", label: "Сотрудник" },
-                        ].map((tab) => (
-                          <button
-                            key={tab.key}
-                            type="button"
-                            role="tab"
-                            aria-selected={form.role === tab.key}
-                            className={["auth-role-tab", form.role === tab.key && "is-active"].filter(Boolean).join(" ")}
-                            onClick={() => {
-                              setForm({ ...form, role: tab.key });
-                              if (tab.key !== "provider") setRegisterStep(1);
-                            }}
-                          >
-                            {tab.label}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="muted small auth-role-hint">
-                        {form.role === "client"
-                          ? "Базовая регистрация для записи к организациям."
-                          : form.role === "provider"
-                            ? "Кабинет организации: услуги, запись, эквайринг."
-                            : "Вход сотрудника по приглашению организации."}
-                      </p>
-                        </>
-                      )}
-                      <input placeholder="Фамилия" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required />
-                      <input placeholder="Имя" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required />
-                      <input placeholder="Отчество (при наличии)" value={form.patronymic} onChange={(e) => setForm({ ...form, patronymic: e.target.value })} />
-                      {needsOnboarding ? null : (
-                        <input placeholder="Логин" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required />
-                      )}
-                      <input
-                        placeholder="Email"
-                        type="email"
-                        value={form.email}
-                        onChange={(e) => setForm({ ...form, email: e.target.value })}
-                        required={!needsOnboarding}
-                        disabled={needsOnboarding && Boolean((me?.email || "").trim())}
-                      />
-                      <input
-                        placeholder="Телефон"
-                        {...phoneFieldProps(form.phone, (phone) => setForm({ ...form, phone }))}
-                      />
-                      {needsOnboarding ? (
-                        <>
-                          <button type="submit">Продолжить</button>
-                          <button type="button" className="ghost-btn" onClick={logout}>Выйти</button>
-                        </>
-                      ) : (
-                        <>
-                      <PasswordInput
-                        placeholder="Пароль"
-                        value={form.password}
-                        onChange={(e) => setForm({ ...form, password: e.target.value })}
-                        required
-                        autoComplete="new-password"
-                      />
-                      <PasswordInput
-                        placeholder="Повторите пароль"
-                        value={form.password_confirm}
-                        onChange={(e) => setForm({ ...form, password_confirm: e.target.value })}
-                        required
-                        autoComplete="new-password"
-                      />
-                      <label className="checkbox auth-consent-item">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(form.age_confirmed)}
-                          onChange={(e) => setForm({ ...form, age_confirmed: e.target.checked })}
-                          required
-                        />
-                        <span>Мне исполнилось 18 лет</span>
-                      </label>
-                      <label className="checkbox auth-consent-item">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(form.accept_offer)}
-                          onChange={(e) => setForm({ ...form, accept_offer: e.target.checked })}
-                          required
-                        />
-                        <span>
-                          Принимаю{" "}
-                          <a href="/offer" target="_blank" rel="noopener noreferrer">
-                            публичную оферту
-                          </a>{" "}
-                          (версия {SITE_LEGAL.offerVersion})
-                        </span>
-                      </label>
-                      <label className="checkbox auth-consent-item">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(form.accept_privacy)}
-                          onChange={(e) => setForm({ ...form, accept_privacy: e.target.checked })}
-                          required
-                        />
-                        <span>
-                          Согласен(на) на обработку персональных данных согласно{" "}
-                          <a href="/privacy" target="_blank" rel="noopener noreferrer">
-                            политике конфиденциальности
-                          </a>{" "}
-                          (версия {SITE_LEGAL.privacyVersion})
-                        </span>
-                      </label>
-                      {form.role === "provider" ? <button type="button" onClick={continueProviderRegistration}>Продолжить</button> : <button type="submit">Создать аккаунт</button>}
-                        </>
-                      )}
-                    </>
-                  )}
-                  {registerStep === 2 && (needsOnboarding ? me?.role === "provider" : form.role === "provider") && (
-                    <>
-                      <p className="muted small auth-provider-disclaimer">
-                        {needsOnboarding
-                          ? "Аккаунт создан. Выберите сферу и заполните данные организации — без этого кабинет не откроется."
-                          : "Платформа «Вместе» предоставляет только ПО для записи и не оказывает конечные услуги клиентам. Лицензии и разрешения — ответственность организации."}
-                      </p>
-                      {needsOnboarding ? (
-                        <>
-                          <input placeholder="Фамилия" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required />
-                          <input placeholder="Имя" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required />
-                          <input placeholder="Отчество (при наличии)" value={form.patronymic} onChange={(e) => setForm({ ...form, patronymic: e.target.value })} />
-                          <input
-                            placeholder="Телефон"
-                            {...phoneFieldProps(form.phone, (phone) => setForm({ ...form, phone }))}
-                          />
-                        </>
-                      ) : null}
-                      <select value={form.provider_sphere} onChange={(e) => setForm({ ...form, provider_sphere: e.target.value })} required>
-                        <option value="">Выбери сферу услуг</option>
-                        {sphereOptions.map((s) => <option key={s.key} value={s.key}>{s.value}</option>)}
-                      </select>
-                      <input placeholder="Название организации" value={form.organization_name} onChange={(e) => setForm({ ...form, organization_name: e.target.value })} required />
-                      {form.provider_sphere === "marketplaces" ? (
-                        <p className="muted small">Для маркетплейсов адрес и карта не нужны.</p>
-                      ) : (
-                        <>
-                      <input
-                        placeholder="Адрес"
-                        value={form.organization_address}
-                        onChange={(e) => onAddressInput(e.target.value)}
-                        onBlur={(e) => geocodeAddress(e.target.value)}
-                        required
-                      />
-                      {detectedCity && <p className="hint">Город поиска: {detectedCity}</p>}
-                      {addressSuggestions.length > 0 && (
-                        <div className="suggestions">
-                          {addressSuggestions.map((item, idx) => (
-                            <button
-                              key={`${item.value}-${idx}`}
-                              type="button"
-                              className="suggestion-item"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => pickSuggestion(item)}
-                            >
-                              {item.value}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      <div id="reg-map" className="map-box" />
-                      <div className="address-details-grid">
-                        <input placeholder="Подъезд" value={form.entrance} onChange={(e) => setForm({ ...form, entrance: e.target.value })} />
-                        <input placeholder="Этаж" value={form.floor} onChange={(e) => setForm({ ...form, floor: e.target.value })} />
-                        <input placeholder="Квартира/офис" value={form.apartment} onChange={(e) => setForm({ ...form, apartment: e.target.value })} />
-                        <input placeholder="Домофон" value={form.intercom} onChange={(e) => setForm({ ...form, intercom: e.target.value })} />
-                      </div>
-                      <input
-                        placeholder="Доп. ориентир (необязательно)"
-                        value={form.organization_address_details}
-                        onChange={(e) => setForm({ ...form, organization_address_details: e.target.value })}
-                      />
-                        </>
-                      )}
-                      <input
-                        placeholder="Номер лицензии (если есть)"
-                        value={form.provider_license_number}
-                        onChange={(e) => setForm({ ...form, provider_license_number: e.target.value })}
-                      />
-                      <label className="checkbox auth-consent-item">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(form.confirm_provider_authority)}
-                          onChange={(e) => setForm({ ...form, confirm_provider_authority: e.target.checked })}
-                          required={!me?.provider_authority_confirmed}
-                        />
-                        <span>
-                          Подтверждаю, что организация вправе оказывать размещаемые услуги и имеет необходимые
-                          лицензии/разрешения, если они требуются законом
-                        </span>
-                      </label>
-                      {needsOnboarding ? (
-                        <button type="button" className="ghost-btn" onClick={logout}>Выйти</button>
-                      ) : (
-                      <button
-                        type="button"
-                        className="ghost-btn"
-                        onClick={() => {
-                          destroyRegMap();
-                          setRegisterStep(1);
-                        }}
-                      >
-                        Назад
-                      </button>
-                      )}
-                      <button type="submit">{needsOnboarding ? "Сохранить и войти" : "Завершить регистрацию"}</button>
-                    </>
-                  )}
-                </form>
-              )}
-              {(authMode === "login" || (authMode === "register" && form.role !== "staff")) && registerStep === 1 && !needsOnboarding && (
-                <div className="auth-social">
-                  <p className="auth-social-label">
-                    {authMode === "register" ? "Зарегистрироваться через" : "Войти через"}
-                  </p>
-                  <div className="auth-social-row">
-                    <div className="auth-social-telegram" ref={telegramLoginHostRef} />
-                    {authProviders.yandex ? (
-                      <a className="auth-social-logo-btn" href={`${API_URL}/users/auth/yandex/${authMode === "register" && (form.role === "client" || form.role === "provider") ? `?role=${encodeURIComponent(form.role)}` : ""}`} title="Яндекс">
-                        <YandexIcon />
-                      </a>
-                    ) : null}
-                    {authProviders.vk ? (
-                      <a className="auth-social-vkid" href={`${API_URL}/users/auth/vk/${authMode === "register" && (form.role === "client" || form.role === "provider") ? `?role=${encodeURIComponent(form.role)}` : ""}`} title="ВКонтакте, Одноклассники и Mail">
-                        <span className="auth-social-logo-btn auth-social-vkid-vk">
-                          <VkIcon />
-                        </span>
-                        <span className="auth-social-logo-btn">
-                          <OkIcon />
-                        </span>
-                        <span className="auth-social-logo-btn">
-                          <MailRuIcon />
-                        </span>
-                      </a>
-                    ) : null}
-                  </div>
-                  <p className="muted small">
-                    {authProviders.yandex || authProviders.vk
-                      ? "VK ID — одна кнопка: ВКонтакте, Одноклассники и Mail. Google в РФ без обхода ограничений недоступен как основной вход."
-                      : "Сейчас работает Telegram. Яндекс ID и VK ID появятся после настройки на сервере. Google в РФ без обхода ограничений недоступен как основной вход."}
-                  </p>
-                </div>
-              )}
-              {needsOnboarding ? null : authMode === "login" || authMode === "register" ? (
-                <>
-                  <p className="auth-switch-text">{authMode === "login" ? "Нет аккаунта?" : "Уже есть аккаунт?"}</p>
-                  <button
-                    className="ghost-btn"
-                    type="button"
-                    onClick={() => {
-                      const next = authMode === "login" ? "register" : "login";
-                      setRegisterStep(1);
-                      setForm({ ...emptyRegisterForm });
-                      setAuthMode(next);
-                    }}
-                  >
-                    {authMode === "login" ? "Регистрация" : "Войти"}
-                  </button>
-                </>
-              ) : null}
-              <p className="status">{authMode === "login" ? authStatus : authStatus || status}</p>
-                </>
-              )}
-            </div>
-          </div>,
+          <AuthModal
+            needsOnboarding={needsOnboarding}
+            needsCredentialsSetup={needsCredentialsSetup}
+            closeAuth={closeAuth}
+            verifyEmailNotice={verifyEmailNotice}
+            setVerifyEmailNotice={setVerifyEmailNotice}
+            resendVerificationForEmail={resendVerificationForEmail}
+            resendStatus={resendStatus}
+            setResendStatus={setResendStatus}
+            completeCredentialsSetup={completeCredentialsSetup}
+            credentialsForm={credentialsForm}
+            setCredentialsForm={setCredentialsForm}
+            credentialsBusy={credentialsBusy}
+            authStatus={authStatus}
+            setAuthStatus={setAuthStatus}
+            me={me}
+            authMode={authMode}
+            setAuthMode={setAuthMode}
+            confirmPasswordReset={confirmPasswordReset}
+            resetForm={resetForm}
+            setResetForm={setResetForm}
+            passwordResetBusy={passwordResetBusy}
+            requestPasswordResetFromLogin={requestPasswordResetFromLogin}
+            loginForm={loginForm}
+            setLoginForm={setLoginForm}
+            onLogin={onLogin}
+            completeOnboarding={completeOnboarding}
+            onSubmit={onSubmit}
+            registerStep={registerStep}
+            setRegisterStep={setRegisterStep}
+            form={form}
+            setForm={setForm}
+            logout={logout}
+            continueProviderRegistration={continueProviderRegistration}
+            sphereOptions={sphereOptions}
+            onAddressInput={onAddressInput}
+            geocodeAddress={geocodeAddress}
+            detectedCity={detectedCity}
+            addressSuggestions={addressSuggestions}
+            pickSuggestion={pickSuggestion}
+            destroyRegMap={destroyRegMap}
+            emptyRegisterForm={emptyRegisterForm}
+            authProviders={authProviders}
+            telegramLoginHostRef={telegramLoginHostRef}
+            status={status}
+          />,
           document.body,
         )}
 
         {accessToken && currentView === "profile" && (
-          <section className="card profile-card">
-            <div className="profile-title-row">
-              <h2 className="profile-title-h2">Личный кабинет</h2>
-              {(chatActivity?.badge_count ?? 0) > 0 && (
-                <span className="profile-title-badge" title="Есть уведомления">
-                  {chatActivity.badge_count > 99 ? "99+" : chatActivity.badge_count}
-                </span>
-              )}
-            </div>
-            <p>Вы вошли как: <strong>{fullName}</strong></p>
-            {(me?.role === "client" || me?.role === "staff") && (chatActivity?.pending_staff_invites?.length ?? 0) > 0 && (
-              <div className="chat-invites-banner">
-                {chatActivity.pending_staff_invites.map((inv) => (
-                  <div key={inv.id} className="chat-invite-card">
-                    <p>
-                      Приглашение присоединиться к организации{" "}
-                      <strong>{inv.provider_user?.organization_name || inv.provider_user?.username || "—"}</strong>.
-                    </p>
-                    <div className="chat-invite-actions">
-                      <button type="button" className="invite-accept-btn" onClick={() => acceptStaffInvite(inv.id)}>
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-                          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                        </svg>
-                        Подтвердить
-                      </button>
-                      <button type="button" className="invite-reject-btn" onClick={() => rejectStaffInvite(inv.id)}>
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-                          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-                        </svg>
-                        Отклонить
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {(chatActivity?.notifications?.length ?? 0) > 0 && (
-              <div className="chat-notif-banner">
-                {chatActivity.notifications.map((n) => (
-                  <div key={n.id} className="chat-notif-card">
-                    <p>{formatInAppNotificationText(n)}</p>
-                    {n.payload?.when ? <p className="muted small">{n.payload.when}</p> : null}
-                    <button
-                      type="button"
-                      className="ghost-btn"
-                      onClick={() => {
-                        if (n.kind === "inspection" || n.payload?.view === "inspections") {
-                          markInAppNotificationsRead([n.id]);
-                          if (n.payload?.inspection_id) {
-                            setPendingInspectionId(Number(n.payload.inspection_id));
-                          }
-                          setCurrentView("inspections");
-                          return;
-                        }
-                        if (
-                          n.kind === "cafe_new_order" ||
-                          n.kind === "cafe_waiter_call" ||
-                          n.payload?.view === "cafe_orders" ||
-                          n.payload?.sphere === "cafe_restaurant"
-                        ) {
-                          markInAppNotificationsRead([n.id]);
-                          setCurrentView("cafe_orders");
-                          return;
-                        }
-                        markInAppNotificationsRead([n.id]);
-                      }}
-                    >
-                      {n.kind === "inspection" ||
-                      n.kind === "cafe_new_order" ||
-                      n.kind === "cafe_waiter_call"
-                        ? "Открыть"
-                        : "Понятно"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <form onSubmit={updateProfile} className="form">
-              <h3>Личная информация</h3>
-              <input value={profileForm.last_name} onChange={(e) => setProfileForm({ ...profileForm, last_name: e.target.value })} placeholder="Фамилия" />
-              <input value={profileForm.first_name} onChange={(e) => setProfileForm({ ...profileForm, first_name: e.target.value })} placeholder="Имя" />
-              <input value={profileForm.patronymic} onChange={(e) => setProfileForm({ ...profileForm, patronymic: e.target.value })} placeholder="Отчество" />
-              <input
-                placeholder="Телефон"
-                {...phoneFieldProps(profileForm.phone, (phone) => setProfileForm({ ...profileForm, phone }))}
-              />
-              <div className="profile-save-row">
-                <button type="submit">Сохранить данные</button>
-              </div>
-            </form>
-            <div className="row-2 profile-quick-nav">
-              <button type="button" className="ghost-btn" onClick={() => setCurrentView("settings")}>Настройки</button>
-              {me?.role !== "client" && (
-                <button type="button" className="ghost-btn" onClick={() => setCurrentView("subscriptions")}>Подписки</button>
-              )}
-              {canManageOrgSettings && (
-                <button type="button" className="ghost-btn" onClick={() => setCurrentView("organization")}>Организация</button>
-              )}
-            </div>
-            <div className="profile-delete-block">
-              <h3>Удаление аккаунта</h3>
-              <p className="muted small">
-                Аккаунт будет деактивирован, персональные данные обезличены. Для подтверждения введите
-                {me?.has_usable_password === false ? " слово «удалить»." : " пароль и слово «удалить»."}
-              </p>
-              <form onSubmit={deleteMyAccount} className="form">
-                {me?.has_usable_password !== false ? (
-                <PasswordInput
-                  placeholder="Текущий пароль"
-                  value={deleteAccountForm.password}
-                  onChange={(e) => setDeleteAccountForm((p) => ({ ...p, password: e.target.value }))}
-                  autoComplete="current-password"
-                  required
-                />
-                ) : null}
-                <input
-                  placeholder='Введите «удалить»'
-                  value={deleteAccountForm.confirm}
-                  onChange={(e) => setDeleteAccountForm((p) => ({ ...p, confirm: e.target.value }))}
-                  required
-                />
-                <button type="submit" className="danger-btn" disabled={deleteAccountBusy}>
-                  {deleteAccountBusy ? "Удаление…" : "Удалить аккаунт"}
-                </button>
-                {deleteAccountStatus ? <p className="status error">{deleteAccountStatus}</p> : null}
-              </form>
-            </div>
-            {!me?.email_verified && (
-              <>
-                <p className="status">Подтверди email для полноценной работы.</p>
-                <button type="button" onClick={resendVerification}>Отправить письмо повторно</button>
-                <p className="status">{resendStatus}</p>
-              </>
-            )}
-            {me?.role === "staff" && (() => {
-              const myLink =
-                orgStaff.find(
-                  (l) =>
-                    Number(l.staff) === Number(me.id) &&
-                    l.is_active &&
-                    l.invitation_status !== "pending" &&
-                    l.invitation_status !== "rejected",
-                ) || null;
-              if (!myLink) {
-                return (
-                  <>
-                    <h3>Моя организация</h3>
-                    <p className="muted">Разделы «Записи» и «Чаты» — под оранжевой шапкой (доступ по правам, их настраивает исполнитель).</p>
-                  </>
-                );
-              }
-              const avatarUrl = myLink.avatar_thumb_url || (myLink.avatar_image ? reviewImageUrl(myLink.avatar_image) : "");
-              const portfolio = myLink.portfolio_photos || [];
-              return (
-                <div className="staff-self-card">
-                  <h3>Карточка сотрудника</h3>
-                  <p className="muted small">Эти данные видят клиенты в карточке организации.</p>
-                  <label className="muted small-label">Должность</label>
-                  <p className="staff-self-job">{(myLink.job_title || "").trim() || "Не указана (задаёт организация)"}</p>
-                  <label className="muted small-label">Кратко о сотруднике</label>
-                  <textarea
-                    rows={3}
-                    key={`bio-${myLink.id}`}
-                    defaultValue={myLink.bio || ""}
-                    placeholder="Коротко расскажите о себе и опыте"
-                    onBlur={(e) => {
-                      const v = e.target.value.trim();
-                      if (v !== (myLink.bio || "").trim()) {
-                        void uploadStaffCard(myLink.id, { bio: v });
-                      }
-                    }}
-                  />
-                  <div className="staff-media-block">
-                    <div className="staff-media-row">
-                      <div className="staff-media-avatar">
-                        {avatarUrl ? (
-                          <img src={avatarUrl} alt="" />
-                        ) : (
-                          <span aria-hidden>{String(fullName || "?").slice(0, 1).toUpperCase()}</span>
-                        )}
-                      </div>
-                      <label className="ghost-btn small staff-media-upload-btn" title="Загрузить фото">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          hidden
-                          onChange={(e) => {
-                            const f = e.target.files?.[0] || null;
-                            void uploadStaffCard(myLink.id, { avatarFile: f });
-                            e.target.value = "";
-                          }}
-                        />
-                        1 фото профиля
-                      </label>
-                    </div>
-                    <div className="staff-media-portfolio">
-                      <label className="muted small-label">Портфолио</label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={(e) => {
-                          const files = Array.from(e.target.files || []);
-                          void uploadStaffCard(myLink.id, { portfolioFiles: files });
-                          e.target.value = "";
-                        }}
-                      />
-                      {portfolio.length > 0 && (
-                        <div className="staff-self-portfolio-list">
-                          {portfolio.map((ph) => (
-                            <button
-                              key={ph.id}
-                              type="button"
-                              className="staff-self-portfolio-chip"
-                              title="Удалить фото"
-                              onClick={() => void deleteStaffPortfolioPhoto(myLink.id, ph.id)}
-                            >
-                              <img src={reviewImageUrl(ph, "thumb")} alt="" loading="lazy" decoding="async" />
-                              <span aria-hidden>×</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {staffInviteStatus ? <p className="status">{staffInviteStatus}</p> : null}
-                </div>
-              );
-            })()}
-          </section>
+          <ProfileCabinetPanel
+            chatActivity={chatActivity}
+            fullName={fullName}
+            me={me}
+            acceptStaffInvite={acceptStaffInvite}
+            rejectStaffInvite={rejectStaffInvite}
+            markInAppNotificationsRead={markInAppNotificationsRead}
+            setPendingInspectionId={setPendingInspectionId}
+            setCurrentView={setCurrentView}
+            updateProfile={updateProfile}
+            profileForm={profileForm}
+            setProfileForm={setProfileForm}
+            canManageOrgSettings={canManageOrgSettings}
+            deleteMyAccount={deleteMyAccount}
+            deleteAccountForm={deleteAccountForm}
+            setDeleteAccountForm={setDeleteAccountForm}
+            deleteAccountBusy={deleteAccountBusy}
+            deleteAccountStatus={deleteAccountStatus}
+            resendVerification={resendVerification}
+            resendStatus={resendStatus}
+            orgStaff={orgStaff}
+            uploadStaffCard={uploadStaffCard}
+            deleteStaffPortfolioPhoto={deleteStaffPortfolioPhoto}
+            staffInviteStatus={staffInviteStatus}
+          />
         )}
 
         {accessToken && me?.role !== "client" && currentView === "subscriptions" && (
