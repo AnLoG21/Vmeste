@@ -87,7 +87,21 @@ docker compose -f docker-compose.prod.yml up -d --build frontend web caddy
 - **Шаг SSH падает за 3–5 секунд** — чаще всего **порт 22 закрыт** или `VPS_HOST` = домен за Cloudflare. Проверка с ПК: `Test-NetConnection -ComputerName <IP> -Port 22` → `TcpTestSucceeded : True`. Откройте TCP 22 в группе безопасности Selectel и укажите в секрете прямой IP.
 - **Permission denied (publickey)** — неверный `VPS_SSH_KEY` / ключ не в `authorized_keys`.
 - **Permission denied docker** — пользователь не в группе `docker`.
-- **Disk full** — `docker system df`, затем `docker image prune -a` (осторожно).
+- **Disk full / no space left on device** — на маленьком VPS это обычно правда: старые Docker-образы. На сервере (консоль Selectel):
+
+```bash
+df -h /
+docker system df
+
+cd /opt/vmeste
+git fetch origin && git reset --hard origin/main
+chmod +x scripts/free-disk.sh scripts/deploy-prod.sh
+./scripts/free-disk.sh
+./scripts/deploy-prod.sh
+```
+
+`free-disk.sh` удаляет неиспользуемые образы и build-cache, **не трогает** volumes (БД/медиа). Если после очистки всё ещё <1 ГБ свободно — смотрите `du -xh /var/lib/docker | sort -h | tail -20` и логи контейнеров.
+
 - Логи Actions: вкладка failed job → Deploy over SSH.
 
 ### Временный обход без Actions

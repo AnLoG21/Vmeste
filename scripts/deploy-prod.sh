@@ -6,19 +6,61 @@ ROOT="${DEPLOY_ROOT:-/opt/vmeste}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 # Selectel/RU VPS often times out on Docker Hub IPv6; Timeweb mirror is IPv4.
 HUB_MIRROR="${DOCKER_HUB_MIRROR:-dockerhub.timeweb.cloud}"
+# Fail early if free space on / is below this many MiB (builds need headroom).
+MIN_FREE_MB="${DEPLOY_MIN_FREE_MB:-900}"
 
 cd "$ROOT"
 
 echo "[deploy] $(date -Is) in $ROOT"
+df -h / || true
+docker system df 2>/dev/null || true
+
+free_kb() {
+  df -Pk / | awk 'NR==2 {print $4}'
+}
+
+ensure_disk_space() {
+  local free_mb=$(( $(free_kb) / 1024 ))
+  echo "[deploy] free on /: ${free_mb} MiB (min ${MIN_FREE_MB})"
+  if (( free_mb >= MIN_FREE_MB )); then
+    return 0
+  fi
+  echo "[deploy] low disk — pruning Docker (images/build-cache; volumes kept)..."
+  docker container prune -f >/dev/null 2>&1 || true
+  docker image prune -af >/dev/null 2>&1 || true
+  docker builder prune -af >/dev/null 2>&1 || true
+  docker buildx prune -af >/dev/null 2>&1 || true
+  journalctl --vacuum-size=50M >/dev/null 2>&1 || true
+  free_mb=$(( $(free_kb) / 1024 ))
+  echo "[deploy] free after prune: ${free_mb} MiB"
+  if (( free_mb < MIN_FREE_MB )); then
+    echo "[deploy] ERROR: still only ${free_mb} MiB free (need ${MIN_FREE_MB})."
+    echo "[deploy] Run: chmod +x scripts/free-disk.sh && ./scripts/free-disk.sh"
+    echo "[deploy] Then check: du -xh /var/lib/docker | sort -h | tail -20"
+    exit 1
+  fi
+}
+
+# Free space before swap/build — fallocate of a 1G swapfile makes a full disk worse.
+ensure_disk_space
 
 # 1 GB VPS OOMs during parallel docker builds without swap.
 if [[ ! -f /swapfile ]]; then
-  echo "[deploy] creating 1G swapfile..."
-  fallocate -l 1G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=1024
-  chmod 600 /swapfile
-  mkswap /swapfile
-  swapon /swapfile
-  grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  free_mb=$(( $(free_kb) / 1024 ))
+  if (( free_mb < 1200 )); then
+    echo "[deploy] skip creating swapfile (only ${free_mb} MiB free)"
+  else
+    echo "[deploy] creating 1G swapfile..."
+    if fallocate -l 1G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=1024; then
+      chmod 600 /swapfile
+      mkswap /swapfile
+      swapon /swapfile
+      grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    else
+      echo "[deploy] warn: could not create swapfile"
+      rm -f /swapfile
+    fi
+  fi
 elif ! swapon --show | grep -q '/swapfile'; then
   swapon /swapfile || true
 fi
@@ -46,9 +88,11 @@ ensure_base_image python:3.12-slim-bookworm
 ensure_base_image node:20-alpine
 ensure_base_image nginx:1.27-alpine
 docker compose -f "$COMPOSE_FILE" stop celery_worker celery_beat || true
+ensure_disk_space
 docker compose -f "$COMPOSE_FILE" build web
 # Cached frontend rebuild is enough after CI already validated the build.
 # Set FRONTEND_NO_CACHE=1 for a clean rebuild when Vite env args change.
+ensure_disk_space
 if [[ "${FRONTEND_NO_CACHE:-0}" == "1" ]]; then
   docker compose -f "$COMPOSE_FILE" build --no-cache frontend
 else
@@ -76,4 +120,5 @@ echo "[deploy] pruning dangling images (safe)..."
 docker image prune -f >/dev/null 2>&1 || true
 
 echo "[deploy] done"
+df -h / || true
 docker compose -f "$COMPOSE_FILE" ps
