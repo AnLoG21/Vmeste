@@ -72,17 +72,13 @@ import { reverseGeocodeByCoords } from "./addressGeocode.js";
 import {
   todayIsoDate,
   currentLocalMonthKey,
-  isoMonthKey,
   normalizeBookingsList,
   normalizeSlotsList,
   mergeBookingsWithManualHolds,
   formatApiError,
   normalizeReviewsList,
   StarRating,
-  clientWindowKey,
-  parseIntervalAssignee,
   intervalAssigneeValue,
-  intervalStaffConflicts,
 } from "./bookingCalendarUtils.jsx";
 import SalonLoyaltyPackagesPanel from "./SalonLoyaltyPackagesPanel.jsx";
 import PlatformTour from "./PlatformTour.jsx";import {
@@ -117,11 +113,13 @@ import { createAuthFetch } from "./authFetch.js";
 import { SITE_LEGAL } from "./legal/siteLegal.js";
 import {
   groupChatMedia,
-  guessAttachAccept,
   resolveAttachmentUrl,
 } from "./chatMedia.js";
 import { useOrgAddress } from "./useOrgAddress.js";
 import { useChatRecording } from "./useChatRecording.js";
+import { useChatMessaging } from "./useChatMessaging.js";
+import { useBookingActions } from "./useBookingActions.js";
+import { useIntervalHandlers } from "./useIntervalHandlers.js";
 import {
   initPushNotifications,
   maybeRequestWebNotificationPermission,
@@ -132,11 +130,6 @@ import { ensurePhonePlus7 } from "./phone.js";
 import { showToast } from "./toast.js";
 import { navigateView, viewFromPath } from "./viewRoutes.js";
 import { setNoIndexAppMeta, setPageMeta } from "./seo/setPageMeta.js";
-
-function savedIntervalsStorageKey(providerId) {
-  if (!providerId) return null;
-  return `vmeste_saved_intervals_v2_${providerId}`;
-}
 
 const chatPrefsStorageKey = (id) => `vmeste_chat_prefs_v1_${id}`;
 const APP_THEME_KEY = "vmeste_theme_v1";
@@ -180,8 +173,6 @@ const emptyRegisterForm = {
   confirm_provider_authority: false,
   provider_license_number: "",
 };
-
-const CHAT_MSG_PAGE_SIZE = 50;
 
 function isMobileChatLayout() {
   if (typeof window === "undefined") return false;
@@ -444,34 +435,12 @@ export default function App() {
   const [subcategoryOpen, setSubcategoryOpen] = useState({});
   const [catalogStatus, setCatalogStatus] = useState(null);
   const [catalogSeeding, setCatalogSeeding] = useState(false);
-  const [slotForm, setSlotForm] = useState({ starts_at: "", ends_at: "" });
-  const [intervalForm, setIntervalForm] = useState({
-    date: "",
-    start_time: "09:00",
-    end_time: "18:00",
-    repeat_type: "none",
-    repeat_count: "1",
-    assignee: "",
-    service_ids: [],
-  });
   const [intervalEditModal, setIntervalEditModal] = useState(null);
-  const [manualHoldForm, setManualHoldForm] = useState(() => ({
-    date: todayIsoDate(),
-    start_time: "10:00",
-    end_time: "11:00",
-    guest_name: "",
-  }));
-  const [manualHoldStatus, setManualHoldStatus] = useState("");
-  const [manualHoldBusy, setManualHoldBusy] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date().toISOString().slice(0, 7));
   const [bookingsMonth, setBookingsMonth] = useState(() => currentLocalMonthKey());
 
-  const [intervalToast, setIntervalToast] = useState(null);
-  const intervalToastTimerRef = useRef(null);
-  const [savedIntervals, setSavedIntervals] = useState([]);
   const [serviceDrafts, setServiceDrafts] = useState({});
   const [serviceSavingAll, setServiceSavingAll] = useState(false);
-  const [selectedIntervalId, setSelectedIntervalId] = useState(null);
   const [dragIntervalId, setDragIntervalId] = useState(null);
   const [intervalPopoverId, setIntervalPopoverId] = useState(null);
   const intervalPopoverAnchorRef = useRef(null);
@@ -876,15 +845,6 @@ export default function App() {
       cancelled = true;
     };
   }, [accessToken, currentView, me?.role, orgActiveStaffIdsKey]);
-
-  function showIntervalToast(message) {
-    if (intervalToastTimerRef.current) clearTimeout(intervalToastTimerRef.current);
-    setIntervalToast(message);
-    intervalToastTimerRef.current = setTimeout(() => {
-      setIntervalToast(null);
-      intervalToastTimerRef.current = null;
-    }, 4200);
-  }
 
   const roleOptions = roles.length
     ? roles
@@ -1295,78 +1255,6 @@ export default function App() {
       setVmenuChatContacts([]);
     }
   }, [accessToken, currentView, vmenuTab]);
-
-  useEffect(() => {
-    chatMessagesRef.current = chatMessages;
-  }, [chatMessages]);
-
-  useEffect(() => {
-    chatHasMoreOlderRef.current = chatHasMoreOlder;
-  }, [chatHasMoreOlder]);
-
-  useEffect(() => {
-    if (!accessToken || !selectedChatId || !chatsSurfaceActive) return;
-    let cancelled = false;
-    setChatMessages([]);
-    setChatHasMoreOlder(false);
-    setChatShowJumpBottom(false);
-    chatNearBottomRef.current = true;
-
-    async function loadLatest() {
-      const msgs = await fetchChatMessagesPage(selectedChatId, { limit: CHAT_MSG_PAGE_SIZE });
-      if (cancelled || !msgs) return;
-      setChatMessages(msgs);
-      setChatHasMoreOlder(msgs.length >= CHAT_MSG_PAGE_SIZE);
-      requestAnimationFrame(() => scrollChatToBottom(false));
-      const last = msgs.length ? msgs[msgs.length - 1] : null;
-      if (last) {
-        await authFetch(`${API_URL}/chat/conversations/${selectedChatId}/mark-read/`, {
-          method: "POST",
-          body: JSON.stringify({ message_id: last.id }),
-        });
-        loadChats();
-      }
-    }
-
-    async function pollNewer() {
-      const current = chatMessagesRef.current;
-      const lastId = current.length ? current[current.length - 1].id : null;
-      if (!lastId) {
-        await loadLatest();
-        return;
-      }
-      const newer = await fetchChatMessagesPage(selectedChatId, {
-        afterId: lastId,
-        limit: CHAT_MSG_PAGE_SIZE,
-      });
-      if (cancelled || !newer?.length) return;
-      setChatMessages((prev) => {
-        const seen = new Set(prev.map((m) => m.id));
-        const add = newer.filter((m) => !seen.has(m.id));
-        return add.length ? [...prev, ...add] : prev;
-      });
-      if (chatNearBottomRef.current) {
-        requestAnimationFrame(() => scrollChatToBottom(true));
-      } else {
-        setChatShowJumpBottom(true);
-      }
-      const last = newer[newer.length - 1];
-      if (last) {
-        await authFetch(`${API_URL}/chat/conversations/${selectedChatId}/mark-read/`, {
-          method: "POST",
-          body: JSON.stringify({ message_id: last.id }),
-        });
-        loadChats();
-      }
-    }
-
-    loadLatest();
-    const id = setInterval(pollNewer, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [accessToken, selectedChatId, chatsSurfaceActive]);
 
   useEffect(() => {
     if (!me) return;
@@ -1992,34 +1880,6 @@ export default function App() {
   }, [showAuthModal, authMode, form.role, registerStep, needsOnboarding, me?.role]);
 
   useEffect(() => {
-    if (me?.role !== "provider" || !me?.id) {
-      setSavedIntervals([]);
-      setSelectedIntervalId(null);
-      closeIntervalPopover();
-      return;
-    }
-    const key = savedIntervalsStorageKey(me.id);
-    try {
-      const raw = localStorage.getItem(key);
-      setSavedIntervals(raw ? JSON.parse(raw) : []);
-    } catch {
-      setSavedIntervals([]);
-    }
-    setSelectedIntervalId(null);
-    closeIntervalPopover();
-  }, [me?.id, me?.role, closeIntervalPopover]);
-
-  useEffect(() => {
-    if (me?.role !== "provider" || !me?.id) return;
-    const key = savedIntervalsStorageKey(me.id);
-    try {
-      localStorage.setItem(key, JSON.stringify(savedIntervals));
-    } catch {
-      // Ignore storage quota/access errors.
-    }
-  }, [savedIntervals, me?.id, me?.role]);
-
-  useEffect(() => {
     if (currentView !== "services" || me?.role !== "provider") return;
     setServiceDrafts((prev) => {
       const next = { ...prev };
@@ -2032,15 +1892,6 @@ export default function App() {
       return next;
     });
   }, [services, currentView, me?.role]);
-
-  useEffect(() => {
-    if (selectedIntervalId && !savedIntervals.some((x) => x.id === selectedIntervalId)) {
-      setSelectedIntervalId(null);
-    }
-    if (intervalPopoverId && !savedIntervals.some((x) => x.id === intervalPopoverId)) {
-      closeIntervalPopover();
-    }
-  }, [savedIntervals, selectedIntervalId, intervalPopoverId, closeIntervalPopover]);
 
   async function loadRoles() {
     const response = await fetch(`${API_URL}/users/roles/`);
@@ -2128,6 +1979,144 @@ export default function App() {
     () => createAuthFetch(() => accessTokenRef.current, refreshAccessToken),
     [refreshAccessToken],
   );
+
+  // Chat messaging / send / mark-read — state (conversations, messages, …) stays above;
+  // pins, groups, visual prefs remain in App below.
+  const {
+    loadChats,
+    loadVmenuChatContacts,
+    openVmenuUserChat,
+    scrollChatToMessageId,
+    jumpToChatMessage,
+    openChatPhotosLightbox,
+    openDirectChatWithStaff,
+    openChatWithClient,
+    openChatWithProvider,
+    scrollChatToBottom,
+    updateChatScrollUi,
+    loadOlderChatMessages,
+    refreshChatMessages,
+    postChatMessage,
+    sendChatMessage,
+    openChatAttachPicker,
+    onChatFilePicked,
+  } = useChatMessaging({
+    authFetch,
+    accessToken,
+    chatsSurfaceActive,
+    currentViewRef,
+    selectedChatId,
+    setSelectedChatId,
+    setConversations,
+    setVmenuChatContacts,
+    chatMessages,
+    setChatMessages,
+    chatHasMoreOlder,
+    setChatHasMoreOlder,
+    setChatLoadingOlder,
+    setChatShowJumpBottom,
+    chatInput,
+    setChatInput,
+    setChatStatus,
+    chatPendingFiles,
+    setChatPendingFiles,
+    chatPendingKind,
+    setChatPendingKind,
+    setChatAttachMenuOpen,
+    setChatInfoOpen,
+    setChatFabOpen,
+    setChatFolder,
+    setCurrentView,
+    setMenuOpen,
+    setOrgPhotoLightbox,
+    chatMessagesRef,
+    chatMessagesElRef,
+    chatNearBottomRef,
+    chatLoadingOlderRef,
+    chatHasMoreOlderRef,
+    chatFileInputRef,
+    postChatMessageRef,
+  });
+
+  // Booking actions; bookings/bookingsMonth state stay in App (shared with seller/staff loaders).
+  const {
+    bookingClientLabel,
+    bookingSlotSecondaryLabel,
+    bookingHasStarted,
+    reloadBookingsList,
+    loadClientBookings,
+    createClientBooking,
+    resumeBookingPayment,
+    orgBookingAction,
+    startInspectionFromBooking,
+    openInspectionFromBooking,
+    clientCancelBooking,
+    goOrgSettingsForBookingMessage,
+  } = useBookingActions({
+    authFetch,
+    me,
+    currentView,
+    canManageBookings,
+    orgStaff,
+    staffJobTitleForUser,
+    setBookings,
+    setSlots,
+    setBookingsMonth,
+    setClientStatus,
+    setBookingMessageError,
+    setOrgSettingsHighlight,
+    setCurrentView,
+    setMenuOpen,
+    setPendingInspectionId,
+    clientBookingForm,
+    setClientBookingForm,
+    clientBookWindows,
+    setClientBookWindows,
+    bookClientPackages,
+    setBookClientPackages,
+    setBookLoyaltyInfo,
+    clientDiscoverFilters,
+    setClientBookModalOpen,
+    setMapOrgPopup,
+  });
+
+  // Interval templates / holds; slots + calendarMonth + popover UI stay in App.
+  const {
+    slotForm,
+    setSlotForm,
+    intervalForm,
+    setIntervalForm,
+    manualHoldForm,
+    setManualHoldForm,
+    manualHoldStatus,
+    setManualHoldStatus,
+    manualHoldBusy,
+    intervalToast,
+    savedIntervals,
+    setSavedIntervals,
+    selectedIntervalId,
+    setSelectedIntervalId,
+    createManualHold,
+    releaseManualHold,
+    addAnonymousSeat,
+    createSlot,
+    createSlotsByInterval,
+    applyIntervalToDay,
+    applyIntervalByPattern,
+    deleteSlot,
+    deleteSeries,
+  } = useIntervalHandlers({
+    authFetch,
+    me,
+    setMe,
+    slots,
+    calendarMonth,
+    setSellerStatus,
+    loadSellerData,
+    setCalendarDayDetail,
+    intervalPopoverId,
+    closeIntervalPopover,
+  });
 
   async function loadMe() {
     const response = await authFetch(`${API_URL}/users/me/`);
@@ -3109,41 +3098,8 @@ export default function App() {
     if (results[5]?.ok) setServices(await results[5].json());
   }
 
-  async function loadChats() {
-    const isVmenu = currentViewRef.current === "vmenu";
-    const url = isVmenu
-      ? `${API_URL}/chat/conversations/?user_direct=1`
-      : `${API_URL}/chat/conversations/`;
-    const res = await authFetch(url);
-    if (res.ok) setConversations(await res.json());
-  }
-
-  async function loadVmenuChatContacts() {
-    const res = await authFetch(`${API_URL}/vmenu/chats/contacts/`);
-    if (res.ok) {
-      const data = await res.json();
-      setVmenuChatContacts(Array.isArray(data?.followers) ? data.followers : []);
-    }
-  }
-
-  async function openVmenuUserChat(userId) {
-    const res = await authFetch(`${API_URL}/chat/conversations/create-user-direct/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId }),
-    });
-    if (!res.ok) {
-      setChatStatus("Не удалось открыть чат с пользователем.");
-      return;
-    }
-    const conv = await res.json();
-    await loadChats();
-    await loadVmenuChatContacts();
-    setSelectedChatId(conv.id);
-    setChatStatus("");
-  }
-
   function togglePinChatForFolder(convId, folder) {
+    // Pins/settings/groups stay in App (tangled with chatLocalPrefs / ChatsWorkspace UI).
     const n = Number(convId);
     const key = folder === "clients" ? "clients" : "org";
     setChatPins((prev) => {
@@ -3175,25 +3131,6 @@ export default function App() {
       list.splice(ti, 0, a);
       return { ...prev, [key]: list };
     });
-  }
-
-  function scrollChatToMessageId(mid) {
-    const el = document.getElementById(`tg-msg-${mid}`);
-    el?.scrollIntoView({ block: "center", behavior: "smooth" });
-    if (el) {
-      el.classList.add("tg-msg--flash");
-      window.setTimeout(() => el.classList.remove("tg-msg--flash"), 1600);
-    }
-  }
-
-  function jumpToChatMessage(mid) {
-    setChatInfoOpen(false);
-    window.setTimeout(() => scrollChatToMessageId(mid), 80);
-  }
-
-  function openChatPhotosLightbox(items, index = 0) {
-    if (!items?.length) return;
-    setOrgPhotoLightbox({ items, index: Math.max(0, Math.min(index, items.length - 1)) });
   }
 
   async function loadChatActivity() {
@@ -3372,24 +3309,6 @@ export default function App() {
     loadChats();
   }
 
-  async function openDirectChatWithStaff(staffId) {
-    if (!staffId) return;
-    setChatStatus("");
-    const response = await authFetch(`${API_URL}/chat/conversations/create-direct/`, {
-      method: "POST",
-      body: JSON.stringify({ staff_id: Number(staffId) }),
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      setChatStatus(err.detail || "Ошибка.");
-      return;
-    }
-    const conv = await response.json();
-    await loadChats();
-    setSelectedChatId(conv.id);
-    setChatFabOpen(false);
-  }
-
   function displayConversationTitle(conversation) {
     if (!conversation) return "";
     if (conversation.is_saved_messages) return "Избранное";
@@ -3452,200 +3371,6 @@ export default function App() {
     patchStaffPermissions(link.id, next);
   }
 
-  async function fetchChatMessagesPage(conversationId, { beforeId, afterId, limit = CHAT_MSG_PAGE_SIZE } = {}) {
-    if (!conversationId) return null;
-    const params = new URLSearchParams({
-      conversation: String(conversationId),
-      limit: String(limit),
-    });
-    if (beforeId) params.set("before_id", String(beforeId));
-    if (afterId) params.set("after_id", String(afterId));
-    const res = await authFetch(`${API_URL}/chat/messages/?${params}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  }
-
-  function scrollChatToBottom(smooth = false) {
-    const el = chatMessagesElRef.current;
-    if (!el) return;
-    chatNearBottomRef.current = true;
-    setChatShowJumpBottom(false);
-    if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-    else el.scrollTop = el.scrollHeight;
-  }
-
-  function updateChatScrollUi(el) {
-    if (!el) return;
-    const distBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const nearBottom = distBottom < 100;
-    chatNearBottomRef.current = nearBottom;
-    setChatShowJumpBottom(!nearBottom && el.scrollHeight > el.clientHeight + 40);
-    if (el.scrollTop < 72) {
-      void loadOlderChatMessages();
-    }
-  }
-
-  async function loadOlderChatMessages() {
-    if (!selectedChatId || chatLoadingOlderRef.current || !chatHasMoreOlderRef.current) return;
-    const oldest = chatMessagesRef.current[0];
-    if (!oldest) return;
-    chatLoadingOlderRef.current = true;
-    setChatLoadingOlder(true);
-    const el = chatMessagesElRef.current;
-    const prevHeight = el?.scrollHeight || 0;
-    const prevTop = el?.scrollTop || 0;
-    try {
-      const older = await fetchChatMessagesPage(selectedChatId, {
-        beforeId: oldest.id,
-        limit: CHAT_MSG_PAGE_SIZE,
-      });
-      if (!older) return;
-      setChatHasMoreOlder(older.length >= CHAT_MSG_PAGE_SIZE);
-      if (!older.length) return;
-      setChatMessages((prev) => {
-        const seen = new Set(prev.map((m) => m.id));
-        const add = older.filter((m) => !seen.has(m.id));
-        return add.length ? [...add, ...prev] : prev;
-      });
-      requestAnimationFrame(() => {
-        const box = chatMessagesElRef.current;
-        if (!box) return;
-        box.scrollTop = prevTop + (box.scrollHeight - prevHeight);
-      });
-    } finally {
-      chatLoadingOlderRef.current = false;
-      setChatLoadingOlder(false);
-    }
-  }
-
-  async function refreshChatMessages(conversationId = selectedChatId) {
-    if (!conversationId) return;
-    const current = chatMessagesRef.current;
-    const lastId = current.length ? current[current.length - 1].id : null;
-    if (lastId && Number(conversationId) === Number(selectedChatId)) {
-      const newer = await fetchChatMessagesPage(conversationId, {
-        afterId: lastId,
-        limit: CHAT_MSG_PAGE_SIZE,
-      });
-      if (newer?.length) {
-        setChatMessages((prev) => {
-          const seen = new Set(prev.map((m) => m.id));
-          const add = newer.filter((m) => !seen.has(m.id));
-          return add.length ? [...prev, ...add] : prev;
-        });
-        requestAnimationFrame(() => scrollChatToBottom(true));
-        const last = newer[newer.length - 1];
-        await authFetch(`${API_URL}/chat/conversations/${conversationId}/mark-read/`, {
-          method: "POST",
-          body: JSON.stringify({ message_id: last.id }),
-        });
-        loadChats();
-      }
-      return;
-    }
-    const msgs = await fetchChatMessagesPage(conversationId, { limit: CHAT_MSG_PAGE_SIZE });
-    if (!msgs) return;
-    setChatMessages(msgs);
-    setChatHasMoreOlder(msgs.length >= CHAT_MSG_PAGE_SIZE);
-    requestAnimationFrame(() => scrollChatToBottom(false));
-    const last = msgs.length ? msgs[msgs.length - 1] : null;
-    if (last) {
-      await authFetch(`${API_URL}/chat/conversations/${conversationId}/mark-read/`, {
-        method: "POST",
-        body: JSON.stringify({ message_id: last.id }),
-      });
-      loadChats();
-    }
-  }
-
-  async function postChatMessage({ text = "", file = null, kind = "", durationSec = null, displayFlip = null }) {
-    if (!selectedChatId) return false;
-    const hasText = Boolean(String(text || "").trim());
-    if (!hasText && !file) return false;
-    let response;
-    if (file) {
-      const fd = new FormData();
-      fd.append("conversation", String(selectedChatId));
-      if (hasText) fd.append("text", String(text).trim());
-      if (kind) fd.append("kind", kind);
-      if (durationSec != null && Number(durationSec) > 0) {
-        fd.append("duration_sec", String(Math.round(Number(durationSec))));
-      }
-      if (displayFlip != null) {
-        fd.append("display_flip", displayFlip ? "true" : "false");
-      }
-      fd.append("attachment", file);
-      response = await authFetch(`${API_URL}/chat/messages/`, { method: "POST", body: fd });
-    } else {
-      response = await authFetch(`${API_URL}/chat/messages/`, {
-        method: "POST",
-        body: JSON.stringify({ conversation: selectedChatId, text: String(text).trim(), kind: "text" }),
-      });
-    }
-    if (!response.ok) {
-      setChatStatus("Не удалось отправить сообщение.");
-      return false;
-    }
-    setChatInput("");
-    setChatPendingFiles([]);
-    setChatPendingKind("");
-    setChatStatus("");
-    setChatAttachMenuOpen(false);
-    await refreshChatMessages(selectedChatId);
-    return true;
-  }
-
-  postChatMessageRef.current = postChatMessage;
-
-  async function sendChatMessage(event) {
-    event.preventDefault();
-    if (chatPendingFiles.length) {
-      const caption = chatInput.trim();
-      const items = [...chatPendingFiles];
-      setChatPendingFiles([]);
-      setChatInput("");
-      for (let i = 0; i < items.length; i += 1) {
-        const item = items[i];
-        await postChatMessage({
-          text: i === 0 ? caption : "",
-          file: item.file,
-          kind: item.kind,
-        });
-      }
-      return;
-    }
-    if (!chatInput.trim()) return;
-    await postChatMessage({ text: chatInput.trim() });
-  }
-
-  function openChatAttachPicker(kind) {
-    setChatPendingKind(kind);
-    setChatAttachMenuOpen(false);
-    const input = chatFileInputRef.current;
-    if (!input) return;
-    input.accept = guessAttachAccept(kind === "music" ? "music" : kind);
-    input.multiple = true;
-    input.value = "";
-    input.click();
-  }
-
-  function onChatFilePicked(e) {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-    const next = files.map((file) => {
-      let kind = chatPendingKind;
-      if (!kind || kind === "auto") {
-        if (file.type.startsWith("image/")) kind = "image";
-        else if (file.type.startsWith("video/")) kind = "video";
-        else if (file.type.startsWith("audio/")) kind = "voice";
-        else kind = "file";
-      }
-      if (kind === "music") kind = "file";
-      return { file, kind };
-    });
-    setChatPendingFiles((prev) => [...prev, ...next]);
-  }
 
   function persistChatVisualSettings() {
     if (chatSettingsForId == null) return;
@@ -3944,10 +3669,6 @@ export default function App() {
     setMenuOpen(false);
   }
 
-  async function loadClientBookings() {
-    await reloadBookingsList();
-  }
-
   async function loadCatalogStatus() {
     const res = await authFetch(`${API_URL}/catalog/seed-catalog/`);
     if (res.ok) setCatalogStatus(await res.json());
@@ -4116,274 +3837,6 @@ export default function App() {
     });
     if (!response.ok) return setSellerStatus("Ошибка обновления услуги.");
     setSellerStatus("Услуга обновлена.");
-    loadSellerData();
-  }
-
-  async function createManualHold(event) {
-    event?.preventDefault?.();
-    if (!manualHoldForm.date || !manualHoldForm.start_time || !manualHoldForm.end_time) {
-      setManualHoldStatus("Укажите дату и время.");
-      return;
-    }
-    const start = new Date(`${manualHoldForm.date}T${manualHoldForm.start_time}:00`);
-    const end = new Date(`${manualHoldForm.date}T${manualHoldForm.end_time}:00`);
-    if (!(start < end)) {
-      setManualHoldStatus("Начало должно быть раньше конца.");
-      return;
-    }
-    setManualHoldBusy(true);
-    setManualHoldStatus("");
-    const response = await authFetch(`${API_URL}/booking/slots/manual-hold/`, {
-      method: "POST",
-      body: JSON.stringify({
-        starts_at: start.toISOString(),
-        ends_at: end.toISOString(),
-        guest_name: (manualHoldForm.guest_name || "").trim(),
-      }),
-    });
-    setManualHoldBusy(false);
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      setManualHoldStatus(err.detail || "Не удалось забронировать интервал.");
-      return;
-    }
-    setManualHoldStatus("Интервал забронирован.");
-    setManualHoldForm((p) => ({ ...p, guest_name: "" }));
-    await loadSellerData();
-  }
-
-  async function releaseManualHold(slotId) {
-    const rawId = String(slotId ?? "").replace(/^hold-/, "");
-    const response = await authFetch(`${API_URL}/booking/slots/${rawId}/release-hold/`, {
-      method: "POST",
-      body: "{}",
-    });
-    if (!(response.ok || response.status === 204)) {
-      const err = await response.json().catch(() => ({}));
-      setSellerStatus(err.detail || "Не удалось снять бронь.");
-      return;
-    }
-    setSellerStatus("Ручная бронь снята.");
-    await loadSellerData();
-  }
-
-  async function addAnonymousSeat() {
-    const next = (Number(me?.anonymous_seat_count) || 0) + 1;
-    const response = await authFetch(`${API_URL}/users/me/`, {
-      method: "PATCH",
-      body: JSON.stringify({ anonymous_seat_count: next }),
-    });
-    if (!response.ok) {
-      setSellerStatus("Не удалось добавить место «Без сотрудников».");
-      return;
-    }
-    const data = await response.json();
-    setMe((prev) => ({ ...prev, ...data }));
-    setIntervalForm((p) => ({ ...p, assignee: `anon:${next}` }));
-    setSellerStatus(`Добавлено: Без сотрудников ${next}`);
-  }
-
-  async function createSlot(event) {
-    event.preventDefault();
-    const response = await authFetch(`${API_URL}/booking/slots/`, { method: "POST", body: JSON.stringify(slotForm) });
-    if (!response.ok) return setSellerStatus("Ошибка при создании слота.");
-    setSlotForm({ starts_at: "", ends_at: "" });
-    setSellerStatus("Слот создан.");
-    loadSellerData();
-  }
-
-  async function createSlotsByInterval(event) {
-    event.preventDefault();
-    if (!intervalForm.start_time || !intervalForm.end_time) {
-      setSellerStatus("Укажи время начала и окончания.");
-      return;
-    }
-    const baseDate = intervalForm.date || new Date().toISOString().slice(0, 10);
-    const baseStart = new Date(`${baseDate}T${intervalForm.start_time}:00`);
-    const baseEnd = new Date(`${baseDate}T${intervalForm.end_time}:00`);
-    if (baseStart >= baseEnd) return setSellerStatus("Время начала должно быть раньше окончания.");
-    const assignee = parseIntervalAssignee(intervalForm.assignee);
-    const templateStaffId = assignee.staff_id;
-    const templateAnon = assignee.anonymous_index;
-    const hasDuplicate = savedIntervals.some(
-      (s) =>
-        s.start_time === intervalForm.start_time &&
-        s.end_time === intervalForm.end_time &&
-        (s.staff_id ?? null) === templateStaffId &&
-        (s.anonymous_index ?? null) === templateAnon,
-    );
-    if (hasDuplicate) {
-      const msg = "Такой интервал уже есть в сохранённых — выбери другой диапазон времени или сотрудника.";
-      setSellerStatus(msg);
-      showIntervalToast(msg);
-      return;
-    }
-    if (templateStaffId == null && templateAnon == null) {
-      setSellerStatus("Выбери сотрудника или место «Без сотрудников».");
-      return;
-    }
-    if (templateAnon != null && !(intervalForm.service_ids || []).length) {
-      setSellerStatus("Для «Без сотрудников» выберите хотя бы одну услугу.");
-      return;
-    }
-    const template = {
-      id: `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      start_time: intervalForm.start_time,
-      end_time: intervalForm.end_time,
-      staff_id: templateStaffId,
-      anonymous_index: templateAnon,
-      service_ids:
-        templateAnon != null
-          ? (intervalForm.service_ids || []).map((x) => Number(x)).filter((n) => Number.isFinite(n))
-          : [],
-    };
-    setSavedIntervals((prev) => [template, ...prev]);
-    setSelectedIntervalId(template.id);
-    setSellerStatus("Интервал сохранён. Нажми на день в календаре для применения.");
-  }
-
-  async function applyIntervalToDay(day, template) {
-    if (!template) return;
-    const date = `${calendarMonth}-${String(day).padStart(2, "0")}`;
-    const check = validateIntervalForDate(date, template);
-    if (!check.ok) {
-      setSellerStatus(check.reason);
-      showIntervalToast(check.reason);
-      return;
-    }
-    const start = new Date(`${date}T${template.start_time}:00`);
-    const end = new Date(`${date}T${template.end_time}:00`);
-    if (start >= end) {
-      setSellerStatus("Некорректный интервал: начало позже конца.");
-      return;
-    }
-    const response = await authFetch(`${API_URL}/booking/slots/`, {
-      method: "POST",
-      body: JSON.stringify({
-        starts_at: start.toISOString(),
-        ends_at: end.toISOString(),
-        ...(template.staff_id != null ? { staff: template.staff_id } : {}),
-        ...(template.anonymous_index != null ? { anonymous_index: template.anonymous_index } : {}),
-        ...(Array.isArray(template.service_ids) && template.service_ids.length
-          ? { service_ids: template.service_ids }
-          : {}),
-      }),
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      const detail = err?.detail || "Не удалось применить интервал на день.";
-      showIntervalToast(detail);
-      setSellerStatus(detail);
-      return;
-    }
-    setSellerStatus(`Интервал применён на ${date}.`);
-    loadSellerData();
-  }
-
-  async function applyIntervalByPattern(pattern, template) {
-    if (!template) return;
-    const [year, month] = calendarMonth.split("-").map(Number);
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const targets = [];
-    for (let day = 1; day <= daysInMonth; day += 1) {
-      const d = new Date(year, month - 1, day);
-      const wd = d.getDay(); // 0..6
-      const isWorkday = wd >= 1 && wd <= 5;
-      const isWeekend = wd === 0 || wd === 6;
-      if (pattern === "daily") targets.push(day);
-      if (pattern === "workweek" && isWorkday) targets.push(day);
-      if (pattern === "weekend" && isWeekend) targets.push(day);
-    }
-    let success = 0;
-    let failed = 0;
-    let skipped = 0;
-    const errors = [];
-    for (const day of targets) {
-      const date = `${calendarMonth}-${String(day).padStart(2, "0")}`;
-      const check = validateIntervalForDate(date, template);
-      if (!check.ok) {
-        skipped += 1;
-        errors.push(check.reason);
-        continue;
-      }
-      const start = new Date(`${date}T${template.start_time}:00`);
-      const end = new Date(`${date}T${template.end_time}:00`);
-      const response = await authFetch(`${API_URL}/booking/slots/`, {
-        method: "POST",
-        body: JSON.stringify({
-          starts_at: start.toISOString(),
-          ends_at: end.toISOString(),
-          ...(template.staff_id != null ? { staff: template.staff_id } : {}),
-          ...(template.anonymous_index != null ? { anonymous_index: template.anonymous_index } : {}),
-          ...(Array.isArray(template.service_ids) && template.service_ids.length
-            ? { service_ids: template.service_ids }
-            : {}),
-        }),
-      });
-      if (response.ok) {
-        success += 1;
-      } else {
-        failed += 1;
-        const err = await response.json().catch(() => ({}));
-        const detail = err?.detail || `Ошибка применения на ${date}`;
-        errors.push(detail);
-      }
-    }
-    const unique = [...new Set(errors)];
-    if (unique.length) {
-      showIntervalToast(unique.length === 1 ? unique[0] : `${unique[0]} (+ещё ${unique.length - 1})`);
-    }
-    setSellerStatus(`Применено: ${success}, пропущено: ${skipped}, ошибок: ${failed}`);
-    loadSellerData();
-  }
-
-  function validateIntervalForDate(date, template) {
-    const start = new Date(`${date}T${template.start_time}:00`);
-    const end = new Date(`${date}T${template.end_time}:00`);
-    if (start >= end) return { ok: false, reason: "Некорректный интервал: время начала должно быть раньше окончания." };
-
-    const startMs = start.getTime();
-    const endMs = end.getTime();
-    // Разрешаем пересечение с уже занятими слотами (запись внутри рабочего интервала).
-    // Запрещаем только перекрытие с существующими свободными интервалами.
-    const daySlots = slots.filter((s) => s.starts_at?.slice(0, 10) === date && !s.is_booked);
-    for (const slot of daySlots) {
-      if (!intervalStaffConflicts(template, slot)) continue;
-      const slotStartMs = new Date(slot.starts_at).getTime();
-      const slotEndMs = new Date(slot.ends_at).getTime();
-      const sameBounds = slotStartMs === startMs && slotEndMs === endMs;
-      if (sameBounds) {
-        return { ok: false, reason: `Интервал ${template.start_time}-${template.end_time} уже применён на ${date}.` };
-      }
-      const overlaps = startMs < slotEndMs && slotStartMs < endMs;
-      if (overlaps) {
-        return { ok: false, reason: `Интервал пересекается с существующим на ${date}.` };
-      }
-    }
-    return { ok: true };
-  }
-
-  async function deleteSlot(slotId) {
-    const response = await authFetch(`${API_URL}/booking/slots/${slotId}/`, { method: "DELETE" });
-    if (!response.ok) return setSellerStatus("Не удалось удалить интервал.");
-    setSellerStatus("Интервал удален.");
-    setCalendarDayDetail((prev) => {
-      if (!prev || prev.mode !== "intervals") return prev;
-      const items = (prev.items || []).filter((x) => Number(x.id) !== Number(slotId));
-      return { ...prev, items };
-    });
-    loadSellerData();
-  }
-
-  async function deleteSeries(group) {
-    if (!group) return;
-    const response = await authFetch(
-      `${API_URL}/booking/slots/delete-series/?recurrence_group=${encodeURIComponent(group)}`,
-      { method: "DELETE" }
-    );
-    if (!response.ok) return setSellerStatus("Не удалось удалить серию интервалов.");
-    const data = await response.json();
-    setSellerStatus(`Удалено интервалов в серии: ${data.deleted ?? 0}`);
     loadSellerData();
   }
 
@@ -4692,252 +4145,6 @@ export default function App() {
         })
         .catch(() => setBookClientPackages([]));
     }
-  }
-
-  async function createClientBooking(event) {
-    event.preventDefault();
-    const serviceId = Number(clientBookingForm.serviceId);
-    if (!serviceId) {
-      setClientStatus("Выберите услугу.");
-      return;
-    }
-    const win = clientBookWindows.find((w) => clientWindowKey(w) === clientBookingForm.windowKey);
-    if (!win) {
-      setClientStatus("Выберите время записи.");
-      return;
-    }
-    const response = await authFetch(`${API_URL}/booking/`, {
-      method: "POST",
-      body: JSON.stringify({
-        provider: Number(clientBookingForm.provider),
-        service: serviceId,
-        starts_at: win.starts_at,
-        ends_at: win.ends_at,
-        staff: win.staff_id ?? null,
-        comment: clientBookingForm.comment,
-        option_ids: clientBookingForm.optionIds || [],
-        loyalty_points:
-          clientBookingForm.usePackage && bookClientPackages.length
-            ? 0
-            : Number(clientBookingForm.loyaltyPoints) || 0,
-        use_package: Boolean(clientBookingForm.usePackage && clientBookingForm.clientPackageId),
-        client_package: clientBookingForm.usePackage ? clientBookingForm.clientPackageId || null : null,
-      }),
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      setClientStatus(err.detail || "Не удалось создать запись.");
-      return;
-    }
-    const created = await response.json().catch(() => ({}));
-    if (created.confirmation_url) {
-      window.location.href = created.confirmation_url;
-      return;
-    }
-    await reloadBookingsList();
-    const monthKey = isoMonthKey(created.slot_starts_at || win.starts_at);
-    if (monthKey) setBookingsMonth(monthKey);
-    setClientStatus(
-      created.client_package
-        ? "Запись создана — списан визит по абонементу."
-        : Number(created.loyalty_points_redeemed) > 0 &&
-            (created.payment_status === "paid" || !created.confirmation_url)
-          ? "Запись создана — баллы учтены в оплате."
-          : "Запись создана.",
-    );
-    setClientBookingForm({
-      locationId: "",
-      provider: "",
-      serviceId: "",
-      optionIds: [],
-      bookDate: clientDiscoverFilters.slot_date || "",
-      windowKey: "",
-      comment: "",
-      loyaltyPoints: "",
-      staffId: "any",
-      usePackage: true,
-      clientPackageId: "",
-    });
-    setBookLoyaltyInfo(null);
-    setBookClientPackages([]);
-    setClientBookWindows([]);
-    setClientBookModalOpen(false);
-    setMapOrgPopup(null);
-    setCurrentView(me?.role === "provider" ? "my_bookings" : "bookings");
-  }
-
-  async function resumeBookingPayment(bookingId, event) {
-    event?.stopPropagation?.();
-    event?.preventDefault?.();
-    const res = await authFetch(`${API_URL}/booking/${bookingId}/pay/`, { method: "POST", body: "{}" });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setClientStatus(data.detail || "Не удалось открыть оплату.");
-      return;
-    }
-    if (data.confirmation_url) {
-      window.location.href = data.confirmation_url;
-      return;
-    }
-    setClientStatus("Оплата уже обработана.");
-    await reloadBookingsList();
-  }
-
-  function bookingClientLabel(it) {
-    const n = (it.client_display_name || "").trim();
-    if (n) return n;
-    return it.client_username || "Клиент";
-  }
-
-  function bookingSlotSecondaryLabel(it) {
-    if (me?.role === "client") {
-      const master = (it.staff_display_name || "").trim();
-      if (master) {
-        const job = (it.staff_job_title || "").trim();
-        return job ? `${master} · ${job}` : master;
-      }
-      return (it.service_name || "").trim() || "Мастер";
-    }
-    const client = bookingClientLabel(it);
-    const service = (it.service_name || "").trim();
-    const staffName = (it.staff_display_name || "").trim();
-    const staffJob = (it.staff_job_title || "").trim();
-    const staff = [staffName, staffJob].filter(Boolean).join(" · ");
-    const parts = [client, service, staff].filter(Boolean);
-    return parts.length ? parts.join(" · ") : "Запись";
-  }
-
-  async function reloadBookingsList() {
-    const asClient = currentView === "my_bookings" || me?.role === "client";
-    const bookingsRes = await authFetch(`${API_URL}/booking/${asClient && me?.role === "provider" ? "?as_client=1" : ""}`);
-    if (!bookingsRes.ok) return [];
-    let list = normalizeBookingsList(await bookingsRes.json());
-
-    if (canManageBookings() && currentView !== "my_bookings") {
-      const slotsRes = await authFetch(`${API_URL}/booking/slots/`);
-      if (slotsRes.ok) {
-        const slotsData = normalizeSlotsList(await slotsRes.json());
-        setSlots(slotsData);
-        list = mergeBookingsWithManualHolds(list, slotsData, {
-          orgStaff,
-          providerId: me?.id,
-          staffJobTitleForUser,
-        });
-      }
-    }
-
-    setBookings(list);
-    return list;
-  }
-
-  async function openChatWithClient(clientId) {
-    const res = await authFetch(`${API_URL}/chat/conversations/create-with-client/`, {
-      method: "POST",
-      body: JSON.stringify({ client_id: Number(clientId) }),
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    await loadChats();
-    setSelectedChatId(data.id);
-    setChatFolder("clients");
-    setCurrentView("chats");
-    setMenuOpen(false);
-  }
-
-  async function openChatWithProvider(providerId) {
-    const res = await authFetch(`${API_URL}/chat/conversations/create-with-provider/`, {
-      method: "POST",
-      body: JSON.stringify({ provider_id: Number(providerId) }),
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    await loadChats();
-    setSelectedChatId(data.id);
-    setCurrentView("chats");
-    setMenuOpen(false);
-  }
-
-  async function orgBookingAction(bookingId, action, event) {
-    event?.stopPropagation?.();
-    event?.preventDefault?.();
-    const res = await authFetch(`${API_URL}/booking/${bookingId}/${action}/`, { method: "POST", body: "{}" });
-    if (res.ok) {
-      await reloadBookingsList();
-      return;
-    }
-    const err = await res.json().catch(() => ({}));
-    if (
-      err.code === "confirm_message_not_set"
-      || err.code === "cancel_message_not_set"
-      || err.code === "done_message_not_set"
-      || err.code === "booking_not_started_yet"
-      || err.code === "prepay_required"
-    ) {
-      setBookingMessageError({ code: err.code, detail: err.detail || "" });
-    }
-  }
-
-  async function startInspectionFromBooking(booking) {
-    if (!booking?.client) {
-      setClientStatus("У записи нет клиента.");
-      return;
-    }
-    // Reuse existing linked intake instead of creating duplicates.
-    if (booking.inspection?.id) {
-      setPendingInspectionId(Number(booking.inspection.id));
-      setCurrentView("inspections");
-      setClientStatus("Открыта приёмка по этой записи.");
-      return;
-    }
-    const res = await authFetch(`${API_URL}/inspections/reports/`, {
-      method: "POST",
-      body: JSON.stringify({
-        client: Number(booking.client),
-        booking: Number(booking.id),
-        vehicle_title: "",
-        notes: booking.service_name ? `По записи: ${booking.service_name}` : "",
-      }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      setClientStatus(err.detail || err.client?.[0] || "Не удалось создать отчёт приёмки.");
-      return;
-    }
-    const created = await res.json();
-    setPendingInspectionId(Number(created.id));
-    setCurrentView("inspections");
-    setClientStatus("Черновик приёмки создан и открыт.");
-    await reloadBookingsList();
-  }
-
-  function openInspectionFromBooking(booking) {
-    const id = booking?.inspection?.id;
-    if (!id) return;
-    setPendingInspectionId(Number(id));
-    setCurrentView("inspections");
-  }
-
-  function bookingHasStarted(it) {
-    if (!it?.slot_starts_at) return true;
-    const start = new Date(it.slot_starts_at).getTime();
-    return !Number.isNaN(start) && start <= Date.now();
-  }
-
-  async function clientCancelBooking(bookingId, event) {
-    event?.stopPropagation?.();
-    event?.preventDefault?.();
-    const res = await authFetch(`${API_URL}/booking/${bookingId}/cancel-by-client/`, { method: "POST", body: "{}" });
-    if (res.ok) await reloadBookingsList();
-  }
-
-  function goOrgSettingsForBookingMessage(code) {
-    setBookingMessageError(null);
-    const highlight =
-      code === "confirm_message_not_set" ? "confirm" : code === "done_message_not_set" ? "done" : "cancel";
-    setOrgSettingsHighlight(highlight);
-    setCurrentView("organization");
-    setMenuOpen(false);
-    setTimeout(() => setOrgSettingsHighlight(""), 2500);
   }
 
   async function loadMapOrgSummary(providerId) {
