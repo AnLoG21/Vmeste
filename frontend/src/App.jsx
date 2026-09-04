@@ -48,14 +48,9 @@ import {
   buildShortAddress,
 } from "./addressFormat.js";
 import {
-  CHAT_PINS_STORAGE_KEY,
-  MAX_PINNED_CHATS,
   formatLastSeenLabel,
   formatStaffFullName,
   conversationOrgDirectPeerTitle,
-  conversationClientCorrespondenceTitle,
-  defaultChatListNameForConversation,
-  loadChatPinsFromStorage,
   reviewImageUrl,
   chatMessagePlainText,
 } from "./chatHelpers.jsx";
@@ -98,8 +93,6 @@ import { getDevicePosition } from "./geoPosition.js";
 import "./landing.css";
 import {
   ORG_GALLERY_MAX_PHOTOS,
-  buildYmapOrgPlacemark,
-  resetOrgPinLayoutClass,
   defaultOrgWorkingHours,
   formatOrgWorkingHoursText,
   filterServiceGroupsFromCatalog,
@@ -118,6 +111,9 @@ import {
 import { useOrgAddress } from "./useOrgAddress.js";
 import { useChatRecording } from "./useChatRecording.js";
 import { useChatMessaging } from "./useChatMessaging.js";
+import { useChatExtras } from "./useChatExtras.js";
+import { useClientMap } from "./useClientMap.js";
+import { useCabinetData } from "./useCabinetData.js";
 import { useBookingActions } from "./useBookingActions.js";
 import { useIntervalHandlers } from "./useIntervalHandlers.js";
 import {
@@ -133,19 +129,7 @@ import { setNoIndexAppMeta, setPageMeta } from "./seo/setPageMeta.js";
 
 const chatPrefsStorageKey = (id) => `vmeste_chat_prefs_v1_${id}`;
 const APP_THEME_KEY = "vmeste_theme_v1";
-const CHAT_RECEIPTS_KEY = "vmeste_chat_receipts_v1";
-
 const chatNotifyStorageKey = (id) => `vmeste_chat_notify_v1_${id}`;
-
-function loadReceiptsPref() {
-  try {
-    const raw = localStorage.getItem(CHAT_RECEIPTS_KEY);
-    const p = raw ? JSON.parse(raw) : {};
-    return p.mode === "classic" ? "classic" : "stickers";
-  } catch {
-    return "stickers";
-  }
-}
 
 const emptyRegisterForm = {
   username: "",
@@ -242,17 +226,11 @@ export default function App() {
   const [status, setStatus] = useState("");
   const [authStatus, setAuthStatus] = useState("");
   const [sellerStatus, setSellerStatus] = useState("");
-  const [cabinetLoadError, setCabinetLoadError] = useState("");
   const [clientStatus, setClientStatus] = useState("");
   const [pendingInspectionId, setPendingInspectionId] = useState(null);
   const [verifyStatus, setVerifyStatus] = useState("");
   const [resendStatus, setResendStatus] = useState("");
   const [verifyEmailNotice, setVerifyEmailNotice] = useState(null);
-  const [categories, setCategories] = useState([]);
-  const [services, setServices] = useState([]);
-  const [slots, setSlots] = useState([]);
-  const [bookings, setBookings] = useState([]);
-  const [location, setLocation] = useState([]);
   const [allLocations, setAllLocations] = useState([]);
   const allLocationsRef = useRef([]);
   const [clientMapSearchInput, setClientMapSearchInput] = useState("");
@@ -285,7 +263,6 @@ export default function App() {
   const [mapOrgProfile, setMapOrgProfile] = useState(null);
   const [mapOrgStaff, setMapOrgStaff] = useState([]);
   const [mapOrgCarouselIndex, setMapOrgCarouselIndex] = useState(0);
-  const [mapMarkersTick, setMapMarkersTick] = useState(0);
   const [orgPhotoLightbox, setOrgPhotoLightbox] = useState(null);
   const [staffReviewModal, setStaffReviewModal] = useState(null);
 
@@ -404,12 +381,6 @@ export default function App() {
   const [reviewReplyOpenId, setReviewReplyOpenId] = useState(null);
   const [reviewReplyForms, setReviewReplyForms] = useState({});
   const [reviewReplyFormError, setReviewReplyFormError] = useState("");
-  const clientDiscoverMapRef = useRef(null);
-  const clientDiscoverMapClickBoundRef = useRef(false);
-  const clientDiscoverMapZoomTimerRef = useRef(null);
-  const clientMyLocationPlacemarkRef = useRef(null);
-  const clientMyLocationCoordsRef = useRef(null);
-  const clientMyLocationWatchIdRef = useRef(null);
   const clientMeBootstrappedRef = useRef(false);
   const [providerServices, setProviderServices] = useState([]);
   const [bookProviderStaff, setBookProviderStaff] = useState([]);
@@ -479,7 +450,6 @@ export default function App() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [intervalPopoverId, closeIntervalPopover]);
 
-  const [orgStaff, setOrgStaff] = useState([]);
   const [staffInviteForm, setStaffInviteForm] = useState({ invite_identifier: "" });
   const [staffInviteStatus, setStaffInviteStatus] = useState("");
   const [staffPermsOpenId, setStaffPermsOpenId] = useState(null);
@@ -487,6 +457,31 @@ export default function App() {
   const [conversations, setConversations] = useState([]);
   const [vmenuChatContacts, setVmenuChatContacts] = useState([]);
   const [selectedChatId, setSelectedChatId] = useState(null);
+  const authFetchRef = useRef(async () => ({ ok: false }));
+  const {
+    cabinetLoadError,
+    categories,
+    setCategories,
+    services,
+    setServices,
+    slots,
+    setSlots,
+    bookings,
+    setBookings,
+    location,
+    setLocation,
+    orgStaff,
+    setOrgStaff,
+    loadSellerData,
+    loadStaffWorkspace,
+    reloadProviderSlots,
+  } = useCabinetData({
+    authFetch: (...args) => authFetchRef.current(...args),
+    accessToken,
+    me,
+    currentView,
+    setConversations,
+  });
   const [vmenuTab, setVmenuTab] = useState("feed");
   const [vmenuChatsHostEl, setVmenuChatsHostEl] = useState(null);
   const [mainChatsHostEl, setMainChatsHostEl] = useState(null);
@@ -496,26 +491,13 @@ export default function App() {
   const [chatShowJumpBottom, setChatShowJumpBottom] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatStatus, setChatStatus] = useState("");
-  /** id чата для модалки оформления (открывается из ⋮ в списке, без смены выбранного чата). */
-  const [chatSettingsForId, setChatSettingsForId] = useState(null);
-  const [chatRowMenuId, setChatRowMenuId] = useState(null);
-  const [chatReceiptsSettingsOpen, setChatReceiptsSettingsOpen] = useState(false);
-  const [chatPins, setChatPins] = useState(() => loadChatPinsFromStorage());
-  const [chatDragPinConvId, setChatDragPinConvId] = useState(null);
   const [chatAttachMenuOpen, setChatAttachMenuOpen] = useState(false);
   const [chatMsgSearchOpen, setChatMsgSearchOpen] = useState(false);
   const [chatMsgSearchQuery, setChatMsgSearchQuery] = useState("");
   const [chatMsgSearchActiveIdx, setChatMsgSearchActiveIdx] = useState(0);
-  const [chatInfoOpen, setChatInfoOpen] = useState(false);
-  const [chatInfoTab, setChatInfoTab] = useState("photos");
-  const [chatMembersView, setChatMembersView] = useState(null); // null | "list" | "add"
-  const [groupAddStaffIds, setGroupAddStaffIds] = useState([]);
-  const [groupAddStatus, setGroupAddStatus] = useState("");
   const [subnavBookmarks, setSubnavBookmarks] = useState(() =>
     loadSubnavBookmarks(localStorage.getItem("vmeste_role_hint") || "client")
   );
-  const [chatInfoHeadMenuOpen, setChatInfoHeadMenuOpen] = useState(false);
-  const [chatInfoPhotoMenuId, setChatInfoPhotoMenuId] = useState(null);
   const [chatPendingFiles, setChatPendingFiles] = useState([]);
   const [chatPendingKind, setChatPendingKind] = useState("");
   const [calendarDayDetail, setCalendarDayDetail] = useState(null);
@@ -529,9 +511,6 @@ export default function App() {
   const chatNearBottomRef = useRef(true);
   const chatLoadingOlderRef = useRef(false);
   const chatHasMoreOlderRef = useRef(false);
-  const [chatSettingsTitle, setChatSettingsTitle] = useState("");
-  const [groupForm, setGroupForm] = useState({ title: "", staff_ids: [] });
-  const [chatFabOpen, setChatFabOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ first_name: "", last_name: "", patronymic: "", phone: "" });
   const [passwordForm, setPasswordForm] = useState({ old_password: "", new_password: "", new_password_confirm: "" });
   const [emailForm, setEmailForm] = useState({ new_email: "" });
@@ -619,19 +598,14 @@ export default function App() {
     postChatMessage: (...args) => postChatMessageRef.current(...args),
     setChatStatus,
   });
-  const [chatLocalPrefs, setChatLocalPrefs] = useState({});
-  const [chatSettingsAvatar, setChatSettingsAvatar] = useState("");
-  const [chatSettingsWallpaper, setChatSettingsWallpaper] = useState("#e8f4ea");
+  const [chatInfoOpen, setChatInfoOpen] = useState(false);
+  const [chatFabOpen, setChatFabOpen] = useState(false);
   const [appTheme, setAppTheme] = useState(() => localStorage.getItem(APP_THEME_KEY) || "light");
   const [chatFolder, setChatFolder] = useState("org");
   const [chatSearchQuery, setChatSearchQuery] = useState("");
-  const [customColorPickerOpen, setCustomColorPickerOpen] = useState(false);
-  const [chatSettingsNotify, setChatSettingsNotify] = useState("all");
-  const [chatSettingsMuteUntil, setChatSettingsMuteUntil] = useState("");
   const [incomingToasts, setIncomingToasts] = useState([]);
   const [chatActivity, setChatActivity] = useState(null);
   const lastNotificationToastIdRef = useRef(null);
-  const [chatReceiptsMode, setChatReceiptsMode] = useState(() => loadReceiptsPref());
   const currentViewRef = useRef(currentView);
   const meRef = useRef(me);
   const chatsSurfaceActive =
@@ -1210,20 +1184,6 @@ export default function App() {
   }, [accessToken]);
 
   useEffect(() => {
-    if (accessToken && me?.role === "provider") loadSellerData();
-  }, [accessToken, me]);
-
-  useEffect(() => {
-    if (!accessToken || (currentView !== "organization" && currentView !== "staff")) return;
-    if (me?.role === "provider") loadSellerData();
-    else if (me?.role === "staff" && staffEffectivePerms.can_delegate_permissions) loadStaffWorkspace();
-  }, [accessToken, currentView, me?.role, staffEffectivePerms.can_delegate_permissions]);
-
-  useEffect(() => {
-    if (accessToken && me?.role === "staff") loadStaffWorkspace();
-  }, [accessToken, me]);
-
-  useEffect(() => {
     if (!accessToken || !chatsSurfaceActive) return;
     if (currentView === "vmenu") {
       loadChats();
@@ -1275,59 +1235,6 @@ export default function App() {
     }, {});
     digestPrimedRef.current = true;
   }, [chatsSurfaceActive, conversations]);
-
-  useEffect(() => {
-    const next = {};
-    for (const c of conversations) {
-      try {
-        const raw = localStorage.getItem(chatPrefsStorageKey(c.id));
-        if (raw) next[c.id] = JSON.parse(raw);
-      } catch {
-        // ignore
-      }
-    }
-    setChatLocalPrefs(next);
-  }, [conversations]);
-
-  useEffect(() => {
-    if (chatSettingsForId == null) return;
-    const p = chatLocalPrefs[chatSettingsForId] || {};
-    const sel = conversations.find((x) => x.id === chatSettingsForId);
-    const fallback = defaultChatListNameForConversation(sel, me?.id);
-    setChatSettingsTitle(p.title || fallback);
-    setChatSettingsAvatar(p.avatarDataUrl || "");
-    setChatSettingsWallpaper(p.wallpaper || "#dfe9e2");
-    let notify = "all";
-    try {
-      const raw = localStorage.getItem(chatNotifyStorageKey(chatSettingsForId));
-      const st = raw ? JSON.parse(raw) : {};
-      if (st.muted) notify = "off";
-      else if (st.mutedUntil && Date.now() < Number(st.mutedUntil)) notify = "1h";
-    } catch {
-      // ignore
-    }
-    setChatSettingsNotify(notify);
-    // Только при смене чата: иначе polling conversations / chatLocalPrefs сбрасывает ввод в поле «Имя».
-  }, [chatSettingsForId]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(CHAT_PINS_STORAGE_KEY, JSON.stringify(chatPins));
-    } catch {
-      // ignore
-    }
-  }, [chatPins]);
-
-  useEffect(() => {
-    if (!conversations.length) return;
-    const ids = new Set(conversations.map((c) => Number(c.id)));
-    setChatPins((prev) => {
-      const org = (prev.org || []).filter((id) => ids.has(Number(id)));
-      const clients = (prev.clients || []).filter((id) => ids.has(Number(id)));
-      if (org.length === (prev.org || []).length && clients.length === (prev.clients || []).length) return prev;
-      return { org, clients };
-    });
-  }, [conversations]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -1627,124 +1534,6 @@ export default function App() {
   }, [clientFiltersOpen, clientFilterModalDraft.sphere]);
 
   useEffect(() => {
-    if (chatRowMenuId == null) return undefined;
-    function onDoc(e) {
-      if (e.target?.closest?.(".tg-chat-row-menu-wrap")) return;
-      setChatRowMenuId(null);
-    }
-    document.addEventListener("mousedown", onDoc, true);
-    return () => document.removeEventListener("mousedown", onDoc, true);
-  }, [chatRowMenuId]);
-
-  useEffect(() => {
-    const map = clientDiscoverMapRef.current;
-    if (!map || currentView !== "client_map" || (me?.role !== "client" && me?.role !== "provider")) return;
-    const lockMap = Boolean(clientBookModalOpen || clientFiltersOpen);
-    try {
-      if (lockMap) {
-        map.behaviors.disable(["drag", "scrollZoom", "dblClickZoom", "multiTouch"]);
-      } else {
-        map.behaviors.enable(["drag", "scrollZoom", "dblClickZoom", "multiTouch"]);
-      }
-    } catch {
-      // ignore
-    }
-  }, [clientBookModalOpen, clientFiltersOpen, currentView, me?.role]);
-
-  useEffect(() => {
-    if (currentView !== "client_map" || (me?.role !== "client" && me?.role !== "provider")) return undefined;
-    if (mapOrgPopup) {
-      window.setTimeout(fitClientDiscoverMapViewport, 0);
-      window.setTimeout(fitClientDiscoverMapViewport, 200);
-    } else {
-      window.setTimeout(fitClientDiscoverMapViewport, 0);
-    }
-    return undefined;
-  }, [mapOrgPopup, mapOrgReviewsOpen, currentView, me?.role]);
-
-  useEffect(() => {
-    if (currentView !== "client_map" || (me?.role !== "client" && me?.role !== "provider")) {
-      destroyClientDiscoverMap();
-      return undefined;
-    }
-    const t = setTimeout(() => {
-      void loadYandexMaps()
-        .then(() => {
-          const ymaps = window.ymaps;
-          if (!ymaps || clientDiscoverMapRef.current) return;
-          if (!document.getElementById("client-discover-map")) return;
-          ymaps.ready(() => {
-            if (clientDiscoverMapRef.current) return;
-            const cityKey = (new URLSearchParams(window.location.search).get("city") || "").toLowerCase();
-            const cityCenters = {
-              moscow: { center: [55.751244, 37.618423], zoom: 11, name: "Москва" },
-              spb: { center: [59.9342802, 30.3350986], zoom: 11, name: "Санкт-Петербург" },
-            };
-            const city = cityCenters[cityKey];
-            if (city?.name) setDetectedCity(city.name);
-            const map = new ymaps.Map("client-discover-map", {
-              center: city ? city.center : [55.751244, 37.618423],
-              zoom: city ? city.zoom : 10,
-              controls: ["zoomControl", "fullscreenControl", "geolocationControl"],
-            });
-            clientDiscoverMapRef.current = map;
-            if (!map._vmesteZoomBound) {
-              map._vmesteZoomBound = true;
-              map.events.add("boundschange", () => {
-                if (clientDiscoverMapZoomTimerRef.current) {
-                  window.clearTimeout(clientDiscoverMapZoomTimerRef.current);
-                }
-                clientDiscoverMapZoomTimerRef.current = window.setTimeout(() => {
-                  if (clientDiscoverMapRef.current) {
-                    paintClientDiscoverMapMarkers(allLocationsRef.current, { fitView: false });
-                  }
-                }, 160);
-              });
-            }
-            paintClientDiscoverMapMarkers(allLocationsRef.current, { fitView: !city });
-            if (city) {
-              try {
-                map.setCenter(city.center, city.zoom);
-              } catch {
-                /* ignore */
-              }
-            }
-            startClientMyLocationTracking();
-          });
-        })
-        .catch(() => showToast("Не удалось загрузить карту.", { tone: "error" }));
-    }, 280);
-    return () => {
-      clearTimeout(t);
-      destroyClientDiscoverMap();
-    };
-  }, [currentView, me?.role]);
-
-  useEffect(() => {
-    if (currentView !== "client_map" || (me?.role !== "client" && me?.role !== "provider")) return undefined;
-    const id = window.setInterval(() => setMapMarkersTick((t) => t + 1), 60000);
-    return () => window.clearInterval(id);
-  }, [currentView, me?.role]);
-
-  useEffect(() => {
-    if (currentView !== "client_map" || (me?.role !== "client" && me?.role !== "provider") || !clientDiscoverMapRef.current) return;
-    paintClientDiscoverMapMarkers(allLocations, { fitView: true });
-  }, [allLocations, currentView, me?.role]);
-
-  useEffect(() => {
-    if (currentView !== "client_map" || (me?.role !== "client" && me?.role !== "provider") || !clientDiscoverMapRef.current) return;
-    paintClientDiscoverMapMarkers(allLocations, { fitView: false });
-  }, [mapMarkersTick, currentView, me?.role]);
-
-  useEffect(() => {
-    if (currentView !== "client_map" || (me?.role !== "client" && me?.role !== "provider") || !clientDiscoverMapRef.current) return;
-    paintClientDiscoverMapMarkers(allLocations, {
-      fitView: false,
-      selectedId: mapOrgPopup?.id ?? null,
-    });
-  }, [mapOrgPopup?.id, currentView, me?.role]);
-
-  useEffect(() => {
     currentViewRef.current = currentView;
   }, [currentView]);
 
@@ -1979,9 +1768,9 @@ export default function App() {
     () => createAuthFetch(() => accessTokenRef.current, refreshAccessToken),
     [refreshAccessToken],
   );
+  authFetchRef.current = authFetch;
 
-  // Chat messaging / send / mark-read — state (conversations, messages, …) stays above;
-  // pins, groups, visual prefs remain in App below.
+  // Chat messaging / send / mark-read — state (conversations, messages, …) stays above.
   const {
     loadChats,
     loadVmenuChatContacts,
@@ -2037,6 +1826,109 @@ export default function App() {
     chatFileInputRef,
     postChatMessageRef,
   });
+
+  const {
+    chatSettingsForId,
+    setChatSettingsForId,
+    chatRowMenuId,
+    setChatRowMenuId,
+    chatReceiptsSettingsOpen,
+    setChatReceiptsSettingsOpen,
+    chatPins,
+    chatDragPinConvId,
+    setChatDragPinConvId,
+    chatInfoTab,
+    setChatInfoTab,
+    chatMembersView,
+    setChatMembersView,
+    groupAddStaffIds,
+    setGroupAddStaffIds,
+    groupAddStatus,
+    setGroupAddStatus,
+    chatInfoHeadMenuOpen,
+    setChatInfoHeadMenuOpen,
+    chatInfoPhotoMenuId,
+    setChatInfoPhotoMenuId,
+    chatSettingsTitle,
+    setChatSettingsTitle,
+    groupForm,
+    setGroupForm,
+    chatLocalPrefs,
+    chatSettingsAvatar,
+    setChatSettingsAvatar,
+    chatSettingsWallpaper,
+    setChatSettingsWallpaper,
+    customColorPickerOpen,
+    setCustomColorPickerOpen,
+    chatSettingsNotify,
+    setChatSettingsNotify,
+    chatReceiptsMode,
+    persistChatReceiptsMode,
+    togglePinChatForFolder,
+    reorderPinnedChats,
+    createOrgGroup,
+    displayConversationTitle,
+    conversationAvatarLetter,
+    persistChatVisualSettings,
+    clearChatVisualSettings,
+    toggleGroupStaff,
+    toggleGroupAddStaff,
+    addMembersToSelectedGroup,
+    deleteGroupChat,
+    chatInfoPeer,
+    activeChatWallpaper,
+  } = useChatExtras({
+    authFetch,
+    me,
+    conversations,
+    setConversations,
+    selectedChatId,
+    setSelectedChatId,
+    setChatStatus,
+    loadChats,
+    chatInfoOpen,
+    setChatInfoOpen,
+    chatFabOpen,
+    setChatFabOpen,
+  });
+
+  const openOrgOnMapRef = useRef(async () => {});
+  const {
+    fitClientDiscoverMapViewport,
+    waitForClientDiscoverMap,
+  } = useClientMap({
+    currentView,
+    meRole: me?.role,
+    allLocations,
+    allLocationsRef,
+    mapOrgPopup,
+    mapOrgReviewsOpen,
+    clientBookModalOpen,
+    clientFiltersOpen,
+    setDetectedCity,
+    openOrgOnMap: (loc) => openOrgOnMapRef.current(loc),
+  });
+
+  function staffJobTitleForUser(userId) {
+    const link = orgStaff.find((l) => Number(l.staff) === Number(userId));
+    return (link?.job_title || "").trim();
+  }
+
+  function memberDisplayName(member) {
+    return (
+      formatStaffFullName({
+        first_name: member?.first_name,
+        last_name: member?.last_name,
+        patronymic: member?.patronymic,
+        username: member?.username,
+      }) || `id ${member?.user}`
+    );
+  }
+
+  function memberInitial(member) {
+    const name = memberDisplayName(member);
+    return (name || "?").slice(0, 1).toUpperCase();
+  }
 
   // Booking actions; bookings/bookingsMonth state stay in App (shared with seller/staff loaders).
   const {
@@ -2611,146 +2503,6 @@ export default function App() {
     profilePlacemarkRef.current = null;
   }
 
-  function destroyClientDiscoverMap() {
-    if (clientMyLocationWatchIdRef.current != null && navigator.geolocation?.clearWatch) {
-      try {
-        navigator.geolocation.clearWatch(clientMyLocationWatchIdRef.current);
-      } catch {
-        /* ignore */
-      }
-      clientMyLocationWatchIdRef.current = null;
-    }
-    clientMyLocationPlacemarkRef.current = null;
-    clientMyLocationCoordsRef.current = null;
-    if (clientDiscoverMapRef.current) {
-      try {
-        clientDiscoverMapRef.current.destroy();
-      } catch (_e) {
-        // ignore
-      }
-      clientDiscoverMapRef.current = null;
-    }
-    clientDiscoverMapClickBoundRef.current = false;
-    if (clientDiscoverMapZoomTimerRef.current) {
-      window.clearTimeout(clientDiscoverMapZoomTimerRef.current);
-      clientDiscoverMapZoomTimerRef.current = null;
-    }
-    resetOrgPinLayoutClass();
-  }
-
-  function ensureClientMyLocationMarker(coords) {
-    const ymaps = window.ymaps;
-    const map = clientDiscoverMapRef.current;
-    if (!ymaps || !map || !coords) return;
-    const [lat, lon] = coords;
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-    clientMyLocationCoordsRef.current = [lat, lon];
-    if (clientMyLocationPlacemarkRef.current) {
-      try {
-        clientMyLocationPlacemarkRef.current.geometry.setCoordinates([lat, lon]);
-      } catch {
-        /* ignore */
-      }
-      try {
-        map.geoObjects.remove(clientMyLocationPlacemarkRef.current);
-      } catch {
-        /* ignore */
-      }
-      try {
-        map.geoObjects.add(clientMyLocationPlacemarkRef.current);
-      } catch {
-        /* ignore */
-      }
-      return;
-    }
-    const pm = new ymaps.Placemark(
-      [lat, lon],
-      { hintContent: "Вы здесь" },
-      {
-        preset: "islands#blueCircleDotIcon",
-        zIndex: 700,
-        zIndexHover: 700,
-      },
-    );
-    clientMyLocationPlacemarkRef.current = pm;
-    map.geoObjects.add(pm);
-  }
-
-  function startClientMyLocationTracking() {
-    if (!navigator.geolocation || clientMyLocationWatchIdRef.current != null) return;
-    const apply = (pos) => {
-      const lat = pos?.coords?.latitude;
-      const lon = pos?.coords?.longitude;
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-      ensureClientMyLocationMarker([lat, lon]);
-    };
-    navigator.geolocation.getCurrentPosition(apply, () => {}, {
-      enableHighAccuracy: false,
-      timeout: 10000,
-      maximumAge: 30000,
-    });
-    try {
-      clientMyLocationWatchIdRef.current = navigator.geolocation.watchPosition(
-        apply,
-        () => {},
-        { enableHighAccuracy: false, timeout: 15000, maximumAge: 15000 },
-      );
-    } catch {
-      /* ignore */
-    }
-  }
-
-  function paintClientDiscoverMapMarkers(locations, { fitView = false, selectedId = null } = {}) {
-    const ymaps = window.ymaps;
-    const map = clientDiscoverMapRef.current;
-    if (!ymaps || !map || !Array.isArray(locations)) return;
-    if (!clientDiscoverMapClickBoundRef.current) {
-      clientDiscoverMapClickBoundRef.current = true;
-      map.geoObjects.events.add("click", (e) => {
-        const target = e.get("target");
-        const loc = target?.properties?.get?.("vmesteLoc");
-        if (loc) openOrgOnMap(loc);
-      });
-    }
-    const zoom = map.getZoom();
-    const selected = selectedId != null ? selectedId : mapOrgPopup?.id;
-    map.geoObjects.removeAll();
-    clientMyLocationPlacemarkRef.current = null;
-    const coordsList = [];
-    for (const loc of locations) {
-      const lat = Number(loc.latitude);
-      const lon = Number(loc.longitude);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      const pm = buildYmapOrgPlacemark(
-        ymaps,
-        loc,
-        () => {
-          openOrgOnMap(loc);
-        },
-        new Date(),
-        zoom,
-        { selected: selected != null && String(loc.id) === String(selected) },
-      );
-      map.geoObjects.add(pm);
-      coordsList.push([lat, lon]);
-    }
-    if (clientMyLocationCoordsRef.current) {
-      ensureClientMyLocationMarker(clientMyLocationCoordsRef.current);
-    } else {
-      startClientMyLocationTracking();
-    }
-    if (!fitView) return;
-    if (coordsList.length === 1) {
-      map.setCenter(coordsList[0], 14);
-    } else if (coordsList.length > 1) {
-      map.setBounds(ymaps.util.bounds.fromPoints(coordsList), { checkZoomRange: true, zoomMargin: 52 });
-    } else if (clientMyLocationCoordsRef.current) {
-      map.setCenter(clientMyLocationCoordsRef.current, 14);
-    } else {
-      map.setCenter([55.751244, 37.618423], 10);
-    }
-  }
-
   function initProfileMapFromCoords(lat, lon) {
     if (profileMapRef.current) return;
     void loadYandexMaps()
@@ -2943,45 +2695,6 @@ export default function App() {
     return tail ? `${baseAddress} | ${tail}` : baseAddress;
   }
 
-  async function reloadProviderSlots() {
-    if (me?.role !== "provider") return;
-    const slotRes = await authFetch(`${API_URL}/booking/slots/`);
-    if (slotRes.ok) setSlots(await slotRes.json());
-  }
-
-  async function loadSellerData() {
-    const [catRes, servRes, slotRes, bookingRes, locRes, staffRes] = await Promise.all([
-      authFetch(`${API_URL}/catalog/categories/`),
-      authFetch(`${API_URL}/catalog/services/`),
-      authFetch(`${API_URL}/booking/slots/`),
-      authFetch(`${API_URL}/booking/`),
-      authFetch(`${API_URL}/locations/`),
-      authFetch(`${API_URL}/booking/staff/`),
-    ]);
-    const failed = [catRes, servRes, slotRes, bookingRes, locRes, staffRes].some((r) => !r.ok);
-    setCabinetLoadError(failed ? "Не удалось загрузить часть данных кабинета." : "");
-    if (catRes.ok) setCategories(await catRes.json());
-    if (servRes.ok) setServices(await servRes.json());
-    const slotsData = slotRes.ok ? normalizeSlotsList(await slotRes.json()) : [];
-    if (slotRes.ok) setSlots(slotsData);
-    const staffData = staffRes.ok ? await staffRes.json() : orgStaff;
-    if (staffRes.ok) setOrgStaff(staffData);
-    if (bookingRes.ok) {
-      const bookingsData = normalizeBookingsList(await bookingRes.json());
-      setBookings(
-        mergeBookingsWithManualHolds(bookingsData, slotsData, {
-          orgStaff: staffData,
-          providerId: me?.id,
-          staffJobTitleForUser: (userId) => {
-            const link = (staffData || []).find((l) => Number(l.staff) === Number(userId));
-            return (link?.job_title || "").trim();
-          },
-        }),
-      );
-    }
-    if (locRes.ok) setLocation(await locRes.json());
-  }
-
   useEffect(() => {
     if ((currentView !== "profile" && currentView !== "organization") || me?.role !== "provider") {
       destroyProfileMap();
@@ -3063,76 +2776,6 @@ export default function App() {
     };
   }, [currentView, me?.role, orgBranchAddOpen, locationForm.latitude, locationForm.longitude]);
 
-  async function loadStaffWorkspace() {
-    const reqs = [
-      authFetch(`${API_URL}/booking/staff/`),
-      authFetch(`${API_URL}/chat/conversations/`),
-      authFetch(`${API_URL}/booking/`),
-      authFetch(`${API_URL}/booking/slots/`),
-    ];
-    if (me?.role === "staff" && staffEffectivePerms.can_delegate_permissions) {
-      reqs.push(authFetch(`${API_URL}/catalog/categories/`), authFetch(`${API_URL}/catalog/services/`));
-    }
-    const results = await Promise.all(reqs);
-    const failed = results.some((r) => !r.ok);
-    setCabinetLoadError(failed ? "Не удалось загрузить часть данных кабинета." : "");
-    const staffData = results[0].ok ? await results[0].json() : orgStaff;
-    if (results[0].ok) setOrgStaff(staffData);
-    if (results[1].ok) setConversations(await results[1].json());
-    const slotsData = results[3]?.ok ? normalizeSlotsList(await results[3].json()) : [];
-    if (results[3]?.ok) setSlots(slotsData);
-    if (results[2].ok) {
-      const bookingsData = normalizeBookingsList(await results[2].json());
-      setBookings(
-        mergeBookingsWithManualHolds(bookingsData, slotsData, {
-          orgStaff: staffData,
-          providerId: null,
-          staffJobTitleForUser: (userId) => {
-            const link = (staffData || []).find((l) => Number(l.staff) === Number(userId));
-            return (link?.job_title || "").trim();
-          },
-        }),
-      );
-    }
-    if (results[4]?.ok) setCategories(await results[4].json());
-    if (results[5]?.ok) setServices(await results[5].json());
-  }
-
-  function togglePinChatForFolder(convId, folder) {
-    // Pins/settings/groups stay in App (tangled with chatLocalPrefs / ChatsWorkspace UI).
-    const n = Number(convId);
-    const key = folder === "clients" ? "clients" : "org";
-    setChatPins((prev) => {
-      const list = [...(prev[key] || [])].map(Number);
-      const i = list.indexOf(n);
-      if (i >= 0) {
-        list.splice(i, 1);
-        return { ...prev, [key]: list };
-      }
-      if (list.length >= MAX_PINNED_CHATS) {
-        queueMicrotask(() => setChatStatus(`Не больше ${MAX_PINNED_CHATS} закреплённых чатов.`));
-        return prev;
-      }
-      return { ...prev, [key]: [...list, n] };
-    });
-  }
-
-  function reorderPinnedChats(folder, draggedId, targetId) {
-    const a = Number(draggedId);
-    const b = Number(targetId);
-    if (!a || !b || a === b) return;
-    const key = folder === "clients" ? "clients" : "org";
-    setChatPins((prev) => {
-      const list = [...(prev[key] || [])].map(Number);
-      const fi = list.indexOf(a);
-      const ti = list.indexOf(b);
-      if (fi < 0 || ti < 0) return prev;
-      list.splice(fi, 1);
-      list.splice(ti, 0, a);
-      return { ...prev, [key]: list };
-    });
-  }
-
   async function loadChatActivity() {
     const res = await authFetch(`${API_URL}/chat/activity/`);
     if (res.ok) setChatActivity(await res.json());
@@ -3171,15 +2814,6 @@ export default function App() {
       body: JSON.stringify({ ids }),
     });
     loadChatActivity();
-  }
-
-  function persistChatReceiptsMode(mode) {
-    setChatReceiptsMode(mode);
-    try {
-      localStorage.setItem(CHAT_RECEIPTS_KEY, JSON.stringify({ mode }));
-    } catch {
-      // ignore
-    }
   }
 
   async function inviteStaff(event) {
@@ -3290,42 +2924,6 @@ export default function App() {
     setStaffInviteStatus("Фото удалено.");
   }
 
-  async function createOrgGroup(event) {
-    event.preventDefault();
-    setChatStatus("");
-    const staffIds = groupForm.staff_ids.map(Number);
-    const response = await authFetch(`${API_URL}/chat/conversations/create-group/`, {
-      method: "POST",
-      body: JSON.stringify({ title: groupForm.title, staff_ids: staffIds }),
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      setChatStatus(err.detail || "Ошибка создания группы.");
-      return;
-    }
-    setChatStatus("");
-    setGroupForm({ title: "", staff_ids: [] });
-    setChatFabOpen(false);
-    loadChats();
-  }
-
-  function displayConversationTitle(conversation) {
-    if (!conversation) return "";
-    if (conversation.is_saved_messages) return "Избранное";
-    const local = chatLocalPrefs[conversation.id];
-    if (local?.title?.trim()) return local.title.trim();
-    const clientPeer = conversationClientCorrespondenceTitle(conversation, me?.id, me?.role);
-    if (clientPeer) return clientPeer;
-    const peer = conversationOrgDirectPeerTitle(conversation, me?.id);
-    if (peer) return peer;
-    return conversation.title || `Чат #${conversation.id ?? ""}`;
-  }
-
-  function conversationAvatarLetter(conversation) {
-    if (conversation?.is_saved_messages) return "★";
-    return displayConversationTitle(conversation).slice(0, 1).toUpperCase();
-  }
-
   async function patchStaffPermissions(linkId, permissions) {
     const response = await authFetch(`${API_URL}/booking/staff/${linkId}/`, {
       method: "PATCH",
@@ -3371,144 +2969,6 @@ export default function App() {
     patchStaffPermissions(link.id, next);
   }
 
-
-  function persistChatVisualSettings() {
-    if (chatSettingsForId == null) return;
-    let prev = {};
-    try {
-      prev = JSON.parse(localStorage.getItem(chatPrefsStorageKey(chatSettingsForId)) || "{}");
-    } catch {
-      prev = {};
-    }
-    const next = { ...prev };
-    if (chatSettingsTitle.trim()) next.title = chatSettingsTitle.trim();
-    else delete next.title;
-    if (chatSettingsAvatar) next.avatarDataUrl = chatSettingsAvatar;
-    else delete next.avatarDataUrl;
-    if (chatSettingsWallpaper) next.wallpaper = chatSettingsWallpaper;
-    else delete next.wallpaper;
-    delete next.memberNames;
-    try {
-      localStorage.setItem(chatPrefsStorageKey(chatSettingsForId), JSON.stringify(next));
-      setChatLocalPrefs((p) => ({ ...p, [chatSettingsForId]: next }));
-    } catch (_e) {
-      setChatStatus("Не удалось сохранить настройки (лимит хранилища браузера).");
-      return;
-    }
-    const notify = {};
-    if (chatSettingsNotify === "off") notify.muted = true;
-    else if (chatSettingsNotify === "1h") notify.mutedUntil = Date.now() + 3600000;
-    else if (chatSettingsNotify === "2h") notify.mutedUntil = Date.now() + 7200000;
-    else if (chatSettingsNotify === "8h") notify.mutedUntil = Date.now() + 28800000;
-    try {
-      if (Object.keys(notify).length) localStorage.setItem(chatNotifyStorageKey(chatSettingsForId), JSON.stringify(notify));
-      else localStorage.removeItem(chatNotifyStorageKey(chatSettingsForId));
-    } catch {
-      // ignore
-    }
-    setChatSettingsForId(null);
-    setChatStatus("");
-    setCustomColorPickerOpen(false);
-  }
-
-  function clearChatVisualSettings() {
-    if (chatSettingsForId == null) return;
-    localStorage.removeItem(chatNotifyStorageKey(chatSettingsForId));
-    localStorage.removeItem(chatPrefsStorageKey(chatSettingsForId));
-    setChatLocalPrefs((prev) => {
-      const copy = { ...prev };
-      delete copy[chatSettingsForId];
-      return copy;
-    });
-    const sel = conversations.find((c) => c.id === chatSettingsForId);
-    setChatSettingsTitle(defaultChatListNameForConversation(sel, me?.id));
-    setChatSettingsAvatar("");
-    setChatSettingsWallpaper("#dfe9e2");
-    setChatSettingsForId(null);
-  }
-
-  function toggleGroupStaff(id) {
-    const n = Number(id);
-    setGroupForm((prev) => ({
-      ...prev,
-      staff_ids: prev.staff_ids.includes(n) ? prev.staff_ids.filter((x) => x !== n) : [...prev.staff_ids, n],
-    }));
-  }
-
-  function toggleGroupAddStaff(id) {
-    const n = Number(id);
-    setGroupAddStaffIds((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
-  }
-
-  function staffJobTitleForUser(userId) {
-    const link = orgStaff.find((l) => Number(l.staff) === Number(userId));
-    return (link?.job_title || "").trim();
-  }
-
-  function memberDisplayName(member) {
-    return (
-      formatStaffFullName({
-        first_name: member?.first_name,
-        last_name: member?.last_name,
-        patronymic: member?.patronymic,
-        username: member?.username,
-      }) || `id ${member?.user}`
-    );
-  }
-
-  function memberInitial(member) {
-    const name = memberDisplayName(member);
-    return (name || "?").slice(0, 1).toUpperCase();
-  }
-
-  async function addMembersToSelectedGroup() {
-    if (!selectedChatId || !groupAddStaffIds.length) return;
-    setGroupAddStatus("");
-    const response = await authFetch(`${API_URL}/chat/conversations/${selectedChatId}/add-members/`, {
-      method: "POST",
-      body: JSON.stringify({ staff_ids: groupAddStaffIds.map(Number) }),
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      setGroupAddStatus(err.detail || "Не удалось добавить участников.");
-      return;
-    }
-    const data = await response.json();
-    if (data.conversation) {
-      setConversations((prev) =>
-        prev.map((c) => (Number(c.id) === Number(data.conversation.id) ? data.conversation : c))
-      );
-    } else {
-      await loadChats();
-    }
-    setGroupAddStaffIds([]);
-    setChatMembersView("list");
-    setGroupAddStatus(data.added ? `Добавлено: ${data.added}` : "Уже в группе.");
-  }
-
-  async function deleteGroupChat(conv) {
-    const target = conv || selectedConv;
-    const chatId = target?.id ?? selectedChatId;
-    if (!chatId || !target?.is_group) return;
-    if (me?.role !== "provider" || Number(target.organization) !== Number(me?.id)) return;
-    if (!window.confirm("Удалить группу для всех участников? Это действие нельзя отменить.")) return;
-    setChatInfoHeadMenuOpen(false);
-    setChatRowMenuId(null);
-    const response = await authFetch(`${API_URL}/chat/conversations/${chatId}/delete-group/`, {
-      method: "POST",
-      body: "{}",
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      showToast(err.detail || "Не удалось удалить группу.");
-      return;
-    }
-    setChatInfoOpen(false);
-    setChatMembersView(null);
-    if (Number(selectedChatId) === Number(chatId)) setSelectedChatId(null);
-    setConversations((prev) => prev.filter((c) => Number(c.id) !== Number(chatId)));
-    showToast("Группа удалена.");
-  }
 
   function isBookmarkAvailable(id) {
     const role = me?.role;
@@ -4174,17 +3634,6 @@ export default function App() {
     setMapOrgStaff(Array.isArray(data) ? data : data.results || []);
   }
 
-  function fitClientDiscoverMapViewport() {
-    const map = clientDiscoverMapRef.current;
-    if (!map) return;
-    try {
-      if (map.container?.fitToViewport) map.container.fitToViewport();
-      else map.setSize?.([map.container?.getSize?.()?.[0], map.container?.getSize?.()?.[1]]);
-    } catch {
-      // ignore
-    }
-  }
-
   function closeMapOrgSheet() {
     setMapOrgPopup(null);
     setMapOrgSheetCollapsed(false);
@@ -4205,16 +3654,6 @@ export default function App() {
   function expandMapOrgSheet() {
     setMapOrgSheetCollapsed(false);
     window.setTimeout(fitClientDiscoverMapViewport, 0);
-  }
-
-  async function waitForClientDiscoverMap(maxMs = 4500) {
-    if (clientDiscoverMapRef.current) return clientDiscoverMapRef.current;
-    const started = Date.now();
-    while (Date.now() - started < maxMs) {
-      await new Promise((r) => window.setTimeout(r, 80));
-      if (clientDiscoverMapRef.current) return clientDiscoverMapRef.current;
-    }
-    return null;
   }
 
   async function openOrgOnMap(loc) {
@@ -4241,6 +3680,7 @@ export default function App() {
     }
     window.setTimeout(fitClientDiscoverMapViewport, 0);
   }
+  openOrgOnMapRef.current = openOrgOnMap;
 
   async function saveOrgProfileInfo(event) {
     event?.preventDefault?.();
@@ -5229,25 +4669,6 @@ export default function App() {
 
   const chatMediaGroups = useMemo(() => groupChatMedia(chatMessages, BASE_URL), [chatMessages]);
 
-  const chatInfoPeer = useMemo(() => {
-    if (!selectedConv) return null;
-    const st = selectedConv.org_direct_peer_status;
-    if (st) return st;
-    const peers = (selectedConv.members || []).filter((m) => Number(m.user) !== Number(me?.id));
-    if (!peers.length) return null;
-    const p = peers[0];
-    return {
-      is_online: p.is_online,
-      last_seen_at: p.last_seen_at,
-      first_name: p.first_name,
-      last_name: p.last_name,
-      patronymic: p.patronymic,
-      username: p.username,
-      organization_name: p.organization_name,
-      role: p.role,
-    };
-  }, [selectedConv, me?.id]);
-  const activeChatWallpaper = selectedChatId ? chatLocalPrefs[selectedChatId]?.wallpaper : null;
   const tgMainStyle = activeChatWallpaper
     ? String(activeChatWallpaper).includes("gradient")
       ? { background: activeChatWallpaper, backgroundSize: "cover" }
