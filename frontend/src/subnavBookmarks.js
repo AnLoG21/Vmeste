@@ -74,8 +74,11 @@ export function loadSubnavBookmarks(role, sphere) {
     const raw = localStorage.getItem(SUBNAV_BOOKMARKS_KEY);
     if (!raw) return [...fallback];
     const all = JSON.parse(raw);
-    const list = all?.[role];
-    if (!Array.isArray(list) || !list.length) return [...fallback];
+    const scopedKey = sphere ? `${role}:${sphere}` : "";
+    const scoped = scopedKey && Array.isArray(all?.[scopedKey]) ? all[scopedKey] : null;
+    const byRole = Array.isArray(all?.[role]) ? all[role] : null;
+    const list = (scoped && scoped.length && scoped) || (byRole && byRole.length && byRole) || null;
+    if (!list) return [...fallback];
     const allowed = new Set(
       BOOKMARK_CATALOG.filter((b) => b.roles.includes(role)).map((b) => b.id)
     );

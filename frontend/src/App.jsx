@@ -383,6 +383,8 @@ export default function App() {
   const [subnavBookmarks, setSubnavBookmarks] = useState(() =>
     loadSubnavBookmarks(localStorage.getItem("vmeste_role_hint") || "client")
   );
+  /** Skip one localStorage write after hydrating from me (avoids racing stale role_hint list over saved prefs). */
+  const skipSubnavBookmarksSaveRef = useRef(true);
   const [chatPendingFiles, setChatPendingFiles] = useState([]);
   const [chatPendingKind, setChatPendingKind] = useState("");
   const [calendarDayDetail, setCalendarDayDetail] = useState(null);
@@ -1265,20 +1267,28 @@ export default function App() {
   useEffect(() => {
     if (!me?.role) return;
     const sphere = me.provider_sphere || me.employer_sphere || "";
+    skipSubnavBookmarksSaveRef.current = true;
     setSubnavBookmarks(loadSubnavBookmarks(me.role, sphere));
   }, [me?.role, me?.provider_sphere, me?.employer_sphere]);
 
   useEffect(() => {
     if (!me?.role) return;
+    if (skipSubnavBookmarksSaveRef.current) {
+      skipSubnavBookmarksSaveRef.current = false;
+      return;
+    }
     try {
       const raw = localStorage.getItem(SUBNAV_BOOKMARKS_KEY);
       const all = raw ? JSON.parse(raw) : {};
+      const sphere = me.provider_sphere || me.employer_sphere || "";
       all[me.role] = subnavBookmarks;
+      // Sphere-scoped copy so salon/cafe prefs don't overwrite each other on role-only key.
+      if (sphere) all[`${me.role}:${sphere}`] = subnavBookmarks;
       localStorage.setItem(SUBNAV_BOOKMARKS_KEY, JSON.stringify(all));
     } catch {
       /* ignore */
     }
-  }, [subnavBookmarks, me?.role]);
+  }, [subnavBookmarks, me?.role, me?.provider_sphere, me?.employer_sphere]);
 
   useEffect(() => {
     if (!accessToken || chatsSurfaceActive) return;
