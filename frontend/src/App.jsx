@@ -38,19 +38,9 @@ import CalendarDayDetailModal from "./CalendarDayDetailModal.jsx";
 import SlotIntervalCalendar, { buildIntervalPopoverFixedStyle } from "./SlotIntervalCalendar.jsx";
 import { LoadErrorBanner } from "./LoadErrorBanner.jsx";
 import {
-  composePipeTailFromDetails,
-  emptyLocationFormState,
-} from "./orgBranchUtils.js";
-import {
-  simplifyCommaAddressLine,
-  getCity,
-  buildShortAddress,
-} from "./addressFormat.js";
-import {
   formatLastSeenLabel,
   formatStaffFullName,
   conversationOrgDirectPeerTitle,
-  reviewImageUrl,
   chatMessagePlainText,
 } from "./chatHelpers.jsx";
 import {
@@ -58,19 +48,15 @@ import {
   bookingSlotCompactIcon,
   formatInAppNotificationText,
   formatBookingPrice,
-  reviewIsSupplemented,
   formatBookingDateTime,
   formatBookingDateTimeParts,
 } from "./bookingDisplay.jsx";
-import { reverseGeocodeByCoords } from "./addressGeocode.js";
 import {
   todayIsoDate,
   currentLocalMonthKey,
   normalizeBookingsList,
   normalizeSlotsList,
   mergeBookingsWithManualHolds,
-  formatApiError,
-  normalizeReviewsList,
   StarRating,
   intervalAssigneeValue,
 } from "./bookingCalendarUtils.jsx";
@@ -87,14 +73,9 @@ import {
 import { getDevicePosition } from "./geoPosition.js";
 import "./landing.css";
 import {
-  ORG_GALLERY_MAX_PHOTOS,
-  defaultOrgWorkingHours,
-  formatOrgWorkingHoursText,
   filterServiceGroupsFromCatalog,
-  normalizeOrgWorkingHours,
   uniqueDiscoverOrgs,
 } from "./clientOrgFeatures.js";
-import { loadYandexMaps } from "./yandexMapsLoader.js";
 import { API_URL, AUTH_URL, BASE_URL, REFRESH_URL } from "./config.js";
 import { createAuthFetch } from "./authFetch.js";
 import {
@@ -102,6 +83,7 @@ import {
   resolveAttachmentUrl,
 } from "./chatMedia.js";
 import { useOrgAddress } from "./useOrgAddress.js";
+import { useOrgSettings } from "./useOrgSettings.js";
 import { useChatRecording } from "./useChatRecording.js";
 import { useChatMessaging } from "./useChatMessaging.js";
 import { useChatExtras } from "./useChatExtras.js";
@@ -114,13 +96,14 @@ import { useAuthOnboarding } from "./useAuthOnboarding.js";
 import { useStaffInvite } from "./useStaffInvite.js";
 import { useServicesEditor } from "./useServicesEditor.js";
 import { useCabinetNavigation } from "./useCabinetNavigation.js";
+import { useReviews } from "./useReviews.js";
+import { useProfileAccount } from "./useProfileAccount.js";
 import {
   initPushNotifications,
   maybeRequestWebNotificationPermission,
   resetPushRegistration,
   showLocalBrowserNotification,
 } from "./pushNotifications.js";
-import { ensurePhonePlus7 } from "./phone.js";
 import { showToast } from "./toast.js";
 import { navigateView, viewFromPath } from "./viewRoutes.js";
 import { setNoIndexAppMeta, setPageMeta } from "./seo/setPageMeta.js";
@@ -284,85 +267,14 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [orgPhotoLightbox?.items?.length, orgPhotoLightbox?.index]);
 
-  const [orgProfileForm, setOrgProfileForm] = useState({
-    working_hours: defaultOrgWorkingHours(),
-    phones: [""],
-    websites: [""],
-    card_note: "",
-  });
-  const [orgGalleryPhotos, setOrgGalleryPhotos] = useState([]);
-  const [orgProfileSaveStatus, setOrgProfileSaveStatus] = useState("");
-  const [orgBookingMessages, setOrgBookingMessages] = useState({ confirm: "", cancel: "", done: "" });
-  const [orgAcquiringForm, setOrgAcquiringForm] = useState({
-    payment_provider: "yookassa",
-    prepay_mode: "off",
-    prepay_percent: 50,
-    yookassa_shop_id: "",
-    yookassa_secret_key: "",
-    has_yookassa: false,
-    tbank_terminal_key: "",
-    tbank_password: "",
-    has_tbank: false,
-    cloudpayments_public_id: "",
-    cloudpayments_api_secret: "",
-    has_cloudpayments: false,
-    robokassa_merchant_login: "",
-    robokassa_password1: "",
-    robokassa_password2: "",
-    has_robokassa: false,
-    has_payment_keys: false,
-  });
-  const [orgAcquiringSaveStatus, setOrgAcquiringSaveStatus] = useState("");
-  const [orgCalendarLinks, setOrgCalendarLinks] = useState(null);
-  const [orgCalendarStatus, setOrgCalendarStatus] = useState("");
-  const [orgMessagingForm, setOrgMessagingForm] = useState({
-    remind_clients: true,
-    remind_org: true,
-    notify_org_on_new: true,
-    winback_enabled: false,
-    winback_weeks: 4,
-    winback_template: "",
-    enable_telegram: false,
-    enable_max: false,
-    enable_whatsapp: false,
-    enable_sms: false,
-    telegram_bot_token: "",
-    telegram_notify_chat_id: "",
-    has_telegram: false,
-    has_platform_telegram: false,
-    has_org_telegram_token: false,
-    max_bot_token: "",
-    max_notify_chat_id: "",
-    has_max: false,
-    wa_api_url: "https://api.green-api.com",
-    wa_id_instance: "",
-    wa_api_token: "",
-    has_whatsapp: false,
-    sms_api_id: "",
-    has_sms_org: false,
-    new_booking_template: "",
-  });
-  const [orgMessagingSaveStatus, setOrgMessagingSaveStatus] = useState("");
   const [clientNotifyForm, setClientNotifyForm] = useState({
     notify_booking_reminders: true,
     notify_booking_status: true,
   });
   const [clientNotifyStatus, setClientNotifyStatus] = useState("");
   const [telegramLinkInfo, setTelegramLinkInfo] = useState(null);
-  const [orgTelegramLinkInfo, setOrgTelegramLinkInfo] = useState(null);
   const [orgSettingsHighlight, setOrgSettingsHighlight] = useState("");
   const [bookingMessageError, setBookingMessageError] = useState(null);
-  const [reviewModalBooking, setReviewModalBooking] = useState(null);
-  const [reviewModalReview, setReviewModalReview] = useState(null);
-  const [reviewForm, setReviewForm] = useState({ rating: 5, staff_rating: 5, text: "", staff_text: "" });
-  const [reviewSubmitError, setReviewSubmitError] = useState("");
-  const [providerReviews, setProviderReviews] = useState([]);
-  const [providerReviewsOrdering, setProviderReviewsOrdering] = useState("-created_at");
-  const [missedReviewsCount, setMissedReviewsCount] = useState(0);
-  const [myReviews, setMyReviews] = useState([]);
-  const [reviewReplyOpenId, setReviewReplyOpenId] = useState(null);
-  const [reviewReplyForms, setReviewReplyForms] = useState({});
-  const [reviewReplyFormError, setReviewReplyFormError] = useState("");
   const clientMeBootstrappedRef = useRef(false);
   const [providerServices, setProviderServices] = useState([]);
   const [bookProviderStaff, setBookProviderStaff] = useState([]);
@@ -484,17 +396,10 @@ export default function App() {
   const chatNearBottomRef = useRef(true);
   const chatLoadingOlderRef = useRef(false);
   const chatHasMoreOlderRef = useRef(false);
-  const [profileForm, setProfileForm] = useState({ first_name: "", last_name: "", patronymic: "", phone: "" });
-  const [passwordForm, setPasswordForm] = useState({ old_password: "", new_password: "", new_password_confirm: "" });
-  const [emailForm, setEmailForm] = useState({ new_email: "" });
   const mapRef = useRef(null);
   const placemarkRef = useRef(null);
   const profileMapRef = useRef(null);
   const profilePlacemarkRef = useRef(null);
-  const [profileOrgStatus, setProfileOrgStatus] = useState("");
-  const [deleteAccountForm, setDeleteAccountForm] = useState({ password: "", confirm: "" });
-  const [deleteAccountStatus, setDeleteAccountStatus] = useState("");
-  const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
   const [orgMainEditOpen, setOrgMainEditOpen] = useState(false);
   const [selectedOrgBranchId, setSelectedOrgBranchId] = useState(null);
   const [orgBranchAddOpen, setOrgBranchAddOpen] = useState(false);
@@ -653,82 +558,6 @@ export default function App() {
     }
     return false;
   }, [me, cafeAccessPerms]);
-
-  useEffect(() => {
-    if (!me) return;
-    setOrgBookingMessages({
-      confirm: me.booking_confirm_message_default || "",
-      cancel: me.booking_cancel_message_default || "",
-      done: me.booking_done_message_default || "",
-    });
-  }, [me?.booking_confirm_message_default, me?.booking_cancel_message_default, me?.booking_done_message_default]);
-
-  useEffect(() => {
-    if (!me || me.role !== "provider") return;
-    const phones = Array.isArray(me.organization_phones) ? me.organization_phones.filter(Boolean) : [];
-    const websites = Array.isArray(me.organization_websites) ? me.organization_websites.filter(Boolean) : [];
-    setOrgProfileForm({
-      working_hours: normalizeOrgWorkingHours(me.organization_working_hours),
-      phones: phones.length ? phones : [""],
-      websites: websites.length ? websites : [""],
-      card_note: me.organization_card_note || "",
-    });
-  }, [
-    me?.id,
-    me?.role,
-    me?.organization_working_hours,
-    me?.organization_phones,
-    me?.organization_websites,
-    me?.organization_card_note,
-  ]);
-
-  useEffect(() => {
-    if (me?.role !== "provider" || currentView !== "organization") return;
-    (async () => {
-      const res = await authFetch(`${API_URL}/users/gallery/`);
-      if (res.ok) {
-        const data = await res.json();
-        setOrgGalleryPhotos(Array.isArray(data) ? data : data.photos || []);
-      }
-      const acqRes = await authFetch(`${API_URL}/booking/acquiring/`);
-      if (acqRes.ok) {
-        const acq = await acqRes.json();
-        setOrgAcquiringForm({
-          payment_provider: acq.payment_provider || "yookassa",
-          prepay_mode: acq.prepay_mode || "off",
-          prepay_percent: acq.prepay_percent || 50,
-          yookassa_shop_id: acq.yookassa_shop_id || "",
-          yookassa_secret_key: "",
-          has_yookassa: Boolean(acq.has_yookassa),
-          tbank_terminal_key: acq.tbank_terminal_key || "",
-          tbank_password: "",
-          has_tbank: Boolean(acq.has_tbank),
-          cloudpayments_public_id: acq.cloudpayments_public_id || "",
-          cloudpayments_api_secret: "",
-          has_cloudpayments: Boolean(acq.has_cloudpayments),
-          robokassa_merchant_login: acq.robokassa_merchant_login || "",
-          robokassa_password1: "",
-          robokassa_password2: "",
-          has_robokassa: Boolean(acq.has_robokassa),
-          has_payment_keys: Boolean(acq.has_payment_keys),
-        });
-      }
-      const calRes = await authFetch(`${API_URL}/booking/calendar/settings/`);
-      if (calRes.ok) setOrgCalendarLinks(await calRes.json());
-      const msgRes = await authFetch(`${API_URL}/booking/messaging/`);
-      if (msgRes.ok) {
-        const m = await msgRes.json();
-        setOrgMessagingForm((p) => ({
-          ...p,
-          ...m,
-          telegram_bot_token: "",
-          max_bot_token: "",
-          wa_api_token: "",
-          sms_api_id: "",
-        }));
-      }
-    })();
-  }, [accessToken, me?.role, currentView]);
 
   useEffect(() => {
     if (!me || (me.role !== "client" && me.role !== "staff")) return;
@@ -1088,13 +917,6 @@ export default function App() {
   }, [accessToken, me?.role, me?.id, staffEffectivePerms.manage_chats]);
 
   useEffect(() => {
-    if (!accessToken || !canViewOrgReviews()) return;
-    loadMissedReviewsCount();
-    const id = setInterval(loadMissedReviewsCount, 12000);
-    return () => clearInterval(id);
-  }, [accessToken, me?.role, me?.id]);
-
-  useEffect(() => {
     if (!accessToken) return;
     const ping = () => authFetch(`${API_URL}/users/presence/ping/`, { method: "POST", body: "{}" });
     ping();
@@ -1134,17 +956,6 @@ export default function App() {
       setVmenuChatContacts([]);
     }
   }, [accessToken, currentView, vmenuTab]);
-
-  useEffect(() => {
-    if (!me) return;
-    setProfileForm({
-      first_name: me.first_name || "",
-      last_name: me.last_name || "",
-      patronymic: me.patronymic || "",
-      phone: ensurePhonePlus7(me.phone || "+7"),
-    });
-    setEmailForm({ new_email: me.email || "" });
-  }, [me]);
 
   useEffect(() => {
     if (!chatsSurfaceActive || !conversations.length) return;
@@ -1296,17 +1107,6 @@ export default function App() {
   }, [accessToken, me?.id, me?.role]);
 
   useEffect(() => {
-    if (!accessToken || me?.role !== "client") return;
-    loadMyReviews();
-  }, [accessToken, me?.role, me?.id]);
-
-  useEffect(() => {
-    if (!accessToken || currentView !== "reviews" || !canViewOrgReviews()) return;
-    loadProviderReviewsList(providerReviewsOrdering);
-    markReviewsSeen();
-  }, [accessToken, currentView, me?.role, providerReviewsOrdering, staffEffectivePerms]);
-
-  useEffect(() => {
     if (!accessToken || me?.role !== "provider") return;
     if (currentView !== "intervals" && currentView !== "bookings") return;
     reloadProviderSlots();
@@ -1325,7 +1125,6 @@ export default function App() {
   useEffect(() => {
     if (!accessToken || currentView !== "booking_history") return;
     reloadBookingsList();
-    if (me?.role === "client") loadMyReviews();
   }, [accessToken, currentView, me?.role, me?.id]);
 
   useEffect(() => {
@@ -1920,6 +1719,86 @@ export default function App() {
     setChatActivity,
   });
 
+  const openProviderReviewsRef = useRef(() => {});
+  const {
+    reviewModalBooking,
+    setReviewModalBooking,
+    reviewModalReview,
+    setReviewModalReview,
+    reviewForm,
+    setReviewForm,
+    reviewSubmitError,
+    providerReviews,
+    providerReviewsOrdering,
+    setProviderReviewsOrdering,
+    missedReviewsCount,
+    reviewReplyOpenId,
+    setReviewReplyOpenId,
+    reviewReplyForms,
+    setReviewReplyForms,
+    reviewReplyFormError,
+    setReviewReplyFormError,
+    loadProviderReviewsList,
+    loadMyReviews,
+    loadMissedReviewsCount,
+    markReviewsSeen,
+    openProviderReviews,
+    bookingHasReview,
+    getBookingReview,
+    openOrgCardFromHistory,
+    toggleReviewLike,
+    submitReviewReply,
+    openReviewPhotoLightbox,
+    submitClientReview,
+    openClientReviewModal,
+  } = useReviews({
+    authFetch,
+    me,
+    bookings,
+    setBookings,
+    allLocations,
+    setAllLocations,
+    setCurrentView,
+    setClientStatus,
+    setClientBookingForm,
+    setClientBookModalOpen,
+    mapOrgPopup,
+    mapOrgReviewsOpen,
+    mapOrgReviewsOrdering,
+    setMapOrgReviews,
+    loadMapOrgSummary,
+    loadMapOrgReviews,
+    waitForClientDiscoverMap,
+    openOrgOnMap,
+    onClientLocationSelect,
+    openOrgPhotoLightbox,
+  });
+  openProviderReviewsRef.current = openProviderReviews;
+
+  useEffect(() => {
+    if (!accessToken || !canViewOrgReviews()) return;
+    loadMissedReviewsCount();
+    const id = setInterval(loadMissedReviewsCount, 12000);
+    return () => clearInterval(id);
+  }, [accessToken, me?.role, me?.id]);
+
+  useEffect(() => {
+    if (!accessToken || me?.role !== "client") return;
+    loadMyReviews();
+  }, [accessToken, me?.role, me?.id]);
+
+  useEffect(() => {
+    if (!accessToken || currentView !== "reviews" || !canViewOrgReviews()) return;
+    loadProviderReviewsList(providerReviewsOrdering);
+    markReviewsSeen();
+  }, [accessToken, currentView, me?.role, providerReviewsOrdering, staffEffectivePerms]);
+
+  useEffect(() => {
+    if (!accessToken || currentView !== "booking_history") return;
+    if (me?.role === "client") loadMyReviews();
+  }, [accessToken, currentView, me?.role, me?.id]);
+
+
   const {
     catalogStatus,
     catalogSeeding,
@@ -1951,6 +1830,72 @@ export default function App() {
     const response = await authFetch(`${API_URL}/users/me/`);
     if (response.ok) setMe(await response.json());
   }
+
+  // Org settings / branches maps+saves; address suggest state stays in useOrgAddress; map refs stay above.
+  const {
+    orgProfileForm,
+    setOrgProfileForm,
+    orgGalleryPhotos,
+    orgProfileSaveStatus,
+    orgBookingMessages,
+    setOrgBookingMessages,
+    orgAcquiringForm,
+    setOrgAcquiringForm,
+    orgAcquiringSaveStatus,
+    orgCalendarLinks,
+    orgCalendarStatus,
+    setOrgCalendarStatus,
+    orgMessagingForm,
+    setOrgMessagingForm,
+    orgMessagingSaveStatus,
+    orgTelegramLinkInfo,
+    profileOrgStatus,
+    setProfileOrgStatus,
+    saveProviderOrganization,
+    createProviderBranch,
+    saveProviderBranchEdit,
+    deleteProviderBranch,
+    saveOrgProfileInfo,
+    saveOrgAcquiring,
+    rotateOrgCalendarToken,
+    saveOrgMessaging,
+    loadOrgTelegramLink,
+    refreshOrgTelegramLink,
+    unlinkOrgTelegram,
+    uploadOrgGalleryPhoto,
+    deleteOrgGalleryPhoto,
+    saveOrgBookingMessages,
+  } = useOrgSettings({
+    authFetch,
+    accessToken,
+    me,
+    currentView,
+    loadMe,
+    loadSellerData,
+    location,
+    orgAddressForm,
+    setOrgAddressForm,
+    locationForm,
+    setLocationForm,
+    setBranchGeoStatus,
+    setDetectedCity,
+    orgMainEditOpen,
+    setOrgMainEditOpen,
+    selectedOrgBranchId,
+    setSelectedOrgBranchId,
+    orgBranchAddOpen,
+    setOrgBranchAddOpen,
+    orgBranchEditOpen,
+    setOrgBranchEditOpen,
+    profileMapRef,
+    profilePlacemarkRef,
+    branchDetailMapRef,
+    branchDetailPlacemarkRef,
+    branchEditMapRef,
+    branchEditPlacemarkRef,
+    branchAddMapRef,
+    branchAddPlacemarkRef,
+  });
 
   function applyAuthTokens(data) {
     if (!data?.access || !data?.refresh) return false;
@@ -2126,6 +2071,32 @@ export default function App() {
     setRegisterStep(1);
   }
 
+  const {
+    profileForm,
+    setProfileForm,
+    passwordForm,
+    setPasswordForm,
+    emailForm,
+    setEmailForm,
+    deleteAccountForm,
+    setDeleteAccountForm,
+    deleteAccountStatus,
+    deleteAccountBusy,
+    updateProfile,
+    changePassword,
+    changeEmail,
+    deleteMyAccount,
+    requestPasswordResetFromSettings,
+  } = useProfileAccount({
+    authFetch,
+    me,
+    loadMe,
+    logout,
+    setStatus,
+    setAuthStatus,
+    setPasswordResetBusy,
+  });
+
   async function exitDemoSession() {
     const demo = localStorage.getItem("vmeste_demo") === "1" || Boolean(me?.is_demo);
     if (demo && accessToken) {
@@ -2138,326 +2109,11 @@ export default function App() {
     logout();
   }
 
-  async function deleteMyAccount(event) {
-    event?.preventDefault?.();
-    setDeleteAccountStatus("");
-    if ((deleteAccountForm.confirm || "").trim().toLowerCase() !== "удалить") {
-      setDeleteAccountStatus("Для подтверждения введите слово «удалить».");
-      return;
-    }
-    if (!deleteAccountForm.password && me?.has_usable_password !== false) {
-      setDeleteAccountStatus("Укажите пароль.");
-      return;
-    }
-    setDeleteAccountBusy(true);
-    const res = await authFetch(`${API_URL}/users/me/delete/`, {
-      method: "POST",
-      body: JSON.stringify({
-        password: deleteAccountForm.password,
-        confirm: "удалить",
-      }),
-    });
-    setDeleteAccountBusy(false);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      setDeleteAccountStatus(err.detail || err.password?.[0] || "Не удалось удалить аккаунт.");
-      return;
-    }
-    setDeleteAccountForm({ password: "", confirm: "" });
-    logout();
-    setAuthStatus("Аккаунт удалён. Данные обезличены.");
-  }
-
   async function resendVerification() {
     setResendStatus("Отправляем письмо...");
     const email = me?.email || verifyEmailNotice?.email || form.email || "";
     await resendVerificationForEmail(email);
   }
-
-  function destroyProfileMap() {
-    if (profileMapRef.current) {
-      try {
-        profileMapRef.current.destroy();
-      } catch (_e) {
-        // ignore destroy errors
-      }
-      profileMapRef.current = null;
-    }
-    profilePlacemarkRef.current = null;
-  }
-
-  function initProfileMapFromCoords(lat, lon) {
-    if (profileMapRef.current) return;
-    void loadYandexMaps()
-      .then(() => {
-        const ymaps = window.ymaps;
-        if (!ymaps || profileMapRef.current) return;
-        ymaps.ready(() => {
-          if (profileMapRef.current || !document.getElementById("profile-address-map")) return;
-          profileMapRef.current = new ymaps.Map("profile-address-map", {
-            center: [lat, lon],
-            zoom: 14,
-          });
-          profilePlacemarkRef.current = new ymaps.Placemark([lat, lon]);
-          profileMapRef.current.geoObjects.add(profilePlacemarkRef.current);
-          profileMapRef.current.events.add("click", (e) => {
-            const coords = e.get("coords");
-            const plat = coords[0];
-            const plon = coords[1];
-            reverseGeocodeByCoords(plat, plon).then((result) => {
-              const shortAddress = buildShortAddress(result?.address);
-              const city = getCity(result?.address);
-              setOrgAddressForm((p) => ({
-                ...p,
-                organization_latitude: plat.toFixed(6),
-                organization_longitude: plon.toFixed(6),
-                organization_address: simplifyCommaAddressLine(
-                  shortAddress || result?.display_name || p.organization_address
-                ),
-              }));
-              if (city) setDetectedCity(city);
-            });
-            if (profilePlacemarkRef.current) {
-              profilePlacemarkRef.current.geometry.setCoordinates(coords);
-            }
-          });
-        });
-      })
-      .catch(() => showToast("Не удалось загрузить карту.", { tone: "error" }));
-  }
-
-  function destroyBranchDetailMap() {
-    if (branchDetailMapRef.current) {
-      try {
-        branchDetailMapRef.current.destroy();
-      } catch (_e) {
-        // ignore
-      }
-      branchDetailMapRef.current = null;
-    }
-    branchDetailPlacemarkRef.current = null;
-  }
-
-  function destroyBranchEditMap() {
-    if (branchEditMapRef.current) {
-      try {
-        branchEditMapRef.current.destroy();
-      } catch (_e) {
-        // ignore
-      }
-      branchEditMapRef.current = null;
-    }
-    branchEditPlacemarkRef.current = null;
-  }
-
-  function destroyBranchAddMap() {
-    if (branchAddMapRef.current) {
-      try {
-        branchAddMapRef.current.destroy();
-      } catch (_e) {
-        // ignore
-      }
-      branchAddMapRef.current = null;
-    }
-    branchAddPlacemarkRef.current = null;
-  }
-
-  function initBranchDetailMapFromCoords(lat, lon) {
-    void loadYandexMaps()
-      .then(() => {
-        const ymaps = window.ymaps;
-        if (!ymaps) return;
-        ymaps.ready(() => {
-          if (!document.getElementById("branch-detail-map")) return;
-          destroyBranchDetailMap();
-          branchDetailMapRef.current = new ymaps.Map("branch-detail-map", {
-            center: [lat, lon],
-            zoom: 14,
-          });
-          branchDetailPlacemarkRef.current = new ymaps.Placemark([lat, lon]);
-          branchDetailMapRef.current.geoObjects.add(branchDetailPlacemarkRef.current);
-        });
-      })
-      .catch(() => showToast("Не удалось загрузить карту.", { tone: "error" }));
-  }
-
-  function initBranchEditMapFromCoords(lat, lon) {
-    void loadYandexMaps()
-      .then(() => {
-        const ymaps = window.ymaps;
-        if (!ymaps) return;
-        ymaps.ready(() => {
-          if (!document.getElementById("branch-edit-map")) return;
-          destroyBranchEditMap();
-          branchEditMapRef.current = new ymaps.Map("branch-edit-map", {
-            center: [lat, lon],
-            zoom: 14,
-          });
-          branchEditPlacemarkRef.current = new ymaps.Placemark([lat, lon]);
-          branchEditMapRef.current.geoObjects.add(branchEditPlacemarkRef.current);
-          branchEditMapRef.current.events.add("click", (e) => {
-            const coords = e.get("coords");
-            const plat = coords[0];
-            const plon = coords[1];
-            reverseGeocodeByCoords(plat, plon).then((result) => {
-              const shortAddress = buildShortAddress(result?.address);
-              const city = getCity(result?.address);
-              setLocationForm((prev) => {
-                const addr = simplifyCommaAddressLine(
-                  shortAddress || result?.display_name || prev.address
-                );
-                return {
-                  ...prev,
-                  latitude: plat.toFixed(6),
-                  longitude: plon.toFixed(6),
-                  address: addr,
-                };
-              });
-              if (city) setDetectedCity(city);
-            });
-            if (branchEditPlacemarkRef.current) {
-              branchEditPlacemarkRef.current.geometry.setCoordinates(coords);
-            }
-          });
-        });
-      })
-      .catch(() => showToast("Не удалось загрузить карту.", { tone: "error" }));
-  }
-
-  function initBranchAddMapFromCoords(lat, lon) {
-    void loadYandexMaps()
-      .then(() => {
-        const ymaps = window.ymaps;
-        if (!ymaps) return;
-        ymaps.ready(() => {
-          if (!document.getElementById("branch-add-map")) return;
-          destroyBranchAddMap();
-          branchAddMapRef.current = new ymaps.Map("branch-add-map", {
-            center: [lat, lon],
-            zoom: 14,
-          });
-          branchAddPlacemarkRef.current = new ymaps.Placemark([lat, lon]);
-          branchAddMapRef.current.geoObjects.add(branchAddPlacemarkRef.current);
-          branchAddMapRef.current.events.add("click", (e) => {
-            const coords = e.get("coords");
-            const plat = coords[0];
-            const plon = coords[1];
-            reverseGeocodeByCoords(plat, plon).then((result) => {
-              const shortAddress = buildShortAddress(result?.address);
-              const city = getCity(result?.address);
-              setLocationForm((prev) => {
-                const addr = simplifyCommaAddressLine(
-                  shortAddress || result?.display_name || prev.address
-                );
-                return {
-                  ...prev,
-                  latitude: plat.toFixed(6),
-                  longitude: plon.toFixed(6),
-                  address: addr,
-                };
-              });
-              if (city) setDetectedCity(city);
-            });
-            if (branchAddPlacemarkRef.current) {
-              branchAddPlacemarkRef.current.geometry.setCoordinates(coords);
-            }
-          });
-        });
-      })
-      .catch(() => showToast("Не удалось загрузить карту.", { tone: "error" }));
-  }
-
-  function composeAddressWithDetails(baseAddress, sourceForm = form) {
-    const tail = composePipeTailFromDetails({
-      entrance: sourceForm.entrance,
-      floor: sourceForm.floor,
-      apartment: sourceForm.apartment,
-      intercom: sourceForm.intercom,
-      extra: sourceForm.organization_address_details,
-    });
-    return tail ? `${baseAddress} | ${tail}` : baseAddress;
-  }
-
-  useEffect(() => {
-    if ((currentView !== "profile" && currentView !== "organization") || me?.role !== "provider") {
-      destroyProfileMap();
-      return;
-    }
-    const lat = Number(orgAddressForm.organization_latitude) || 55.751244;
-    const lon = Number(orgAddressForm.organization_longitude) || 37.618423;
-    const t = setTimeout(() => {
-      destroyProfileMap();
-      initProfileMapFromCoords(lat, lon);
-    }, 200);
-    return () => {
-      clearTimeout(t);
-      destroyProfileMap();
-    };
-  }, [currentView, me?.role, orgAddressForm.organization_latitude, orgAddressForm.organization_longitude, orgMainEditOpen]);
-
-  useEffect(() => {
-    if (currentView !== "organization" || me?.role !== "provider") {
-      destroyBranchDetailMap();
-      return;
-    }
-    if (!selectedOrgBranchId || orgBranchAddOpen || orgBranchEditOpen) {
-      destroyBranchDetailMap();
-      return;
-    }
-    const br = location.find((l) => Number(l.id) === Number(selectedOrgBranchId));
-    if (!br) {
-      destroyBranchDetailMap();
-      return;
-    }
-    const lat = Number(br.latitude);
-    const lon = Number(br.longitude);
-    if (Number.isNaN(lat) || Number.isNaN(lon)) {
-      destroyBranchDetailMap();
-      return;
-    }
-    const t = setTimeout(() => {
-      destroyBranchDetailMap();
-      initBranchDetailMapFromCoords(lat, lon);
-    }, 220);
-    return () => {
-      clearTimeout(t);
-      destroyBranchDetailMap();
-    };
-  }, [currentView, me?.role, selectedOrgBranchId, orgBranchAddOpen, orgBranchEditOpen, location]);
-
-  useEffect(() => {
-    if (currentView !== "organization" || me?.role !== "provider" || !orgBranchEditOpen || !selectedOrgBranchId || orgBranchAddOpen) {
-      destroyBranchEditMap();
-      return;
-    }
-    const lat = Number(locationForm.latitude) || 55.751244;
-    const lon = Number(locationForm.longitude) || 37.618423;
-    const t = setTimeout(() => {
-      destroyBranchEditMap();
-      initBranchEditMapFromCoords(lat, lon);
-    }, 220);
-    return () => {
-      clearTimeout(t);
-      destroyBranchEditMap();
-    };
-  }, [currentView, me?.role, orgBranchEditOpen, selectedOrgBranchId, orgBranchAddOpen, locationForm.latitude, locationForm.longitude]);
-
-  useEffect(() => {
-    if (currentView !== "organization" || me?.role !== "provider" || !orgBranchAddOpen) {
-      destroyBranchAddMap();
-      return;
-    }
-    const lat = Number(locationForm.latitude) || 55.751244;
-    const lon = Number(locationForm.longitude) || 37.618423;
-    const t = setTimeout(() => {
-      destroyBranchAddMap();
-      initBranchAddMapFromCoords(lat, lon);
-    }, 220);
-    return () => {
-      clearTimeout(t);
-      destroyBranchAddMap();
-    };
-  }, [currentView, me?.role, orgBranchAddOpen, locationForm.latitude, locationForm.longitude]);
 
   async function loadChatActivity() {
     const res = await authFetch(`${API_URL}/chat/activity/`);
@@ -2499,7 +2155,6 @@ export default function App() {
     loadChatActivity();
   }
 
-  const openProviderReviewsRef = useRef(() => {});
   const {
     isBookmarkAvailable,
     navigateBookmark,
@@ -2551,47 +2206,6 @@ export default function App() {
     setMenuOpen(false);
   }
 
-  async function updateProfile(event) {
-    event.preventDefault();
-    const response = await authFetch(`${API_URL}/users/me/`, {
-      method: "PATCH",
-      body: JSON.stringify(profileForm),
-    });
-    if (!response.ok) return setStatus("Не удалось сохранить личные данные.");
-    showToast("Данные сохранены");
-    setStatus("Данные сохранены.");
-    loadMe();
-  }
-
-  async function changePassword(event) {
-    event.preventDefault();
-    const response = await authFetch(`${API_URL}/users/change-password/`, {
-      method: "POST",
-      body: JSON.stringify(passwordForm),
-    });
-    const data = await response.json().catch(() => ({}));
-    const detail = data.detail || (response.ok ? "Проверьте почту для подтверждения смены пароля." : "Не удалось сменить пароль.");
-    if (!response.ok) return setStatus(detail);
-    showToast(detail, { tone: "success", ms: 14000 });
-    setStatus(detail);
-    setPasswordForm({ old_password: "", new_password: "", new_password_confirm: "" });
-  }
-
-  async function requestPasswordResetFromSettings() {
-    if (me?.is_demo) {
-      setStatus("В демо-режиме пароль сбрасывать нельзя.");
-      return;
-    }
-    setPasswordResetBusy(true);
-    const response = await authFetch(`${API_URL}/users/request-password-reset/`, { method: "POST", body: "{}" });
-    const data = await response.json().catch(() => ({}));
-    const detail = data.detail || (response.ok ? "Проверьте почту — мы отправили ссылку для сброса." : "Не удалось отправить ссылку.");
-    setPasswordResetBusy(false);
-    if (!response.ok) return setStatus(detail);
-    showToast(detail, { tone: "success", ms: 14000 });
-    setStatus(detail);
-  }
-
   async function requestPasswordResetFromLogin(event) {
     event.preventDefault();
     const email = (loginForm.email || "").trim();
@@ -2608,263 +2222,6 @@ export default function App() {
     const data = await response.json().catch(() => ({}));
     setPasswordResetBusy(false);
     setAuthStatus(data.detail || (response.ok ? "Если аккаунт есть, мы отправили ссылку на почту." : "Не удалось отправить ссылку."));
-  }
-
-  async function changeEmail(event) {
-    event.preventDefault();
-    const response = await authFetch(`${API_URL}/users/change-email/`, {
-      method: "POST",
-      body: JSON.stringify(emailForm),
-    });
-    const data = await response.json().catch(() => ({}));
-    const detail = data.detail || (response.ok ? "Email изменен. Подтверди его по письму." : "Не удалось сменить email.");
-    if (!response.ok) return setStatus(detail);
-    showToast(detail, { tone: "success", ms: 14000 });
-    setStatus(detail);
-    loadMe();
-  }
-
-  async function saveProviderOrganization(event) {
-    event.preventDefault();
-    const isMp = me?.provider_sphere === "marketplaces";
-    const response = await authFetch(`${API_URL}/users/me/`, {
-      method: "PATCH",
-      body: JSON.stringify(
-        isMp
-          ? {
-              organization_name: orgAddressForm.organization_name,
-              organization_address: "",
-              organization_entrance: "",
-              organization_floor: "",
-              organization_apartment: "",
-              organization_intercom: "",
-              organization_address_extra: "",
-              organization_latitude: null,
-              organization_longitude: null,
-            }
-          : {
-              organization_name: orgAddressForm.organization_name,
-              organization_address:
-                simplifyCommaAddressLine((orgAddressForm.organization_address || "").trim()) ||
-                (orgAddressForm.organization_address || "").trim(),
-              organization_entrance: (orgAddressForm.entrance || "").trim(),
-              organization_floor: (orgAddressForm.floor || "").trim(),
-              organization_apartment: (orgAddressForm.apartment || "").trim(),
-              organization_intercom: (orgAddressForm.intercom || "").trim(),
-              organization_address_extra: (orgAddressForm.organization_address_details || "").trim(),
-              organization_latitude: orgAddressForm.organization_latitude,
-              organization_longitude: orgAddressForm.organization_longitude,
-            },
-      ),
-    });
-    if (!response.ok) {
-      setProfileOrgStatus(isMp ? "Не удалось сохранить название." : "Не удалось сохранить адрес организации.");
-      return;
-    }
-    setProfileOrgStatus(isMp ? "Название организации обновлено." : "Адрес организации обновлён.");
-    setOrgMainEditOpen(false);
-    loadMe();
-    loadSellerData();
-  }
-
-  async function createProviderBranch(event) {
-    event.preventDefault();
-    setBranchGeoStatus("");
-    const response = await authFetch(`${API_URL}/locations/`, {
-      method: "POST",
-      body: JSON.stringify({
-        title: locationForm.title,
-        address: locationForm.address.trim(),
-        latitude: Number(locationForm.latitude),
-        longitude: Number(locationForm.longitude),
-        entrance: (locationForm.entrance || "").trim(),
-        floor: (locationForm.floor || "").trim(),
-        apartment: (locationForm.apartment || "").trim(),
-        intercom: (locationForm.intercom || "").trim(),
-        address_details: (locationForm.address_details || "").trim(),
-      }),
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      setBranchGeoStatus(err.detail || Object.values(err).flat().find(Boolean) || "Не удалось добавить филиал.");
-      return;
-    }
-    setLocationForm(emptyLocationFormState());
-    setBranchGeoStatus("Филиал добавлен.");
-    setOrgBranchAddOpen(false);
-    destroyBranchAddMap();
-    loadSellerData();
-  }
-
-  async function saveProviderBranchEdit(event) {
-    event.preventDefault();
-    if (!selectedOrgBranchId) return;
-    setBranchGeoStatus("Сохраняем…");
-    const response = await authFetch(`${API_URL}/locations/${selectedOrgBranchId}/`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        title: locationForm.title.trim(),
-        address: locationForm.address.trim(),
-        latitude: Number(locationForm.latitude),
-        longitude: Number(locationForm.longitude),
-        entrance: (locationForm.entrance || "").trim(),
-        floor: (locationForm.floor || "").trim(),
-        apartment: (locationForm.apartment || "").trim(),
-        intercom: (locationForm.intercom || "").trim(),
-        address_details: (locationForm.address_details || "").trim(),
-      }),
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      setBranchGeoStatus(err.detail || Object.values(err).flat().find(Boolean) || "Не удалось сохранить филиал.");
-      return;
-    }
-    setBranchGeoStatus("Филиал обновлён.");
-    setOrgBranchEditOpen(false);
-    loadSellerData();
-  }
-
-  async function deleteProviderBranch(id) {
-    const response = await authFetch(`${API_URL}/locations/${id}/`, { method: "DELETE" });
-    if (!response.ok) {
-      setBranchGeoStatus("Не удалось удалить филиал.");
-      return;
-    }
-    if (Number(selectedOrgBranchId) === Number(id)) {
-      setSelectedOrgBranchId(null);
-      setOrgBranchEditOpen(false);
-    }
-    setBranchGeoStatus("Филиал удалён.");
-    loadSellerData();
-  }
-
-  async function saveOrgProfileInfo(event) {
-    event?.preventDefault?.();
-    const phones = orgProfileForm.phones.map((p) => String(p).trim()).filter(Boolean);
-    const websites = orgProfileForm.websites.map((w) => String(w).trim()).filter(Boolean);
-    const res = await authFetch(`${API_URL}/users/organization-info/`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        organization_working_hours: orgProfileForm.working_hours,
-        organization_phones: phones,
-        organization_websites: websites,
-        organization_card_note: orgProfileForm.card_note,
-      }),
-    });
-    if (!res.ok) {
-      setOrgProfileSaveStatus("Не удалось сохранить.");
-      return;
-    }
-    setOrgProfileSaveStatus("Сохранено.");
-    loadMe();
-  }
-
-  async function saveOrgAcquiring(event) {
-    event?.preventDefault?.();
-    setOrgAcquiringSaveStatus("");
-    const payload = {
-      payment_provider: orgAcquiringForm.payment_provider || "yookassa",
-      prepay_mode: orgAcquiringForm.prepay_mode,
-      prepay_percent: Number(orgAcquiringForm.prepay_percent) || 50,
-      yookassa_shop_id: orgAcquiringForm.yookassa_shop_id || "",
-      tbank_terminal_key: orgAcquiringForm.tbank_terminal_key || "",
-      cloudpayments_public_id: orgAcquiringForm.cloudpayments_public_id || "",
-      robokassa_merchant_login: orgAcquiringForm.robokassa_merchant_login || "",
-    };
-    const secrets = [
-      "yookassa_secret_key",
-      "tbank_password",
-      "cloudpayments_api_secret",
-      "robokassa_password1",
-      "robokassa_password2",
-    ];
-    for (const key of secrets) {
-      if ((orgAcquiringForm[key] || "").trim()) payload[key] = orgAcquiringForm[key].trim();
-    }
-    const res = await authFetch(`${API_URL}/booking/acquiring/`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setOrgAcquiringSaveStatus(data.detail || data.prepay_mode?.[0] || data.payment_provider?.[0] || "Не удалось сохранить.");
-      return;
-    }
-    setOrgAcquiringForm((p) => ({
-      ...p,
-      payment_provider: data.payment_provider || p.payment_provider,
-      prepay_mode: data.prepay_mode || p.prepay_mode,
-      prepay_percent: data.prepay_percent || p.prepay_percent,
-      yookassa_shop_id: data.yookassa_shop_id || "",
-      yookassa_secret_key: "",
-      has_yookassa: Boolean(data.has_yookassa),
-      tbank_terminal_key: data.tbank_terminal_key || "",
-      tbank_password: "",
-      has_tbank: Boolean(data.has_tbank),
-      cloudpayments_public_id: data.cloudpayments_public_id || "",
-      cloudpayments_api_secret: "",
-      has_cloudpayments: Boolean(data.has_cloudpayments),
-      robokassa_merchant_login: data.robokassa_merchant_login || "",
-      robokassa_password1: "",
-      robokassa_password2: "",
-      has_robokassa: Boolean(data.has_robokassa),
-      has_payment_keys: Boolean(data.has_payment_keys),
-    }));
-    setOrgAcquiringSaveStatus("Сохранено.");
-  }
-
-  async function rotateOrgCalendarToken() {
-    setOrgCalendarStatus("");
-    const res = await authFetch(`${API_URL}/booking/calendar/settings/`, { method: "POST", body: "{}" });
-    if (!res.ok) {
-      setOrgCalendarStatus("Не удалось обновить ссылку.");
-      return;
-    }
-    setOrgCalendarLinks(await res.json());
-    setOrgCalendarStatus("Новая ссылка календаря создана. Старая больше не работает.");
-  }
-
-  async function saveOrgMessaging(event) {
-    event?.preventDefault?.();
-    setOrgMessagingSaveStatus("");
-    const payload = {
-      remind_clients: Boolean(orgMessagingForm.remind_clients),
-      remind_org: Boolean(orgMessagingForm.remind_org),
-      notify_org_on_new: Boolean(orgMessagingForm.notify_org_on_new),
-      winback_enabled: Boolean(orgMessagingForm.winback_enabled),
-      winback_weeks: Number(orgMessagingForm.winback_weeks) || 4,
-      winback_template: orgMessagingForm.winback_template || "",
-      enable_telegram: Boolean(orgMessagingForm.enable_telegram),
-      enable_max: Boolean(orgMessagingForm.enable_max),
-      enable_whatsapp: Boolean(orgMessagingForm.enable_whatsapp),
-      enable_sms: Boolean(orgMessagingForm.enable_sms),
-      telegram_notify_chat_id: orgMessagingForm.telegram_notify_chat_id || "",
-      max_notify_chat_id: orgMessagingForm.max_notify_chat_id || "",
-      wa_api_url: orgMessagingForm.wa_api_url || "https://api.green-api.com",
-      wa_id_instance: orgMessagingForm.wa_id_instance || "",
-      new_booking_template: orgMessagingForm.new_booking_template || "",
-    };
-    for (const key of ["telegram_bot_token", "max_bot_token", "wa_api_token", "sms_api_id"]) {
-      if ((orgMessagingForm[key] || "").trim()) payload[key] = orgMessagingForm[key].trim();
-    }
-    const res = await authFetch(`${API_URL}/booking/messaging/`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setOrgMessagingSaveStatus(data.detail || "Не удалось сохранить.");
-      return;
-    }
-    setOrgMessagingForm((p) => ({
-      ...p,
-      ...data,
-      telegram_bot_token: "",
-      max_bot_token: "",
-      wa_api_token: "",
-      sms_api_id: "",
-    }));
-    setOrgMessagingSaveStatus("Сохранено.");
   }
 
   async function saveClientNotifyPrefs(event) {
@@ -2897,244 +2254,6 @@ export default function App() {
     loadMe();
   }
 
-  async function loadOrgTelegramLink() {
-    const res = await authFetch(`${API_URL}/booking/messaging/telegram-link/`);
-    if (!res.ok) return;
-    const data = await res.json();
-    setOrgTelegramLinkInfo(data);
-    if (data.telegram_notify_chat_id) {
-      setOrgMessagingForm((p) => ({ ...p, telegram_notify_chat_id: data.telegram_notify_chat_id }));
-    }
-  }
-
-  async function refreshOrgTelegramLink() {
-    const linkRes = await authFetch(`${API_URL}/booking/messaging/telegram-link/`);
-    if (!linkRes.ok) return;
-    const data = await linkRes.json();
-    setOrgTelegramLinkInfo(data);
-    setOrgMessagingForm((p) => ({
-      ...p,
-      telegram_notify_chat_id: data.telegram_notify_chat_id || p.telegram_notify_chat_id,
-      enable_telegram: true,
-    }));
-  }
-
-  async function unlinkOrgTelegram() {
-    await authFetch(`${API_URL}/booking/messaging/telegram-link/`, { method: "DELETE" });
-    setOrgTelegramLinkInfo((p) =>
-      p ? { ...p, linked: false, telegram_notify_chat_id: "" } : p,
-    );
-    setOrgMessagingForm((p) => ({ ...p, telegram_notify_chat_id: "" }));
-  }
-
-  async function uploadOrgGalleryPhoto(file) {
-    if (!file) return false;
-    if (orgGalleryPhotos.length >= ORG_GALLERY_MAX_PHOTOS) {
-      setOrgProfileSaveStatus(`Можно загрузить не более ${ORG_GALLERY_MAX_PHOTOS} фото.`);
-      return false;
-    }
-    const fd = new FormData();
-    fd.append("image", file);
-    const res = await authFetch(`${API_URL}/users/gallery/`, { method: "POST", body: fd });
-    if (res.ok) {
-      const row = await res.json();
-      setOrgGalleryPhotos((p) => [...p, row].slice(0, ORG_GALLERY_MAX_PHOTOS));
-      setOrgProfileSaveStatus("Фото добавлено.");
-      return true;
-    }
-    const err = await res.json().catch(() => ({}));
-    setOrgProfileSaveStatus(err.detail || "Не удалось загрузить фото.");
-    return false;
-  }
-
-  async function deleteOrgGalleryPhoto(id) {
-    const res = await authFetch(`${API_URL}/users/gallery/?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (res.ok) setOrgGalleryPhotos((p) => p.filter((x) => Number(x.id) !== Number(id)));
-  }
-
-  async function loadProviderReviewsList(ordering = providerReviewsOrdering) {
-    const res = await authFetch(
-      `${API_URL}/reviews/?ordering=${encodeURIComponent(ordering || "-created_at")}`,
-    );
-    if (res.ok) setProviderReviews(normalizeReviewsList(await res.json()));
-  }
-
-  async function loadMyReviews() {
-    const res = await authFetch(`${API_URL}/reviews/`);
-    if (res.ok) setMyReviews(normalizeReviewsList(await res.json()));
-  }
-
-  async function loadMissedReviewsCount() {
-    if (me?.role !== "provider") return;
-    const res = await authFetch(`${API_URL}/reviews/unread-count/`);
-    if (res.ok) {
-      const data = await res.json();
-      setMissedReviewsCount(Number(data.count) || 0);
-    }
-  }
-
-  async function markReviewsSeen() {
-    if (me?.role !== "provider") return;
-    const res = await authFetch(`${API_URL}/reviews/mark-seen/`, { method: "POST", body: "{}" });
-    if (res.ok) setMissedReviewsCount(0);
-  }
-
-  function openProviderReviews() {
-    setCurrentView("reviews");
-    loadProviderReviewsList(providerReviewsOrdering);
-    markReviewsSeen();
-  }
-  openProviderReviewsRef.current = openProviderReviews;
-
-  async function refreshReviewsAfterSubmit(providerId) {
-    if (me?.role === "client") await loadMyReviews();
-    if (me?.role === "provider") await loadProviderReviewsList(providerReviewsOrdering);
-    if (mapOrgPopup && Number(mapOrgPopup.provider) === Number(providerId)) {
-      await loadMapOrgSummary(providerId);
-      if (mapOrgReviewsOpen) await loadMapOrgReviews(providerId, mapOrgReviewsOrdering);
-    }
-  }
-
-  function bookingHasReview(bookingId) {
-    const b = bookings.find((x) => Number(x.id) === Number(bookingId));
-    if (b?.review?.id) return true;
-    return myReviews.some((r) => Number(r.booking) === Number(bookingId));
-  }
-
-  function getBookingReview(booking) {
-    if (booking?.review?.id) return booking.review;
-    if (me?.role === "client") {
-      return myReviews.find((r) => Number(r.booking) === Number(booking.id)) || null;
-    }
-    return null;
-  }
-
-  async function openOrgCardFromHistory(booking) {
-    const providerId = booking?.provider;
-    if (!providerId) return;
-    let loc = allLocations.find((l) => Number(l.provider) === Number(providerId));
-    if (!loc) {
-      const res = await authFetch(`${API_URL}/locations/`);
-      if (res.ok) {
-        const list = await res.json();
-        loc = list.find((l) => Number(l.provider) === Number(providerId));
-        if (Array.isArray(list) && list.length) setAllLocations(list);
-      }
-    }
-    if (!loc) {
-      setClientStatus("Точка организации на карте не найдена.");
-      return;
-    }
-    setCurrentView("client_map");
-    await waitForClientDiscoverMap();
-    await openOrgOnMap(loc);
-    const serviceId = booking.service || booking.service_id;
-    const staffId = booking.staff || booking.staff_id;
-    await onClientLocationSelect(String(loc.id), todayIsoDate());
-    setClientBookingForm((p) => ({
-      ...p,
-      provider: String(booking.provider || loc.provider || p.provider),
-      locationId: String(loc.id),
-      serviceId: serviceId ? String(serviceId) : p.serviceId,
-      staffId: staffId ? String(staffId) : "any",
-      windowKey: "",
-    }));
-    setClientBookModalOpen(true);
-  }
-
-  function patchReviewInLists(updated) {
-    const merge = (list) => list.map((r) => (Number(r.id) === Number(updated.id) ? { ...r, ...updated } : r));
-    setProviderReviews((list) => merge(list));
-    setMapOrgReviews((list) => merge(list));
-    setMyReviews((list) => merge(list));
-  }
-
-  async function toggleReviewLike(reviewId, likedByMe) {
-    const path = likedByMe ? "unlike" : "like";
-    const res = await authFetch(`${API_URL}/reviews/${reviewId}/${path}/`, { method: "POST", body: "{}" });
-    if (!res.ok) return;
-    const data = await res.json();
-    const patch = (list) =>
-      list.map((r) =>
-        Number(r.id) === Number(reviewId)
-          ? { ...r, liked_by_me: !likedByMe, likes_count: data.likes_count ?? r.likes_count }
-          : r,
-      );
-    setProviderReviews(patch);
-    setMapOrgReviews(patch);
-  }
-
-  async function submitReviewReply(reviewId) {
-    const form = reviewReplyForms[reviewId] || {};
-    const text = (form.text || "").trim();
-    if (!text) {
-      setReviewReplyFormError("Введите текст ответа.");
-      return;
-    }
-    if (!form.publishReply && !form.viaChat) {
-      setReviewReplyFormError("Отметьте хотя бы один способ: ответ на отзыв или сообщение в чат.");
-      return;
-    }
-    setReviewReplyFormError("");
-    const res = await authFetch(`${API_URL}/reviews/${reviewId}/reply/`, {
-      method: "POST",
-      body: JSON.stringify({
-        text,
-        publish_reply: form.publishReply,
-        via_chat: form.viaChat,
-      }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      setReviewReplyFormError(formatApiError(err, res.status) || "Не удалось отправить ответ.");
-      return;
-    }
-    const updated = await res.json();
-    patchReviewInLists(updated);
-    setReviewReplyOpenId(null);
-    setReviewReplyForms((p) => {
-      const next = { ...p };
-      delete next[reviewId];
-      return next;
-    });
-  }
-
-  function buildAllReviewPhotoLightboxItems(reviews) {
-    const items = [];
-    for (const r of reviews || []) {
-      for (const p of r.photos || []) {
-        items.push({
-          id: `review-${r.id}-${p.id}`,
-          url: reviewImageUrl(p, "full"),
-          source: "review",
-          review_id: r.id,
-          client_name: r.client_name,
-          rating: r.rating,
-          text: r.text || "",
-        });
-      }
-    }
-    return items;
-  }
-
-  function findReviewPhotoGlobalIndex(reviews, reviewId, photoIndex) {
-    let offset = 0;
-    for (const r of reviews || []) {
-      const photos = r.photos || [];
-      if (r.id === reviewId) return offset + photoIndex;
-      offset += photos.length;
-    }
-    return 0;
-  }
-
-  function openReviewPhotoLightbox(review, photoIndex = 0, reviewsList = null) {
-    const reviews = reviewsList?.length ? reviewsList : [review];
-    const items = buildAllReviewPhotoLightboxItems(reviews);
-    if (!items.length) return;
-    const globalIndex = findReviewPhotoGlobalIndex(reviews, review.id, photoIndex);
-    openOrgPhotoLightbox(items, globalIndex);
-  }
-
   function renderProviderReviewsBlock() {
     return (
       <ProviderReviewsPanel
@@ -3155,136 +2274,6 @@ export default function App() {
         openReviewPhotoLightbox={openReviewPhotoLightbox}
       />
     );
-  }
-
-  async function saveOrgBookingMessages(event) {
-    event.preventDefault();
-    const response = await authFetch(`${API_URL}/users/me/`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        booking_confirm_message_default: orgBookingMessages.confirm,
-        booking_cancel_message_default: orgBookingMessages.cancel,
-        booking_done_message_default: orgBookingMessages.done,
-      }),
-    });
-    if (response.ok) {
-      showToast("Сообщения сохранены", { tone: "success" });
-      setProfileOrgStatus("Сообщения для записей сохранены.");
-      loadMe();
-    } else {
-      setProfileOrgStatus("Не удалось сохранить сообщения.");
-    }
-  }
-
-  async function submitClientReview(event) {
-    event.preventDefault();
-    if (!reviewModalBooking) return;
-    setReviewSubmitError("");
-    const input = document.getElementById("review-photos-input");
-    const isSupplement = Boolean(reviewModalReview?.id);
-
-    if (isSupplement) {
-      const fd = new FormData();
-      if ((reviewForm.text || "").trim()) fd.append("append_text", reviewForm.text.trim());
-      if (input?.files) {
-        for (const f of input.files) fd.append("photos", f);
-      }
-      const res = await authFetch(`${API_URL}/reviews/${reviewModalReview.id}/`, {
-        method: "PATCH",
-        body: fd,
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        const bookingId = reviewModalBooking.id;
-        const providerId = reviewModalBooking.provider;
-        setBookings((prev) =>
-          prev.map((b) =>
-            Number(b.id) === Number(bookingId)
-              ? {
-                  ...b,
-                  review: {
-                    id: updated.id,
-                    rating: updated.rating,
-                    text: updated.text,
-                    created_at: updated.created_at,
-                    supplemented_at: updated.supplemented_at,
-                    photos: updated.photos || [],
-                    reply: updated.reply || null,
-                  },
-                }
-              : b,
-          ),
-        );
-        setMyReviews((prev) => {
-          const has = prev.some((r) => Number(r.id) === Number(updated.id));
-          if (has) return prev.map((r) => (Number(r.id) === Number(updated.id) ? { ...r, ...updated } : r));
-          return [updated, ...prev];
-        });
-        setReviewModalBooking(null);
-        setReviewModalReview(null);
-        setReviewForm({ rating: 5, staff_rating: 5, text: "", staff_text: "" });
-        if (input) input.value = "";
-        setReviewSubmitError("");
-        setClientStatus("Отзыв дополнен.");
-        await refreshReviewsAfterSubmit(providerId);
-        return;
-      }
-      const err = await res.json().catch(() => ({}));
-      setReviewSubmitError(formatApiError(err, res.status) || "Не удалось дополнить отзыв.");
-      return;
-    }
-
-    const fd = new FormData();
-    fd.append("provider", String(reviewModalBooking.provider));
-    fd.append("booking", String(reviewModalBooking.id));
-    if (reviewModalBooking.staff_user_id) {
-      fd.append("staff_user", String(reviewModalBooking.staff_user_id));
-    }
-    fd.append("rating", String(reviewForm.rating));
-    if (reviewModalBooking.staff_user_id && reviewForm.staff_rating) {
-      fd.append("staff_rating", String(reviewForm.staff_rating));
-    }
-    fd.append("text", reviewForm.text || "");
-    if (reviewModalBooking.staff_user_id) {
-      fd.append("staff_text", reviewForm.staff_text || "");
-    }
-    if (input?.files) {
-      for (const f of input.files) fd.append("photos", f);
-    }
-    const res = await authFetch(`${API_URL}/reviews/`, { method: "POST", body: fd });
-    if (res.ok) {
-      const created = await res.json();
-      const providerId = reviewModalBooking.provider;
-      const bookingId = reviewModalBooking.id;
-      setBookings((prev) =>
-        prev.map((b) =>
-          Number(b.id) === Number(bookingId)
-            ? {
-                ...b,
-                review: {
-                  id: created.id,
-                  rating: created.rating,
-                  text: created.text,
-                  created_at: created.created_at,
-                  supplemented_at: created.supplemented_at,
-                  photos: created.photos || [],
-                  reply: created.reply || null,
-                },
-              }
-            : b,
-        ),
-      );
-      setReviewModalBooking(null);
-      setReviewModalReview(null);
-      setReviewForm({ rating: 5, staff_rating: 5, text: "", staff_text: "" });
-      if (input) input.value = "";
-      setReviewSubmitError("");
-      setClientStatus("Отзыв отправлен.");
-      await refreshReviewsAfterSubmit(providerId);
-      return;
-    }
-    const err = await res.json().catch(() => ({}));
-    setReviewSubmitError(formatApiError(err, res.status) || "Не удалось отправить отзыв.");
   }
 
   function renderBookingSlotActions(it) {
@@ -3326,24 +2315,6 @@ export default function App() {
 
   function renderBookingsBlock(title = "Записи") {
     return renderBookingCalendar(title);
-  }
-
-  function openClientReviewModal(booking, existingReview = null) {
-    if (existingReview && reviewIsSupplemented(existingReview)) return;
-    setReviewSubmitError("");
-    if (existingReview) {
-      setReviewModalReview(existingReview);
-      setReviewForm({
-        rating: existingReview.rating,
-        staff_rating: existingReview.staff_rating || 5,
-        text: "",
-        staff_text: "",
-      });
-    } else {
-      setReviewModalReview(null);
-      setReviewForm({ rating: 5, staff_rating: 5, text: "", staff_text: "" });
-    }
-    setReviewModalBooking({ ...booking, staff_user_id: booking.staff || null });
   }
 
   function renderBookingHistory() {
