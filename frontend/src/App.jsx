@@ -40,6 +40,7 @@ import {
   mapPhotonFeatureToSuggestion,
   getCity,
   buildShortAddress,
+  mergeStructuredOrgPartsFromMe,
 } from "./addressFormat.js";
 import {
   CHAT_PINS_STORAGE_KEY,
