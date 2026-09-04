@@ -12,19 +12,17 @@ import ChatsWorkspace from "./ChatsWorkspace.jsx";
 import ClientCafeOrdersPage from "./ClientCafeOrdersPage.jsx";
 import ClientLoyaltyPage from "./ClientLoyaltyPage.jsx";
 import ClientActivityFeed from "./ClientActivityFeed.jsx";
-import WaitlistPanel, { JoinWaitlistButton } from "./WaitlistPanel.jsx";
+import WaitlistPanel from "./WaitlistPanel.jsx";
 import MarketplaceWorkspace from "./MarketplaceWorkspace.jsx";
 import VmenuApp, { ServicesHub } from "./vmenu/VmenuApp.jsx";
 import { CabinetErrorBoundary } from "./CabinetErrorBoundary.jsx";
 import VmenuLogo from "./vmenu/VmenuLogo.jsx";
 import InspectionWorkspace from "./InspectionWorkspace.jsx";
 import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
-import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import { buildServiceDraftFromService, serviceDraftEqualsService } from "./ServiceEditor.jsx";
 import ProviderReviewsPanel from "./ProviderReviewsPanel.jsx";
 import ServiceCatalogTree from "./ServiceCatalogTree.jsx";
 import ClientMapPanel from "./ClientMapPanel.jsx";
-import { PhotoLightboxReviewCaption } from "./mapOrgBlocks.jsx";
 import StaffManagementPanel from "./StaffManagementPanel.jsx";
 import GeneralSettingsPanel from "./GeneralSettingsPanel.jsx";
 import OrganizationSettingsPanel from "./OrganizationSettingsPanel.jsx";
@@ -33,6 +31,12 @@ import BookingHistory from "./BookingHistory.jsx";
 import BookingSlotActions from "./BookingSlotActions.jsx";
 import ProfileCabinetPanel from "./ProfileCabinetPanel.jsx";
 import AuthModal from "./AuthModal.jsx";
+import ClientMapFiltersModal from "./ClientMapFiltersModal.jsx";
+import BookingMessageErrorModal from "./BookingMessageErrorModal.jsx";
+import OrgPhotoLightbox from "./OrgPhotoLightbox.jsx";
+import ReviewModal from "./ReviewModal.jsx";
+import ClientBookModal from "./ClientBookModal.jsx";
+import CalendarDayDetailModal from "./CalendarDayDetailModal.jsx";
 import SlotIntervalCalendar, { buildIntervalPopoverFixedStyle } from "./SlotIntervalCalendar.jsx";
 import { LoadErrorBanner } from "./LoadErrorBanner.jsx";
 import {
@@ -63,8 +67,6 @@ import {
 import {
   bookingSlotStatusModifier,
   bookingSlotCompactIcon,
-  bookingStatusLabel,
-  bookingPrepayHint,
   formatInAppNotificationText,
   formatBookingPrice,
   reviewIsSupplemented,
@@ -90,18 +92,13 @@ import {
   formatApiError,
   normalizeReviewsList,
   StarRating,
-  formatTimeHm,
   clientWindowKey,
-  groupClientWindowsByStaff,
   parseIntervalAssignee,
   intervalAssigneeValue,
   intervalStaffConflicts,
 } from "./bookingCalendarUtils.jsx";
 import SalonLoyaltyPackagesPanel from "./SalonLoyaltyPackagesPanel.jsx";
-import OrgReviewComposer from "./OrgReviewComposer.jsx";
-import MiniDatePicker from "./MiniDatePicker.jsx";
-import PlatformTour from "./PlatformTour.jsx";
-import {
+import PlatformTour from "./PlatformTour.jsx";import {
   buildPlatformTourSteps,
   readPlatformTourDone,
   writePlatformTourDone,
@@ -8041,101 +8038,6 @@ export default function App() {
           />
         )}
 
-        {accessToken && me?.role === "client" && false && currentView === "client_book" && (
-          <section className="card client-book-card">
-            <h2>Записаться</h2>
-            <p className="muted">
-              Список точек совпадает с фильтрами на вкладке «Карта». Можно выбрать организацию и свободное время.
-            </p>
-            <form onSubmit={createClientBooking} className="form">
-              <label className="field-label" htmlFor="client-book-location">Точка / организация</label>
-              <select
-                id="client-book-location"
-                value={clientBookingForm.locationId}
-                onChange={(e) => onClientLocationSelect(e.target.value)}
-                required
-              >
-                <option value="">Выбери точку</option>
-                {allLocations.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {[item.organization_name, item.title].filter(Boolean).join(" · ") || "Организация"} — {item.address}
-                  </option>
-                ))}
-              </select>
-              <MiniDatePicker
-                id="client-book-date"
-                label="Дата записи"
-                value={clientBookingForm.bookDate}
-                onChange={(iso) => setClientBookingForm((p) => ({ ...p, bookDate: iso, windowKey: "" }))}
-              />
-              <label className="field-label" htmlFor="client-book-service">Услуга</label>
-              <select
-                id="client-book-service"
-                value={clientBookingForm.serviceId}
-                onChange={(e) => setClientBookingForm((p) => ({ ...p, serviceId: e.target.value, optionIds: [], windowKey: "" }))}
-                required
-                disabled={!clientBookingForm.provider}
-              >
-                <option value="">Выбери услугу</option>
-                {providerServices.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} — {s.price} ₽ ({s.duration_minutes} мин)
-                  </option>
-                ))}
-              </select>
-              {clientBookingForm.serviceId && clientBookingForm.bookDate && (
-                <>
-                  <p className="field-label">Свободное время</p>
-                  {clientBookWindows.length === 0 ? (
-                    <div>
-                      <p className="muted small">Нет свободных интервалов на эту дату.</p>
-                      <JoinWaitlistButton
-                        authFetch={authFetch}
-                        API_URL={API_URL}
-                        providerId={clientBookingForm.provider}
-                        serviceId={clientBookingForm.serviceId}
-                        staffId={clientBookingForm.staffId}
-                        preferredDate={clientBookingForm.bookDate}
-                      />
-                    </div>
-                  ) : (
-                    <div className="client-slot-strip" role="listbox" aria-label="Доступное время">
-                      {clientBookWindows.map((w) => {
-                        const key = clientWindowKey(w);
-                        const active = clientBookingForm.windowKey === key;
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            role="option"
-                            aria-selected={active}
-                            className={["client-slot-chip", active && "client-slot-chip--active"].filter(Boolean).join(" ")}
-                            onClick={() => setClientBookingForm((p) => ({ ...p, windowKey: key }))}
-                          >
-                            <span className="client-slot-chip-time">
-                              {formatTimeHm(w.starts_at)} — {formatTimeHm(w.ends_at)}
-                            </span>
-                            <span className="client-slot-chip-master">{w.staff_label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              )}
-              <input
-                placeholder="Комментарий к записи"
-                value={clientBookingForm.comment}
-                onChange={(e) => setClientBookingForm({ ...clientBookingForm, comment: e.target.value })}
-              />
-              <button type="submit" disabled={!clientBookingForm.windowKey}>
-                Подтвердить запись
-              </button>
-            </form>
-            <p className="status">{clientStatus}</p>
-          </section>
-        )}
-
         {accessToken && me?.role === "client" && currentView === "activity" && (
           <ClientActivityFeed
             authFetch={authFetch}
@@ -8156,802 +8058,74 @@ export default function App() {
         {accessToken && currentView === "booking_history" && renderBookingHistory()}
 
         {accessToken && (me?.role === "client" || me?.role === "provider") && clientFiltersOpen && typeof document !== "undefined" && createPortal(
-          <div
-            className="modal-backdrop modal-backdrop--app-overlay"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="client-filters-title"
-            onClick={() => setClientFiltersOpen(false)}
-          >
-            <div className="modal-card client-filters-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="client-filters-modal-head">
-                <h3 id="client-filters-title">Фильтры</h3>
-                <button
-                  type="button"
-                  className="modal-close-btn"
-                  aria-label="Закрыть"
-                  onClick={() => setClientFiltersOpen(false)}
-                >
-                  ×
-                </button>
-              </div>
-              <div className="form">
-                <p className="field-label">Сфера услуг</p>
-                <div className="filter-sphere-grid" role="listbox" aria-label="Сфера услуг">
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={!clientFilterModalDraft.sphere}
-                    className={["filter-sphere-chip", !clientFilterModalDraft.sphere && "filter-sphere-chip--active"]
-                      .filter(Boolean)
-                      .join(" ")}
-                    onClick={() => setClientFilterModalDraft((d) => ({ ...d, sphere: "", service: "" }))}
-                  >
-                    <span className="filter-sphere-chip-icon filter-sphere-chip-icon--any" aria-hidden="true">
-                      ✦
-                    </span>
-                    <span>Любая</span>
-                  </button>
-                  {sphereOptions.filter((s) => s.key !== "marketplaces").map((s) => (
-                    <button
-                      key={s.key}
-                      type="button"
-                      role="option"
-                      aria-selected={clientFilterModalDraft.sphere === s.key}
-                      className={[
-                        "filter-sphere-chip",
-                        clientFilterModalDraft.sphere === s.key && "filter-sphere-chip--active",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      onClick={() =>
-                        setClientFilterModalDraft((d) => ({
-                          ...d,
-                          sphere: s.key,
-                          service: d.sphere === s.key ? d.service : "",
-                        }))
-                      }
-                    >
-                      <img className="filter-sphere-chip-icon" src={sphereMapIconHref(s.key)} alt="" />
-                      <span>{s.value}</span>
-                    </button>
-                  ))}
-                </div>
-                <p className="field-label">Услуга</p>
-                {clientFilterModalDraft.sphere && clientFilterServiceGroups.length > 0 ? (
-                  <div className="filter-service-tree">
-                    <button
-                      type="button"
-                      className={[
-                        "filter-service-any",
-                        !clientFilterModalDraft.service && "filter-service-any--active",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      onClick={() => setClientFilterModalDraft((d) => ({ ...d, service: "" }))}
-                    >
-                      Любая услуга
-                    </button>
-                    {clientFilterServiceGroups.map((group) => (
-                      <div key={group.id} className="filter-service-group">
-                        <div className="filter-service-group-head">
-                          <img src={group.icon} alt="" className="filter-service-group-icon" />
-                          <strong>{group.name}</strong>
-                        </div>
-                        <div className="filter-service-chips">
-                          {group.services.map((s) => (
-                            <button
-                              key={s.value}
-                              type="button"
-                              className={[
-                                "filter-service-chip",
-                                clientFilterModalDraft.service === s.value && "filter-service-chip--active",
-                              ]
-                                .filter(Boolean)
-                                .join(" ")}
-                              title={s.label}
-                              onClick={() =>
-                                setClientFilterModalDraft((d) => ({
-                                  ...d,
-                                  service: d.service === s.value ? "" : s.value,
-                                }))
-                              }
-                            >
-                              {s.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <input
-                    id="client-filter-service"
-                    type="search"
-                    placeholder="Название услуги"
-                    value={clientFilterModalDraft.service}
-                    onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, service: e.target.value }))}
-                  />
-                )}
-                <div className="row-2">
-                  <div>
-                    <label className="field-label" htmlFor="client-filter-minp">
-                      Цена от (₽)
-                    </label>
-                    <input
-                      id="client-filter-minp"
-                      type="number"
-                      min="0"
-                      step="1"
-                      placeholder="не важно"
-                      value={clientFilterModalDraft.min_price}
-                      onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, min_price: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <label className="field-label" htmlFor="client-filter-maxp">
-                      Цена до (₽)
-                    </label>
-                    <input
-                      id="client-filter-maxp"
-                      type="number"
-                      min="0"
-                      step="1"
-                      placeholder="не важно"
-                      value={clientFilterModalDraft.max_price}
-                      onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, max_price: e.target.value }))}
-                    />
-                  </div>
-                </div>
-                <p className="muted small">Учитывается диапазон цен активных услуг исполнителя.</p>
-                <MiniDatePicker
-                  id="client-filter-date"
-                  label="Дата записи"
-                  value={clientFilterModalDraft.slot_date}
-                  allowClear
-                  onChange={(iso) => setClientFilterModalDraft((d) => ({ ...d, slot_date: iso }))}
-                />
-                <p className="muted small">Дату и время указывайте только если нужны исполнители со свободным слотом. Для фильтра по сфере оставьте дату пустой.</p>
-                <div className="row-2">
-                  <div>
-                    <label className="field-label" htmlFor="client-filter-tf">
-                      Время с
-                    </label>
-                    <input
-                      id="client-filter-tf"
-                      type="time"
-                      value={clientFilterModalDraft.time_from}
-                      onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, time_from: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <label className="field-label" htmlFor="client-filter-tt">
-                      Время до
-                    </label>
-                    <input
-                      id="client-filter-tt"
-                      type="time"
-                      value={clientFilterModalDraft.time_to}
-                      onChange={(e) => setClientFilterModalDraft((d) => ({ ...d, time_to: e.target.value }))}
-                    />
-                  </div>
-                </div>
-                <p className="muted small">Время учитывается только вместе с выбранной датой или диапазоном дат на сервере.</p>
-              </div>
-              <div className="client-filters-actions">
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={() => {
-                    const empty = emptyClientFilters();
-                    setClientFilterModalDraft(empty);
-                    setClientDiscoverFilters(empty);
-                    setClientFiltersOpen(false);
-                  }}
-                >
-                  Сбросить всё
-                </button>
-                <button type="button" className="ghost-btn" onClick={() => setClientFiltersOpen(false)}>
-                  Отмена
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const slotDate = String(clientFilterModalDraft.slot_date || "").trim();
-                    const timeFrom = String(clientFilterModalDraft.time_from || "").trim();
-                    const timeTo = String(clientFilterModalDraft.time_to || "").trim();
-                    const nextFilters = {
-                      ...clientFilterModalDraft,
-                      slot_date: slotDate,
-                      time_from: slotDate ? timeFrom : "",
-                      time_to: slotDate ? timeTo : "",
-                    };
-                    setClientDiscoverFilters(nextFilters);
-                    setClientBookingForm((p) => ({
-                      ...p,
-                      bookDate: slotDate || p.bookDate || todayIsoDate(),
-                    }));
-                    setClientFiltersOpen(false);
-                  }}
-                >
-                  Применить
-                </button>
-              </div>
-            </div>
-          </div>,
+          <ClientMapFiltersModal
+            clientFilterModalDraft={clientFilterModalDraft}
+            setClientFilterModalDraft={setClientFilterModalDraft}
+            sphereOptions={sphereOptions}
+            clientFilterServiceGroups={clientFilterServiceGroups}
+            setClientFiltersOpen={setClientFiltersOpen}
+            setClientDiscoverFilters={setClientDiscoverFilters}
+            setClientBookingForm={setClientBookingForm}
+            emptyClientFilters={emptyClientFilters}
+          />,
           document.body,
         )}
       </main>
 
       {bookingMessageError && typeof document !== "undefined" && createPortal(
-        <div
-          className="modal-backdrop modal-backdrop--app-overlay"
-          role="alertdialog"
-          onClick={() => setBookingMessageError(null)}
-        >
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <h3>
-              {bookingMessageError.code === "booking_not_started_yet"
-                ? "Рано отмечать выполнение"
-                : bookingMessageError.code === "prepay_required"
-                  ? "Нужна предоплата"
-                  : "Сообщение не задано"}
-            </h3>
-            <p className="muted">
-              {bookingMessageError.code === "booking_not_started_yet"
-                ? bookingMessageError.detail
-                  || "Отметить «услуга оказана» можно только после начала записи по времени."
-                : bookingMessageError.code === "prepay_required"
-                  ? bookingMessageError.detail || "Клиент ещё не внёс предоплату — подтвердить запись нельзя."
-                : bookingMessageError.code === "confirm_message_not_set"
-                  ? "Сообщение для подтверждения записи не задано. Задайте его в настройках организации."
-                  : bookingMessageError.code === "done_message_not_set"
-                    ? "Сообщение при отметке «услуга оказана» не задано. Задайте его в настройках организации."
-                    : "Сообщение об отмене записи не задано. Задайте его в настройках организации."}
-            </p>
-            <div className="row-2">
-              {bookingMessageError.code !== "booking_not_started_yet" && bookingMessageError.code !== "prepay_required" ? (
-                <button type="button" onClick={() => goOrgSettingsForBookingMessage(bookingMessageError.code)}>
-                  Перейти в настройки
-                </button>
-              ) : null}
-              <button type="button" className="ghost-btn" onClick={() => setBookingMessageError(null)}>
-                Закрыть
-              </button>
-            </div>
-          </div>
-        </div>,
+        <BookingMessageErrorModal
+          bookingMessageError={bookingMessageError}
+          setBookingMessageError={setBookingMessageError}
+          goOrgSettingsForBookingMessage={goOrgSettingsForBookingMessage}
+        />,
         document.body,
       )}
 
       {orgPhotoLightbox?.items?.length > 0 && typeof document !== "undefined" && createPortal(
-        <div
-          className="photo-lightbox-backdrop"
-          onClick={() => setOrgPhotoLightbox(null)}
-        >
-          {orgPhotoLightbox.items.length > 1 ? (
-            <>
-              <button
-                type="button"
-                className="photo-lightbox-nav photo-lightbox-nav--prev"
-                aria-label="Предыдущее фото"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  stepOrgPhotoLightbox(-1);
-                }}
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                className="photo-lightbox-nav photo-lightbox-nav--next"
-                aria-label="Следующее фото"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  stepOrgPhotoLightbox(1);
-                }}
-              >
-                ›
-              </button>
-              <p className="photo-lightbox-counter">
-                {orgPhotoLightbox.index + 1} / {orgPhotoLightbox.items.length}
-              </p>
-            </>
-          ) : null}
-          <div className="photo-lightbox-inner" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Просмотр фото">
-            <button type="button" className="photo-lightbox-close" aria-label="Закрыть" onClick={() => setOrgPhotoLightbox(null)}>
-              ×
-            </button>
-            <div
-              className="photo-lightbox-viewport"
-              onTouchStart={(e) => {
-                orgPhotoLightboxTouchX.current = e.touches?.[0]?.clientX ?? 0;
-              }}
-              onTouchEnd={(e) => {
-                if (orgPhotoLightbox.items.length < 2) return;
-                const x = e.changedTouches?.[0]?.clientX ?? 0;
-                const dx = x - orgPhotoLightboxTouchX.current;
-                if (Math.abs(dx) < 48) return;
-                e.stopPropagation();
-                stepOrgPhotoLightbox(dx > 0 ? -1 : 1);
-              }}
-            >
-              {orgPhotoLightbox.items.map((item, i) => {
-                const active = i === orgPhotoLightbox.index;
-                const nearby = Math.abs(i - orgPhotoLightbox.index) <= 1;
-                return (
-                <img
-                  key={item.id || item.url}
-                  src={nearby ? item.url : undefined}
-                  alt=""
-                  draggable={false}
-                  loading={active ? "eager" : "lazy"}
-                  decoding="async"
-                  className={[
-                    "photo-lightbox-slide",
-                    active && "photo-lightbox-slide--active",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                />
-                );
-              })}
-            </div>
-            {orgPhotoLightbox.items[orgPhotoLightbox.index]?.source === "review" && (
-              <PhotoLightboxReviewCaption
-                key={orgPhotoLightbox.items[orgPhotoLightbox.index]?.id || orgPhotoLightbox.index}
-                photo={orgPhotoLightbox.items[orgPhotoLightbox.index]}
-              />
-            )}
-          </div>
-        </div>,
+        <OrgPhotoLightbox
+          orgPhotoLightbox={orgPhotoLightbox}
+          setOrgPhotoLightbox={setOrgPhotoLightbox}
+          stepOrgPhotoLightbox={stepOrgPhotoLightbox}
+          orgPhotoLightboxTouchX={orgPhotoLightboxTouchX}
+        />,
         document.body,
       )}
 
       {reviewModalBooking && typeof document !== "undefined" && createPortal(
-        <div
-          className="modal-backdrop modal-backdrop--app-overlay"
-          onClick={() => {
-            setReviewModalBooking(null);
-            setReviewModalReview(null);
-          }}
-        >
-          <div
-            className="modal-card review-modal-card"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-labelledby="review-modal-title"
-          >
-            <div className="review-modal-head">
-              <h3 id="review-modal-title">{reviewModalReview?.id ? "Дополнить отзыв" : "Отзыв"}</h3>
-              <button
-                type="button"
-                className="review-modal-close"
-                aria-label="Закрыть"
-                onClick={() => {
-                  setReviewModalBooking(null);
-                  setReviewModalReview(null);
-                }}
-              >
-                ×
-              </button>
-            </div>
-            <form onSubmit={submitClientReview} className="form review-modal-form">
-              <div className="review-modal-body">
-                {reviewModalReview?.id ? (
-                  <p className="muted small review-modal-existing">
-                    Текущая оценка: {"★".repeat(reviewModalReview.rating)}
-                    {reviewModalReview.staff_rating
-                      ? ` · мастер ${"★".repeat(reviewModalReview.staff_rating)}`
-                      : ""}
-                    {reviewModalReview.text ? (
-                      <>
-                        <br />
-                        {reviewModalReview.text}
-                      </>
-                    ) : null}
-                  </p>
-                ) : (
-                  <OrgReviewComposer
-                    orgLabel="Оценка услуги"
-                    rating={reviewForm.rating}
-                    onRatingChange={(rating) => setReviewForm((p) => ({ ...p, rating }))}
-                    text={reviewForm.text}
-                    onTextChange={(text) => setReviewForm((p) => ({ ...p, text }))}
-                    showStaff={Boolean(reviewModalBooking.staff_user_id)}
-                    staffRating={reviewForm.staff_rating}
-                    onStaffRatingChange={(staff_rating) => setReviewForm((p) => ({ ...p, staff_rating }))}
-                    staffText={reviewForm.staff_text}
-                    onStaffTextChange={(staff_text) => setReviewForm((p) => ({ ...p, staff_text }))}
-                    hideSubmit
-                    photoInputId="review-photos-input"
-                    onPhotosChange={() => {}}
-                    placeholder="Комментарий об услуге (необязательно)"
-                  />
-                )}
-                {reviewModalReview?.id ? (
-                  <>
-                    <textarea
-                      placeholder="Дополнительный текст к отзыву"
-                      value={reviewForm.text}
-                      onChange={(e) => setReviewForm((p) => ({ ...p, text: e.target.value }))}
-                      rows={3}
-                    />
-                    <label className="field-label" htmlFor="review-photos-input">
-                      Добавить фото
-                    </label>
-                    <input id="review-photos-input" type="file" accept="image/*" multiple />
-                  </>
-                ) : null}
-                {reviewSubmitError ? <p className="status error">{reviewSubmitError}</p> : null}
-              </div>
-              <div className="review-modal-actions">
-                <button type="submit" className="review-modal-submit">
-                  {reviewModalReview?.id ? "Сохранить дополнение" : "Отправить отзыв"}
-                </button>
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={() => {
-                    setReviewModalBooking(null);
-                    setReviewModalReview(null);
-                  }}
-                >
-                  {reviewModalReview?.id ? "Отмена" : "Пропустить"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>,
+        <ReviewModal
+          reviewModalBooking={reviewModalBooking}
+          setReviewModalBooking={setReviewModalBooking}
+          reviewModalReview={reviewModalReview}
+          setReviewModalReview={setReviewModalReview}
+          reviewForm={reviewForm}
+          setReviewForm={setReviewForm}
+          reviewSubmitError={reviewSubmitError}
+          submitClientReview={submitClientReview}
+        />,
         document.body,
       )}
 
       <div className="incoming-toast-stack" aria-live="polite">
 
         {clientBookModalOpen && typeof document !== "undefined" && createPortal(
-          <div className="modal-backdrop modal-backdrop--app-overlay" onClick={() => setClientBookModalOpen(false)}>
-            <div className="modal-card client-book-overlay" onClick={(e) => e.stopPropagation()}>
-              <div className="client-book-overlay-head">
-                <h3>Запись{mapOrgPopup?.organization_name ? ` · ${mapOrgPopup.organization_name}` : ""}</h3>
-                <button
-                  type="button"
-                  className="modal-close-btn"
-                  aria-label="Закрыть"
-                  onClick={() => setClientBookModalOpen(false)}
-                >
-                  ×
-                </button>
-              </div>
-              {mapOrgProfile?.phones?.length > 0 && (
-                <div className="client-book-phones">
-                  {mapOrgProfile.phones.map((ph) => (
-                    <a key={ph} href={`tel:${ph.replace(/[^\d+]/g, "")}`}>
-                      {ph}
-                    </a>
-                  ))}
-                </div>
-              )}
-              {bookingPrepayHint(mapOrgProfile?.prepay) ? (
-                <p className="muted small">{bookingPrepayHint(mapOrgProfile.prepay)}</p>
-              ) : null}
-              <form onSubmit={createClientBooking} className="form">
-                {(() => {
-                  const staffOptions = bookProviderStaff || [];
-                  const bookableServices = (() => {
-                    if (clientBookingForm.staffId === "any") return providerServices;
-                    const link = staffOptions.find(
-                      (l) => String(l.staff) === String(clientBookingForm.staffId),
-                    );
-                    if (!link) return providerServices;
-                    const svcIds = (link.assigned_service_ids || []).map(Number);
-                    const catIds = (link.assigned_category_ids || []).map(Number);
-                    if (!svcIds.length && !catIds.length) return providerServices;
-                    return providerServices.filter(
-                      (s) =>
-                        svcIds.includes(Number(s.id)) ||
-                        (s.category && catIds.includes(Number(s.category))),
-                    );
-                  })();
-                  return (
-                    <>
-                      <p className="field-label">Мастер</p>
-                      <div className="client-book-staff-pick">
-                        <button
-                          type="button"
-                          className={`client-book-staff-chip${clientBookingForm.staffId === "any" ? " is-on" : ""}`}
-                          onClick={() =>
-                            setClientBookingForm((p) => ({
-                              ...p,
-                              staffId: "any",
-                              serviceId: "",
-                              optionIds: [],
-                              windowKey: "",
-                            }))
-                          }
-                        >
-                          Любой
-                        </button>
-                        {staffOptions.map((link) => {
-                          const label =
-                            (link.display_name || "").trim() ||
-                            formatStaffFullName(link.staff_user) ||
-                            link.staff_username ||
-                            "Мастер";
-                          const on = String(clientBookingForm.staffId) === String(link.staff);
-                          return (
-                            <button
-                              key={link.id}
-                              type="button"
-                              className={`client-book-staff-chip${on ? " is-on" : ""}`}
-                              onClick={() =>
-                                setClientBookingForm((p) => ({
-                                  ...p,
-                                  staffId: String(link.staff),
-                                  serviceId: "",
-                                  optionIds: [],
-                                  windowKey: "",
-                                }))
-                              }
-                            >
-                              {label}
-                              {link.job_title ? (
-                                <span className="client-book-staff-job">{link.job_title}</span>
-                              ) : null}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <select
-                        value={clientBookingForm.serviceId}
-                        onChange={(e) =>
-                          setClientBookingForm((p) => ({
-                            ...p,
-                            serviceId: e.target.value,
-                            optionIds: [],
-                            windowKey: "",
-                          }))
-                        }
-                        required
-                        disabled={!clientBookingForm.provider || bookableServices.length === 0}
-                      >
-                        <option value="">Услуга</option>
-                        {bookableServices.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name} — {s.price} ₽
-                          </option>
-                        ))}
-                      </select>
-                    </>
-                  );
-                })()}
-                {(() => {
-                  const selected = providerServices.find(
-                    (s) => String(s.id) === String(clientBookingForm.serviceId),
-                  );
-                  const opts = (selected?.options || []).filter((o) => o.is_active !== false);
-                  if (!opts.length) return null;
-                  return (
-                    <div className="service-options-pick">
-                      <p className="field-label">Дополнительно</p>
-                      {opts.map((o) => {
-                        const on = (clientBookingForm.optionIds || []).map(Number).includes(Number(o.id));
-                        return (
-                          <button
-                            key={o.id}
-                            type="button"
-                            className={`service-option-chip${on ? " is-on" : ""}`}
-                            onClick={() =>
-                              setClientBookingForm((p) => {
-                                const cur = (p.optionIds || []).map(Number);
-                                const id = Number(o.id);
-                                const next = on ? cur.filter((x) => x !== id) : [...cur, id];
-                                return { ...p, optionIds: next, windowKey: "" };
-                              })
-                            }
-                          >
-                            <span className="service-option-plus">{on ? "✓" : "+"}</span>
-                            <span>
-                              {o.name}
-                              {Number(o.price) > 0 ? ` · +${Number(o.price).toLocaleString("ru-RU")} ₽` : ""}
-                              {Number(o.extra_minutes) > 0 ? ` · +${o.extra_minutes} мин` : ""}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-                {(() => {
-                  const selected = providerServices.find(
-                    (s) => String(s.id) === String(clientBookingForm.serviceId),
-                  );
-                  const gallery = selected?.gallery || [];
-                  if (!gallery.length) return null;
-                  return (
-                    <ServicePhotoCarousel
-                      items={gallery}
-                      className="client-book-service-carousel"
-                      onOpen={(items, idx) =>
-                        openOrgPhotoLightbox(
-                          items.map((it) => ({ id: it.id, url: it.url || it.image })),
-                          idx,
-                        )
-                      }
-                    />
-                  );
-                })()}
-                {clientBookingForm.provider && providerServices.length === 0 ? (
-                  <p className="muted small">Нет услуг, которые оказывают мастера организации. Назначьте услуги в настройках сотрудников.</p>
-                ) : null}
-                <MiniDatePicker
-                  label="Дата"
-                  value={clientBookingForm.bookDate}
-                  alwaysOpen
-                  availableDates={clientBookingForm.serviceId ? bookAvailableDates : null}
-                  onChange={(iso) => setClientBookingForm((p) => ({ ...p, bookDate: iso, windowKey: "" }))}
-                />
-                {!clientBookingForm.serviceId ? (
-                  <p className="muted small">Выберите мастера и услугу — доступные даты подсветятся в календаре.</p>
-                ) : null}
-                {clientBookingForm.serviceId && clientBookingForm.bookDate && (
-                  <>
-                    <p className="field-label">Свободное время</p>
-                    {clientBookWindows.length === 0 ? (
-                      <div>
-                        <p className="muted small">Нет свободных интервалов на эту дату.</p>
-                        <JoinWaitlistButton
-                          authFetch={authFetch}
-                          API_URL={API_URL}
-                          providerId={clientBookingForm.provider}
-                          serviceId={clientBookingForm.serviceId}
-                          staffId={clientBookingForm.staffId}
-                          preferredDate={clientBookingForm.bookDate}
-                        />
-                      </div>
-                    ) : clientBookingForm.staffId !== "any" ? (
-                      <div
-                        className="client-slot-strip client-book-slot-strip"
-                        role="listbox"
-                        aria-label="Время"
-                      >
-                        {clientBookWindows.map((w) => {
-                          const key = clientWindowKey(w);
-                          const active = clientBookingForm.windowKey === key;
-                          return (
-                            <button
-                              key={key}
-                              type="button"
-                              role="option"
-                              aria-selected={active}
-                              className={["client-slot-chip", active && "client-slot-chip--active"].filter(Boolean).join(" ")}
-                              onClick={() => setClientBookingForm((p) => ({ ...p, windowKey: key }))}
-                            >
-                              <span className="client-slot-chip-time">
-                                {formatTimeHm(w.starts_at)} — {formatTimeHm(w.ends_at)}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="client-staff-slots">
-                        {groupClientWindowsByStaff(clientBookWindows).map((group) => (
-                          <div key={group.staff_id ?? "none"} className="client-staff-slot-row">
-                            <p className="client-staff-slot-name">{group.staff_label}</p>
-                            <div
-                              className="client-slot-strip client-book-slot-strip"
-                              role="listbox"
-                              aria-label={`Время · ${group.staff_label}`}
-                            >
-                              {group.windows.map((w) => {
-                                const key = clientWindowKey(w);
-                                const active = clientBookingForm.windowKey === key;
-                                return (
-                                  <button
-                                    key={key}
-                                    type="button"
-                                    role="option"
-                                    aria-selected={active}
-                                    className={["client-slot-chip", active && "client-slot-chip--active"].filter(Boolean).join(" ")}
-                                    onClick={() => setClientBookingForm((p) => ({ ...p, windowKey: key }))}
-                                  >
-                                    <span className="client-slot-chip-time">
-                                      {formatTimeHm(w.starts_at)} — {formatTimeHm(w.ends_at)}
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-                <input
-                  placeholder="Комментарий к записи"
-                  value={clientBookingForm.comment}
-                  onChange={(e) => setClientBookingForm((p) => ({ ...p, comment: e.target.value }))}
-                />
-                {bookClientPackages.length > 0 ? (
-                  <div className="client-book-package-box">
-                    <label className="checkbox loyalty-enable-row">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(clientBookingForm.usePackage)}
-                        onChange={(e) =>
-                          setClientBookingForm((p) => ({ ...p, usePackage: e.target.checked }))
-                        }
-                      />
-                      <span>Оплатить абонементом</span>
-                    </label>
-                    {clientBookingForm.usePackage ? (
-                      <select
-                        value={clientBookingForm.clientPackageId}
-                        onChange={(e) =>
-                          setClientBookingForm((p) => ({ ...p, clientPackageId: e.target.value }))
-                        }
-                      >
-                        {bookClientPackages.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.package_name} — осталось {p.visits_remaining}/{p.visits_total}
-                          </option>
-                        ))}
-                      </select>
-                    ) : null}
-                    <p className="muted small">При оплате абонементом списывается 1 визит, предоплата не нужна.</p>
-                  </div>
-                ) : null}
-                {bookLoyaltyInfo?.enabled &&
-                Number(bookLoyaltyInfo.balance) > 0 &&
-                !(clientBookingForm.usePackage && bookClientPackages.length) ? (
-                  <label className="field-label">
-                    Списать баллы (баланс {Number(bookLoyaltyInfo.balance).toLocaleString("ru-RU")}
-                    {bookLoyaltyInfo.rub_per_point
-                      ? `, 1 балл ≈ ${bookLoyaltyInfo.rub_per_point} ₽`
-                      : ""}
-                    )
-                    <input
-                      type="number"
-                      min="0"
-                      max={Number(bookLoyaltyInfo.balance) || 0}
-                      placeholder="0"
-                      value={clientBookingForm.loyaltyPoints}
-                      onChange={(e) =>
-                        setClientBookingForm((p) => ({ ...p, loyaltyPoints: e.target.value }))
-                      }
-                    />
-                    {(() => {
-                      const pts = Number(clientBookingForm.loyaltyPoints) || 0;
-                      const rate = Number(bookLoyaltyInfo.rub_per_point) || 1;
-                      const svc = providerServices.find(
-                        (s) => String(s.id) === String(clientBookingForm.serviceId)
-                      );
-                      const price = Number(svc?.price) || 0;
-                      if (!pts || !price) return null;
-                      const discount = Math.min(price, pts * rate);
-                      const due = Math.max(0, Math.round((price - discount) * 100) / 100);
-                      return (
-                        <span className="field-hint">
-                          Скидка ≈ {discount.toLocaleString("ru-RU")} ₽ · к оплате ≈{" "}
-                          {due.toLocaleString("ru-RU")} ₽
-                          {due <= 0 ? " (без карты)" : ""}
-                        </span>
-                      );
-                    })()}
-                  </label>
-                ) : null}
-                <button type="submit" disabled={!clientBookingForm.windowKey}>
-                  {clientBookingForm.usePackage && bookClientPackages.length
-                    ? "Записаться по абонементу"
-                    : mapOrgProfile?.prepay?.ready
-                      ? "Перейти к оплате"
-                      : "Подтвердить"}
-                </button>
-              </form>
-              <p className="status">{clientStatus}</p>
-            </div>
-          </div>,
+          <ClientBookModal
+            setClientBookModalOpen={setClientBookModalOpen}
+            mapOrgPopup={mapOrgPopup}
+            mapOrgProfile={mapOrgProfile}
+            createClientBooking={createClientBooking}
+            bookProviderStaff={bookProviderStaff}
+            providerServices={providerServices}
+            clientBookingForm={clientBookingForm}
+            setClientBookingForm={setClientBookingForm}
+            openOrgPhotoLightbox={openOrgPhotoLightbox}
+            bookAvailableDates={bookAvailableDates}
+            clientBookWindows={clientBookWindows}
+            authFetch={authFetch}
+            API_URL={API_URL}
+            bookClientPackages={bookClientPackages}
+            bookLoyaltyInfo={bookLoyaltyInfo}
+            clientStatus={clientStatus}
+          />,
           document.body,
         )}
 
@@ -8973,115 +8147,14 @@ export default function App() {
         {calendarDayDetail &&
           typeof document !== "undefined" &&
           createPortal(
-            <div
-              className="modal-backdrop modal-backdrop--app-overlay"
-              onClick={() => setCalendarDayDetail(null)}
-            >
-              <div className="modal-card calendar-day-sheet" onClick={(e) => e.stopPropagation()} role="dialog">
-                <div className="calendar-day-sheet-head">
-                  <h3>
-                    {(() => {
-                      const ym = String(calendarDayDetail.month || "");
-                      const [y, m] = ym.split("-").map(Number);
-                      if (y && m) {
-                        const d = new Date(y, m - 1, calendarDayDetail.day);
-                        return d.toLocaleDateString("ru-RU", {
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        });
-                      }
-                      return `${calendarDayDetail.day}`;
-                    })()}
-                  </h3>
-                  <button
-                    type="button"
-                    className="calendar-day-sheet-close"
-                    aria-label="Закрыть"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCalendarDayDetail(null);
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-                {!calendarDayDetail.items?.length ? (
-                  <p className="muted calendar-day-sheet-empty">На этот день записей нет</p>
-                ) : (
-                  <ul className="calendar-day-sheet-list">
-                    {calendarDayDetail.items.map((it) => (
-                      <li key={it.id} className="calendar-day-sheet-item">
-                        {calendarDayDetail.mode === "bookings" ? (
-                          <>
-                            <strong>
-                              {new Date(it.slot_starts_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                              {" – "}
-                              {new Date(it.slot_ends_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </strong>
-                            <div>{bookingSlotSecondaryLabel(it)}</div>
-                            {it.status ? <div className="muted">{bookingStatusLabel(it)}</div> : null}
-                            {renderBookingSlotActions(it)}
-                          </>
-                        ) : (
-                          <>
-                            {!it.is_booked ? (
-                              <button
-                                type="button"
-                                className="calendar-day-sheet-item-delete"
-                                aria-label="Удалить интервал"
-                                title="Удалить"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteSlot(it.id);
-                                }}
-                              >
-                                ×
-                              </button>
-                            ) : it.is_manual_hold ? (
-                              <button
-                                type="button"
-                                className="calendar-day-sheet-item-delete"
-                                aria-label="Снять ручную бронь"
-                                title="Снять ручную бронь"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void releaseManualHold(it.id);
-                                }}
-                              >
-                                ×
-                              </button>
-                            ) : null}
-                            <strong>
-                              {new Date(it.starts_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                              {" – "}
-                              {new Date(it.ends_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </strong>
-                            <div className="muted">
-                              {it.is_manual_hold
-                                ? `Ручная бронь${it.booking_client_name || it.hold_label ? ` · ${it.booking_client_name || it.hold_label}` : ""}`
-                                : "Свободно"}
-                            </div>
-                          </>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>,
+            <CalendarDayDetailModal
+              calendarDayDetail={calendarDayDetail}
+              setCalendarDayDetail={setCalendarDayDetail}
+              bookingSlotSecondaryLabel={bookingSlotSecondaryLabel}
+              renderBookingSlotActions={renderBookingSlotActions}
+              deleteSlot={deleteSlot}
+              releaseManualHold={releaseManualHold}
+            />,
             document.body
           )}
 
