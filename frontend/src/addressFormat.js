@@ -1,4 +1,6 @@
-/** Shared address normalization (Photon / geocoder). */
+import { trimAddrSeg, composePipeTailFromDetails, parseAddressDetailsPipeTail } from "./orgBranchUtils.js";
+
+export const NOMINATIM_HEADERS = { Accept: "application/json", "Accept-Language": "ru,ru-RU;q=0.9,en;q=0.5" };
 
 const ADDR_COUNTRY_SEGMENTS = new Set([
   "russia",
@@ -7,12 +9,7 @@ const ADDR_COUNTRY_SEGMENTS = new Set([
   "российская федерация",
 ]);
 
-export function trimAddrSeg(s) {
-  if (s == null || s === "") return "";
-  return String(s).trim().replace(/\s+/g, " ");
-}
-
-function dedupeAddrSegments(parts) {
+export function dedupeAddrSegments(parts) {
   const out = [];
   const seen = new Set();
   for (const raw of parts) {
@@ -27,7 +24,7 @@ function dedupeAddrSegments(parts) {
   return out;
 }
 
-function looksLikeHouseSegment(s) {
+export function looksLikeHouseSegment(s) {
   const t = trimAddrSeg(s).toLowerCase();
   if (!t) return false;
   if (/^д\.?\s*\d/.test(t)) return true;
@@ -41,7 +38,7 @@ function looksLikeHouseSegment(s) {
   return false;
 }
 
-function looksLikeStreetSegment(s) {
+export function looksLikeStreetSegment(s) {
   const t = trimAddrSeg(s);
   if (!t || looksLikeHouseSegment(t)) return false;
   const low = t.toLowerCase();
@@ -57,7 +54,7 @@ function looksLikeStreetSegment(s) {
 }
 
 /** Город/субъект без явных признаков улицы (чтобы не принять «Иваново» за улицу рядом с «5»). */
-function looksLikeAdminOnlySegment(s) {
+export function looksLikeAdminOnlySegment(s) {
   const st = trimAddrSeg(s);
   const t = st.toLowerCase();
   if (!t) return false;
@@ -74,7 +71,7 @@ function looksLikeAdminOnlySegment(s) {
 }
 
 /** Убирает хвост «Moscow, Russia» после «улица, дом» (часто в ответе геокодера). */
-function stripTrailingAdminSegmentsFromAddress(parts) {
+export function stripTrailingAdminSegmentsFromAddress(parts) {
   const p = [...parts];
   while (p.length > 1) {
     const last = p[p.length - 1];
@@ -86,7 +83,7 @@ function stripTrailingAdminSegmentsFromAddress(parts) {
 }
 
 /** Если в цепочке уже есть улица или дом — убираем ведущий «город/субъект» (дубль с хвостом). */
-function stripLeadingAdminWhenStreetOrHousePresent(parts) {
+export function stripLeadingAdminWhenStreetOrHousePresent(parts) {
   const p = [...parts];
   const hasStreetOrHouse = p.some((s) => looksLikeStreetSegment(s) || looksLikeHouseSegment(s));
   if (!hasStreetOrHouse) return p;
@@ -94,7 +91,7 @@ function stripLeadingAdminWhenStreetOrHousePresent(parts) {
   return p;
 }
 
-function addrSegNormKey(s) {
+export function addrSegNormKey(s) {
   return trimAddrSeg(s)
     .toLowerCase()
     .replace(/[.,']/g, "")
@@ -174,7 +171,7 @@ const ADDR_EN_OBLAST_KRAI = {
   "nizhny novgorod": "Нижегородская область",
 };
 
-function translateAddrSegToRu(seg) {
+export function translateAddrSegToRu(seg) {
   const t = trimAddrSeg(seg);
   if (!t) return t;
   if (/[а-яё]/i.test(t)) return t;
@@ -231,7 +228,7 @@ const LATIN_TO_RU_CHARS = {
   z: "з",
 };
 
-function transliterateLatinToRussian(text) {
+export function transliterateLatinToRussian(text) {
   let s = String(text || "");
   const digraphs = [
     ["sch", "щ"],
@@ -275,7 +272,7 @@ function transliterateLatinToRussian(text) {
 }
 
 /** Латинские названия улиц из OSM (без кириллицы в сегменте) — типовые замены. */
-function translateLatinStreetToken(seg) {
+export function translateLatinStreetToken(seg) {
   const t = trimAddrSeg(seg);
   if (!t || /[а-яё]/i.test(t)) return t;
   const low = t.toLowerCase();
@@ -293,45 +290,8 @@ function translateLatinStreetToken(seg) {
   return t;
 }
 
-function composePipeTailFromDetails({ entrance, floor, apartment, intercom, extra }) {
-  const details = [];
-  if (entrance) details.push(`подъезд ${entrance}`);
-  if (floor) details.push(`этаж ${floor}`);
-  if (apartment) details.push(`кв. ${apartment}`);
-  if (intercom) details.push(`домофон ${intercom}`);
-  if (extra) details.push(extra);
-  return details.join(", ");
-}
-
-/** Разбор хвоста после « | » при загрузке организации/старых филиалов. */
-function parseAddressDetailsPipeTail(tail) {
-  const out = { entrance: "", floor: "", apartment: "", intercom: "", extraDetails: "" };
-  const s = tail == null ? "" : String(tail).trim();
-  if (!s) return out;
-  const parts = s.split(",").map(trimAddrSeg).filter(Boolean);
-  const extra = [];
-  let matchedStructured = false;
-  for (const p of parts) {
-    if (/^подъезд\s+/i.test(p)) {
-      out.entrance = p.replace(/^подъезд\s+/i, "").trim();
-      matchedStructured = true;
-    } else if (/^этаж\s+/i.test(p)) {
-      out.floor = p.replace(/^этаж\s+/i, "").trim();
-      matchedStructured = true;
-    } else if (/^кв\.?\s+/i.test(p)) {
-      out.apartment = p.replace(/^кв\.?\s+/i, "").trim();
-      matchedStructured = true;
-    } else if (/^домофон\s+/i.test(p)) {
-      out.intercom = p.replace(/^домофон\s+/i, "").trim();
-      matchedStructured = true;
-    } else extra.push(p);
-  }
-  out.extraDetails = matchedStructured ? extra.join(", ") : parts.join(", ");
-  return out;
-}
-
 /** Один сегмент «улица, Moscow» от геокодера → два сегмента. */
-function splitMixedScriptCommaSegment(seg) {
+export function splitMixedScriptCommaSegment(seg) {
   const t = trimAddrSeg(seg);
   if (!t.includes(",")) return [t];
   const hasCyr = /[а-яё]/i.test(t);
@@ -350,76 +310,11 @@ export function finalizeAddressSuggestionFromParts(parts) {
   return shortenAddressToStreetHouse(p);
 }
 
-function composeBranchDisplay(br) {
-  if (!br) return "";
-  const tail = composePipeTailFromDetails({
-    entrance: br.entrance,
-    floor: br.floor,
-    apartment: br.apartment,
-    intercom: br.intercom,
-    extra: br.address_details,
-  });
-  const base = br.address || "";
-  return tail ? `${base} | ${tail}` : base;
-}
-
-function parseBranchRecordForForm(br) {
-  const raw = String(br.address || "").trim();
-  const sep = " | ";
-  const idx = raw.indexOf(sep);
-  const base = idx >= 0 ? raw.slice(0, idx).trim() : raw;
-  const tail = idx >= 0 ? raw.slice(idx + sep.length).trim() : "";
-  const fromApi = {
-    entrance: br.entrance || "",
-    floor: br.floor || "",
-    apartment: br.apartment || "",
-    intercom: br.intercom || "",
-    address_details: br.address_details || "",
-  };
-  const hasCol =
-    fromApi.entrance || fromApi.floor || fromApi.apartment || fromApi.intercom || fromApi.address_details;
-  if (!hasCol && tail) {
-    const p = parseAddressDetailsPipeTail(tail);
-    return {
-      title: br.title || "",
-      address: base,
-      latitude: String(br.latitude ?? ""),
-      longitude: String(br.longitude ?? ""),
-      entrance: p.entrance,
-      floor: p.floor,
-      apartment: p.apartment,
-      intercom: p.intercom,
-      address_details: p.extraDetails,
-    };
-  }
-  return {
-    title: br.title || "",
-    address: base,
-    latitude: String(br.latitude ?? ""),
-    longitude: String(br.longitude ?? ""),
-    ...fromApi,
-  };
-}
-
-function emptyLocationFormState() {
-  return {
-    title: "",
-    address: "",
-    latitude: "55.751244",
-    longitude: "37.618423",
-    entrance: "",
-    floor: "",
-    apartment: "",
-    intercom: "",
-    address_details: "",
-  };
-}
-
 /**
  * Короткая подпись для подсказок: «улица, дом», если хвост распознан;
  * иначе полная цепочка (регион, город, …).
  */
-function shortenAddressToStreetHouse(segments) {
+export function shortenAddressToStreetHouse(segments) {
   const p = dedupeAddrSegments(segments).filter(Boolean);
   if (p.length === 0) return "";
   if (p.length === 1) return p[0];
@@ -444,7 +339,7 @@ function shortenAddressToStreetHouse(segments) {
 }
 
 /** Запятые перед лат. городом/страной после кириллицы или цифры — иначе сегмент с кириллицей не проходит EN→RU. */
-function insertCommasBeforeLatinAdminRun(text) {
+export function insertCommasBeforeLatinAdminRun(text) {
   let s = String(text || "").trim();
   if (!s) return s;
   s = s.replace(/\s*,\s*/g, ", ");
@@ -456,7 +351,7 @@ function insertCommasBeforeLatinAdminRun(text) {
   return s;
 }
 
-function mergeStructuredOrgPartsFromMe(m) {
+export function mergeStructuredOrgPartsFromMe(m) {
   if (!m) return { entrance: "", floor: "", apartment: "", intercom: "", extra: "" };
   let entrance = String(m.organization_entrance || "").trim();
   let floor = String(m.organization_floor || "").trim();
@@ -485,7 +380,7 @@ export function simplifyCommaAddressLine(text) {
 }
 
 /** Строка адреса организации для отображения (отдельные поля API + старый формат «база | хвост»). */
-function composeOrgDisplayFromMe(m) {
+export function composeOrgDisplayFromMe(m) {
   if (!m) return "";
   const merged = mergeStructuredOrgPartsFromMe(m);
   const hasStructured =
@@ -585,4 +480,36 @@ export function mapPhotonFeatureToSuggestion(feature) {
     lon,
     city,
   };
+}
+
+export function getCity(addressObj) {
+  if (!addressObj) return "";
+  return (
+    addressObj.city ||
+    addressObj.town ||
+    addressObj.village ||
+    addressObj.hamlet ||
+    addressObj.municipality ||
+    addressObj.city_district ||
+    addressObj.suburb ||
+    addressObj.quarter ||
+    addressObj.state_district ||
+    ""
+  );
+}
+
+export function buildShortAddress(addressObj) {
+  if (!addressObj) return "";
+  const road =
+    addressObj.road ||
+    addressObj.pedestrian ||
+    addressObj.footway ||
+    addressObj.path ||
+    addressObj.residential ||
+    addressObj.neighbourhood ||
+    addressObj.quarter ||
+    "";
+  const house = addressObj.house_number || "";
+  const building = [addressObj.block, addressObj.building, addressObj.construction].filter(Boolean).join(" ");
+  return [road, house, building].filter(Boolean).join(", ");
 }
