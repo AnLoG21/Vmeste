@@ -21,6 +21,7 @@ const FAV_CLEAN = `<?xml version="1.0" encoding="UTF-8"?>
   <ellipse cx="32" cy="50" rx="10" ry="3.2" fill="#FF8C33" opacity="0.55"/>
 </svg>`;
 
+/** Remove white matte / light fringe left by AI PNG export. */
 async function trimLogoTransparent(inputPath, outPath) {
   const { data, info } = await sharp(inputPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const { width, height, channels } = info;
@@ -28,42 +29,68 @@ async function trimLogoTransparent(inputPath, outPath) {
   let left = width;
   let right = 0;
   let bottom = 0;
+  const out = Buffer.alloc(width * height * 4);
+
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = (y * width + x) * channels;
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      const a = channels > 3 ? data[i + 3] : 255;
-      const isBg = a < 8 || (r > 245 && g > 245 && b > 245);
-      if (!isBg) {
-        if (x < left) left = x;
-        if (x > right) right = x;
-        if (y < top) top = y;
-        if (y > bottom) bottom = y;
+      const o = (y * width + x) * 4;
+      let r = data[i];
+      let g = data[i + 1];
+      let b = data[i + 2];
+      let a = channels > 3 ? data[i + 3] : 255;
+
+      const maxc = Math.max(r, g, b);
+      const minc = Math.min(r, g, b);
+      const lum = (r + g + b) / 3;
+      const isOrange = r > 170 && g > 60 && g < 210 && b < 140 && r - b > 50;
+      const isDark = maxc < 95 && lum < 80;
+      const isNearWhite = minc > 228 || (lum > 235 && maxc - minc < 18);
+      const isLightFringe = !isOrange && !isDark && lum > 175 && maxc - minc < 40;
+
+      if (a < 8 || isNearWhite || isLightFringe) {
+        out[o + 3] = 0;
+        continue;
       }
+
+      if (!isOrange && lum > 140 && maxc - minc < 55) {
+        const t = Math.min(1, (lum - 140) / 90);
+        a = Math.round(a * (1 - t));
+        if (a < 12) {
+          out[o + 3] = 0;
+          continue;
+        }
+        const inv = 1 - a / 255;
+        const den = a / 255 || 1;
+        r = Math.max(0, Math.min(255, Math.round((r - 255 * inv) / den)));
+        g = Math.max(0, Math.min(255, Math.round((g - 255 * inv) / den)));
+        b = Math.max(0, Math.min(255, Math.round((b - 255 * inv) / den)));
+      }
+
+      out[o] = r;
+      out[o + 1] = g;
+      out[o + 2] = b;
+      out[o + 3] = a;
+
+      if (x < left) left = x;
+      if (x > right) right = x;
+      if (y < top) top = y;
+      if (y > bottom) bottom = y;
     }
   }
-  const pad = 8;
+
+  if (right < left || bottom < top) {
+    throw new Error("Logo trim failed: no opaque pixels");
+  }
+
+  const pad = 6;
   left = Math.max(0, left - pad);
   top = Math.max(0, top - pad);
   right = Math.min(width - 1, right + pad);
   bottom = Math.min(height - 1, bottom + pad);
 
-  const cropped = await sharp(inputPath)
+  await sharp(out, { raw: { width, height, channels: 4 } })
     .extract({ left, top, width: right - left + 1, height: bottom - top + 1 })
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-
-  const out = Buffer.from(cropped.data);
-  for (let i = 0; i < out.length; i += 4) {
-    if (out[i] > 245 && out[i + 1] > 245 && out[i + 2] > 245) out[i + 3] = 0;
-  }
-
-  await sharp(out, {
-    raw: { width: cropped.info.width, height: cropped.info.height, channels: 4 },
-  })
     .png()
     .toFile(outPath);
 }
@@ -89,45 +116,7 @@ async function main() {
   await svgPng(FAV_CLEAN, 512, path.join(pub, "icon-512.png"));
   await svgPng(FAV_CLEAN, 128, path.join(assets, "logo-small.png"));
 
-  const fgSvg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="432" height="432" viewBox="0 0 432 432">
-  <rect width="432" height="432" fill="#1A1208"/>
-  <g transform="translate(216 210) scale(4.6) translate(-32 -32)">
-    <circle cx="32" cy="26" r="11" fill="#FF8C33"/>
-    <rect x="30" y="36" width="4" height="12" rx="2" fill="#FF8C33"/>
-    <ellipse cx="32" cy="50" rx="10" ry="3.2" fill="#FF8C33" opacity="0.55"/>
-  </g>
-</svg>`;
-
-  const launcher = [
-    ["mdpi", 48, 108],
-    ["hdpi", 72, 162],
-    ["xhdpi", 96, 216],
-    ["xxhdpi", 144, 324],
-    ["xxxhdpi", 192, 432],
-  ];
-  for (const [dens, iconSize, fgSize] of launcher) {
-    const dir = path.join(root, "android", "app", "src", "main", "res", `mipmap-${dens}`);
-    if (!fs.existsSync(dir)) continue;
-    await svgPng(FAV_CLEAN, iconSize, path.join(dir, "ic_launcher.png"));
-    await svgPng(FAV_CLEAN, iconSize, path.join(dir, "ic_launcher_round.png"));
-    await sharp(Buffer.from(fgSvg)).resize(fgSize, fgSize).png().toFile(path.join(dir, "ic_launcher_foreground.png"));
-  }
-
-  const iosIcon = path.join(
-    root,
-    "ios",
-    "App",
-    "App",
-    "Assets.xcassets",
-    "AppIcon.appiconset",
-    "AppIcon-512@2x.png"
-  );
-  if (fs.existsSync(path.dirname(iosIcon))) {
-    await svgPng(FAV_CLEAN, 1024, iosIcon);
-  }
-
-  console.log("OK: AI-L01 → logo-main.png; F13 → favicons + launcher icons");
+  console.log("OK: cleaned logo-main.png (no white fringe) + favicons");
 }
 
 main().catch((e) => {

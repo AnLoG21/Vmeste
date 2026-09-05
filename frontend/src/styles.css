@@ -43,10 +43,12 @@ body {
 }
 
 .brand-logo {
-  height: 180px;
+  height: 48px;
   width: auto;
+  max-width: min(200px, 42vw);
   display: block;
   object-fit: contain;
+  object-position: left center;
 }
 
 .grid {
@@ -2327,8 +2329,9 @@ body {
 }
 
 .brand-logo {
-  height: 116px;
+  height: 48px;
   width: auto;
+  max-width: min(200px, 42vw);
   display: block;
   object-fit: contain;
   object-position: left center;
@@ -3157,13 +3160,13 @@ body.theme-dark .tg-chat-item-row:hover {
 
 .brand-logo {
   width: auto;
-  max-width: min(380px, 72vw);
+  max-width: min(200px, 42vw);
   height: auto;
-  max-height: 108px;
+  max-height: 48px;
   object-fit: contain;
-  object-position: center center;
+  object-position: left center;
   display: block;
-  transform: translateY(4px);
+  transform: none;
 }
 
 .brand-btn .brand-mark {
@@ -3468,8 +3471,20 @@ body.theme-dark .tg-chat-item-row:hover {
 }
 
 .hero.top-row .brand-btn .brand-logo {
-  max-height: 108px;
-  transform: translateY(4px);
+  max-height: 48px;
+  transform: none;
+}
+
+.page-logged .hero.top-row > button.brand-btn {
+  max-width: 168px;
+}
+
+.page-logged .hero.top-row .brand-btn .brand-logo {
+  height: 40px;
+  max-height: 40px;
+  max-width: 160px;
+  width: auto;
+  transform: none;
 }
 
 .brand-logo {
@@ -5533,6 +5548,7 @@ body.theme-dark .field-label {
 .page-logged .hero.top-row > button.brand-btn {
   grid-column: 1;
   justify-self: start;
+  max-width: 168px;
 }
 
 .page-logged .hero.top-row > div:empty,
