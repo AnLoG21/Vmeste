@@ -416,7 +416,7 @@ class MarketplaceSettingsView(APIView):
             s.ozon_disable_auto_actions = bool(data.get("ozon_disable_auto_actions"))
         if "sku_costs" in data and isinstance(data.get("sku_costs"), dict):
             cleaned = {}
-            for k, v in list(data.get("sku_costs") or {}.items())[:500]:
+            for k, v in list(data["sku_costs"].items())[:500]:
                 key = str(k or "").strip()[:128]
                 if not key:
                     continue

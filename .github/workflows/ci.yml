@@ -98,3 +98,44 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+
+  mobile-cap-sync:
+    name: Capacitor Android sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: Mobile env
+        run: |
+          printf 'VITE_API_URL=https://vsevmeste.space/api\n' > .env.mobile
+      - name: Build mobile bundle + cap sync
+        run: npm run cap:sync
+      - name: Assert synced web assets
+        run: |
+          test -f android/app/src/main/assets/public/index.html
+          test -f android/app/src/main/assets/capacitor.config.json
+      - name: Fail on tracked Android drift after sync
+        run: |
+          if ! git diff --quiet -- android; then
+            echo "::error::cap sync changed tracked Android files — commit the updates"
+            git --no-pager diff -- android
+            exit 1
+          fi
+      - name: Upload synced assets artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-cap-assets
+          path: |
+            frontend/android/app/src/main/assets
+          if-no-files-found: error
+          retention-days: 7

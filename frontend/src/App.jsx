@@ -925,15 +925,22 @@ export default function App() {
         if (loc) void openOrgOnMapRef.current(loc);
       }
     };
+    const onChat = (ev) => {
+      const conversationId = Number(ev?.detail?.conversationId || 0);
+      setCurrentView("chats");
+      if (conversationId) setSelectedChatId(conversationId);
+    };
     window.addEventListener("vmeste:open-cafe-orders", onCafe);
     window.addEventListener("vmeste:open-inspections", onInspections);
     window.addEventListener("vmeste:open-bookings", onBookings);
     window.addEventListener("vmeste:open-map", onMap);
+    window.addEventListener("vmeste:open-chat", onChat);
     return () => {
       window.removeEventListener("vmeste:open-cafe-orders", onCafe);
       window.removeEventListener("vmeste:open-inspections", onInspections);
       window.removeEventListener("vmeste:open-bookings", onBookings);
       window.removeEventListener("vmeste:open-map", onMap);
+      window.removeEventListener("vmeste:open-chat", onChat);
     };
   }, [me?.role, allLocations]);
 

@@ -70,10 +70,13 @@ public class MainActivity extends BridgeActivity {
         if (intent == null) return;
         Uri data = intent.getData();
         if (data == null) return;
-        // Capacitor Bridge loads server.url; path is still useful for future JS deep-link hooks.
+        // Capacitor Bridge.triggerJSEvent(name, target, dataJson) → CustomEvent.detail
         try {
-            if (getBridge() != null && data.getPath() != null) {
-                getBridge().triggerJSEvent("vmesteDeepLink", "window", "\"" + data.toString().replace("\"", "\\\"") + "\"");
+            if (getBridge() != null) {
+                String url = data.toString().replace("\\", "\\\\").replace("\"", "\\\"");
+                String payload = "{\"url\":\"" + url + "\"}";
+                getBridge().triggerJSEvent("vmesteDeepLink", "document", payload);
+                getBridge().triggerJSEvent("vmesteDeepLink", "window", payload);
             }
         } catch (Exception ignored) {
             /* ignore */
