@@ -122,17 +122,19 @@ jobs:
       - name: Mobile env
         run: |
           printf 'VITE_API_URL=https://vsevmeste.space/api\n' > .env.mobile
-      - name: Build mobile bundle + cap sync
-        run: npm run cap:sync
+      - name: Build mobile web bundle
+        run: npm run build:mobile
+      - name: Capacitor copy into Android assets
+        run: npx cap copy android
       - name: Assert synced web assets
         run: |
           test -f android/app/src/main/assets/public/index.html
           test -f android/app/src/main/assets/capacitor.config.json
-          grep -q 'App-' android/app/src/main/assets/public/index.html || grep -q 'assets/' android/app/src/main/assets/public/index.html
-      - name: Fail on tracked Android drift after sync
+          grep -E 'assets/|App-' android/app/src/main/assets/public/index.html
+      - name: Fail on tracked Android drift after copy
         run: |
           if ! git diff --quiet -- android; then
-            echo "::error::cap sync changed tracked Android files — commit the updates"
+            echo "::error::cap copy changed tracked Android files — commit the updates"
             git --no-pager diff -- android
             exit 1
           fi
