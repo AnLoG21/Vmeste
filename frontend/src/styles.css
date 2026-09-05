@@ -5753,8 +5753,6 @@ body.theme-dark .client-org-search-meta {
   position: relative;
   width: 28px;
   height: 28px;
-  margin-left: -14px;
-  margin-top: -14px;
   pointer-events: none;
 }
 
@@ -5762,7 +5760,7 @@ body.theme-dark .client-org-search-meta {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: rgba(255, 122, 0, 0.28);
+  background: rgba(26, 115, 232, 0.28);
   animation: ymap-me-pulse 1.8s ease-out infinite;
 }
 

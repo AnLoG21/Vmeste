@@ -109,12 +109,16 @@ const POSITION_TTL_MS = 60_000;
 
 /**
  * Текущие координаты устройства (с коротким кэшем).
- * Порядок: Capacitor → браузер (GPS/сеть) → Яндекс browser → Яндекс IP.
+ * Порядок: Capacitor → браузер (GPS/сеть) → Яндекс browser → Яндекс IP (если allowIpFallback).
  */
-export async function getDevicePosition({ force = false } = {}) {
+export async function getDevicePosition({ force = false, allowIpFallback = true } = {}) {
   const now = Date.now();
   if (!force && _cachedPosition && now - _cachedAt < POSITION_TTL_MS) {
-    return _cachedPosition;
+    if (!allowIpFallback && String(_cachedPosition.source || "").startsWith("yandex:")) {
+      /* skip coarse cache for map pin */
+    } else {
+      return _cachedPosition;
+    }
   }
   const native = await fromCapacitor();
   if (native) {
@@ -139,15 +143,17 @@ export async function getDevicePosition({ force = false } = {}) {
     } catch {
       /* ignore */
     }
-    try {
-      const yaIp = await fromYandex("yandex");
-      if (yaIp) {
-        _cachedPosition = yaIp;
-        _cachedAt = now;
-        return yaIp;
+    if (allowIpFallback) {
+      try {
+        const yaIp = await fromYandex("yandex");
+        if (yaIp) {
+          _cachedPosition = yaIp;
+          _cachedAt = now;
+          return yaIp;
+        }
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
     }
     throw new Error(geoErrorMessage(browserErr) || browserErr?.message || "Не удалось получить геолокацию");
   }
