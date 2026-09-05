@@ -183,6 +183,12 @@ def mark_booking_paid(booking: Booking) -> None:
         notify_new_booking(booking)
     except Exception:
         pass
+    try:
+        from moy_nalog.service import maybe_issue_after_booking_paid
+
+        maybe_issue_after_booking_paid(booking)
+    except Exception:
+        pass
 
 
 def sync_booking_from_yookassa(booking: Booking) -> bool:

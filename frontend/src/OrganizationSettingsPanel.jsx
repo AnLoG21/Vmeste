@@ -2,6 +2,7 @@ import { LoadErrorBanner } from "./LoadErrorBanner.jsx";
 import OrgMessengerChannelsForm from "./OrgMessengerChannelsForm.jsx";
 import OrgBookingMessagesSection from "./OrgBookingMessagesSection.jsx";
 import OrgAcquiringFields from "./OrgAcquiringFields.jsx";
+import OrgMoyNalogPanel from "./OrgMoyNalogPanel.jsx";
 import OrgCalendarSection from "./OrgCalendarSection.jsx";
 import OrgMessagingRemindersSection from "./OrgMessagingRemindersSection.jsx";
 import VoiceAdminPanel from "./VoiceAdminPanel.jsx";
@@ -205,6 +206,8 @@ export default function OrganizationSettingsPanel({
               </form>
             </>
           )}
+
+          <OrgMoyNalogPanel authFetch={authFetch} API_URL={API_URL} />
 
           <OrgClientCardSection
             form={orgProfileForm}

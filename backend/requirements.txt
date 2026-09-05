@@ -12,5 +12,6 @@ whitenoise>=6.8
 sentry-sdk>=2.20
 google-auth>=2.29
 requests>=2.32
+cryptography>=42
 fpdf2>=2.8
 openpyxl>=3.1

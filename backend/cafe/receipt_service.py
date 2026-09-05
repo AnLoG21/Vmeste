@@ -80,6 +80,12 @@ def build_order_receipt_pdf_bytes(order: CafeOrder):
 
 
 def send_order_receipt_after_payment(order: CafeOrder) -> bool:
+    try:
+        from moy_nalog.service import maybe_issue_after_cafe_paid
+
+        maybe_issue_after_cafe_paid(order)
+    except Exception:
+        logger.exception("moy_nalog cafe hook failed for order #%s", order.id)
     if not order.guest_email:
         return False
     provider = order.provider

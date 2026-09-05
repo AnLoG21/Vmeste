@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     "marketplaces",
     "voice",
     "vmenu",
+    "moy_nalog",
 ]
 
 MIDDLEWARE = [
