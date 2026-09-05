@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { API_URL } from "./config.js";
+import { repairStatusLabel } from "./inspectionRepair.js";
 import "./landing.css";
 
 const SEVERITY_META = {
@@ -240,8 +241,8 @@ export default function InspectionApproveView({
     setReport(data);
     setSelected(new Set((data.items || []).filter((i) => i.client_selected).map((i) => i.id)));
     setStatus(
-      data.repair_status === "in_progress"
-        ? "Ремонт утверждён. Статус: в работе."
+      repairStatusLabel(data.repair_status)
+        ? `Ремонт утверждён. Статус: ${repairStatusLabel(data.repair_status).toLowerCase()}.`
         : "Ремонт утверждён. Автосервис получил уведомление.",
     );
     onApproved?.(data);
@@ -342,11 +343,10 @@ export default function InspectionApproveView({
         {report.status === "approved" && (
           <>
             <p className="inspection-badge inspection-badge--approved">Утверждено</p>
-            {report.repair_status === "in_progress" ? (
-              <p className="inspection-badge inspection-badge--repair-in_progress">В работе</p>
-            ) : null}
-            {report.repair_status === "ready" ? (
-              <p className="inspection-badge inspection-badge--repair-ready">Готов</p>
+            {repairStatusLabel(report.repair_status) ? (
+              <p className={`inspection-badge inspection-badge--repair-${report.repair_status}`}>
+                {repairStatusLabel(report.repair_status)}
+              </p>
             ) : null}
           </>
         )}

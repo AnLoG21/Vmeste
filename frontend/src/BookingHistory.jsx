@@ -9,6 +9,7 @@ import {
 } from "./bookingDisplay.jsx";
 import { reviewImageUrl } from "./chatHelpers.jsx";
 import { bookingPayStillOpen } from "./bookingCalendarUtils.jsx";
+import { repairStatusButtonSuffix, repairStatusClientHistoryCta } from "./inspectionRepair.js";
 
 function BookingHistoryReview({
   booking,
@@ -235,11 +236,9 @@ export default function BookingHistory({
                       onClick={() => openInspectionFromBooking(b)}
                     >
                       Открыть приёмку
-                      {b.inspection.repair_status === "ready"
-                        ? " · готов"
-                        : b.inspection.repair_status === "in_progress"
-                          ? " · в работе"
-                          : ""}
+                      {b.inspection.repair_status && b.inspection.repair_status !== "none"
+                        ? repairStatusButtonSuffix(b.inspection.repair_status)
+                        : ""}
                     </button>
                   ) : (
                     <button
@@ -260,13 +259,7 @@ export default function BookingHistory({
                       setCurrentView("inspections");
                     }}
                   >
-                    {b.inspection.repair_status === "ready"
-                      ? "Авто готово"
-                      : b.inspection.repair_status === "in_progress"
-                        ? "Ремонт в работе"
-                        : b.inspection.status === "sent"
-                          ? "Согласовать диагностику"
-                          : "Открыть диагностику"}
+                    {repairStatusClientHistoryCta(b.inspection)}
                   </button>
                 ) : null}
                 <BookingHistoryReview

@@ -1,17 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import InspectionApproveView from "./InspectionApproveView.jsx";
+import { REPAIR_STATUS_LABELS } from "./inspectionRepair.js";
 
 const STATUS_LABELS = {
   sent: "Нужно согласовать",
   approved: "Утверждено",
   cancelled: "Отменён",
-};
-
-const REPAIR_STATUS_LABELS = {
-  in_progress: "В работе",
-  ready: "Готов",
-  waiting_parts: "Ждём запчасти",
-  handed_over: "Выдан",
 };
 
 export default function ClientInspectionsPanel({
@@ -84,7 +78,7 @@ export default function ClientInspectionsPanel({
         <div>
           <h2>Диагностика и ремонт</h2>
           <p className="muted small">
-            Согласуйте работы по авто и следите за статусом: в работе / готов.
+            Согласуйте работы по авто и следите за статусом: запчасти → в работе → готов → выдан.
           </p>
         </div>
         )}

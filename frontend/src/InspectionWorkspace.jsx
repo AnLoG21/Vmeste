@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { InspectionItemBlock, InspectionPhotoLightbox, money } from "./InspectionApproveView.jsx";
 import { EmptyState } from "./EmptyState.jsx";
+import { REPAIR_STATUS_LABELS, REPAIR_STATUS_TOAST } from "./inspectionRepair.js";
 
 const SEVERITY_OPTIONS = [
   { value: "critical", label: "Критично" },
@@ -13,14 +14,6 @@ const STATUS_LABELS = {
   sent: "Ожидает клиента",
   approved: "Утверждён",
   cancelled: "Отменён",
-};
-
-const REPAIR_STATUS_LABELS = {
-  none: "",
-  waiting_parts: "Ждём запчасти",
-  in_progress: "В работе",
-  ready: "Готов",
-  handed_over: "Выдан",
 };
 
 function emptyItemForm() {
@@ -290,7 +283,7 @@ export default function InspectionWorkspace({
       return;
     }
     setReport(await res.json());
-    setStatus(value === "ready" ? "Клиенту отправлено: авто готово." : "Клиенту отправлено: ремонт в работе.");
+    setStatus(REPAIR_STATUS_TOAST[value] || "Статус ремонта обновлён.");
     loadList();
   }
 

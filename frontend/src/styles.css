@@ -9628,9 +9628,21 @@ body.theme-dark .password-eye-btn:hover {
   margin-left: 6px;
 }
 
+.inspection-badge--repair-waiting_parts {
+  background: rgba(245, 124, 0, 0.16);
+  color: #e65100;
+  margin-left: 6px;
+}
+
 .inspection-badge--repair-ready {
   background: rgba(46, 125, 50, 0.22);
   color: #1b5e20;
+  margin-left: 6px;
+}
+
+.inspection-badge--repair-handed_over {
+  background: rgba(97, 97, 97, 0.16);
+  color: #424242;
   margin-left: 6px;
 }
 

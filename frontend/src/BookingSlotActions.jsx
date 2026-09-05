@@ -1,4 +1,5 @@
 import { bookingPayStillOpen } from "./bookingCalendarUtils.jsx";
+import { repairStatusButtonSuffix, repairStatusClientCta } from "./inspectionRepair.js";
 
 /** Action buttons for a booking slot (calendar / day detail). */
 export default function BookingSlotActions({
@@ -81,15 +82,13 @@ export default function BookingSlotActions({
             }}
           >
             Приёмка
-            {it.inspection.repair_status === "ready"
-              ? " · готов"
-              : it.inspection.repair_status === "in_progress"
-                ? " · в работе"
-                : it.inspection.status === "approved"
-                  ? " · утв."
-                  : it.inspection.status === "sent"
-                    ? " · ждёт"
-                    : ""}
+            {it.inspection.repair_status && it.inspection.repair_status !== "none"
+              ? repairStatusButtonSuffix(it.inspection.repair_status)
+              : it.inspection.status === "approved"
+                ? " · утв."
+                : it.inspection.status === "sent"
+                  ? " · ждёт"
+                  : ""}
           </button>
         ) : (
           <button
@@ -116,13 +115,7 @@ export default function BookingSlotActions({
             setCurrentView("inspections");
           }}
         >
-          {it.inspection.repair_status === "ready"
-            ? "Готов"
-            : it.inspection.repair_status === "in_progress"
-              ? "В работе"
-              : it.inspection.status === "sent"
-                ? "Согласовать"
-                : "Диагностика"}
+          {repairStatusClientCta(it.inspection)}
         </button>
       )}
       {isOrg && !cancelled && (
