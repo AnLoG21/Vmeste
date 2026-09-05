@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#1A1208"/>
+  
+      <text x="80" y="220" font-family="Manrope,Arial,sans-serif" font-weight="800" font-size="88" fill="#FFFFFF">Вместе</text>
+      <text x="80" y="300" font-family="Manrope,Arial,sans-serif" font-size="36" fill="#FFD9BD">Запись, чаты и автоматизация</text>
+      <g transform="translate(900 180)">
+  <g transform="translate(0 0) scale(1.6) translate(-56 -70)">
+    <path d="M56 8c-24.3 0-44 19.7-44 44 0 33.5 44 86 44 86s44-52.5 44-86c0-24.3-19.7-44-44-44z" fill="#FF7A00"/>
+    <circle cx="56" cy="50" r="16" fill="#1A1208"/>
+  </g></g>
+      <text x="80" y="540" font-family="Manrope,Arial,sans-serif" font-size="24" fill="#C9B0A0">vsevmeste.space</text>
+  <text x="24" y="612" font-family="Manrope,Arial,sans-serif" font-size="16" fill="#998877" opacity="0.7">OG23</text>
+</svg>

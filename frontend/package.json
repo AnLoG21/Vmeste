@@ -14,7 +14,8 @@
     "cap:open": "npx cap open android",
     "cap:open:ios": "npx cap open ios",
     "cap:run": "npm run cap:sync && npx cap run android",
-    "brand:proposals": "node scripts/generate-brand-proposals.mjs"
+    "brand:proposals": "node scripts/generate-brand-proposals.mjs",
+    "brand:apply": "node scripts/apply-brand-pick.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",

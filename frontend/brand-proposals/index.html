@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Vmeste — выбор лого и фавикона</title>
+  <title>Vmeste — выбор лого, фавикона и OG cover</title>
   <style>
     :root { color-scheme: light; --ink:#1a1208; --accent:#ff7a00; --bg:#f6f1eb; }
     * { box-sizing: border-box; }
@@ -16,6 +16,7 @@
     h2 { margin: 0 0 12px; font-size: 1rem; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
     .grid--fav { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+    .grid--og { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
     .card { appearance: none; border: 2px solid transparent; background: #fff; border-radius: 14px; padding: 12px; cursor: pointer; text-align: center; display: grid; gap: 8px; transition: border-color .15s, transform .15s; }
     .card:hover { transform: translateY(-1px); border-color: #ffd0a8; }
     .card.is-selected { border-color: var(--accent); box-shadow: 0 0 0 3px #ff7a0033; }
@@ -29,13 +30,224 @@
   <header>
     <div>
       <h1>Выбор брендинга Vmeste</h1>
-      <p class="hint">Кликните по варианту. Напишите в чат номера, например: «лого L12, фавикон F07».</p>
+      <p class="hint">Кликните по варианту. Напишите в чат номера, например: «лого L12, фавикон F07, OG15».</p>
     </div>
     <div class="picks">
       <div>Лого: <strong id="pick-logo">—</strong></div>
       <div>Фавикон: <strong id="pick-fav">—</strong></div>
+      <div>OG cover: <strong id="pick-og">—</strong></div>
     </div>
   </header>
+
+  <section>
+    <h2>OG cover — превью при шаринге (50)</h2>
+    <p class="hint" style="margin-bottom:12px">Формат 1200×630. Выберите вариант для <code>og-cover.png</code>.</p>
+    <div class="grid grid--og" style="margin-bottom:16px">
+      <button type="button" class="card card--og" data-kind="og" data-id="AI-OG01" data-file="ai/ai-og-01-cream-wordmark.png"><img src="ai/ai-og-01-cream-wordmark.png" alt="AI OG 1"/><span>AI-OG01</span></button>
+      <button type="button" class="card card--og" data-kind="og" data-id="AI-OG02" data-file="ai/ai-og-02-dark.png"><img src="ai/ai-og-02-dark.png" alt="AI OG 2"/><span>AI-OG02</span></button>
+      <button type="button" class="card card--og" data-kind="og" data-id="AI-OG03" data-file="ai/ai-og-03-orange.png"><img src="ai/ai-og-03-orange.png" alt="AI OG 3"/><span>AI-OG03</span></button>
+    </div>
+    <div class="grid grid--og" id="ogs"><button type="button" class="card card--og" data-kind="og" data-id="OG1" data-file="og-01.png">
+      <img src="og-covers/og-01.png" alt="OG 1" loading="lazy"/>
+      <span>OG01</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG2" data-file="og-02.png">
+      <img src="og-covers/og-02.png" alt="OG 2" loading="lazy"/>
+      <span>OG02</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG3" data-file="og-03.png">
+      <img src="og-covers/og-03.png" alt="OG 3" loading="lazy"/>
+      <span>OG03</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG4" data-file="og-04.png">
+      <img src="og-covers/og-04.png" alt="OG 4" loading="lazy"/>
+      <span>OG04</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG5" data-file="og-05.png">
+      <img src="og-covers/og-05.png" alt="OG 5" loading="lazy"/>
+      <span>OG05</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG6" data-file="og-06.png">
+      <img src="og-covers/og-06.png" alt="OG 6" loading="lazy"/>
+      <span>OG06</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG7" data-file="og-07.png">
+      <img src="og-covers/og-07.png" alt="OG 7" loading="lazy"/>
+      <span>OG07</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG8" data-file="og-08.png">
+      <img src="og-covers/og-08.png" alt="OG 8" loading="lazy"/>
+      <span>OG08</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG9" data-file="og-09.png">
+      <img src="og-covers/og-09.png" alt="OG 9" loading="lazy"/>
+      <span>OG09</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG10" data-file="og-10.png">
+      <img src="og-covers/og-10.png" alt="OG 10" loading="lazy"/>
+      <span>OG10</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG11" data-file="og-11.png">
+      <img src="og-covers/og-11.png" alt="OG 11" loading="lazy"/>
+      <span>OG11</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG12" data-file="og-12.png">
+      <img src="og-covers/og-12.png" alt="OG 12" loading="lazy"/>
+      <span>OG12</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG13" data-file="og-13.png">
+      <img src="og-covers/og-13.png" alt="OG 13" loading="lazy"/>
+      <span>OG13</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG14" data-file="og-14.png">
+      <img src="og-covers/og-14.png" alt="OG 14" loading="lazy"/>
+      <span>OG14</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG15" data-file="og-15.png">
+      <img src="og-covers/og-15.png" alt="OG 15" loading="lazy"/>
+      <span>OG15</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG16" data-file="og-16.png">
+      <img src="og-covers/og-16.png" alt="OG 16" loading="lazy"/>
+      <span>OG16</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG17" data-file="og-17.png">
+      <img src="og-covers/og-17.png" alt="OG 17" loading="lazy"/>
+      <span>OG17</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG18" data-file="og-18.png">
+      <img src="og-covers/og-18.png" alt="OG 18" loading="lazy"/>
+      <span>OG18</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG19" data-file="og-19.png">
+      <img src="og-covers/og-19.png" alt="OG 19" loading="lazy"/>
+      <span>OG19</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG20" data-file="og-20.png">
+      <img src="og-covers/og-20.png" alt="OG 20" loading="lazy"/>
+      <span>OG20</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG21" data-file="og-21.png">
+      <img src="og-covers/og-21.png" alt="OG 21" loading="lazy"/>
+      <span>OG21</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG22" data-file="og-22.png">
+      <img src="og-covers/og-22.png" alt="OG 22" loading="lazy"/>
+      <span>OG22</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG23" data-file="og-23.png">
+      <img src="og-covers/og-23.png" alt="OG 23" loading="lazy"/>
+      <span>OG23</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG24" data-file="og-24.png">
+      <img src="og-covers/og-24.png" alt="OG 24" loading="lazy"/>
+      <span>OG24</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG25" data-file="og-25.png">
+      <img src="og-covers/og-25.png" alt="OG 25" loading="lazy"/>
+      <span>OG25</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG26" data-file="og-26.png">
+      <img src="og-covers/og-26.png" alt="OG 26" loading="lazy"/>
+      <span>OG26</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG27" data-file="og-27.png">
+      <img src="og-covers/og-27.png" alt="OG 27" loading="lazy"/>
+      <span>OG27</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG28" data-file="og-28.png">
+      <img src="og-covers/og-28.png" alt="OG 28" loading="lazy"/>
+      <span>OG28</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG29" data-file="og-29.png">
+      <img src="og-covers/og-29.png" alt="OG 29" loading="lazy"/>
+      <span>OG29</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG30" data-file="og-30.png">
+      <img src="og-covers/og-30.png" alt="OG 30" loading="lazy"/>
+      <span>OG30</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG31" data-file="og-31.png">
+      <img src="og-covers/og-31.png" alt="OG 31" loading="lazy"/>
+      <span>OG31</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG32" data-file="og-32.png">
+      <img src="og-covers/og-32.png" alt="OG 32" loading="lazy"/>
+      <span>OG32</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG33" data-file="og-33.png">
+      <img src="og-covers/og-33.png" alt="OG 33" loading="lazy"/>
+      <span>OG33</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG34" data-file="og-34.png">
+      <img src="og-covers/og-34.png" alt="OG 34" loading="lazy"/>
+      <span>OG34</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG35" data-file="og-35.png">
+      <img src="og-covers/og-35.png" alt="OG 35" loading="lazy"/>
+      <span>OG35</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG36" data-file="og-36.png">
+      <img src="og-covers/og-36.png" alt="OG 36" loading="lazy"/>
+      <span>OG36</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG37" data-file="og-37.png">
+      <img src="og-covers/og-37.png" alt="OG 37" loading="lazy"/>
+      <span>OG37</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG38" data-file="og-38.png">
+      <img src="og-covers/og-38.png" alt="OG 38" loading="lazy"/>
+      <span>OG38</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG39" data-file="og-39.png">
+      <img src="og-covers/og-39.png" alt="OG 39" loading="lazy"/>
+      <span>OG39</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG40" data-file="og-40.png">
+      <img src="og-covers/og-40.png" alt="OG 40" loading="lazy"/>
+      <span>OG40</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG41" data-file="og-41.png">
+      <img src="og-covers/og-41.png" alt="OG 41" loading="lazy"/>
+      <span>OG41</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG42" data-file="og-42.png">
+      <img src="og-covers/og-42.png" alt="OG 42" loading="lazy"/>
+      <span>OG42</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG43" data-file="og-43.png">
+      <img src="og-covers/og-43.png" alt="OG 43" loading="lazy"/>
+      <span>OG43</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG44" data-file="og-44.png">
+      <img src="og-covers/og-44.png" alt="OG 44" loading="lazy"/>
+      <span>OG44</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG45" data-file="og-45.png">
+      <img src="og-covers/og-45.png" alt="OG 45" loading="lazy"/>
+      <span>OG45</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG46" data-file="og-46.png">
+      <img src="og-covers/og-46.png" alt="OG 46" loading="lazy"/>
+      <span>OG46</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG47" data-file="og-47.png">
+      <img src="og-covers/og-47.png" alt="OG 47" loading="lazy"/>
+      <span>OG47</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG48" data-file="og-48.png">
+      <img src="og-covers/og-48.png" alt="OG 48" loading="lazy"/>
+      <span>OG48</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG49" data-file="og-49.png">
+      <img src="og-covers/og-49.png" alt="OG 49" loading="lazy"/>
+      <span>OG49</span>
+    </button>
+<button type="button" class="card card--og" data-kind="og" data-id="OG50" data-file="og-50.png">
+      <img src="og-covers/og-50.png" alt="OG 50" loading="lazy"/>
+      <span>OG50</span>
+    </button></div>
+  </section>
   <section>
     <h2>AI-концепты (дополнительно)</h2>
     <div class="grid">
@@ -460,7 +672,8 @@
   <script>
     const pickLogo = document.getElementById('pick-logo');
     const pickFav = document.getElementById('pick-fav');
-    const selected = { logo: null, favicon: null };
+    const selected = { logo: null, favicon: null, og: null };
+    const pickOg = document.getElementById('pick-og');
     document.body.addEventListener('click', (e) => {
       const btn = e.target.closest('.card');
       if (!btn) return;
@@ -469,7 +682,8 @@
       document.querySelectorAll('.card[data-kind="'+kind+'"]').forEach((c) => c.classList.remove('is-selected'));
       btn.classList.add('is-selected');
       if (kind === 'logo') { selected.logo = id; pickLogo.textContent = id + ' (' + btn.dataset.file + ')'; }
-      else { selected.favicon = id; pickFav.textContent = id + ' (' + btn.dataset.file + ')'; }
+      else if (kind === 'favicon') { selected.favicon = id; pickFav.textContent = id + ' (' + btn.dataset.file + ')'; }
+      else if (kind === 'og') { selected.og = id; if (pickOg) pickOg.textContent = id + ' (' + btn.dataset.file + ')'; }
       try { localStorage.setItem('vmeste_brand_pick', JSON.stringify(selected)); } catch {}
     });
     try {
@@ -480,6 +694,10 @@
       }
       if (saved?.favicon) {
         const b = document.querySelector('.card[data-id="'+saved.favicon+'"]');
+        b?.click();
+      }
+      if (saved?.og) {
+        const b = document.querySelector('.card[data-id="'+saved.og+'"]');
         b?.click();
       }
     } catch {}

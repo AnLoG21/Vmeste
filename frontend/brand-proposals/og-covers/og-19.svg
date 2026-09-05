@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#FFFFFF"/><rect x="48" y="48" width="1104" height="534" rx="28" fill="none" stroke="#FF7A00" stroke-width="4"/>
+  
+      
+  <g fill="#1A1208" font-family="Manrope, Arial Black, Arial, sans-serif" font-weight="800" font-size="100">
+    <text x="260" y="280">В</text>
+    <text x="365" y="280">месте</text>
+  </g>
+  
+  <g transform="translate(332 208) scale(0.6756756756756757) translate(-56 -70)">
+    <path d="M56 8c-24.3 0-44 19.7-44 44 0 33.5 44 86 44 86s44-52.5 44-86c0-24.3-19.7-44-44-44z" fill="#FF7A00"/>
+    <circle cx="56" cy="50" r="16" fill="#FFFFFF"/>
+  </g>
+      <text x="600" y="380" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-size="32" fill="#7A6552">Платформа для локального бизнеса</text>
+      <text x="600" y="520" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-size="24" fill="#7A6552">vsevmeste.space</text>
+  <text x="24" y="612" font-family="Manrope,Arial,sans-serif" font-size="16" fill="#998877" opacity="0.7">OG19</text>
+</svg>
