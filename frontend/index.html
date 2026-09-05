@@ -404,7 +404,13 @@
             window.Capacitor &&
             typeof window.Capacitor.isNativePlatform === "function" &&
             window.Capacitor.isNativePlatform();
-          if (!native) {
+          var standalone =
+            (window.matchMedia &&
+              (window.matchMedia("(display-mode: standalone)").matches ||
+                window.matchMedia("(display-mode: fullscreen)").matches ||
+                window.matchMedia("(display-mode: minimal-ui)").matches)) ||
+            window.navigator.standalone === true;
+          if (!native && !standalone) {
             var el = document.getElementById("vmeste-boot-splash");
             if (el) el.remove();
           }

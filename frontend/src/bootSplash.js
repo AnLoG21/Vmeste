@@ -12,6 +12,25 @@ function prefersReducedMotion() {
   }
 }
 
+/** Native Capacitor shell or installed PWA / «На экран Домой». */
+export function shouldShowBootSplash() {
+  try {
+    if (Capacitor.isNativePlatform()) return true;
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (window.matchMedia("(display-mode: standalone)").matches) return true;
+    if (window.matchMedia("(display-mode: fullscreen)").matches) return true;
+    if (window.matchMedia("(display-mode: minimal-ui)").matches) return true;
+  } catch {
+    /* ignore */
+  }
+  // iOS Safari «Add to Home Screen»
+  if (typeof navigator !== "undefined" && navigator.standalone === true) return true;
+  return false;
+}
+
 async function hideNativeSplash() {
   if (!Capacitor.isNativePlatform()) return;
   try {
@@ -23,18 +42,18 @@ async function hideNativeSplash() {
 }
 
 /**
- * Branded boot splash: smooth scale/fade, then remove overlay.
- * Native Android/iOS splash matches background so the handoff feels continuous.
+ * Branded boot splash with pin-fly animation.
+ * Shown in Capacitor apps and installed browser PWAs (not regular desktop tabs).
  */
 export function initBootSplash() {
   const el = document.getElementById("vmeste-boot-splash");
-  const native = Capacitor.isNativePlatform();
-  // Branded animation is for the installed app; on desktop web skip overlay.
-  if (!el || !native) {
+  if (!el || !shouldShowBootSplash()) {
     el?.remove();
     hideNativeSplash();
     return;
   }
+
+  document.documentElement.classList.add("vmeste-boot-splash-active");
 
   const started = performance.now();
   const reduced = prefersReducedMotion();
@@ -49,6 +68,7 @@ export function initBootSplash() {
     await new Promise((r) => setTimeout(r, wait));
     await hideNativeSplash();
     el.classList.add("vmeste-boot-splash--out");
+    document.documentElement.classList.remove("vmeste-boot-splash-active");
     window.setTimeout(() => el.remove(), FADE_MS + 40);
   };
 
@@ -57,7 +77,6 @@ export function initBootSplash() {
     else window.addEventListener("load", finish, { once: true });
   };
 
-  // Cap total time so a slow network still clears splash.
   window.setTimeout(finish, reduced ? 400 : MAX_MS);
   onReady();
 }

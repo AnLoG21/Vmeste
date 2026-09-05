@@ -4,7 +4,7 @@
   "description": "Онлайн-запись и автоматизация бизнеса",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#fff8f1",
+  "background_color": "#FFF7F0",
   "theme_color": "#ff7a00",
   "icons": [
     {
