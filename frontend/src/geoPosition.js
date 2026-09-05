@@ -57,11 +57,13 @@ async function fromCapacitor() {
   }
 }
 
-async function fromBrowser() {
-  const attempts = [
-    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
-    { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
-  ];
+async function fromBrowser({ highAccuracyOnly = false } = {}) {
+  const attempts = highAccuracyOnly
+    ? [{ enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }]
+    : [
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
+      ];
   let lastErr = null;
   for (const opts of attempts) {
     try {
@@ -111,11 +113,18 @@ const POSITION_TTL_MS = 60_000;
  * Текущие координаты устройства (с коротким кэшем).
  * Порядок: Capacitor → браузер (GPS/сеть) → Яндекс browser → Яндекс IP (если allowIpFallback).
  */
-export async function getDevicePosition({ force = false, allowIpFallback = true } = {}) {
+export async function getDevicePosition({
+  force = false,
+  allowIpFallback = true,
+  highAccuracyOnly = false,
+} = {}) {
   const now = Date.now();
   if (!force && _cachedPosition && now - _cachedAt < POSITION_TTL_MS) {
-    if (!allowIpFallback && String(_cachedPosition.source || "").startsWith("yandex:")) {
-      /* skip coarse cache for map pin */
+    const src = String(_cachedPosition.source || "");
+    if (!allowIpFallback && src.startsWith("yandex:yandex")) {
+      /* skip IP cache */
+    } else if (highAccuracyOnly && Number(_cachedPosition.accuracy) > 8000) {
+      /* skip coarse cache */
     } else {
       return _cachedPosition;
     }
@@ -128,7 +137,7 @@ export async function getDevicePosition({ force = false, allowIpFallback = true 
   }
 
   try {
-    const browser = await fromBrowser();
+    const browser = await fromBrowser({ highAccuracyOnly });
     _cachedPosition = browser;
     _cachedAt = now;
     return browser;
