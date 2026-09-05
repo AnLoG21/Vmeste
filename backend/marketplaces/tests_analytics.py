@@ -1,9 +1,16 @@
-"""Unit tests for WB report normalize + SPP reprice (no DB)."""
+"""Unit tests for WB report normalize + SPP reprice + sku_costs settings."""
 
-from django.test import SimpleTestCase
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase, TestCase
+from rest_framework.test import APIRequestFactory, force_authenticate
 
+from marketplaces.models import MarketplaceSettings
 from marketplaces.spp_reprice import calc_supplier_price_for_target_buyer, plan_spp_update, should_reprice
+from marketplaces.views import MarketplaceSettingsView
 from marketplaces.wb_report import aggregate_buh_rows, normalize_buh_row
+
+
+User = get_user_model()
 
 
 class WbReportNormalizeTests(SimpleTestCase):
@@ -72,3 +79,34 @@ class SppRepriceTests(SimpleTestCase):
         self.assertIsNotNone(plan)
         self.assertEqual(plan["new_price"], 1000)
         self.assertTrue(plan["needs_change"])
+
+
+class SkuCostsSettingsApiTests(TestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.provider = User.objects.create_user(
+            username="mp_costs",
+            email="mp_costs@example.com",
+            password="test-pass-123",
+            role=User.Role.PROVIDER,
+            provider_sphere=User.ProviderSphere.MARKETPLACES,
+        )
+        MarketplaceSettings.objects.create(provider=self.provider, environment="sandbox")
+
+    def test_patch_sku_costs_round_trip(self):
+        req = self.factory.patch(
+            "/api/marketplaces/settings/",
+            {"sku_costs": {"ozon:SKU-1": 120.5, "wildberries:A": 99}},
+            format="json",
+        )
+        force_authenticate(req, user=self.provider)
+        resp = MarketplaceSettingsView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["sku_costs"]["ozon:SKU-1"], 120.5)
+        self.assertEqual(resp.data["sku_costs"]["wildberries:A"], 99.0)
+
+        req2 = self.factory.get("/api/marketplaces/settings/")
+        force_authenticate(req2, user=self.provider)
+        resp2 = MarketplaceSettingsView.as_view()(req2)
+        self.assertEqual(resp2.status_code, 200)
+        self.assertEqual(resp2.data["sku_costs"]["ozon:SKU-1"], 120.5)

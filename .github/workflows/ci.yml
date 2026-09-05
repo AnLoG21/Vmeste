@@ -60,10 +60,17 @@ jobs:
           booking.tests_loyalty_pay
           booking.tests_actions
           booking.tests_waitlist
+          booking.tests_salon_p2
+          inspections.tests_pdf
+          inspections.tests_repair_funnel
           payments.tests
           marketplaces.tests
           marketplaces.tests_analytics
+          marketplaces.tests_card_designs
+          marketplaces.tests_sync
           cafe.test_delivery_zones
+          cafe.test_courier_access
+          cafe.test_menu_nutrition
           users.test_working_hours
           users.test_oauth_find_user
           users.test_oauth_credentials

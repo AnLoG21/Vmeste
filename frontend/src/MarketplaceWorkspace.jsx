@@ -4590,6 +4590,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
           API_URL={API_URL}
           history={history}
           onStatus={setStatus}
+          onSettingsSaved={setSettings}
         />
       )}
 

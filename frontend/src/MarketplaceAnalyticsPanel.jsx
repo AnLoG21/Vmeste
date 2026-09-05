@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   aggregateBuhRows,
   buildSkuBubbles,
@@ -80,6 +80,7 @@ export default function MarketplaceAnalyticsPanel({
   authFetch,
   API_URL,
   onStatus,
+  onSettingsSaved,
   history = [],
 }) {
   const base = `${API_URL}/marketplaces`;
@@ -94,7 +95,6 @@ export default function MarketplaceAnalyticsPanel({
   const [warehouse, setWarehouse] = useState([]);
   const [bubbles, setBubbles] = useState([]);
   const [heatmap, setHeatmap] = useState([]);
-  const [unitRows, setUnitRows] = useState([]);
   const [financePeriods, setFinancePeriods] = useState([]);
   const [financePeriod, setFinancePeriod] = useState("week");
   const [costDraft, setCostDraft] = useState(() => ({ ...(settings?.sku_costs || {}) }));
@@ -110,6 +110,16 @@ export default function MarketplaceAnalyticsPanel({
   const [logisticsRub, setLogisticsRub] = useState(50);
   const [buyoutPct, setBuyoutPct] = useState(85);
 
+  useEffect(() => {
+    setCostDraft({ ...(settings?.sku_costs || {}) });
+    setSppRules(
+      Array.isArray(settings?.spp_rules) && settings.spp_rules.length
+        ? settings.spp_rules
+        : [{ offer_id: "", nm_id: "", target_buyer_price: "", supplier_discount: 0 }],
+    );
+    setSppEnabled(Boolean(settings?.spp_reprice_enabled));
+  }, [settings]);
+
   const periodDays = useMemo(() => {
     const a = new Date(dateFrom);
     const b = new Date(dateTo);
@@ -120,6 +130,24 @@ export default function MarketplaceAnalyticsPanel({
   const filteredFunnel = useMemo(() => filterBySku(funnel, skuFilter), [funnel, skuFilter]);
   const filteredBySku = useMemo(() => filterBySku(bySku, skuFilter), [bySku, skuFilter]);
   const filteredWarehouse = useMemo(() => filterBySku(warehouse, skuFilter), [warehouse, skuFilter]);
+
+  const unitRows = useMemo(() => {
+    return (bySku || []).slice(0, 40).map((row) => {
+      const costKey = `${mp}:${row.sku}`;
+      const cost = Number(costDraft[costKey] ?? costDraft[row.sku] ?? 0) || 0;
+      const price = row.qty ? Math.abs(row.retail / row.qty) : Math.abs(row.for_pay);
+      const funnelRow = funnel.find((f) => f.sku === row.sku || f.nm_id === row.nm_id);
+      const buyout = funnelRow?.conv_buyout || buyoutPct;
+      const u = calcUnitEconomics({
+        price,
+        cost,
+        commissionPct,
+        logistics: logisticsRub,
+        buyoutPct: buyout,
+      });
+      return { ...row, cost, price: Math.round(price * 100) / 100, ...u };
+    });
+  }, [bySku, costDraft, mp, commissionPct, logisticsRub, buyoutPct, funnel]);
 
   async function loadAll() {
     await withBusy("analytics", async () => {
@@ -204,24 +232,6 @@ export default function MarketplaceAnalyticsPanel({
       setBubbles(bub);
       setHeatmap(heat);
 
-      const costs = { ...(settings?.sku_costs || {}), ...costDraft };
-      const units = agg.by_sku.slice(0, 40).map((row) => {
-        const costKey = `${mp}:${row.sku}`;
-        const cost = Number(costs[costKey] ?? costs[row.sku] ?? 0) || 0;
-        const price = row.qty ? Math.abs(row.retail / row.qty) : Math.abs(row.for_pay);
-        const funnelRow = nmCards.find((f) => f.sku === row.sku || f.nm_id === row.nm_id);
-        const buyout = funnelRow?.conv_buyout || buyoutPct;
-        const u = calcUnitEconomics({
-          price,
-          cost,
-          commissionPct,
-          logistics: logisticsRub,
-          buyoutPct: buyout,
-        });
-        return { ...row, cost, price: Math.round(price * 100) / 100, ...u };
-      });
-      setUnitRows(units);
-
       const finGrouped = groupFinanceByPeriod(
         agg.by_day.map((d) => ({ date: d.date, for_pay: d.for_pay })),
         financePeriod,
@@ -236,10 +246,14 @@ export default function MarketplaceAnalyticsPanel({
 
   async function saveCostsAndRules() {
     await withBusy("analytics-save", async () => {
-      const cleaned = {};
+      const cleaned = { ...(settings?.sku_costs || {}) };
       for (const [k, v] of Object.entries(costDraft || {})) {
         const key = String(k || "").trim();
         if (!key) continue;
+        if (v === "" || v == null) {
+          delete cleaned[key];
+          continue;
+        }
         const n = Number(v);
         if (!Number.isFinite(n)) continue;
         cleaned[key] = n;
@@ -262,6 +276,10 @@ export default function MarketplaceAnalyticsPanel({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Не удалось сохранить.");
+      setCostDraft({ ...(data.sku_costs || cleaned) });
+      if (Array.isArray(data.spp_rules)) setSppRules(data.spp_rules.length ? data.spp_rules : sppRules);
+      if ("spp_reprice_enabled" in data) setSppEnabled(Boolean(data.spp_reprice_enabled));
+      onSettingsSaved?.(data);
       onStatus?.("Себестоимость и правила СПП сохранены.");
     });
   }
@@ -518,6 +536,9 @@ export default function MarketplaceAnalyticsPanel({
               ))}
             </tbody>
           </table>
+          {!unitRows.length ? (
+            <p className="muted small">Загрузите аналитику за период — появятся SKU и расчёт маржи.</p>
+          ) : null}
         </div>
         <div className="mp-actions">
           <button type="button" className="mp-btn" disabled={busy === "analytics-save"} onClick={saveCostsAndRules}>
