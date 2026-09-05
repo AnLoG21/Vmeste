@@ -26,6 +26,20 @@ function isVoicePlan(plan) {
   return plan?.product_kind === "voice";
 }
 
+function isFreePlatformPlan(plan) {
+  return (
+    !isVoicePlan(plan) &&
+    (plan?.plan_type === "trial" || plan?.plan_type === "free" || plan?.slug === "starter")
+  );
+}
+
+function resolveUpgradePlan(plans, subPlan) {
+  if (isFreePlatformPlan(subPlan)) {
+    return plans.find((p) => p.slug === "business") || subPlan;
+  }
+  return subPlan;
+}
+
 export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
   const [plans, setPlans] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
@@ -174,9 +188,7 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
       payPlan(sub.plan);
       return;
     }
-    const plan = sub.plan?.plan_type === "trial"
-      ? plans.find((p) => p.slug === "business") || sub.plan
-      : sub.plan;
+    const plan = resolveUpgradePlan(plans, sub.plan);
     if (plan && Number(plan.price_monthly) > 0) {
       setPromoModalPlan(plan);
       setStatus("");
@@ -236,14 +248,16 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
     });
   }
 
-  function planActionLabel(plan, { currentVoicePlanId } = {}) {
+  function planActionLabel(plan, { currentVoicePlanId, currentPlatformPlanId, onFreePlatform } = {}) {
     if (isVoicePlan(plan)) {
       if (currentVoicePlanId && plan.id === currentVoicePlanId) return "Текущий тариф";
       if (currentVoicePlanId) return "Сменить тариф";
       return `Купить ${plan.voice_minutes_monthly || ""} мин`.trim();
     }
-    if (plan.plan_type === "trial" || plan.plan_type === "free" || plan.slug === "starter") return "Подключить бесплатно";
+    if (currentPlatformPlanId && plan.id === currentPlatformPlanId) return "Текущий тариф";
+    if (isFreePlatformPlan(plan)) return "Подключить бесплатно";
     if (Number(plan.price_monthly) <= 0 || plan.plan_type === "custom") return "Оставить заявку";
+    if (onFreePlatform && plan.slug === "business") return "Перейти на «Бизнес»";
     return "Оплатить";
   }
 
@@ -262,6 +276,7 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
   const platformPlans = plans.filter((p) => !isVoicePlan(p));
   const voicePlans = plans.filter((p) => isVoicePlan(p));
   const currentVoicePlanId = activeVoice?.plan?.id;
+  const currentPlatformPlanId = activePlatform?.plan?.id;
 
   function expiringSoon(sub) {
     if (!sub?.period_end) return false;
@@ -273,6 +288,13 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
     if (!sub) return null;
     const voice = isVoicePlan(sub.plan);
     const minutes = sub.plan?.voice_minutes_monthly;
+    const features = Array.isArray(sub.plan?.features) ? sub.plan.features : [];
+    const canUpgradeToBusiness =
+      !voice &&
+      (isFreePlatformPlan(sub.plan) ||
+        sub.source === "trial" ||
+        sub.source === "promo" ||
+        sub.cancel_at_period_end);
     return (
       <div className={`subscriptions-active${voice ? " subscriptions-active--voice" : ""}`}>
         <h3>{title}</h3>
@@ -284,6 +306,19 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
           {sub.source ? ` · ${SOURCE_LABELS[sub.source] || sub.source}` : ""}
           {sub.promo_code ? ` (${sub.promo_code})` : ""}
         </p>
+        {(features.length > 0 || (voice && minutes)) && (
+          <div className="subscriptions-active-includes">
+            <h4>Что входит в тариф</h4>
+            <ul className="subscriptions-plan-features">
+              {features.map((f) => (
+                <li key={f}>{f}</li>
+              ))}
+              {voice && minutes && !features.some((f) => String(f).includes(String(minutes))) ? (
+                <li>{minutes} минут SpeechKit в месяц</li>
+              ) : null}
+            </ul>
+          </div>
+        )}
         {sub.cancel_at_period_end && (
           <p className="subscriptions-cancel-note">
             Автопродление отключено. После {formatDate(sub.period_end)} подписка не продлится.
@@ -305,7 +340,7 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
               Продлить сейчас
             </button>
           )}
-          {!voice && (sub.source === "trial" || sub.source === "promo" || sub.cancel_at_period_end) && (
+          {canUpgradeToBusiness && (
             <button type="button" onClick={() => renewSubscription(sub)}>
               Перейти на «Бизнес»
             </button>
@@ -326,7 +361,9 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
     return (
       <div className="subscriptions-plans">
         {list.map((plan) => {
-          const isCurrent = voice && plan.id === currentVoicePlanId;
+          const isCurrent = voice
+            ? plan.id === currentVoicePlanId
+            : plan.id === currentPlatformPlanId;
           return (
             <article
               key={plan.id}
@@ -338,12 +375,13 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
                 {!voice && plan.plan_type === "custom" ? "🛠️ " : ""}
                 {voice ? "🎙 " : ""}
                 {plan.name}
+                {isCurrent ? " · текущий" : ""}
               </h4>
               <p className="subscriptions-plan-desc">{plan.description}</p>
               {voice && plan.voice_minutes_monthly ? (
                 <p className="subscriptions-plan-minutes">{plan.voice_minutes_monthly} минут / месяц</p>
               ) : null}
-              {plan.plan_type === "trial" || plan.plan_type === "free" || plan.slug === "starter" ? (
+              {isFreePlatformPlan(plan) ? (
                 <p className="subscriptions-plan-price">Бесплатно</p>
               ) : Number(plan.price_monthly) > 0 ? (
                 <p className="subscriptions-plan-price">
@@ -360,14 +398,18 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
               <button
                 type="button"
                 className={
-                  isCurrent || (Number(plan.price_monthly) <= 0 && plan.plan_type !== "trial" && plan.plan_type !== "free")
+                  isCurrent || (Number(plan.price_monthly) <= 0 && !isFreePlatformPlan(plan))
                     ? "ghost-btn"
                     : ""
                 }
                 disabled={isCurrent}
                 onClick={() => openPayFlow(plan)}
               >
-                {planActionLabel(plan, { currentVoicePlanId })}
+                {planActionLabel(plan, {
+                  currentVoicePlanId,
+                  currentPlatformPlanId,
+                  onFreePlatform: isFreePlatformPlan(activePlatform?.plan),
+                })}
               </button>
             </article>
           );

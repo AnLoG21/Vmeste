@@ -77,6 +77,7 @@ jobs:
           users.test_onboarding_p3
           vmenu.tests_units
           subscriptions.tests_promos
+          subscriptions.tests_trial_voice
           notifications.tests_channels
           --verbosity=2
 
@@ -113,10 +114,6 @@ jobs:
           node-version: "20"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
       - name: Install deps
         run: npm ci
       - name: Mobile env

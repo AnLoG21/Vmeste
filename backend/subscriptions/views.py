@@ -385,7 +385,14 @@ class RenewSubscriptionView(APIView):
         if not sub:
             return Response({"detail": "Подписка не найдена."}, status=status.HTTP_404_NOT_FOUND)
         plan = sub.plan
-        if plan.plan_type == SubscriptionPlan.PlanType.TRIAL:
+        if (
+            plan.plan_type
+            in (
+                SubscriptionPlan.PlanType.TRIAL,
+                SubscriptionPlan.PlanType.FREE,
+            )
+            or plan.slug == "starter"
+        ):
             plan = SubscriptionPlan.objects.filter(slug="business", is_active=True).first() or plan
         payment, result = _create_payment_for_plan(request.user, plan)
         if not payment:

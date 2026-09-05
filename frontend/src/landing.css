@@ -479,6 +479,15 @@
   margin-bottom: 24px;
 }
 
+.subscriptions-active-includes {
+  margin: 10px 0 4px;
+}
+
+.subscriptions-active-includes h4 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+}
+
 .subscriptions-auto-renew {
   display: flex;
   align-items: center;
