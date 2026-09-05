@@ -658,6 +658,7 @@ class BookingViewSet(viewsets.ModelViewSet):
 
         from .acquiring import attach_prepay_if_needed
         from .booking_actions import notify_new_booking
+        from .waitlist import mark_waitlist_booked_for_booking
 
         try:
             extra = attach_prepay_if_needed(booking)
@@ -665,6 +666,10 @@ class BookingViewSet(viewsets.ModelViewSet):
             db_transaction.set_rollback(True)
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         booking.refresh_from_db()
+        try:
+            mark_waitlist_booked_for_booking(booking)
+        except Exception:
+            pass
         if not extra:
             try:
                 notify_new_booking(booking)

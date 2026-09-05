@@ -31,6 +31,8 @@ const BOOKING_STATUS_LABELS = {
   confirmed: "Подтверждена",
   cancelled: "Отменена",
   done: "Выполнена",
+  no_show: "Неявка",
+  arrived: "Клиент пришёл",
 };
 
 const CAFE_STATUS_LABELS = {

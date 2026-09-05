@@ -8,6 +8,7 @@ export function bookingSlotStatusModifier(bookingOrStatus, endsAt) {
       : endsAt;
   if (status === "cancelled") return "booking-slot--cancelled";
   if (status === "done") return "booking-slot--done";
+  if (status === "no_show") return "booking-slot--noshow";
   if (status === "manual_hold") return "booking-slot--manual-hold";
   const pay = typeof bookingOrStatus === "object" ? bookingOrStatus.payment_status : "";
   if (pay === "pending") return "booking-slot--pending";
@@ -23,6 +24,7 @@ export function bookingSlotStatusModifier(bookingOrStatus, endsAt) {
 export function bookingSlotCompactIcon(statusModifier) {
   if (statusModifier === "booking-slot--cancelled") return "✕";
   if (statusModifier === "booking-slot--done") return "✓";
+  if (statusModifier === "booking-slot--noshow") return "∅";
   if (statusModifier === "booking-slot--overdue") return "!";
   if (statusModifier === "booking-slot--confirmed") return "●";
   if (statusModifier === "booking-slot--pending") return "₽";
@@ -36,6 +38,7 @@ export const BOOKING_STATUS_LABELS = {
   arrived: "Клиент пришёл",
   cancelled: "Отменена",
   done: "Оказана",
+  no_show: "Неявка",
   manual_hold: "Ручная бронь",
 };
 

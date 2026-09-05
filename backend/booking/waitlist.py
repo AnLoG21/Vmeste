@@ -7,6 +7,21 @@ from django.utils import timezone
 from .models import WaitlistEntry
 
 
+def mark_waitlist_booked_for_booking(booking) -> int:
+    """When a waitlisted client books, close matching WAITING/NOTIFIED rows as BOOKED."""
+    if not booking or not getattr(booking, "client_id", None) or not getattr(booking, "provider_id", None):
+        return 0
+    qs = WaitlistEntry.objects.filter(
+        provider_id=booking.provider_id,
+        client_id=booking.client_id,
+        status__in=(WaitlistEntry.Status.WAITING, WaitlistEntry.Status.NOTIFIED),
+    )
+    service_id = getattr(booking, "service_id", None)
+    if service_id:
+        qs = qs.filter(service_id=service_id)
+    return qs.update(status=WaitlistEntry.Status.BOOKED)
+
+
 def notify_waitlist_after_slot_freed(provider_id: int, service_id: int | None = None) -> int:
     """Уведомить следующего в очереди (push + SMS/TG). Возвращает число уведомлений."""
     qs = (

@@ -100,6 +100,20 @@ class WaitlistViewSet(viewsets.ModelViewSet):
         preferred = request.data.get("preferred_date") or None
         if preferred == "":
             preferred = None
+        if preferred is not None:
+            from datetime import date, datetime
+
+            if isinstance(preferred, date) and not isinstance(preferred, datetime):
+                pass
+            else:
+                raw = str(preferred).strip()
+                try:
+                    preferred = date.fromisoformat(raw[:10])
+                except ValueError:
+                    return Response(
+                        {"detail": "preferred_date: ожидается дата YYYY-MM-DD."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
         entry = WaitlistEntry.objects.create(
             provider_id=provider_id,
             client=request.user,
