@@ -14,6 +14,7 @@ import PublicOrgPage from "./legal/PublicOrgPage.jsx";
 import HomeFallback from "./HomeFallback.jsx";
 import { shouldLoadApp } from "./viewRoutes.js";
 import "./landing.css";
+import "./design-kit.css";
 
 function lazyAppImport() {
   return import("./App.jsx").catch((err) => {

@@ -5719,6 +5719,71 @@ body.theme-dark .field-label {
   font-weight: 600;
 }
 
+.client-org-search-distance {
+  color: #1a1208;
+  font-weight: 700;
+}
+
+[data-theme="dark"] .client-org-search-distance,
+body.theme-dark .client-org-search-distance {
+  color: #ffb74d;
+}
+
+[data-theme="dark"] .client-org-search-meta,
+body.theme-dark .client-org-search-meta {
+  color: #9a9aa3;
+}
+
+[data-theme="dark"] .client-org-search-name,
+body.theme-dark .client-org-search-name {
+  color: #ececec;
+}
+
+[data-theme="dark"] .client-org-search-distance,
+body.theme-dark .client-org-search-distance {
+  color: #ffb74d;
+}
+
+[data-theme="dark"] .client-org-search-meta,
+body.theme-dark .client-org-search-meta {
+  color: #9a9aa3;
+}
+
+.ymap-me-pin {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  margin-left: -14px;
+  margin-top: -14px;
+  pointer-events: none;
+}
+
+.ymap-me-pin__halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(255, 122, 0, 0.28);
+  animation: ymap-me-pulse 1.8s ease-out infinite;
+}
+
+.ymap-me-pin__dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: #1a73e8;
+  border: 2.5px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+@keyframes ymap-me-pulse {
+  0% { transform: scale(0.7); opacity: 0.85; }
+  100% { transform: scale(1.85); opacity: 0; }
+}
+
 .client-org-search-sphere {
   overflow: hidden;
   text-overflow: ellipsis;

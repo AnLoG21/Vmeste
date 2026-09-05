@@ -35,7 +35,7 @@ services:
       sh -c "python manage.py migrate --noinput &&
              python manage.py sync_voice_asterisk || true &&
              python manage.py collectstatic --noinput &&
-             if [ \"$${SEED_DEMO_ON_DEPLOY:-0}\" = \"1\" ]; then python manage.py seed_demo --no-reset || true; fi &&
+             if [ \"$${SEED_DEMO_ON_DEPLOY:-0}\" = \"1\" ] && [ \"$${ALLOW_DEMO_SEED:-0}\" = \"1\" ]; then python manage.py seed_demo --no-reset --force || true; fi &&
              gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers $${GUNICORN_WORKERS:-1} --timeout 120"
     volumes:
       - vmeste_media:/app/media
@@ -48,6 +48,8 @@ services:
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
       CELERY_TASK_ALWAYS_EAGER: "0"
+      # Never auto-seed demo orgs on production deploys.
+      SEED_DEMO_ON_DEPLOY: "0"
       ASTERISK_CONF_DIR: /app/asterisk/conf/generated
       ASTERISK_AMI_HOST: asterisk
       ASTERISK_AMI_SECRET: ${ASTERISK_AMI_SECRET:-${ASTERISK_INTERNAL_SECRET}}

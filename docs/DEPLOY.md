@@ -133,6 +133,7 @@ https://vmeste.ru/api/subscriptions/webhook/yookassa/
 |--------------|--------------|
 | `runserver` | **Gunicorn** (4 воркера) |
 | `DEBUG=1` | `DEBUG=0` |
+| `SEED_DEMO_ON_DEPLOY=1` (если включали локально) | **Всегда `0` на проде** — `docker-compose.prod.yml` фиксирует `SEED_DEMO_ON_DEPLOY=0`. Демо-организации не сидятся при деплое. Staging: `ALLOW_DEMO_SEED=1` + `seed_demo --force` вручную |
 | Порты 5433, 6379 наружу | Закрыть, только внутри Docker |
 | `VITE_API_URL=localhost` | `https://ваш-домен.ru/api` |
 | Медиа в контейнере | Том `media_data` на диске |
@@ -198,6 +199,7 @@ docker compose -f docker-compose.prod.yml exec -T db \
 ## Чеклист перед запуском
 
 - [ ] `DEBUG=0`
+- [ ] `SEED_DEMO_ON_DEPLOY=0` (прод не должен сидить демо-организации)
 - [ ] Уникальный `SECRET_KEY`
 - [ ] `ALLOWED_HOSTS` с доменом
 - [ ] HTTPS работает

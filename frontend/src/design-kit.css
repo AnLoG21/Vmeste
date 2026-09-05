@@ -1,0 +1,155 @@
+/**
+ * Design kit — semantic tokens for new screens (light/dark).
+ * Prefer these vars over hard-coded hex when building new UI.
+ * Theme switch already sets the base tokens on :root / [data-theme].
+ */
+:root,
+[data-theme="light"] {
+  --vm-bg: var(--bg-page, #fff8f2);
+  --vm-surface: var(--bg-card, #ffffff);
+  --vm-surface-2: #fff3e8;
+  --vm-text: var(--text, #1a1a1a);
+  --vm-text-muted: var(--muted, #8d8d8d);
+  --vm-border: var(--border, #ffd9bd);
+  --vm-accent: var(--accent, #ff7a00);
+  --vm-accent-hover: var(--accent-hover, #eb6f00);
+  --vm-accent-soft: rgba(255, 122, 0, 0.12);
+  --vm-danger: #c62828;
+  --vm-success: #2e7d32;
+  --vm-warning: #e67e00;
+  --vm-info: #1a73e8;
+  --vm-shadow: 0 8px 24px var(--shadow, rgba(0, 0, 0, 0.08));
+  --vm-radius-sm: 8px;
+  --vm-radius: 12px;
+  --vm-radius-lg: 18px;
+  --vm-space-1: 4px;
+  --vm-space-2: 8px;
+  --vm-space-3: 12px;
+  --vm-space-4: 16px;
+  --vm-space-5: 24px;
+  --vm-space-6: 32px;
+  --vm-font: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --vm-font-display: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --vm-focus-ring: 0 0 0 3px rgba(255, 122, 0, 0.35);
+}
+
+[data-theme="dark"],
+body.theme-dark {
+  --vm-bg: var(--bg-page, #0f0f10);
+  --vm-surface: var(--bg-card, #1a1b1e);
+  --vm-surface-2: #25262c;
+  --vm-text: var(--text, #ececec);
+  --vm-text-muted: var(--muted, #9a9aa3);
+  --vm-border: var(--border, #2e3038);
+  --vm-accent: var(--accent, #ff8c33);
+  --vm-accent-hover: var(--accent-hover, #ff9f55);
+  --vm-accent-soft: rgba(255, 140, 51, 0.16);
+  --vm-danger: #ef5350;
+  --vm-success: #66bb6a;
+  --vm-warning: #ffb74d;
+  --vm-info: #64b5f6;
+  --vm-shadow: 0 10px 28px var(--shadow, rgba(0, 0, 0, 0.35));
+  --vm-focus-ring: 0 0 0 3px rgba(255, 140, 51, 0.4);
+}
+
+/* Primitives for new screens */
+.vm-screen {
+  background: var(--vm-bg);
+  color: var(--vm-text);
+  font-family: var(--vm-font);
+  min-height: 100%;
+}
+
+.vm-panel {
+  background: var(--vm-surface);
+  border: 1px solid var(--vm-border);
+  border-radius: var(--vm-radius);
+  box-shadow: var(--vm-shadow);
+  padding: var(--vm-space-5);
+}
+
+.vm-title {
+  font-family: var(--vm-font-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0 0 var(--vm-space-2);
+  color: var(--vm-text);
+}
+
+.vm-subtitle {
+  margin: 0 0 var(--vm-space-4);
+  color: var(--vm-text-muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.vm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--vm-space-2);
+  min-height: 40px;
+  padding: 0 var(--vm-space-4);
+  border-radius: var(--vm-radius-sm);
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.vm-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--vm-focus-ring);
+}
+
+.vm-btn--primary {
+  background: var(--vm-accent);
+  color: #fff;
+}
+
+.vm-btn--primary:hover {
+  background: var(--vm-accent-hover);
+}
+
+.vm-btn--ghost {
+  background: transparent;
+  color: var(--vm-text);
+  border-color: var(--vm-border);
+}
+
+.vm-btn--ghost:hover {
+  background: var(--vm-accent-soft);
+}
+
+.vm-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vm-space-1);
+  margin-bottom: var(--vm-space-3);
+}
+
+.vm-field label {
+  font-size: 0.85rem;
+  color: var(--vm-text-muted);
+}
+
+.vm-input {
+  min-height: 40px;
+  padding: 0 var(--vm-space-3);
+  border: 1px solid var(--vm-border);
+  border-radius: var(--vm-radius-sm);
+  background: var(--vm-surface);
+  color: var(--vm-text);
+  font: inherit;
+}
+
+.vm-input:focus {
+  outline: none;
+  box-shadow: var(--vm-focus-ring);
+  border-color: var(--vm-accent);
+}
+
+.vm-muted {
+  color: var(--vm-text-muted);
+}

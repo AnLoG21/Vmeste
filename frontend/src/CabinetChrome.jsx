@@ -1,7 +1,7 @@
 import logoMain from "./assets/logo-main.png";
 import VmenuLogo from "./vmenu/VmenuLogo.jsx";
 import { bookmarkLabel } from "./subnavBookmarks.js";
-import { sphereMapIconHref } from "./clientOrgFeatures.js";
+import { formatDistanceKm, sphereMapIconHref } from "./clientOrgFeatures.js";
 
 function bookmarkMenuIcon(id) {
   const icons = {
@@ -323,6 +323,7 @@ export default function CabinetChrome({
                       loc.provider_average_rating != null
                         ? Number(loc.provider_average_rating).toFixed(1)
                         : null;
+                    const distLabel = formatDistanceKm(loc.distance_km);
                     return (
                       <li key={loc.provider} role="option">
                         <button
@@ -347,6 +348,9 @@ export default function CabinetChrome({
                           <span className="client-org-search-body">
                             <span className="client-org-search-name">{name}</span>
                             <span className="client-org-search-meta">
+                              {distLabel ? (
+                                <span className="client-org-search-distance">{distLabel}</span>
+                              ) : null}
                               {rating != null && (
                                 <span className="client-org-search-rating">★ {rating}</span>
                               )}

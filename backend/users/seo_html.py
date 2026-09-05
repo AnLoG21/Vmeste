@@ -10,6 +10,8 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.views import View
 
+from .city_seo import get_city_seo
+from .city_seo import get_city_seo
 from .map_visibility import providers_visible_on_map
 from .models import User
 from .org_profile import default_working_hours
@@ -346,9 +348,10 @@ class SeoCityHtmlView(View):
                 ),
                 status=404,
             )
-        aliases = CITY_ALIASES.get(city_key, [city_title.lower()])
+        city_seo = get_city_seo(city_key) or {}
+        aliases = city_seo.get("aliases") or CITY_ALIASES.get(city_key, [city_title.lower()])
         qs = providers_visible_on_map(
-            User.objects.filter(role=User.Role.PROVIDER, is_active=True)
+            User.objects.filter(role=User.Role.PROVIDER, is_active=True, is_demo=False)
             .exclude(organization_name="")
             .order_by("id")[:800]
         )
@@ -367,11 +370,17 @@ class SeoCityHtmlView(View):
                     "is_cafe": u.provider_sphere == User.ProviderSphere.CAFE_RESTAURANT,
                 }
             )
+        meta_title = city_seo.get("meta_title") or f"Вместе в городе {city_title} — онлайн-запись и кафе"
+        meta_description = city_seo.get("meta_description") or (
+            f"Организации на платформе Вместе в городе {city_title}: запись, меню, контакты."
+        )
+        city_faqs = city_seo.get("faqs") or []
         json_ld = [
             {
                 "@context": "https://schema.org",
                 "@type": "CollectionPage",
                 "name": f"Вместе · {city_title}",
+                "description": meta_description,
                 "url": f"{SITE_ORIGIN}/city/{city_key}",
                 "about": city_title,
             },
@@ -390,16 +399,35 @@ class SeoCityHtmlView(View):
                 ],
             },
         ]
+        if city_faqs:
+            json_ld.append(
+                {
+                    "@context": "https://schema.org",
+                    "@type": "FAQPage",
+                    "mainEntity": [
+                        {
+                            "@type": "Question",
+                            "name": f["q"],
+                            "acceptedAnswer": {"@type": "Answer", "text": f["a"]},
+                        }
+                        for f in city_faqs
+                        if f.get("q") and f.get("a")
+                    ],
+                }
+            )
         return render(
             request,
             "seo/city.html",
             _base_ctx(
-                title=f"Вместе в городе {city_title} — онлайн-запись и кафе",
-                description=f"Организации на платформе Вместе в городе {city_title}: запись, меню, контакты.",
+                title=meta_title,
+                description=meta_description,
                 canonical=f"{SITE_ORIGIN}/city/{city_key}",
                 robots="index,follow",
                 city_key=city_key,
                 city_title=city_title,
+                city_intro=city_seo.get("intro") or "",
+                city_bullets=city_seo.get("bullets") or [],
+                city_faqs=city_faqs,
                 orgs=orgs,
                 json_ld=json.dumps(json_ld, ensure_ascii=False),
             ),

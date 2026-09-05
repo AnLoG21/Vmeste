@@ -431,12 +431,33 @@ export function uniqueDiscoverOrgs(locations) {
       (x.is_main_office ? 4 : 0) + (x.provider_cover_url ? 2 : 0) + (x.provider_average_rating != null ? 1 : 0);
     if (score(loc) > score(prev)) byProvider.set(pid, loc);
   }
-  return [...byProvider.values()].sort((a, b) =>
+  const list = [...byProvider.values()];
+  const hasDistance = list.some((x) => Number.isFinite(Number(x.distance_km)));
+  if (hasDistance) {
+    return list.sort((a, b) => {
+      const da = Number.isFinite(Number(a.distance_km)) ? Number(a.distance_km) : 1e9;
+      const db = Number.isFinite(Number(b.distance_km)) ? Number(b.distance_km) : 1e9;
+      if (da !== db) return da - db;
+      return String(a.organization_name || a.title || "").localeCompare(
+        String(b.organization_name || b.title || ""),
+        "ru",
+      );
+    });
+  }
+  return list.sort((a, b) =>
     String(a.organization_name || a.title || "").localeCompare(
       String(b.organization_name || b.title || ""),
       "ru",
     ),
   );
+}
+
+export function formatDistanceKm(km) {
+  const n = Number(km);
+  if (!Number.isFinite(n) || n < 0) return "";
+  if (n < 1) return `${Math.round(n * 1000)} м`;
+  if (n < 10) return `${n.toFixed(1)} км`;
+  return `${Math.round(n)} км`;
 }
 
 export function escapeMapHtml(text) {

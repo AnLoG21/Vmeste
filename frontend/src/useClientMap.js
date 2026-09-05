@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadYandexMaps } from "./yandexMapsLoader.js";
 import { buildYmapOrgPlacemark, resetOrgPinLayoutClass } from "./clientOrgFeatures.js";
+import { getDevicePosition } from "./geoPosition.js";
 import { showToast } from "./toast.js";
 
 /**
@@ -25,6 +26,7 @@ export function useClientMap({
   const clientMyLocationPlacemarkRef = useRef(null);
   const clientMyLocationCoordsRef = useRef(null);
   const clientMyLocationWatchIdRef = useRef(null);
+  const clientCenteredOnMeRef = useRef(false);
   const [mapMarkersTick, setMapMarkersTick] = useState(0);
   const openOrgOnMapRef = useRef(openOrgOnMap);
   openOrgOnMapRef.current = openOrgOnMap;
@@ -40,6 +42,7 @@ export function useClientMap({
     }
     clientMyLocationPlacemarkRef.current = null;
     clientMyLocationCoordsRef.current = null;
+    clientCenteredOnMeRef.current = false;
     if (clientDiscoverMapRef.current) {
       try {
         clientDiscoverMapRef.current.destroy();
@@ -56,7 +59,23 @@ export function useClientMap({
     resetOrgPinLayoutClass();
   }
 
-  function ensureClientMyLocationMarker(coords) {
+  function maybeCenterOnMe(coords, { force = false } = {}) {
+    const map = clientDiscoverMapRef.current;
+    if (!map || !coords) return;
+    const cityKey = (new URLSearchParams(window.location.search).get("city") || "").toLowerCase();
+    if (cityKey && !force) return;
+    if (clientCenteredOnMeRef.current && !force) return;
+    const [lat, lon] = coords;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    try {
+      map.setCenter([lat, lon], 13, { duration: 280 });
+      clientCenteredOnMeRef.current = true;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function ensureClientMyLocationMarker(coords, { center = false } = {}) {
     const ymaps = window.ymaps;
     const map = clientDiscoverMapRef.current;
     if (!ymaps || !map || !coords) return;
@@ -79,34 +98,47 @@ export function useClientMap({
       } catch {
         /* ignore */
       }
+      if (center) maybeCenterOnMe([lat, lon]);
       return;
     }
+    const layout = ymaps.templateLayoutFactory.createClass(
+      `<div class="ymap-me-pin" title="Вы здесь">
+        <span class="ymap-me-pin__halo"></span>
+        <span class="ymap-me-pin__dot"></span>
+      </div>`,
+    );
     const pm = new ymaps.Placemark(
       [lat, lon],
-      { hintContent: "Вы здесь" },
+      { hintContent: "Вы здесь", balloonContent: "Моё местоположение" },
       {
-        preset: "islands#blueCircleDotIcon",
-        zIndex: 700,
-        zIndexHover: 700,
+        iconLayout: layout,
+        iconShape: { type: "Circle", coordinates: [0, 0], radius: 18 },
+        zIndex: 900,
+        zIndexHover: 900,
       },
     );
     clientMyLocationPlacemarkRef.current = pm;
     map.geoObjects.add(pm);
+    if (center) maybeCenterOnMe([lat, lon]);
   }
 
-  function startClientMyLocationTracking() {
-    if (!navigator.geolocation || clientMyLocationWatchIdRef.current != null) return;
+  async function startClientMyLocationTracking() {
+    if (clientMyLocationWatchIdRef.current != null) return;
+    try {
+      const pos = await getDevicePosition();
+      if (pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lon)) {
+        ensureClientMyLocationMarker([pos.lat, pos.lon], { center: true });
+      }
+    } catch {
+      /* permission denied / unavailable */
+    }
+    if (!navigator.geolocation) return;
     const apply = (pos) => {
       const lat = pos?.coords?.latitude;
       const lon = pos?.coords?.longitude;
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-      ensureClientMyLocationMarker([lat, lon]);
+      ensureClientMyLocationMarker([lat, lon], { center: !clientCenteredOnMeRef.current });
     };
-    navigator.geolocation.getCurrentPosition(apply, () => {}, {
-      enableHighAccuracy: false,
-      timeout: 10000,
-      maximumAge: 30000,
-    });
     try {
       clientMyLocationWatchIdRef.current = navigator.geolocation.watchPosition(
         apply,
@@ -155,9 +187,16 @@ export function useClientMap({
     if (clientMyLocationCoordsRef.current) {
       ensureClientMyLocationMarker(clientMyLocationCoordsRef.current);
     } else {
-      startClientMyLocationTracking();
+      void startClientMyLocationTracking();
     }
     if (!fitView) return;
+    if (clientMyLocationCoordsRef.current && !clientCenteredOnMeRef.current) {
+      maybeCenterOnMe(clientMyLocationCoordsRef.current);
+      return;
+    }
+    if (clientCenteredOnMeRef.current && clientMyLocationCoordsRef.current) {
+      return;
+    }
     if (coordsList.length === 1) {
       map.setCenter(coordsList[0], 14);
     } else if (coordsList.length > 1) {

@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
+import "./design-kit.css";
 import "./mobile.css";
 import LandingPage from "./LandingPage.jsx";
 import SubscriptionsPage from "./SubscriptionsPage.jsx";
@@ -1095,12 +1096,13 @@ export default function App() {
     if (f.time_to) p.set("time_to", f.time_to);
     let cancelled = false;
     (async () => {
-      // «Рядом»: сортировка по дистанции при известной геолокации (особенно с фильтром сферы/услуги).
+      // «Рядом»: сортировка по дистанции + радиус 40 км при известной геолокации.
       try {
         const pos = await getDevicePosition();
         if (pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lon)) {
           p.set("near_lat", String(pos.lat));
           p.set("near_lon", String(pos.lon));
+          p.set("max_km", "40");
         }
       } catch {
         /* ignore geo */

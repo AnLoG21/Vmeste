@@ -317,6 +317,7 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
 
         near_lat = (request.query_params.get("near_lat") or "").strip()
         near_lon = (request.query_params.get("near_lon") or "").strip()
+        max_km_raw = (request.query_params.get("max_km") or "").strip()
         if near_lat and near_lon:
             try:
                 lat0 = float(near_lat)
@@ -330,6 +331,14 @@ class ProviderLocationViewSet(viewsets.ModelViewSet):
                     d = _dist_key(item)
                     if d < 1e8:
                         item["distance_km"] = round(d, 2)
+                if max_km_raw:
+                    max_km = float(max_km_raw)
+                    if max_km > 0:
+                        data = [
+                            item
+                            for item in data
+                            if item.get("distance_km") is not None and float(item["distance_km"]) <= max_km
+                        ]
             except (TypeError, ValueError):
                 pass
 

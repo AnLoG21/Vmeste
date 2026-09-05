@@ -103,29 +103,57 @@ async function fromYandex(provider = "browser") {
   return { lat, lon, source: `yandex:${provider}` };
 }
 
+let _cachedPosition = null;
+let _cachedAt = 0;
+const POSITION_TTL_MS = 60_000;
+
 /**
- * Текущие координаты устройства.
+ * Текущие координаты устройства (с коротким кэшем).
  * Порядок: Capacitor → браузер (GPS/сеть) → Яндекс browser → Яндекс IP.
  */
-export async function getDevicePosition() {
+export async function getDevicePosition({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && _cachedPosition && now - _cachedAt < POSITION_TTL_MS) {
+    return _cachedPosition;
+  }
   const native = await fromCapacitor();
-  if (native) return native;
+  if (native) {
+    _cachedPosition = native;
+    _cachedAt = now;
+    return native;
+  }
 
   try {
-    return await fromBrowser();
+    const browser = await fromBrowser();
+    _cachedPosition = browser;
+    _cachedAt = now;
+    return browser;
   } catch (browserErr) {
     try {
       const yaBrowser = await fromYandex("browser");
-      if (yaBrowser) return yaBrowser;
+      if (yaBrowser) {
+        _cachedPosition = yaBrowser;
+        _cachedAt = now;
+        return yaBrowser;
+      }
     } catch {
       /* ignore */
     }
     try {
       const yaIp = await fromYandex("yandex");
-      if (yaIp) return yaIp;
+      if (yaIp) {
+        _cachedPosition = yaIp;
+        _cachedAt = now;
+        return yaIp;
+      }
     } catch {
       /* ignore */
     }
     throw new Error(geoErrorMessage(browserErr) || browserErr?.message || "Не удалось получить геолокацию");
   }
+}
+
+export function peekCachedPosition() {
+  if (_cachedPosition && Date.now() - _cachedAt < POSITION_TTL_MS) return _cachedPosition;
+  return null;
 }

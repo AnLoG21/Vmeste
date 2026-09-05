@@ -9,9 +9,24 @@
     <span>{{ city_title }}</span>
   </nav>
   <h1>Вместе · {{ city_title }}</h1>
+  {% if city_intro %}
+  <p>{{ city_intro }}</p>
+  {% else %}
   <p class="muted">Организации с адресом в этом городе.</p>
+  {% endif %}
+  <p><a href="/map?city={{ city_key }}">Открыть на карте</a></p>
 </header>
 <article>
+  {% if city_bullets %}
+  <h2>Что доступно в городе</h2>
+  <ul>
+    {% for b in city_bullets %}
+    <li>{{ b }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <h2>Организации</h2>
   {% if not orgs %}
   <p>Пока нет опубликованных организаций с адресом в городе {{ city_title }}.</p>
   {% else %}
@@ -26,6 +41,17 @@
     {% endfor %}
   </ul>
   {% endif %}
+
+  {% if city_faqs %}
+  <h2>Частые вопросы</h2>
+  {% for f in city_faqs %}
+  <details>
+    <summary>{{ f.q }}</summary>
+    <p>{{ f.a }}</p>
+  </details>
+  {% endfor %}
+  {% endif %}
+
   <p>
     <a href="/city/moscow">Москва</a> ·
     <a href="/city/spb">Санкт-Петербург</a> ·
