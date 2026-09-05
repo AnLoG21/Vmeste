@@ -4,9 +4,6 @@ import { buildYmapOrgPlacemark, resetOrgPinLayoutClass } from "./clientOrgFeatur
 import { getDevicePosition, hasCoords } from "./geoPosition.js";
 import { showToast } from "./toast.js";
 
-/** Слишком грубая точность = почти наверняка IP/кэш, не ставим «я здесь». */
-const MAX_ME_ACCURACY_M = 8000;
-
 /**
  * Client discover map: Yandex init/destroy, placemarks, my-location tracking.
  * Map-org sheet state lives in useMapOrgSheet; pass setDetectedCity from useOrgAddress.
@@ -196,33 +193,39 @@ export function useClientMap({
 
     const applyCoords = (lat, lon, accuracy, { center = false, source = "" } = {}) => {
       if (!hasCoords(lat, lon)) return false;
-      const acc = Number(accuracy);
-      // IP/очень грубая сеть — не ставим (как раз «за пределами Москвы»).
-      if (String(source).includes("yandex:yandex")) return false;
-      if (Number.isFinite(acc) && acc > MAX_ME_ACCURACY_M) return false;
-      ensureClientMyLocationMarker([Number(lat), Number(lon)], { center, accuracy: acc });
+      // Только явный IP-провайдер Яндекса даёт «за городом»; browser/Wi‑Fi — ставим всегда.
+      if (String(source) === "yandex:yandex") return false;
+      ensureClientMyLocationMarker([Number(lat), Number(lon)], {
+        center,
+        accuracy: Number(accuracy),
+      });
       return true;
     };
 
     try {
-      // Только GPS/браузер — без IP-фолбэка Яндекса (см. CafeGuestDeliveryMap provider: browser).
+      // Как у курьера: getDevicePosition без IP. Сначала точный GPS, потом обычный browser.
       try {
-        const pos = await getDevicePosition({
-          force: true,
-          allowIpFallback: false,
-          highAccuracyOnly: true,
-        });
+        const pos =
+          (await getDevicePosition({
+            force: true,
+            allowIpFallback: false,
+            highAccuracyOnly: true,
+          }).catch(() => null)) ||
+          (await getDevicePosition({
+            force: true,
+            allowIpFallback: false,
+            highAccuracyOnly: false,
+          }));
         if (pos) {
           applyCoords(pos.lat, pos.lon, pos.accuracy, { center: true, source: pos.source });
         }
       } catch {
-        /* ниже добьём watch + GeolocationControl */
+        /* watch / кнопка геолокации */
       }
 
-      // Дополнительно: ymaps.geolocation с provider=browser (как кнопка на карте доставки).
       try {
         const ymaps = window.ymaps;
-        if (ymaps?.geolocation?.get) {
+        if (ymaps?.geolocation?.get && !clientMyLocationCoordsRef.current) {
           const result = await ymaps.geolocation.get({
             provider: "browser",
             autoReverseGeocode: false,
@@ -230,7 +233,10 @@ export function useClientMap({
           });
           const coords = result?.geoObjects?.get?.(0)?.geometry?.getCoordinates?.();
           if (Array.isArray(coords) && coords.length >= 2) {
-            applyCoords(coords[0], coords[1], null, { center: !clientCenteredOnMeRef.current, source: "yandex:browser" });
+            applyCoords(coords[0], coords[1], null, {
+              center: !clientCenteredOnMeRef.current,
+              source: "yandex:browser",
+            });
           }
         }
       } catch {
@@ -249,16 +255,30 @@ export function useClientMap({
         });
       };
 
-      try {
-        clientMyLocationWatchIdRef.current = navigator.geolocation.watchPosition(
-          applyWatch,
-          () => {
-            clientMyLocationWatchIdRef.current = null;
-          },
-          { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
-        );
-      } catch {
-        clientMyLocationWatchIdRef.current = null;
+      const startWatch = (high) => {
+        try {
+          return navigator.geolocation.watchPosition(
+            applyWatch,
+            () => {
+              if (high) {
+                // Desktop без GPS: пробуем network location.
+                clientMyLocationWatchIdRef.current = startWatch(false);
+              } else {
+                clientMyLocationWatchIdRef.current = null;
+              }
+            },
+            high
+              ? { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+              : { enableHighAccuracy: false, timeout: 20000, maximumAge: 10000 },
+          );
+        } catch {
+          return null;
+        }
+      };
+
+      clientMyLocationWatchIdRef.current = startWatch(true);
+      if (clientMyLocationWatchIdRef.current == null) {
+        clientMyLocationWatchIdRef.current = startWatch(false);
       }
     } catch {
       clientMyLocationWatchIdRef.current = null;
@@ -266,7 +286,7 @@ export function useClientMap({
   }
 
   function attachBrowserGeolocationControl(ymaps, map) {
-    // Как CafeGuestDeliveryMap: только browser, без своей метки Яндекса (IP).
+    // Как CafeGuestDeliveryMap: provider=browser, без IP-метки Яндекса.
     try {
       const geoControl = new ymaps.control.GeolocationControl({
         options: { provider: "browser", noPlacemark: true },
