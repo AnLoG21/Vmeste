@@ -21,7 +21,17 @@ const statusLabels = {
 
 const KITCHEN_STATUS_ACTIONS = ["cooking", "ready"];
 const HALL_STATUS_ACTIONS = ["accepted", "ready", "to_courier", "delivering", "done", "cancelled"];
+const COURIER_STATUS_ACTIONS = ["to_courier", "delivering", "done", "cancelled"];
 const KITCHEN_STATUSES = new Set(["paid", "accepted", "cooking", "ready", "awaiting_payment", "to_courier"]);
+const ACTIVE_DELIVERY_STATUSES = new Set([
+  "paid",
+  "accepted",
+  "cooking",
+  "ready",
+  "awaiting_payment",
+  "to_courier",
+  "delivering",
+]);
 
 function formatGuestPhone(phone) {
   const raw = String(phone || "").trim();
@@ -103,9 +113,17 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
   const canKitchen = Boolean(perms.cafe_kitchen);
   const canSeating = Boolean(perms.cafe_seating);
   const canDelivery = Boolean(perms.cafe_delivery);
+  const deliveryOnly = canDelivery && !canOrders && !canKitchen && !canSeating;
   const roleSound = { canOrders, canKitchen, canSeating, canDelivery };
   const courierOptions = useMemo(() => {
-    const list = (orgStaff || []).filter((l) => l.is_active && l.invitation_status !== "pending");
+    const list = (orgStaff || []).filter((l) => {
+      if (!l.is_active || l.invitation_status === "pending") return false;
+      const p = l.permissions && typeof l.permissions === "object" ? l.permissions : null;
+      if (p && ("cafe_delivery" in p || "cafe_orders" in p || "cafe_kitchen" in p)) {
+        return Boolean(p.cafe_delivery) || Boolean(p.cafe_orders);
+      }
+      return true;
+    });
     return list.map((l) => ({
       id: Number(l.staff || l.staff_user?.id),
       name:
@@ -123,7 +141,15 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
     if (updated) setGeoStatus(courierUserId ? "Курьер назначен" : "Назначение курьера снято");
   }
 
-  const defaultTab = canOrders ? "orders" : canKitchen ? "kitchen" : canSeating ? "seating" : "orders";
+  const defaultTab = canOrders
+    ? "orders"
+    : canKitchen
+      ? "kitchen"
+      : canSeating
+        ? "seating"
+        : canDelivery
+          ? "delivery"
+          : "orders";
   const [tab, setTab] = useState(defaultTab);
   const [orders, setOrders] = useState([]);
   const [floors, setFloors] = useState([]);
@@ -159,8 +185,9 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
     if (canOrders) allowed.push("orders");
     if (canKitchen) allowed.push("kitchen");
     if (canSeating) allowed.push("seating");
+    if (canDelivery) allowed.push("delivery");
     if (allowed.length && !allowed.includes(tab)) setTab(allowed[0]);
-  }, [canOrders, canKitchen, canSeating, tab]);
+  }, [canOrders, canKitchen, canSeating, canDelivery, tab]);
 
   const loadOrders = useCallback(async () => {
     const res = await authFetch(`${API_URL}/cafe/orders/`);
@@ -324,6 +351,15 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
       .filter((o) => KITCHEN_STATUSES.has(o.status))
       .sort((a, b) => {
         const rank = { cooking: 0, accepted: 1, paid: 2, awaiting_payment: 3, ready: 4 };
+        return (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || b.id - a.id;
+      });
+  }, [orders]);
+
+  const deliveryOrders = useMemo(() => {
+    return orders
+      .filter((o) => o.mode === "delivery" && ACTIVE_DELIVERY_STATUSES.has(o.status))
+      .sort((a, b) => {
+        const rank = { to_courier: 0, ready: 1, delivering: 2, accepted: 3, cooking: 4, paid: 5 };
         return (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || b.id - a.id;
       });
   }, [orders]);
@@ -657,9 +693,11 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
             <div className="cafe-status-actions">
               {(kitchen
                 ? KITCHEN_STATUS_ACTIONS
-                : o.mode === "delivery"
-                  ? HALL_STATUS_ACTIONS
-                  : HALL_STATUS_ACTIONS.filter((st) => st !== "to_courier" && st !== "delivering")
+                : deliveryOnly || (o.mode === "delivery" && canDelivery && !canOrders)
+                  ? COURIER_STATUS_ACTIONS
+                  : o.mode === "delivery"
+                    ? HALL_STATUS_ACTIONS
+                    : HALL_STATUS_ACTIONS.filter((st) => st !== "to_courier" && st !== "delivering")
               ).map((st) => (
                 <button
                   key={st}
@@ -694,6 +732,7 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
           canOrders ? ["orders", "Заказы"] : null,
           canKitchen ? ["kitchen", "Кухня"] : null,
           canSeating ? ["seating", "Посадка"] : null,
+          canDelivery ? ["delivery", "Доставка"] : null,
         ]
           .filter(Boolean)
           .map(([id, label]) => (
@@ -705,6 +744,7 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
           >
             {label}
             {id === "kitchen" && kitchenOrders.length ? ` (${kitchenOrders.length})` : ""}
+            {id === "delivery" && deliveryOrders.length ? ` (${deliveryOrders.length})` : ""}
           </button>
         ))}
       </div>
@@ -723,6 +763,24 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
           <div className="cafe-tables-list">
             {orders.length === 0 ? <p className="muted">Заказов пока нет.</p> : null}
             {orders.map((o) => renderOrderCard(o))}
+          </div>
+        </>
+      ) : null}
+
+      {tab === "delivery" ? (
+        <>
+          <div className="cafe-kitchen-banner">
+            <p className="muted" style={{ margin: 0 }}>
+              Очередь доставки: назначение курьера, геолокация и статусы «в пути».
+            </p>
+            <label className="checkbox">
+              <input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} />
+              <span>Звук новых заказов</span>
+            </label>
+          </div>
+          <div className="cafe-tables-list">
+            {deliveryOrders.length === 0 ? <p className="muted">Активных заказов доставки нет.</p> : null}
+            {deliveryOrders.map((o) => renderOrderCard(o))}
           </div>
         </>
       ) : null}

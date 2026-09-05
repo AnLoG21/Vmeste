@@ -561,12 +561,17 @@ class CafeProviderOrdersView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        
-        provider, err = _cafe_auth(request, need_orders=True, need_kitchen=True, need_delivery=True, need_seating=True)
+        provider, perms, err = _gate_cafe(
+            request, need_orders=True, need_kitchen=True, need_delivery=True, need_seating=True
+        )
         if err:
             return err
-        qs = CafeOrder.objects.filter(provider=provider).select_related("courier_user").prefetch_related("items")[:100]
-        return Response(CafeOrderSerializer(qs, many=True).data)
+        qs = CafeOrder.objects.filter(provider=provider).select_related("courier_user").prefetch_related("items")
+        from .access import delivery_only_perms
+
+        if delivery_only_perms(perms):
+            qs = qs.filter(mode=CafeOrder.Mode.DELIVERY)
+        return Response(CafeOrderSerializer(qs[:100], many=True).data)
 
     def post(self, request):
         """Официант создаёт заказ за стол."""
@@ -654,18 +659,32 @@ class CafeProviderOrdersView(APIView):
         return Response(CafeOrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
     def patch(self, request, pk):
-        
-        provider, err = _cafe_auth(request, need_orders=True, need_kitchen=True, need_delivery=True)
+        provider, perms, err = _gate_cafe(request, need_orders=True, need_kitchen=True, need_delivery=True)
         if err:
             return err
         order = get_object_or_404(CafeOrder, pk=pk, provider=provider)
+        can_orders = bool(perms.get("cafe_orders"))
+        can_delivery = bool(perms.get("cafe_delivery"))
+        from .access import validate_courier_order_patch
+
         new_status = (request.data.get("status") or "").strip()
         allowed = {c[0] for c in CafeOrder.Status.choices}
         if new_status not in allowed:
             return Response({"status": ["Некорректный статус."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        courier_err = validate_courier_order_patch(
+            perms=perms, order_mode=order.mode, new_status=new_status
+        )
+        if courier_err:
+            code = status.HTTP_403_FORBIDDEN if "только с заказами" in courier_err else status.HTTP_400_BAD_REQUEST
+            payload = {"detail": courier_err} if code == status.HTTP_403_FORBIDDEN else {"status": [courier_err]}
+            return Response(payload, status=code)
+
         order.status = new_status
         update_fields = ["status", "updated_at"]
         if "courier_user" in request.data or "courier_user_id" in request.data:
+            if not (can_delivery or can_orders):
+                return Response({"detail": "Нет права назначать курьера."}, status=status.HTTP_403_FORBIDDEN)
             raw_c = request.data.get("courier_user", request.data.get("courier_user_id"))
             if raw_c in (None, "", "null"):
                 order.courier_user_id = None
@@ -691,6 +710,8 @@ class CafeProviderOrdersView(APIView):
                 order.courier_user_id = cid
                 update_fields.append("courier_user")
         if "courier_lat" in request.data and "courier_lon" in request.data:
+            if not can_delivery:
+                return Response({"detail": "Нет права обновлять геолокацию курьера."}, status=status.HTTP_403_FORBIDDEN)
             try:
                 clat = float(request.data.get("courier_lat"))
                 clon = float(request.data.get("courier_lon"))
@@ -1176,58 +1197,29 @@ class CafeGuestOrderCreateView(APIView):
 
             delivery_fee = Decimal("0")
             if mode == CafeOrder.Mode.DELIVERY:
-                from .delivery_zones import find_delivery_zone, normalize_delivery_zones
+                from .delivery_zones import quote_delivery_for_point
 
-                zones = normalize_delivery_zones(settings_obj.delivery_zones or [])
-                zone = None
-                if zones:
-                    try:
-                        d_lat = float(request.data.get("delivery_lat"))
-                        d_lon = float(request.data.get("delivery_lon"))
-                    except (TypeError, ValueError):
-                        order.delete()
-                        return Response(
-                            {
-                                "delivery_address": [
-                                    "Укажите точку доставки на карте — адрес должен попадать в зону."
-                                ]
-                            },
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
-                    zone = find_delivery_zone(d_lat, d_lon, zones)
-                    if not zone:
-                        order.delete()
-                        return Response(
-                            {
-                                "detail": "Адрес вне зон доставки. Выберите точку внутри выделенной области на карте."
-                            },
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
-                    zone_min = Decimal(str(zone.get("min_order") or 0))
-                    zone_fee = Decimal(str(zone.get("fee") or 0))
-                    if zone_min <= 0:
-                        zone_min = settings_obj.delivery_min_order or Decimal("0")
-                    if zone_fee < 0:
-                        zone_fee = settings_obj.delivery_fee or Decimal("0")
-                    if items_total < zone_min and zone_min > 0:
-                        order.delete()
-                        return Response(
-                            {"detail": f"Минимальная сумма заказа для доставки: {zone_min} ₽."},
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
-                    delivery_fee = zone_fee
-                    # зону в адрес не пишем — клиенту не нужна
-                    order.delivery_address = delivery_address
-                else:
-                    if items_total < settings_obj.delivery_min_order and settings_obj.delivery_min_order > 0:
-                        order.delete()
-                        return Response(
-                            {
-                                "detail": f"Минимальная сумма для доставки: {settings_obj.delivery_min_order} ₽."
-                            },
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
-                    delivery_fee = settings_obj.delivery_fee or Decimal("0")
+                try:
+                    d_lat = float(request.data.get("delivery_lat"))
+                    d_lon = float(request.data.get("delivery_lon"))
+                except (TypeError, ValueError):
+                    d_lat = d_lon = None
+                delivery_fee, _zone, zone_err = quote_delivery_for_point(
+                    zones=settings_obj.delivery_zones or [],
+                    fallback_fee=settings_obj.delivery_fee,
+                    fallback_min_order=settings_obj.delivery_min_order,
+                    lat=d_lat,
+                    lon=d_lon,
+                    items_total=items_total,
+                )
+                if zone_err:
+                    order.delete()
+                    key = "delivery_address" if "карте" in zone_err.lower() or "точку" in zone_err.lower() else "detail"
+                    if key == "detail":
+                        return Response({"detail": zone_err}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({key: [zone_err]}, status=status.HTTP_400_BAD_REQUEST)
+                order.delivery_address = delivery_address
+                order.delivery_fee = delivery_fee or Decimal("0")
 
             if tip_custom:
                 tip_amount = tip_amount_raw.quantize(Decimal("0.01"))

@@ -103,3 +103,24 @@ def require_cafe(request, *, need_orders=False, need_kitchen=False, need_seating
     request.cafe_provider = provider
     request.cafe_perms = perms
     return provider, perms, None
+
+
+COURIER_ALLOWED_STATUSES = frozenset({"to_courier", "delivering", "done", "cancelled"})
+
+
+def delivery_only_perms(perms: dict) -> bool:
+    return bool(perms.get("cafe_delivery")) and not bool(perms.get("cafe_orders")) and not bool(perms.get("cafe_kitchen"))
+
+
+def validate_courier_order_patch(*, perms: dict, order_mode: str, new_status: str) -> str | None:
+    """
+    If staff is delivery-only, restrict to delivery orders + courier statuses.
+    Returns error detail or None when OK.
+    """
+    if not delivery_only_perms(perms):
+        return None
+    if order_mode != "delivery":
+        return "Курьер может работать только с заказами доставки."
+    if new_status not in COURIER_ALLOWED_STATUSES:
+        return "Для курьера доступны статусы: передаём курьеру, в пути, завершён, отменён."
+    return None

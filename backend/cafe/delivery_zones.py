@@ -102,3 +102,47 @@ def find_delivery_zone(lat: float, lon: float, zones) -> dict | None:
         if point_in_polygon(lat, lon, z.get("polygon") or []):
             return z
     return None
+
+
+def quote_delivery_for_point(
+    *,
+    zones,
+    fallback_fee,
+    fallback_min_order,
+    lat: float | None,
+    lon: float | None,
+    items_total,
+) -> tuple[Decimal | None, dict | None, str | None]:
+    """
+    Resolve delivery fee for a cart point.
+    Returns (fee, zone_or_none, error_message_or_none).
+    """
+    zones = normalize_delivery_zones(zones)
+    items_total = _to_decimal(items_total, "0")
+    fallback_fee = _to_decimal(fallback_fee, "0")
+    fallback_min = _to_decimal(fallback_min_order, "0")
+
+    if zones:
+        if lat is None or lon is None:
+            return None, None, "Укажите точку доставки на карте — адрес должен попадать в зону."
+        try:
+            d_lat = float(lat)
+            d_lon = float(lon)
+        except (TypeError, ValueError):
+            return None, None, "Укажите точку доставки на карте — адрес должен попадать в зону."
+        zone = find_delivery_zone(d_lat, d_lon, zones)
+        if not zone:
+            return None, None, "Адрес вне зон доставки. Выберите точку внутри выделенной области на карте."
+        zone_min = _to_decimal(zone.get("min_order"), "0")
+        zone_fee = _to_decimal(zone.get("fee"), "0")
+        if zone_min <= 0:
+            zone_min = fallback_min
+        if zone_fee < 0:
+            zone_fee = fallback_fee
+        if zone_min > 0 and items_total < zone_min:
+            return None, zone, f"Минимальная сумма заказа для доставки: {zone_min} ₽."
+        return zone_fee, zone, None
+
+    if fallback_min > 0 and items_total < fallback_min:
+        return None, None, f"Минимальная сумма для доставки: {fallback_min} ₽."
+    return fallback_fee, None, None
