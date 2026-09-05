@@ -237,7 +237,7 @@
         color: #9a4000;
       }
 
-      /* Native/web boot splash — fast, smooth, no favicon tile */
+      /* Native boot splash — pin flies into «Вместе» */
       #vmeste-boot-splash {
         position: fixed;
         inset: 0;
@@ -245,9 +245,9 @@
         display: grid;
         place-items: center;
         background:
-          radial-gradient(120% 80% at 50% 28%, #ffe0c2 0%, transparent 55%),
+          radial-gradient(110% 70% at 50% 32%, #ffe0c2 0%, transparent 58%),
           linear-gradient(165deg, #fffaf5 0%, #fff1e4 48%, #ffe8d4 100%);
-        transition: opacity 0.38s ease, visibility 0.38s ease;
+        transition: opacity 0.4s ease, visibility 0.4s ease;
       }
       #vmeste-boot-splash.vmeste-boot-splash--out {
         opacity: 0;
@@ -258,51 +258,121 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 18px;
-        animation: vmeste-boot-in 0.62s cubic-bezier(0.22, 1, 0.36, 1) both;
+        gap: 14px;
       }
-      .vmeste-boot-splash__mark {
-        width: 72px;
-        height: 72px;
-        border-radius: 18px;
-        background: transparent;
-        box-shadow: 0 14px 36px rgba(26, 18, 8, 0.22);
-        display: grid;
-        place-items: center;
-        overflow: hidden;
-        animation: vmeste-boot-pulse 1.1s ease-in-out 0.35s 1 both;
+      .vmeste-boot-splash__lockup {
+        position: relative;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 0;
+        min-height: 64px;
+        padding: 8px 4px 0;
       }
-      .vmeste-boot-splash__mark svg {
-        width: 72px;
-        height: 72px;
-        display: block;
-      }
-      .vmeste-boot-splash__word {
+      .vmeste-boot-splash__letter {
         margin: 0;
         font-family: Manrope, system-ui, sans-serif;
         font-weight: 800;
-        font-size: 1.55rem;
-        letter-spacing: -0.03em;
+        font-size: clamp(2.1rem, 8vw, 2.75rem);
+        letter-spacing: -0.04em;
+        line-height: 1;
         color: #1a1208;
         opacity: 0;
-        animation: vmeste-boot-word 0.45s ease 0.18s forwards;
       }
-      .vmeste-boot-splash--reduced .vmeste-boot-splash__inner,
-      .vmeste-boot-splash--reduced .vmeste-boot-splash__mark,
-      .vmeste-boot-splash--reduced .vmeste-boot-splash__word {
+      .vmeste-boot-splash__letter--left {
+        animation: vmeste-boot-letter-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) 0.05s forwards;
+      }
+      .vmeste-boot-splash__letter--right {
+        animation: vmeste-boot-letter-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) 0.12s forwards;
+      }
+      .vmeste-boot-splash__pin-slot {
+        position: relative;
+        width: 42px;
+        height: 58px;
+        flex: 0 0 42px;
+        margin: 0 2px 2px;
+      }
+      .vmeste-boot-splash__pin {
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        width: 38px;
+        height: 52px;
+        margin-left: -19px;
+        transform-origin: 50% 100%;
+        opacity: 0;
+        animation: vmeste-boot-pin-fly 0.78s cubic-bezier(0.18, 0.9, 0.28, 1.15) 0.28s forwards;
+        filter: drop-shadow(0 10px 16px rgba(255, 122, 0, 0.35));
+      }
+      .vmeste-boot-splash__pin svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .vmeste-boot-splash__ripple {
+        position: absolute;
+        left: 50%;
+        bottom: 2px;
+        width: 22px;
+        height: 8px;
+        margin-left: -11px;
+        border-radius: 50%;
+        background: rgba(255, 122, 0, 0.35);
+        opacity: 0;
+        transform: scale(0.4);
+        animation: vmeste-boot-ripple 0.55s ease-out 0.9s forwards;
+      }
+      .vmeste-boot-splash__tag {
+        margin: 0;
+        font-family: Manrope, system-ui, sans-serif;
+        font-weight: 600;
+        font-size: 0.92rem;
+        color: #8a6550;
+        letter-spacing: 0.01em;
+        opacity: 0;
+        animation: vmeste-boot-tag 0.4s ease 0.95s forwards;
+      }
+      .vmeste-boot-splash--reduced .vmeste-boot-splash__letter,
+      .vmeste-boot-splash--reduced .vmeste-boot-splash__pin,
+      .vmeste-boot-splash--reduced .vmeste-boot-splash__ripple,
+      .vmeste-boot-splash--reduced .vmeste-boot-splash__tag {
         animation: none !important;
         opacity: 1;
+        transform: none;
       }
-      @keyframes vmeste-boot-in {
-        from { opacity: 0; transform: translateY(8px) scale(0.94); }
-        to { opacity: 1; transform: translateY(0) scale(1); }
+      .vmeste-boot-splash--reduced .vmeste-boot-splash__pin {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1);
+        left: 50%;
+        margin-left: 0;
+        transform: translateX(-50%);
       }
-      @keyframes vmeste-boot-pulse {
-        0% { transform: scale(1); }
-        45% { transform: scale(1.045); }
-        100% { transform: scale(1); }
+      @keyframes vmeste-boot-letter-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
       }
-      @keyframes vmeste-boot-word {
+      @keyframes vmeste-boot-pin-fly {
+        0% {
+          opacity: 0;
+          transform: translateY(-120px) scale(0.55) rotate(-18deg);
+        }
+        55% {
+          opacity: 1;
+          transform: translateY(6px) scale(1.06) rotate(4deg);
+        }
+        72% {
+          transform: translateY(-4px) scale(0.98) rotate(-2deg);
+        }
+        100% {
+          opacity: 1;
+          transform: translateY(0) scale(1) rotate(0deg);
+        }
+      }
+      @keyframes vmeste-boot-ripple {
+        0% { opacity: 0.55; transform: scale(0.35); }
+        100% { opacity: 0; transform: scale(2.4); }
+      }
+      @keyframes vmeste-boot-tag {
         from { opacity: 0; transform: translateY(6px); }
         to { opacity: 1; transform: translateY(0); }
       }
@@ -311,15 +381,20 @@
   <body>
     <div id="vmeste-boot-splash" aria-hidden="true">
       <div class="vmeste-boot-splash__inner">
-        <div class="vmeste-boot-splash__mark">
-          <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
-            <rect width="64" height="64" rx="14" fill="#1A1208"/>
-            <circle cx="32" cy="26" r="11" fill="#FF8C33"/>
-            <rect x="30" y="36" width="4" height="12" rx="2" fill="#FF8C33"/>
-            <ellipse cx="32" cy="50" rx="10" ry="3.2" fill="#FF8C33" opacity="0.55"/>
-          </svg>
+        <div class="vmeste-boot-splash__lockup" role="img" aria-label="Вместе">
+          <span class="vmeste-boot-splash__letter vmeste-boot-splash__letter--left">В</span>
+          <span class="vmeste-boot-splash__pin-slot">
+            <span class="vmeste-boot-splash__ripple"></span>
+            <span class="vmeste-boot-splash__pin">
+              <svg viewBox="0 0 48 64" fill="none" aria-hidden="true">
+                <path d="M24 4c-11.6 0-21 9.4-21 21 0 16 21 35 21 35s21-19 21-35c0-11.6-9.4-21-21-21z" fill="#FF7A00"/>
+                <circle cx="24" cy="24" r="8" fill="#FFF7F0"/>
+              </svg>
+            </span>
+          </span>
+          <span class="vmeste-boot-splash__letter vmeste-boot-splash__letter--right">месте</span>
         </div>
-        <p class="vmeste-boot-splash__word">Вместе</p>
+        <p class="vmeste-boot-splash__tag">онлайн-запись для бизнеса</p>
       </div>
     </div>
     <script>

@@ -1,8 +1,8 @@
 import { Capacitor } from "@capacitor/core";
 
-const MIN_MS = 700;
-const MAX_MS = 1600;
-const FADE_MS = 380;
+const MIN_MS = 1100;
+const MAX_MS = 1800;
+const FADE_MS = 400;
 
 function prefersReducedMotion() {
   try {
