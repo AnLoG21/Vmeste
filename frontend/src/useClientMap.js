@@ -6,7 +6,7 @@ import { showToast } from "./toast.js";
 
 /**
  * Client discover map: Yandex init/destroy, placemarks, my-location tracking.
- * Map-org sheet state lives in useMapOrgSheet; pass setDetectedCity from useOrgAddress.
+ * Org pins live in orgLayer; my-location lives in meLayer (never wiped by paint).
  */
 export function useClientMap({
   currentView,
@@ -21,14 +21,17 @@ export function useClientMap({
   openOrgOnMap,
 }) {
   const clientDiscoverMapRef = useRef(null);
+  const orgLayerRef = useRef(null);
+  const meLayerRef = useRef(null);
   const clientDiscoverMapClickBoundRef = useRef(false);
   const clientDiscoverMapZoomTimerRef = useRef(null);
   const clientMyLocationPlacemarkRef = useRef(null);
   const clientMyLocationAccuracyRef = useRef(null);
   const clientMyLocationCoordsRef = useRef(null);
-  const clientMyLocationMetaRef = useRef(null); // { accuracy, at }
+  const clientMyLocationMetaRef = useRef(null);
   const clientMyLocationWatchIdRef = useRef(null);
   const clientCenteredOnMeRef = useRef(false);
+  const geoStartedRef = useRef(false);
   const [mapMarkersTick, setMapMarkersTick] = useState(0);
   const openOrgOnMapRef = useRef(openOrgOnMap);
   openOrgOnMapRef.current = openOrgOnMap;
@@ -43,6 +46,7 @@ export function useClientMap({
       }
     }
     clientMyLocationWatchIdRef.current = null;
+    geoStartedRef.current = false;
   }
 
   function destroyClientDiscoverMap() {
@@ -52,6 +56,8 @@ export function useClientMap({
     clientMyLocationCoordsRef.current = null;
     clientMyLocationMetaRef.current = null;
     clientCenteredOnMeRef.current = false;
+    orgLayerRef.current = null;
+    meLayerRef.current = null;
     if (clientDiscoverMapRef.current) {
       try {
         clientDiscoverMapRef.current.destroy();
@@ -77,7 +83,7 @@ export function useClientMap({
     const [lat, lon] = coords;
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
     try {
-      map.setCenter([lat, lon], 13, { duration: 280 });
+      map.setCenter([lat, lon], 14, { duration: 280 });
       clientCenteredOnMeRef.current = true;
     } catch {
       /* ignore */
@@ -87,9 +93,10 @@ export function useClientMap({
   function ensureClientMyLocationMarker(coords, { center = false, accuracy = null } = {}) {
     const ymaps = window.ymaps;
     const map = clientDiscoverMapRef.current;
-    if (!ymaps || !map || !coords) return;
+    const meLayer = meLayerRef.current;
+    if (!ymaps || !map || !meLayer || !coords) return;
     const [lat, lon] = coords;
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    if (!hasCoords(lat, lon)) return;
 
     const acc = Number(accuracy);
     const hasAcc = Number.isFinite(acc) && acc > 0 && acc < 5000;
@@ -101,12 +108,12 @@ export function useClientMap({
       Number.isFinite(prev.accuracy)
     ) {
       const ageMs = Date.now() - (prev.at || 0);
-      if (acc > prev.accuracy * 1.75 && acc > 60 && ageMs < 90_000) {
+      if (acc > prev.accuracy * 1.75 && acc > 80 && ageMs < 90_000) {
         return;
       }
     }
 
-    clientMyLocationCoordsRef.current = [lat, lon];
+    clientMyLocationCoordsRef.current = [Number(lat), Number(lon)];
     clientMyLocationMetaRef.current = {
       accuracy: hasAcc ? acc : prev?.accuracy ?? null,
       at: Date.now(),
@@ -114,179 +121,144 @@ export function useClientMap({
 
     if (clientMyLocationPlacemarkRef.current) {
       try {
-        clientMyLocationPlacemarkRef.current.geometry.setCoordinates([lat, lon]);
+        clientMyLocationPlacemarkRef.current.geometry.setCoordinates([Number(lat), Number(lon)]);
       } catch {
         /* ignore */
       }
     } else {
-      // Как у курьера в CafeOrderMapPin: islands#blueCircleDotIcon
+      // Как курьер: CafeOrderMapPin islands#blueCircleDotIcon
       const pm = new ymaps.Placemark(
-        [lat, lon],
+        [Number(lat), Number(lon)],
         { hintContent: "Вы здесь", balloonContent: "Моё местоположение" },
-        {
-          preset: "islands#blueCircleDotIcon",
-          zIndex: 1000,
-          zIndexHover: 1000,
-        },
+        { preset: "islands#blueCircleDotIcon", zIndex: 1000, zIndexHover: 1000 },
       );
       clientMyLocationPlacemarkRef.current = pm;
       try {
-        map.geoObjects.add(pm);
+        meLayer.add(pm);
       } catch {
-        /* ignore */
-      }
-    }
-
-    const radius = hasAcc ? Math.max(25, Math.min(acc, 350)) : null;
-    if (radius != null) {
-      if (clientMyLocationAccuracyRef.current) {
         try {
-          clientMyLocationAccuracyRef.current.geometry.setCoordinates([[lat, lon], radius]);
-        } catch {
-          try {
-            clientMyLocationAccuracyRef.current.geometry.setCoordinates([lat, lon]);
-            clientMyLocationAccuracyRef.current.geometry.setRadius?.(radius);
-          } catch {
-            /* ignore */
-          }
-        }
-      } else {
-        try {
-          const circle = new ymaps.Circle(
-            [[lat, lon], radius],
-            {},
-            {
-              fillColor: "rgba(26, 115, 232, 0.12)",
-              strokeColor: "#1a73e8",
-              strokeOpacity: 0.4,
-              strokeWidth: 1,
-              zIndex: 50,
-            },
-          );
-          clientMyLocationAccuracyRef.current = circle;
-          map.geoObjects.add(circle);
+          map.geoObjects.add(pm);
         } catch {
           /* ignore */
         }
       }
     }
 
-    try {
+    if (hasAcc) {
+      const radius = Math.max(25, Math.min(acc, 350));
       if (clientMyLocationAccuracyRef.current) {
-        map.geoObjects.remove(clientMyLocationAccuracyRef.current);
-        map.geoObjects.add(clientMyLocationAccuracyRef.current);
+        try {
+          clientMyLocationAccuracyRef.current.geometry.setCoordinates([
+            [Number(lat), Number(lon)],
+            radius,
+          ]);
+        } catch {
+          /* ignore */
+        }
+      } else {
+        try {
+          const circle = new ymaps.Circle(
+            [[Number(lat), Number(lon)], radius],
+            {},
+            {
+              fillColor: "rgba(26, 115, 232, 0.12)",
+              strokeColor: "#1a73e8",
+              strokeOpacity: 0.35,
+              strokeWidth: 1,
+              zIndex: 40,
+            },
+          );
+          clientMyLocationAccuracyRef.current = circle;
+          meLayer.add(circle);
+        } catch {
+          /* ignore */
+        }
       }
-      if (clientMyLocationPlacemarkRef.current) {
-        map.geoObjects.remove(clientMyLocationPlacemarkRef.current);
-        map.geoObjects.add(clientMyLocationPlacemarkRef.current);
-      }
-    } catch {
-      /* ignore */
     }
 
-    if (center) maybeCenterOnMe([lat, lon]);
+    if (center) maybeCenterOnMe([Number(lat), Number(lon)]);
   }
 
-  async function startClientMyLocationTracking() {
-    if (clientMyLocationWatchIdRef.current != null) return;
-    clientMyLocationWatchIdRef.current = "pending";
+  function applyGeoPosition(lat, lon, accuracy, { center = false, source = "" } = {}) {
+    if (!hasCoords(lat, lon)) return;
+    if (String(source) === "yandex:yandex") return;
+    ensureClientMyLocationMarker([Number(lat), Number(lon)], {
+      center,
+      accuracy,
+    });
+  }
 
-    const applyCoords = (lat, lon, accuracy, { center = false, source = "" } = {}) => {
-      if (!hasCoords(lat, lon)) return false;
-      // Только явный IP-провайдер Яндекса даёт «за городом»; browser/Wi‑Fi — ставим всегда.
-      if (String(source) === "yandex:yandex") return false;
-      ensureClientMyLocationMarker([Number(lat), Number(lon)], {
-        center,
-        accuracy: Number(accuracy),
+  /** Не блокируем watch долгими await — иначе метка так и не появляется. */
+  function startClientMyLocationTracking() {
+    if (geoStartedRef.current) return;
+    geoStartedRef.current = true;
+
+    const onWatch = (pos) => {
+      applyGeoPosition(pos?.coords?.latitude, pos?.coords?.longitude, pos?.coords?.accuracy, {
+        center: !clientCenteredOnMeRef.current,
+        source: "browser-watch",
       });
-      return true;
     };
 
-    try {
-      // Как у курьера: getDevicePosition без IP. Сначала точный GPS, потом обычный browser.
+    if (navigator.geolocation) {
       try {
-        const pos =
-          (await getDevicePosition({
-            force: true,
-            allowIpFallback: false,
-            highAccuracyOnly: true,
-          }).catch(() => null)) ||
-          (await getDevicePosition({
-            force: true,
-            allowIpFallback: false,
-            highAccuracyOnly: false,
-          }));
-        if (pos) {
-          applyCoords(pos.lat, pos.lon, pos.accuracy, { center: true, source: pos.source });
-        }
+        // Сразу network/Wi‑Fi — на десктопе GPS часто не отвечает.
+        clientMyLocationWatchIdRef.current = navigator.geolocation.watchPosition(onWatch, () => {}, {
+          enableHighAccuracy: false,
+          timeout: 20000,
+          maximumAge: 10000,
+        });
       } catch {
-        /* watch / кнопка геолокации */
+        clientMyLocationWatchIdRef.current = null;
       }
 
+      // Параллельно одна точная попытка (не ждём её для старта watch).
+      try {
+        navigator.geolocation.getCurrentPosition(
+          onWatch,
+          () => {},
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
+        );
+      } catch {
+        /* ignore */
+      }
+    }
+
+    // Параллельно общий хелпер (как у курьера), без IP.
+    void getDevicePosition({ force: true, allowIpFallback: false })
+      .then((pos) => {
+        if (!pos) return;
+        applyGeoPosition(pos.lat, pos.lon, pos.accuracy, {
+          center: !clientCenteredOnMeRef.current,
+          source: pos.source,
+        });
+      })
+      .catch(() => {});
+
+    // И ymaps browser-provider (как CafeGuestDeliveryMap).
+    void (async () => {
       try {
         const ymaps = window.ymaps;
-        if (ymaps?.geolocation?.get && !clientMyLocationCoordsRef.current) {
-          const result = await ymaps.geolocation.get({
-            provider: "browser",
-            autoReverseGeocode: false,
-            mapStateAutoApply: false,
+        if (!ymaps?.geolocation?.get) return;
+        const result = await ymaps.geolocation.get({
+          provider: "browser",
+          autoReverseGeocode: false,
+          mapStateAutoApply: false,
+        });
+        const coords = result?.geoObjects?.get?.(0)?.geometry?.getCoordinates?.();
+        if (Array.isArray(coords) && coords.length >= 2) {
+          applyGeoPosition(coords[0], coords[1], null, {
+            center: !clientCenteredOnMeRef.current,
+            source: "yandex:browser",
           });
-          const coords = result?.geoObjects?.get?.(0)?.geometry?.getCoordinates?.();
-          if (Array.isArray(coords) && coords.length >= 2) {
-            applyCoords(coords[0], coords[1], null, {
-              center: !clientCenteredOnMeRef.current,
-              source: "yandex:browser",
-            });
-          }
         }
       } catch {
         /* ignore */
       }
-
-      if (!navigator.geolocation) {
-        clientMyLocationWatchIdRef.current = null;
-        return;
-      }
-
-      const applyWatch = (pos) => {
-        applyCoords(pos?.coords?.latitude, pos?.coords?.longitude, pos?.coords?.accuracy, {
-          center: !clientCenteredOnMeRef.current,
-          source: "browser-watch",
-        });
-      };
-
-      const startWatch = (high) => {
-        try {
-          return navigator.geolocation.watchPosition(
-            applyWatch,
-            () => {
-              if (high) {
-                // Desktop без GPS: пробуем network location.
-                clientMyLocationWatchIdRef.current = startWatch(false);
-              } else {
-                clientMyLocationWatchIdRef.current = null;
-              }
-            },
-            high
-              ? { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-              : { enableHighAccuracy: false, timeout: 20000, maximumAge: 10000 },
-          );
-        } catch {
-          return null;
-        }
-      };
-
-      clientMyLocationWatchIdRef.current = startWatch(true);
-      if (clientMyLocationWatchIdRef.current == null) {
-        clientMyLocationWatchIdRef.current = startWatch(false);
-      }
-    } catch {
-      clientMyLocationWatchIdRef.current = null;
-    }
+    })();
   }
 
   function attachBrowserGeolocationControl(ymaps, map) {
-    // Как CafeGuestDeliveryMap: provider=browser, без IP-метки Яндекса.
     try {
       const geoControl = new ymaps.control.GeolocationControl({
         options: { provider: "browser", noPlacemark: true },
@@ -295,11 +267,7 @@ export function useClientMap({
       geoControl.events.add("locationchange", (e) => {
         const position = e.get("position");
         if (!Array.isArray(position) || position.length < 2) return;
-        if (!hasCoords(position[0], position[1])) return;
-        ensureClientMyLocationMarker([Number(position[0]), Number(position[1])], {
-          center: true,
-          accuracy: null,
-        });
+        applyGeoPosition(position[0], position[1], null, { center: true, source: "geo-control" });
       });
     } catch {
       /* ignore */
@@ -309,20 +277,22 @@ export function useClientMap({
   function paintClientDiscoverMapMarkers(locations, { fitView = false, selectedId = null } = {}) {
     const ymaps = window.ymaps;
     const map = clientDiscoverMapRef.current;
-    if (!ymaps || !map || !Array.isArray(locations)) return;
+    const orgLayer = orgLayerRef.current;
+    if (!ymaps || !map || !orgLayer || !Array.isArray(locations)) return;
+
     if (!clientDiscoverMapClickBoundRef.current) {
       clientDiscoverMapClickBoundRef.current = true;
-      map.geoObjects.events.add("click", (e) => {
+      orgLayer.events.add("click", (e) => {
         const target = e.get("target");
         const loc = target?.properties?.get?.("vmesteLoc");
         if (loc) openOrgOnMapRef.current?.(loc);
       });
     }
+
     const zoom = map.getZoom();
     const selected = selectedId != null ? selectedId : mapOrgPopup?.id;
-    map.geoObjects.removeAll();
-    clientMyLocationPlacemarkRef.current = null;
-    clientMyLocationAccuracyRef.current = null;
+    // Важно: чистим только слой организаций — метка «я» в meLayer не трогается.
+    orgLayer.removeAll();
     const coordsList = [];
     for (const loc of locations) {
       const lat = Number(loc.latitude);
@@ -338,16 +308,14 @@ export function useClientMap({
         zoom,
         { selected: selected != null && String(loc.id) === String(selected) },
       );
-      map.geoObjects.add(pm);
+      orgLayer.add(pm);
       coordsList.push([lat, lon]);
     }
-    if (clientMyLocationCoordsRef.current) {
-      ensureClientMyLocationMarker(clientMyLocationCoordsRef.current, {
-        accuracy: clientMyLocationMetaRef.current?.accuracy,
-      });
-    } else {
-      void startClientMyLocationTracking();
+
+    if (!clientMyLocationCoordsRef.current) {
+      startClientMyLocationTracking();
     }
+
     if (!fitView) return;
     if (clientMyLocationCoordsRef.current && !clientCenteredOnMeRef.current) {
       maybeCenterOnMe(clientMyLocationCoordsRef.current);
@@ -440,9 +408,14 @@ export function useClientMap({
             const map = new ymaps.Map("client-discover-map", {
               center: city ? city.center : [55.751244, 37.618423],
               zoom: city ? city.zoom : 10,
-              // Без дефолтного geolocationControl: он часто ставит метку по IP (вне города).
               controls: ["zoomControl", "fullscreenControl"],
             });
+            const orgLayer = new ymaps.GeoObjectCollection();
+            const meLayer = new ymaps.GeoObjectCollection();
+            map.geoObjects.add(orgLayer);
+            map.geoObjects.add(meLayer);
+            orgLayerRef.current = orgLayer;
+            meLayerRef.current = meLayer;
             clientDiscoverMapRef.current = map;
             attachBrowserGeolocationControl(ymaps, map);
             if (!map._vmesteZoomBound) {
@@ -458,7 +431,7 @@ export function useClientMap({
                 }, 160);
               });
             }
-            paintClientDiscoverMapMarkers(allLocationsRef.current, { fitView: !city });
+            paintClientDiscoverMapMarkers(allLocationsRef.current || [], { fitView: !city });
             if (city) {
               try {
                 map.setCenter(city.center, city.zoom);
@@ -485,17 +458,17 @@ export function useClientMap({
 
   useEffect(() => {
     if (!onClientMap || !clientDiscoverMapRef.current) return;
-    paintClientDiscoverMapMarkers(allLocations, { fitView: true });
+    paintClientDiscoverMapMarkers(allLocations || [], { fitView: true });
   }, [allLocations, onClientMap]);
 
   useEffect(() => {
     if (!onClientMap || !clientDiscoverMapRef.current) return;
-    paintClientDiscoverMapMarkers(allLocations, { fitView: false });
+    paintClientDiscoverMapMarkers(allLocations || [], { fitView: false });
   }, [mapMarkersTick, onClientMap]);
 
   useEffect(() => {
     if (!onClientMap || !clientDiscoverMapRef.current) return;
-    paintClientDiscoverMapMarkers(allLocations, {
+    paintClientDiscoverMapMarkers(allLocations || [], {
       fitView: false,
       selectedId: mapOrgPopup?.id ?? null,
     });
