@@ -88,9 +88,5 @@ class RepairFunnelTests(TestCase):
         with patch("notifications.push.notify_users") as mocked:
             notify_repair_status(self.report)
         mocked.assert_called_once()
-        payload = mocked.call_args.kwargs.get("payload")
-        if payload is None:
-            # positional: notify_users(ids, kind=..., title=..., body=..., payload=...)
-            payload = mocked.call_args.kwargs["payload"]
-        self.assertEqual(payload["repair_status"], "ready")
-        self.assertEqual(mocked.call_args.kwargs.get("title") or mocked.call_args[1].get("title"), "Авто готово")
+        self.assertEqual(mocked.call_args.kwargs["payload"]["repair_status"], "ready")
+        self.assertEqual(mocked.call_args.kwargs["title"], "Авто готово")
