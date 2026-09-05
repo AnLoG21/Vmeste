@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  
+  <rect width="64" height="64" rx="12" fill="#FFFFFF"/>
+  <g transform="translate(32 32) rotate(23) scale(0.93) translate(-32 -32)" style="color:#FF8C33">
+    <rect width="64" height="64" rx="20" fill="#FFF7F0"/><circle cx="24" cy="30" r="9" fill="#FF8C33"/><circle cx="40" cy="30" r="9" fill="#FF8C33"/><path d="M18 44c6 6 22 6 28 0" stroke="#1A1208" stroke-width="3" fill="none" stroke-linecap="round"/>
+  </g>
+  <!-- F18 -->
+</svg>

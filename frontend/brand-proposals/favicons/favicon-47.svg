@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  
+  <rect width="64" height="64" rx="16" fill="#FFE0C2"/>
+  <g transform="translate(32 32) rotate(10) scale(0.905) translate(-32 -32)" style="color:#E85F00">
+    <circle cx="32" cy="32" r="30" fill="#FFF7F0"/><text x="32" y="40" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-weight="800" font-size="22" fill="#E85F00">+</text><circle cx="22" cy="26" r="6" fill="#E85F00"/><circle cx="42" cy="26" r="6" fill="#E85F00"/>
+  </g>
+  <!-- F47 -->
+</svg>

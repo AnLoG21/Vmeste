@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  
+  <rect width="64" height="64" rx="12" fill="#FF7A00"/>
+  <g transform="translate(32 32) rotate(11) scale(0.98) translate(-32 -32)" style="color:#F07800">
+    <circle cx="32" cy="32" r="30" fill="#1A1208"/><text x="32" y="41" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-weight="800" font-size="26" fill="#F07800">Вм</text>
+  </g>
+  <!-- F30 -->
+</svg>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="120" viewBox="0 0 400 120">
+  <rect width="400" height="120" rx="12" fill="#FFFFFF"/>
+  <rect x="40" y="12" width="320" height="64" rx="32" fill="#FF6A00"/>
+  <text x="200" y="54" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-weight="800" font-size="34" fill="#FFFFFF">Вместе</text>
+  <text x="12" y="112" font-family="Manrope,Arial,sans-serif" font-size="10" fill="#998877">L24 · badge-word</text>
+</svg>

@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Vmeste — выбор лого и фавикона</title>
+  <style>
+    :root { color-scheme: light; --ink:#1a1208; --accent:#ff7a00; --bg:#f6f1eb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Manrope, system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+    header { position: sticky; top: 0; z-index: 5; background: #fff9f3ee; backdrop-filter: blur(8px); border-bottom: 1px solid #ecd9c6; padding: 14px 20px; display: flex; gap: 16px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+    h1 { margin: 0; font-size: 1.15rem; }
+    .picks { display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.92rem; }
+    .picks strong { color: var(--accent); }
+    section { padding: 20px; }
+    h2 { margin: 0 0 12px; font-size: 1rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+    .grid--fav { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+    .card { appearance: none; border: 2px solid transparent; background: #fff; border-radius: 14px; padding: 12px; cursor: pointer; text-align: center; display: grid; gap: 8px; transition: border-color .15s, transform .15s; }
+    .card:hover { transform: translateY(-1px); border-color: #ffd0a8; }
+    .card.is-selected { border-color: var(--accent); box-shadow: 0 0 0 3px #ff7a0033; }
+    .card img { width: 100%; height: auto; display: block; }
+    .card--fav img { width: 64px; height: 64px; margin: 0 auto; }
+    .card span { font-size: 0.8rem; color: #7a6552; }
+    .hint { margin: 0; color: #7a6552; font-size: 0.9rem; max-width: 52rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Выбор брендинга Vmeste</h1>
+      <p class="hint">Кликните по варианту. Напишите в чат номера, например: «лого L12, фавикон F07».</p>
+    </div>
+    <div class="picks">
+      <div>Лого: <strong id="pick-logo">—</strong></div>
+      <div>Фавикон: <strong id="pick-fav">—</strong></div>
+    </div>
+  </header>
+  <section>
+    <h2>AI-концепты (дополнительно)</h2>
+    <div class="grid">
+      <button type="button" class="card" data-kind="logo" data-id="AI-L01" data-file="ai/ai-logo-01-pin-wordmark.png"><img src="ai/ai-logo-01-pin-wordmark.png" alt="AI logo 1"/><span>AI-L01</span></button>
+      <button type="button" class="card" data-kind="logo" data-id="AI-L02" data-file="ai/ai-logo-02-badge-left.png"><img src="ai/ai-logo-02-badge-left.png" alt="AI logo 2"/><span>AI-L02</span></button>
+      <button type="button" class="card" data-kind="logo" data-id="AI-L03" data-file="ai/ai-logo-03-minimal-type.png"><img src="ai/ai-logo-03-minimal-type.png" alt="AI logo 3"/><span>AI-L03</span></button>
+      <button type="button" class="card" data-kind="logo" data-id="AI-L04" data-file="ai/ai-logo-04-dark-bar.png"><img src="ai/ai-logo-04-dark-bar.png" alt="AI logo 4"/><span>AI-L04</span></button>
+    </div>
+    <div class="grid grid--fav" style="margin-top:12px">
+      <button type="button" class="card card--fav" data-kind="favicon" data-id="AI-F01" data-file="ai/ai-favicon-01-pin.png"><img src="ai/ai-favicon-01-pin.png" alt="AI fav 1"/><span>AI-F01</span></button>
+      <button type="button" class="card card--fav" data-kind="favicon" data-id="AI-F02" data-file="ai/ai-favicon-02-letter-v.png"><img src="ai/ai-favicon-02-letter-v.png" alt="AI fav 2"/><span>AI-F02</span></button>
+      <button type="button" class="card card--fav" data-kind="favicon" data-id="AI-F03" data-file="ai/ai-favicon-03-together.png"><img src="ai/ai-favicon-03-together.png" alt="AI fav 3"/><span>AI-F03</span></button>
+      <button type="button" class="card card--fav" data-kind="favicon" data-id="AI-F04" data-file="ai/ai-favicon-04-teardrop.png"><img src="ai/ai-favicon-04-teardrop.png" alt="AI fav 4"/><span>AI-F04</span></button>
+    </div>
+  </section>
+  <section>
+    <h2>Логотипы (50)</h2>
+    <div class="grid" id="logos"><button type="button" class="card" data-kind="logo" data-id="L1" data-file="logo-01.svg">
+      <img src="logos/logo-01.svg" alt="Logo 1" loading="lazy"/>
+      <span>L01</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L2" data-file="logo-02.svg">
+      <img src="logos/logo-02.svg" alt="Logo 2" loading="lazy"/>
+      <span>L02</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L3" data-file="logo-03.svg">
+      <img src="logos/logo-03.svg" alt="Logo 3" loading="lazy"/>
+      <span>L03</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L4" data-file="logo-04.svg">
+      <img src="logos/logo-04.svg" alt="Logo 4" loading="lazy"/>
+      <span>L04</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L5" data-file="logo-05.svg">
+      <img src="logos/logo-05.svg" alt="Logo 5" loading="lazy"/>
+      <span>L05</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L6" data-file="logo-06.svg">
+      <img src="logos/logo-06.svg" alt="Logo 6" loading="lazy"/>
+      <span>L06</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L7" data-file="logo-07.svg">
+      <img src="logos/logo-07.svg" alt="Logo 7" loading="lazy"/>
+      <span>L07</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L8" data-file="logo-08.svg">
+      <img src="logos/logo-08.svg" alt="Logo 8" loading="lazy"/>
+      <span>L08</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L9" data-file="logo-09.svg">
+      <img src="logos/logo-09.svg" alt="Logo 9" loading="lazy"/>
+      <span>L09</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L10" data-file="logo-10.svg">
+      <img src="logos/logo-10.svg" alt="Logo 10" loading="lazy"/>
+      <span>L10</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L11" data-file="logo-11.svg">
+      <img src="logos/logo-11.svg" alt="Logo 11" loading="lazy"/>
+      <span>L11</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L12" data-file="logo-12.svg">
+      <img src="logos/logo-12.svg" alt="Logo 12" loading="lazy"/>
+      <span>L12</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L13" data-file="logo-13.svg">
+      <img src="logos/logo-13.svg" alt="Logo 13" loading="lazy"/>
+      <span>L13</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L14" data-file="logo-14.svg">
+      <img src="logos/logo-14.svg" alt="Logo 14" loading="lazy"/>
+      <span>L14</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L15" data-file="logo-15.svg">
+      <img src="logos/logo-15.svg" alt="Logo 15" loading="lazy"/>
+      <span>L15</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L16" data-file="logo-16.svg">
+      <img src="logos/logo-16.svg" alt="Logo 16" loading="lazy"/>
+      <span>L16</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L17" data-file="logo-17.svg">
+      <img src="logos/logo-17.svg" alt="Logo 17" loading="lazy"/>
+      <span>L17</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L18" data-file="logo-18.svg">
+      <img src="logos/logo-18.svg" alt="Logo 18" loading="lazy"/>
+      <span>L18</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L19" data-file="logo-19.svg">
+      <img src="logos/logo-19.svg" alt="Logo 19" loading="lazy"/>
+      <span>L19</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L20" data-file="logo-20.svg">
+      <img src="logos/logo-20.svg" alt="Logo 20" loading="lazy"/>
+      <span>L20</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L21" data-file="logo-21.svg">
+      <img src="logos/logo-21.svg" alt="Logo 21" loading="lazy"/>
+      <span>L21</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L22" data-file="logo-22.svg">
+      <img src="logos/logo-22.svg" alt="Logo 22" loading="lazy"/>
+      <span>L22</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L23" data-file="logo-23.svg">
+      <img src="logos/logo-23.svg" alt="Logo 23" loading="lazy"/>
+      <span>L23</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L24" data-file="logo-24.svg">
+      <img src="logos/logo-24.svg" alt="Logo 24" loading="lazy"/>
+      <span>L24</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L25" data-file="logo-25.svg">
+      <img src="logos/logo-25.svg" alt="Logo 25" loading="lazy"/>
+      <span>L25</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L26" data-file="logo-26.svg">
+      <img src="logos/logo-26.svg" alt="Logo 26" loading="lazy"/>
+      <span>L26</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L27" data-file="logo-27.svg">
+      <img src="logos/logo-27.svg" alt="Logo 27" loading="lazy"/>
+      <span>L27</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L28" data-file="logo-28.svg">
+      <img src="logos/logo-28.svg" alt="Logo 28" loading="lazy"/>
+      <span>L28</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L29" data-file="logo-29.svg">
+      <img src="logos/logo-29.svg" alt="Logo 29" loading="lazy"/>
+      <span>L29</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L30" data-file="logo-30.svg">
+      <img src="logos/logo-30.svg" alt="Logo 30" loading="lazy"/>
+      <span>L30</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L31" data-file="logo-31.svg">
+      <img src="logos/logo-31.svg" alt="Logo 31" loading="lazy"/>
+      <span>L31</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L32" data-file="logo-32.svg">
+      <img src="logos/logo-32.svg" alt="Logo 32" loading="lazy"/>
+      <span>L32</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L33" data-file="logo-33.svg">
+      <img src="logos/logo-33.svg" alt="Logo 33" loading="lazy"/>
+      <span>L33</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L34" data-file="logo-34.svg">
+      <img src="logos/logo-34.svg" alt="Logo 34" loading="lazy"/>
+      <span>L34</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L35" data-file="logo-35.svg">
+      <img src="logos/logo-35.svg" alt="Logo 35" loading="lazy"/>
+      <span>L35</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L36" data-file="logo-36.svg">
+      <img src="logos/logo-36.svg" alt="Logo 36" loading="lazy"/>
+      <span>L36</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L37" data-file="logo-37.svg">
+      <img src="logos/logo-37.svg" alt="Logo 37" loading="lazy"/>
+      <span>L37</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L38" data-file="logo-38.svg">
+      <img src="logos/logo-38.svg" alt="Logo 38" loading="lazy"/>
+      <span>L38</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L39" data-file="logo-39.svg">
+      <img src="logos/logo-39.svg" alt="Logo 39" loading="lazy"/>
+      <span>L39</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L40" data-file="logo-40.svg">
+      <img src="logos/logo-40.svg" alt="Logo 40" loading="lazy"/>
+      <span>L40</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L41" data-file="logo-41.svg">
+      <img src="logos/logo-41.svg" alt="Logo 41" loading="lazy"/>
+      <span>L41</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L42" data-file="logo-42.svg">
+      <img src="logos/logo-42.svg" alt="Logo 42" loading="lazy"/>
+      <span>L42</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L43" data-file="logo-43.svg">
+      <img src="logos/logo-43.svg" alt="Logo 43" loading="lazy"/>
+      <span>L43</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L44" data-file="logo-44.svg">
+      <img src="logos/logo-44.svg" alt="Logo 44" loading="lazy"/>
+      <span>L44</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L45" data-file="logo-45.svg">
+      <img src="logos/logo-45.svg" alt="Logo 45" loading="lazy"/>
+      <span>L45</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L46" data-file="logo-46.svg">
+      <img src="logos/logo-46.svg" alt="Logo 46" loading="lazy"/>
+      <span>L46</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L47" data-file="logo-47.svg">
+      <img src="logos/logo-47.svg" alt="Logo 47" loading="lazy"/>
+      <span>L47</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L48" data-file="logo-48.svg">
+      <img src="logos/logo-48.svg" alt="Logo 48" loading="lazy"/>
+      <span>L48</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L49" data-file="logo-49.svg">
+      <img src="logos/logo-49.svg" alt="Logo 49" loading="lazy"/>
+      <span>L49</span>
+    </button>
+<button type="button" class="card" data-kind="logo" data-id="L50" data-file="logo-50.svg">
+      <img src="logos/logo-50.svg" alt="Logo 50" loading="lazy"/>
+      <span>L50</span>
+    </button></div>
+  </section>
+  <section>
+    <h2>Фавиконки / app icon (50)</h2>
+    <div class="grid grid--fav" id="favs"><button type="button" class="card card--fav" data-kind="favicon" data-id="F1" data-file="favicon-01.svg">
+      <img src="favicons/favicon-01.svg" alt="Favicon 1" loading="lazy"/>
+      <span>F01</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F2" data-file="favicon-02.svg">
+      <img src="favicons/favicon-02.svg" alt="Favicon 2" loading="lazy"/>
+      <span>F02</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F3" data-file="favicon-03.svg">
+      <img src="favicons/favicon-03.svg" alt="Favicon 3" loading="lazy"/>
+      <span>F03</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F4" data-file="favicon-04.svg">
+      <img src="favicons/favicon-04.svg" alt="Favicon 4" loading="lazy"/>
+      <span>F04</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F5" data-file="favicon-05.svg">
+      <img src="favicons/favicon-05.svg" alt="Favicon 5" loading="lazy"/>
+      <span>F05</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F6" data-file="favicon-06.svg">
+      <img src="favicons/favicon-06.svg" alt="Favicon 6" loading="lazy"/>
+      <span>F06</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F7" data-file="favicon-07.svg">
+      <img src="favicons/favicon-07.svg" alt="Favicon 7" loading="lazy"/>
+      <span>F07</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F8" data-file="favicon-08.svg">
+      <img src="favicons/favicon-08.svg" alt="Favicon 8" loading="lazy"/>
+      <span>F08</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F9" data-file="favicon-09.svg">
+      <img src="favicons/favicon-09.svg" alt="Favicon 9" loading="lazy"/>
+      <span>F09</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F10" data-file="favicon-10.svg">
+      <img src="favicons/favicon-10.svg" alt="Favicon 10" loading="lazy"/>
+      <span>F10</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F11" data-file="favicon-11.svg">
+      <img src="favicons/favicon-11.svg" alt="Favicon 11" loading="lazy"/>
+      <span>F11</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F12" data-file="favicon-12.svg">
+      <img src="favicons/favicon-12.svg" alt="Favicon 12" loading="lazy"/>
+      <span>F12</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F13" data-file="favicon-13.svg">
+      <img src="favicons/favicon-13.svg" alt="Favicon 13" loading="lazy"/>
+      <span>F13</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F14" data-file="favicon-14.svg">
+      <img src="favicons/favicon-14.svg" alt="Favicon 14" loading="lazy"/>
+      <span>F14</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F15" data-file="favicon-15.svg">
+      <img src="favicons/favicon-15.svg" alt="Favicon 15" loading="lazy"/>
+      <span>F15</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F16" data-file="favicon-16.svg">
+      <img src="favicons/favicon-16.svg" alt="Favicon 16" loading="lazy"/>
+      <span>F16</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F17" data-file="favicon-17.svg">
+      <img src="favicons/favicon-17.svg" alt="Favicon 17" loading="lazy"/>
+      <span>F17</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F18" data-file="favicon-18.svg">
+      <img src="favicons/favicon-18.svg" alt="Favicon 18" loading="lazy"/>
+      <span>F18</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F19" data-file="favicon-19.svg">
+      <img src="favicons/favicon-19.svg" alt="Favicon 19" loading="lazy"/>
+      <span>F19</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F20" data-file="favicon-20.svg">
+      <img src="favicons/favicon-20.svg" alt="Favicon 20" loading="lazy"/>
+      <span>F20</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F21" data-file="favicon-21.svg">
+      <img src="favicons/favicon-21.svg" alt="Favicon 21" loading="lazy"/>
+      <span>F21</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F22" data-file="favicon-22.svg">
+      <img src="favicons/favicon-22.svg" alt="Favicon 22" loading="lazy"/>
+      <span>F22</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F23" data-file="favicon-23.svg">
+      <img src="favicons/favicon-23.svg" alt="Favicon 23" loading="lazy"/>
+      <span>F23</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F24" data-file="favicon-24.svg">
+      <img src="favicons/favicon-24.svg" alt="Favicon 24" loading="lazy"/>
+      <span>F24</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F25" data-file="favicon-25.svg">
+      <img src="favicons/favicon-25.svg" alt="Favicon 25" loading="lazy"/>
+      <span>F25</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F26" data-file="favicon-26.svg">
+      <img src="favicons/favicon-26.svg" alt="Favicon 26" loading="lazy"/>
+      <span>F26</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F27" data-file="favicon-27.svg">
+      <img src="favicons/favicon-27.svg" alt="Favicon 27" loading="lazy"/>
+      <span>F27</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F28" data-file="favicon-28.svg">
+      <img src="favicons/favicon-28.svg" alt="Favicon 28" loading="lazy"/>
+      <span>F28</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F29" data-file="favicon-29.svg">
+      <img src="favicons/favicon-29.svg" alt="Favicon 29" loading="lazy"/>
+      <span>F29</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F30" data-file="favicon-30.svg">
+      <img src="favicons/favicon-30.svg" alt="Favicon 30" loading="lazy"/>
+      <span>F30</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F31" data-file="favicon-31.svg">
+      <img src="favicons/favicon-31.svg" alt="Favicon 31" loading="lazy"/>
+      <span>F31</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F32" data-file="favicon-32.svg">
+      <img src="favicons/favicon-32.svg" alt="Favicon 32" loading="lazy"/>
+      <span>F32</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F33" data-file="favicon-33.svg">
+      <img src="favicons/favicon-33.svg" alt="Favicon 33" loading="lazy"/>
+      <span>F33</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F34" data-file="favicon-34.svg">
+      <img src="favicons/favicon-34.svg" alt="Favicon 34" loading="lazy"/>
+      <span>F34</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F35" data-file="favicon-35.svg">
+      <img src="favicons/favicon-35.svg" alt="Favicon 35" loading="lazy"/>
+      <span>F35</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F36" data-file="favicon-36.svg">
+      <img src="favicons/favicon-36.svg" alt="Favicon 36" loading="lazy"/>
+      <span>F36</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F37" data-file="favicon-37.svg">
+      <img src="favicons/favicon-37.svg" alt="Favicon 37" loading="lazy"/>
+      <span>F37</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F38" data-file="favicon-38.svg">
+      <img src="favicons/favicon-38.svg" alt="Favicon 38" loading="lazy"/>
+      <span>F38</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F39" data-file="favicon-39.svg">
+      <img src="favicons/favicon-39.svg" alt="Favicon 39" loading="lazy"/>
+      <span>F39</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F40" data-file="favicon-40.svg">
+      <img src="favicons/favicon-40.svg" alt="Favicon 40" loading="lazy"/>
+      <span>F40</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F41" data-file="favicon-41.svg">
+      <img src="favicons/favicon-41.svg" alt="Favicon 41" loading="lazy"/>
+      <span>F41</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F42" data-file="favicon-42.svg">
+      <img src="favicons/favicon-42.svg" alt="Favicon 42" loading="lazy"/>
+      <span>F42</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F43" data-file="favicon-43.svg">
+      <img src="favicons/favicon-43.svg" alt="Favicon 43" loading="lazy"/>
+      <span>F43</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F44" data-file="favicon-44.svg">
+      <img src="favicons/favicon-44.svg" alt="Favicon 44" loading="lazy"/>
+      <span>F44</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F45" data-file="favicon-45.svg">
+      <img src="favicons/favicon-45.svg" alt="Favicon 45" loading="lazy"/>
+      <span>F45</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F46" data-file="favicon-46.svg">
+      <img src="favicons/favicon-46.svg" alt="Favicon 46" loading="lazy"/>
+      <span>F46</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F47" data-file="favicon-47.svg">
+      <img src="favicons/favicon-47.svg" alt="Favicon 47" loading="lazy"/>
+      <span>F47</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F48" data-file="favicon-48.svg">
+      <img src="favicons/favicon-48.svg" alt="Favicon 48" loading="lazy"/>
+      <span>F48</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F49" data-file="favicon-49.svg">
+      <img src="favicons/favicon-49.svg" alt="Favicon 49" loading="lazy"/>
+      <span>F49</span>
+    </button>
+<button type="button" class="card card--fav" data-kind="favicon" data-id="F50" data-file="favicon-50.svg">
+      <img src="favicons/favicon-50.svg" alt="Favicon 50" loading="lazy"/>
+      <span>F50</span>
+    </button></div>
+  </section>
+  <script>
+    const pickLogo = document.getElementById('pick-logo');
+    const pickFav = document.getElementById('pick-fav');
+    const selected = { logo: null, favicon: null };
+    document.body.addEventListener('click', (e) => {
+      const btn = e.target.closest('.card');
+      if (!btn) return;
+      const kind = btn.dataset.kind;
+      const id = btn.dataset.id;
+      document.querySelectorAll('.card[data-kind="'+kind+'"]').forEach((c) => c.classList.remove('is-selected'));
+      btn.classList.add('is-selected');
+      if (kind === 'logo') { selected.logo = id; pickLogo.textContent = id + ' (' + btn.dataset.file + ')'; }
+      else { selected.favicon = id; pickFav.textContent = id + ' (' + btn.dataset.file + ')'; }
+      try { localStorage.setItem('vmeste_brand_pick', JSON.stringify(selected)); } catch {}
+    });
+    try {
+      const saved = JSON.parse(localStorage.getItem('vmeste_brand_pick') || 'null');
+      if (saved?.logo) {
+        const b = document.querySelector('.card[data-id="'+saved.logo+'"]');
+        b?.click();
+      }
+      if (saved?.favicon) {
+        const b = document.querySelector('.card[data-id="'+saved.favicon+'"]');
+        b?.click();
+      }
+    } catch {}
+  </script>
+</body>
+</html>

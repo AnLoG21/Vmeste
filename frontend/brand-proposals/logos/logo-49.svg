@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="120" viewBox="0 0 400 120">
+  <rect width="400" height="120" rx="12" fill="#FFFFFF"/>
+  <circle cx="70" cy="44" r="28" fill="none" stroke="#FF6A00" stroke-width="3" stroke-dasharray="4 6"/>
+            <path d="M70 18c-7.199999999999999 0-13 5.8-13 13 0 9.8 13 23 13 23s13-13.200000000000001 13-23c0-7.199999999999999-5.8-13-13-13z" fill="#FF6A00"/><circle cx="70" cy="30" r="3.5" fill="#FFFFFF"/>
+  <text x="120" y="54" font-family="Manrope,Arial,sans-serif" font-weight="800" font-size="40" fill="#1A1208">Вместе</text>
+  <text x="12" y="112" font-family="Manrope,Arial,sans-serif" font-size="10" fill="#998877">L49 · map-orbit</text>
+</svg>

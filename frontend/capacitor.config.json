@@ -12,5 +12,15 @@
   "server": {
     "androidScheme": "https",
     "iosScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0,
+      "launchAutoHide": false,
+      "backgroundColor": "#FFF7F0",
+      "showSpinner": false,
+      "splashFullScreen": true,
+      "splashImmersive": true
+    }
   }
 }

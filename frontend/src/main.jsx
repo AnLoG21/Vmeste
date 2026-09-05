@@ -3,10 +3,12 @@ import { createRoot } from "react-dom/client";
 import { Capacitor } from "@capacitor/core";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import PublicEntry from "./PublicEntry.jsx";
+import { initBootSplash } from "./bootSplash.js";
 import { initMonitoring } from "./monitoring.js";
 import { initNativeDeepLinks } from "./nativeDeepLinks.js";
 
 initMonitoring();
+initBootSplash();
 
 async function initNativeShell() {
   if (!Capacitor.isNativePlatform()) return;

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  
+  <rect width="64" height="64" rx="16" fill="#FFF3E8"/>
+  <g transform="translate(32 32) rotate(6) scale(0.9550000000000001) translate(-32 -32)" style="color:#FF6A00">
+    <defs><radialGradient id="r18" cx="35%" cy="30%"><stop stop-color="#FFB066"/><stop offset="1" stop-color="#FF6A00"/></radialGradient></defs><circle cx="32" cy="32" r="30" fill="url(#r18)"/><circle cx="32" cy="28" r="7" fill="#FFFFFF" opacity=".9"/>
+  </g>
+  <!-- F19 -->
+</svg>

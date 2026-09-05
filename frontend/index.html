@@ -235,9 +235,106 @@
       .static-home a {
         color: #9a4000;
       }
+
+      /* Native/web boot splash — fast, smooth, no favicon tile */
+      #vmeste-boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(120% 80% at 50% 28%, #ffe0c2 0%, transparent 55%),
+          linear-gradient(165deg, #fffaf5 0%, #fff1e4 48%, #ffe8d4 100%);
+        transition: opacity 0.38s ease, visibility 0.38s ease;
+      }
+      #vmeste-boot-splash.vmeste-boot-splash--out {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .vmeste-boot-splash__inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        animation: vmeste-boot-in 0.62s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      .vmeste-boot-splash__mark {
+        width: 72px;
+        height: 72px;
+        border-radius: 22px;
+        background: linear-gradient(145deg, #ff8a1a, #ff6a00);
+        box-shadow: 0 14px 36px rgba(255, 122, 0, 0.28);
+        display: grid;
+        place-items: center;
+        animation: vmeste-boot-pulse 1.1s ease-in-out 0.35s 1 both;
+      }
+      .vmeste-boot-splash__mark svg {
+        width: 38px;
+        height: 38px;
+        display: block;
+      }
+      .vmeste-boot-splash__word {
+        margin: 0;
+        font-family: Manrope, system-ui, sans-serif;
+        font-weight: 800;
+        font-size: 1.55rem;
+        letter-spacing: -0.03em;
+        color: #1a1208;
+        opacity: 0;
+        animation: vmeste-boot-word 0.45s ease 0.18s forwards;
+      }
+      .vmeste-boot-splash--reduced .vmeste-boot-splash__inner,
+      .vmeste-boot-splash--reduced .vmeste-boot-splash__mark,
+      .vmeste-boot-splash--reduced .vmeste-boot-splash__word {
+        animation: none !important;
+        opacity: 1;
+      }
+      @keyframes vmeste-boot-in {
+        from { opacity: 0; transform: translateY(8px) scale(0.94); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      @keyframes vmeste-boot-pulse {
+        0% { transform: scale(1); }
+        45% { transform: scale(1.045); }
+        100% { transform: scale(1); }
+      }
+      @keyframes vmeste-boot-word {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
     </style>
   </head>
   <body>
+    <div id="vmeste-boot-splash" aria-hidden="true">
+      <div class="vmeste-boot-splash__inner">
+        <div class="vmeste-boot-splash__mark">
+          <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+            <path d="M24 6c-7.2 0-13 5.8-13 13 0 9.8 13 23 13 23s13-13.2 13-23c0-7.2-5.8-13-13-13z" fill="#fff"/>
+            <circle cx="24" cy="18" r="4.5" fill="#ff7a00"/>
+          </svg>
+        </div>
+        <p class="vmeste-boot-splash__word">Вместе</p>
+      </div>
+    </div>
+    <script>
+      (function () {
+        try {
+          var native =
+            window.Capacitor &&
+            typeof window.Capacitor.isNativePlatform === "function" &&
+            window.Capacitor.isNativePlatform();
+          if (!native) {
+            var el = document.getElementById("vmeste-boot-splash");
+            if (el) el.remove();
+          }
+        } catch (e) {
+          var el2 = document.getElementById("vmeste-boot-splash");
+          if (el2) el2.remove();
+        }
+      })();
+    </script>
     <noscript>
       <main class="legal-page">
         <h1>Вместе — платформа для записи и автоматизации бизнеса</h1>

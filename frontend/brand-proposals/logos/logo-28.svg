@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="120" viewBox="0 0 400 120">
+  <rect width="400" height="120" rx="12" fill="#FFFFFF"/>
+  <rect x="48" y="18" width="304" height="52" rx="26" fill="#FFF7F0" stroke="#FF8C33" stroke-width="2"/>
+  <text x="200" y="52" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-weight="800" font-size="30" fill="#FF8C33">Вместе</text>
+  <text x="12" y="112" font-family="Manrope,Arial,sans-serif" font-size="10" fill="#998877">L28 · rounded-pill</text>
+</svg>

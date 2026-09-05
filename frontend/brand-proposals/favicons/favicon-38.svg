@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  
+  <rect width="64" height="64" rx="12" fill="#FF7A00"/>
+  <g transform="translate(32 32) rotate(19) scale(0.93) translate(-32 -32)" style="color:#FF8C33">
+    <rect width="64" height="64" rx="12" fill="#1A1208"/><circle cx="32" cy="28" r="12" fill="#FF8C33"/><rect x="30" y="38" width="4" height="14" rx="2" fill="#FF8C33"/><ellipse cx="32" cy="52" rx="10" ry="3" fill="#FF8C33" opacity=".5"/>
+  </g>
+  <!-- F38 -->
+</svg>

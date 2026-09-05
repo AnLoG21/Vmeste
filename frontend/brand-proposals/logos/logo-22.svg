@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="120" viewBox="0 0 400 120">
+  <rect width="400" height="120" rx="12" fill="#1A1208"/>
+  <rect x="24" y="16" width="56" height="56" rx="14" fill="#E85F00"/>
+            <path d="M52 16c-8.64 0-15.600000000000001 6.959999999999999-15.600000000000001 15.600000000000001 0 11.76 15.600000000000001 27.599999999999998 15.600000000000001 27.599999999999998s15.600000000000001-15.84 15.600000000000001-27.599999999999998c0-8.64-6.959999999999999-15.600000000000001-15.600000000000001-15.600000000000001z" fill="#FFFFFF" transform="translate(0,0)"/><circle cx="52" cy="30" r="4" fill="#E85F00"/>
+  <text x="100" y="56" font-family="Manrope,Arial,sans-serif" font-weight="800" font-size="40" fill="#FFFFFF">Вместе</text>
+  <text x="12" y="112" font-family="Manrope,Arial,sans-serif" font-size="10" fill="#998877">L22 · mark-left</text>
+</svg>

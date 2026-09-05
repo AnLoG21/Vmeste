@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  
+  <rect width="64" height="64" rx="20" fill="#FFF"/>
+  <g transform="translate(32 32) rotate(9) scale(0.98) translate(-32 -32)" style="color:#F07800">
+    <rect width="64" height="64" fill="#F07800"/><text x="32" y="44" text-anchor="middle" font-family="Georgia,serif" font-weight="700" font-size="30" fill="#FFFFFF">V</text>
+  </g>
+  <!-- F40 -->
+</svg>

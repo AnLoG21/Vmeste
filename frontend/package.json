@@ -13,7 +13,8 @@
     "cap:sync:ios": "npm run build:mobile && npx cap sync ios",
     "cap:open": "npx cap open android",
     "cap:open:ios": "npx cap open ios",
-    "cap:run": "npm run cap:sync && npx cap run android"
+    "cap:run": "npm run cap:sync && npx cap run android",
+    "brand:proposals": "node scripts/generate-brand-proposals.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",
@@ -22,6 +23,7 @@
     "@capacitor/geolocation": "^8.2.2",
     "@capacitor/ios": "^8.5.1",
     "@capacitor/push-notifications": "^8.1.2",
+    "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.3",
     "@sentry/react": "^10.73.0",
     "@vitejs/plugin-react-swc": "^3.7.2",
