@@ -3465,9 +3465,9 @@ body.theme-dark .tg-chat-item-row:hover {
 }
 
 .page-logged .hero.top-row {
-  padding: 10px 12px 14px;
-  /* Preserve former header height (was driven by ~108px logo). */
-  min-height: 122px;
+  padding: 8px 12px 12px;
+  /* ~20% tighter than the restored large-logo band (was 122px). */
+  min-height: 98px;
   align-items: center;
   box-sizing: border-box;
 }
@@ -3479,7 +3479,7 @@ body.theme-dark .tg-chat-item-row:hover {
 
 .page-logged .hero.top-row > button.brand-btn {
   max-width: 168px;
-  min-height: 108px;
+  min-height: 86px;
   align-items: center;
 }
 
