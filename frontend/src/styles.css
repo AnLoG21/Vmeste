@@ -4059,18 +4059,21 @@ body.theme-dark .tg-chat-search {
   right: 12px;
   bottom: 18px;
   z-index: 600;
-  width: 44px;
+  min-width: 72px;
   height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   border: 1px solid var(--border, #ffd9bd);
   border-radius: 12px;
   background: var(--bg-card, #fff);
-  color: var(--accent, #ff7a00);
+  color: var(--text, #1a1a1a);
+  font-weight: 700;
+  font-size: 14px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
   cursor: pointer;
-  padding: 0;
+  padding: 0 14px;
 }
 
 .client-map-locate-btn:hover:not(:disabled) {
