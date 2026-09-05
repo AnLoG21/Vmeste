@@ -553,7 +553,7 @@ class MarketplaceCardDesignView(APIView):
         return Response({"results": [_card_design_payload(t) for t in rows[:100]]})
 
     def post(self, request):
-        from .card_designs import STARTER_DESIGNS, normalize_style
+        from .card_designs import STARTER_DESIGNS, build_starter_canvas_json, has_canvas_scene, normalize_style
 
         provider, err = _require_provider(request, need_catalog=True)
         if err:
@@ -567,11 +567,13 @@ class MarketplaceCardDesignView(APIView):
                     status=400,
                 )
             for item in STARTER_DESIGNS:
+                style = normalize_style(item.get("style"))
                 t = MarketplaceCardDesign.objects.create(
                     provider=provider,
                     name=item["name"],
                     layout=item["layout"],
-                    style=normalize_style(item.get("style")),
+                    style=style,
+                    canvas=build_starter_canvas_json(item["layout"], style),
                 )
                 created.append(_card_design_payload(t))
             return Response({"results": created}, status=201)
@@ -579,12 +581,16 @@ class MarketplaceCardDesignView(APIView):
         layout = str(data.get("layout") or "hero").strip()
         if layout not in ("hero", "benefits", "specs"):
             layout = "hero"
+        style = normalize_style(data.get("style") if isinstance(data.get("style"), dict) else {})
+        canvas = data.get("canvas") if isinstance(data.get("canvas"), dict) else {}
+        if not has_canvas_scene(canvas):
+            canvas = build_starter_canvas_json(layout, style)
         t = MarketplaceCardDesign.objects.create(
             provider=provider,
             name=str(data.get("name") or "Мой шаблон")[:180],
             layout=layout,
-            style=normalize_style(data.get("style") if isinstance(data.get("style"), dict) else {}),
-            canvas=data.get("canvas") if isinstance(data.get("canvas"), dict) else {},
+            style=style,
+            canvas=canvas,
         )
         return Response(_card_design_payload(t), status=201)
 
