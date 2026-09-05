@@ -1629,6 +1629,7 @@ export default function App() {
   const {
     fitClientDiscoverMapViewport,
     waitForClientDiscoverMap,
+    locateMeNow,
   } = useClientMap({
     currentView,
     meRole: me?.role,
@@ -3241,6 +3242,7 @@ export default function App() {
         {accessToken && (me?.role === "client" || me?.role === "provider") && currentView === "client_map" && (
           <ClientMapPanel
             allLocations={allLocations}
+            locateMeNow={locateMeNow}
             mapOrgPopup={mapOrgPopup}
             mapOrgSheetCollapsed={mapOrgSheetCollapsed}
             mapOrgReviewsOpen={mapOrgReviewsOpen}

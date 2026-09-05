@@ -90,18 +90,19 @@ export function useClientMap({
     }
   }
 
-  function ensureClientMyLocationMarker(coords, { center = false, accuracy = null } = {}) {
+  function ensureClientMyLocationMarker(coords, { center = false, forceCenter = false, accuracy = null } = {}) {
     const ymaps = window.ymaps;
     const map = clientDiscoverMapRef.current;
     const meLayer = meLayerRef.current;
-    if (!ymaps || !map || !meLayer || !coords) return;
+    if (!ymaps || !map || !meLayer || !coords) return false;
     const [lat, lon] = coords;
-    if (!hasCoords(lat, lon)) return;
+    if (!hasCoords(lat, lon)) return false;
 
     const acc = Number(accuracy);
     const hasAcc = Number.isFinite(acc) && acc > 0 && acc < 5000;
     const prev = clientMyLocationMetaRef.current;
     if (
+      !forceCenter &&
       clientMyLocationPlacemarkRef.current &&
       prev &&
       hasAcc &&
@@ -109,7 +110,7 @@ export function useClientMap({
     ) {
       const ageMs = Date.now() - (prev.at || 0);
       if (acc > prev.accuracy * 1.75 && acc > 80 && ageMs < 90_000) {
-        return;
+        return true;
       }
     }
 
@@ -126,7 +127,6 @@ export function useClientMap({
         /* ignore */
       }
     } else {
-      // Как курьер: CafeOrderMapPin islands#blueCircleDotIcon
       const pm = new ymaps.Placemark(
         [Number(lat), Number(lon)],
         { hintContent: "Вы здесь", balloonContent: "Моё местоположение" },
@@ -139,7 +139,7 @@ export function useClientMap({
         try {
           map.geoObjects.add(pm);
         } catch {
-          /* ignore */
+          return false;
         }
       }
     }
@@ -176,16 +176,35 @@ export function useClientMap({
       }
     }
 
-    if (center) maybeCenterOnMe([Number(lat), Number(lon)]);
+    if (center || forceCenter) maybeCenterOnMe([Number(lat), Number(lon)], { force: forceCenter });
+    return true;
   }
 
-  function applyGeoPosition(lat, lon, accuracy, { center = false, source = "" } = {}) {
-    if (!hasCoords(lat, lon)) return;
-    if (String(source) === "yandex:yandex") return;
-    ensureClientMyLocationMarker([Number(lat), Number(lon)], {
+  function applyGeoPosition(lat, lon, accuracy, { center = false, forceCenter = false, source = "" } = {}) {
+    if (!hasCoords(lat, lon)) return false;
+    if (String(source) === "yandex:yandex") return false;
+    return ensureClientMyLocationMarker([Number(lat), Number(lon)], {
       center,
+      forceCenter,
       accuracy,
     });
+  }
+
+  /** Клик пользователя (жест) — браузеры часто не отдают геолокацию без клика. */
+  async function locateMeNow() {
+    await waitForClientDiscoverMap(3000);
+    if (!clientDiscoverMapRef.current || !meLayerRef.current) {
+      throw new Error("Карта ещё не загрузилась");
+    }
+    // Как кнопка курьера: явный getDevicePosition по клику.
+    const pos = await getDevicePosition({ force: true, allowIpFallback: false });
+    const ok = applyGeoPosition(pos.lat, pos.lon, pos.accuracy, {
+      center: true,
+      forceCenter: true,
+      source: pos.source || "browser",
+    });
+    if (!ok) throw new Error("Не удалось поставить метку на карту");
+    return pos;
   }
 
   /** Не блокируем watch долгими await — иначе метка так и не появляется. */
@@ -482,5 +501,6 @@ export function useClientMap({
     fitClientDiscoverMapViewport,
     waitForClientDiscoverMap,
     startClientMyLocationTracking,
+    locateMeNow,
   };
 }

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import { ReviewListItem } from "./ProviderReviewsPanel.jsx";
 import { MapOrgContactsBlock, MapOrgHoursBlock } from "./mapOrgBlocks.jsx";
@@ -9,6 +10,7 @@ import { buildOrgCarouselItems } from "./clientOrgFeatures.js";
 /** Карта услуг: Яндекс-карта (контейнер) и карточка организации. */
 export default function ClientMapPanel({
   allLocations,
+  locateMeNow,
   mapOrgPopup,
   mapOrgSheetCollapsed,
   mapOrgReviewsOpen,
@@ -52,6 +54,21 @@ export default function ClientMapPanel({
   submitReviewReply,
   openReviewPhotoLightbox,
 }) {
+  const [locateBusy, setLocateBusy] = useState(false);
+
+  async function onLocateMe() {
+    if (!locateMeNow || locateBusy) return;
+    setLocateBusy(true);
+    try {
+      await locateMeNow();
+      showToast("Метка «Вы здесь» обновлена");
+    } catch (e) {
+      showToast(e?.message || "Разрешите доступ к геолокации в браузере", { tone: "error" });
+    } finally {
+      setLocateBusy(false);
+    }
+  }
+
   return (
     <section className="card full-width client-discover-card">
       <div className="client-discover-top">
@@ -73,6 +90,25 @@ export default function ClientMapPanel({
           .join(" ")}
       >
         <div id="client-discover-map" className="client-discover-map" role="application" aria-label="Карта точек записи" />
+        <button
+          type="button"
+          className="client-map-locate-btn"
+          aria-label="Моё местоположение"
+          title="Моё местоположение"
+          disabled={locateBusy || !locateMeNow}
+          onClick={onLocateMe}
+        >
+          {locateBusy ? (
+            "…"
+          ) : (
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"
+              />
+            </svg>
+          )}
+        </button>
         {mapOrgPopup && (
           <div
             className={[

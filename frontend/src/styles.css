@@ -4054,6 +4054,41 @@ body.theme-dark .tg-chat-search {
   min-height: min(520px, 62vh);
 }
 
+.client-map-locate-btn {
+  position: absolute;
+  right: 12px;
+  bottom: 18px;
+  z-index: 600;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border, #ffd9bd);
+  border-radius: 12px;
+  background: var(--bg-card, #fff);
+  color: var(--accent, #ff7a00);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  padding: 0;
+}
+
+.client-map-locate-btn:hover:not(:disabled) {
+  background: var(--accent-soft, #fff3e8);
+}
+
+.client-map-locate-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+[data-theme="dark"] .client-map-locate-btn,
+body.theme-dark .client-map-locate-btn {
+  background: var(--bg-card, #1a1b1e);
+  border-color: var(--border, #2e3038);
+  color: var(--accent, #ff8c33);
+}
+
 .client-discover-map-wrap .client-discover-map {
   display: block;
   flex: 1 1 auto;
