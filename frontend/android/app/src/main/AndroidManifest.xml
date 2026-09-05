@@ -28,6 +28,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="vsevmeste.space" />
+                <data android:scheme="https" android:host="www.vsevmeste.space" />
             </intent-filter>
 
             <intent-filter>

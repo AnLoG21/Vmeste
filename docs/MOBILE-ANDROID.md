@@ -164,6 +164,32 @@ docker compose -f docker-compose.prod.yml up -d --build web
 
 ---
 
+## App Links (Digital Asset Links)
+
+Манифест уже слушает `https://vsevmeste.space` и `https://www.vsevmeste.space` (`android:autoVerify="true"`).
+
+Сайт отдаёт:
+
+`https://vsevmeste.space/.well-known/assetlinks.json`
+
+Сейчас в файле — отпечаток **debug**-keystore (локальные APK). Для Google Play добавьте SHA-256 **App signing key** (Play Console → App integrity → App signing) в массив `sha256_cert_fingerprints` того же JSON и задеплойте фронт.
+
+Проверка:
+
+```bash
+curl -sI https://vsevmeste.space/.well-known/assetlinks.json
+# 200, Content-Type: application/json, без 301/302
+
+# Отпечаток debug-ключа (Windows + Android Studio JBR):
+& "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe" -list -v `
+  -keystore "$env:USERPROFILE\.android\debug.keystore" `
+  -alias androiddebugkey -storepass android -keypass android
+```
+
+iOS / Universal Links: см. [MOBILE-IOS.md](./MOBILE-IOS.md).
+
+---
+
 ## Разрешения Android
 
 Для карты и геолокации в `android/app/src/main/AndroidManifest.xml`:

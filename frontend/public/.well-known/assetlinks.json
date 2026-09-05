@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "space.vsevmeste.app",
+      "sha256_cert_fingerprints": [
+        "15:14:E2:9C:68:3E:E0:F3:4D:41:EC:C3:53:F5:6F:9C:4B:59:06:0B:15:06:68:75:43:59:A6:B0:B4:78:7B:0D"
+      ]
+    }
+  }
+]

@@ -1,4 +1,4 @@
-/** Deep links from Android MainActivity (vmesteDeepLink) and path routing. */
+/** Deep links from native shells (Android MainActivity, iOS Universal Links, App plugin). */
 
 /**
  * Normalize https://vsevmeste.space/... or vmeste://app/... into an in-app path+search+hash.
@@ -38,6 +38,11 @@ export function applyDeepLinkPath(pathWithQuery) {
   return true;
 }
 
+function handleDeepUrl(url) {
+  if (!url) return;
+  applyDeepLinkPath(url);
+}
+
 export function initNativeDeepLinks() {
   const onDeep = (ev) => {
     const detail = ev?.detail;
@@ -45,13 +50,32 @@ export function initNativeDeepLinks() {
       typeof detail === "string"
         ? detail
         : detail?.url || detail?.data || (typeof detail === "object" && detail !== null ? detail.href : "");
-    if (!url) return;
-    applyDeepLinkPath(url);
+    handleDeepUrl(url);
   };
   window.addEventListener("vmesteDeepLink", onDeep);
   document.addEventListener("vmesteDeepLink", onDeep);
+
+  let removeAppUrlOpen = null;
+  import("@capacitor/app")
+    .then(({ App }) => {
+      const sub = App.addListener("appUrlOpen", (event) => {
+        handleDeepUrl(event?.url);
+      });
+      removeAppUrlOpen = () => {
+        Promise.resolve(sub).then((h) => h?.remove?.()).catch(() => {});
+      };
+      return App.getLaunchUrl?.();
+    })
+    .then((launch) => {
+      if (launch?.url) handleDeepUrl(launch.url);
+    })
+    .catch(() => {
+      /* web / plugin missing */
+    });
+
   return () => {
     window.removeEventListener("vmesteDeepLink", onDeep);
     document.removeEventListener("vmesteDeepLink", onDeep);
+    removeAppUrlOpen?.();
   };
 }

@@ -99,6 +99,12 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+      - name: Assert App Links / Universal Links files
+        run: |
+          test -f dist/.well-known/assetlinks.json
+          test -f dist/.well-known/apple-app-site-association
+          grep -q 'space.vsevmeste.app' dist/.well-known/assetlinks.json
+          grep -q 'space.vsevmeste.app' dist/.well-known/apple-app-site-association
 
   mobile-cap-sync:
     name: Capacitor Android sync

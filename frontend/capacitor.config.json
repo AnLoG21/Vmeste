@@ -5,7 +5,12 @@
   "android": {
     "allowMixedContent": false
   },
+  "ios": {
+    "scheme": "App",
+    "contentInset": "automatic"
+  },
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "iosScheme": "https"
   }
 }
