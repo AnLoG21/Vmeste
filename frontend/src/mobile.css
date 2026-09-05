@@ -11,18 +11,20 @@
 
   .page-logged .hero.top-row {
     grid-template-columns: auto minmax(0, 1fr) auto;
-    padding: 6px 8px 8px;
+    padding: 8px 8px 10px;
     row-gap: 6px;
+    min-height: 72px;
   }
 
   .page-logged .hero.top-row > .brand-btn {
     max-width: 112px;
+    min-height: 56px;
   }
 
   .hero.top-row .brand-btn .brand-logo,
   .page-logged .hero.top-row .brand-btn .brand-logo {
-    max-height: 44px !important;
-    height: auto !important;
+    max-height: 40px !important;
+    height: 40px !important;
     max-width: 112px !important;
     transform: none !important;
     object-position: left center;
