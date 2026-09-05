@@ -34,6 +34,7 @@
     "vite": "^6.0.0"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.4.2"
+    "@capacitor/cli": "^8.4.2",
+    "sharp": "^0.35.4"
   }
 }
