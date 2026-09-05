@@ -896,6 +896,16 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
                         <p className="muted small cafe-rating-readonly">Пока без оценок</p>
                       )}
                       {item.composition ? <p className="muted small">{item.composition}</p> : null}
+                      {(item.weight_grams || item.calories) ? (
+                        <p className="muted small cafe-menu-nutrition">
+                          {[
+                            item.weight_grams ? `${item.weight_grams} г` : null,
+                            item.calories ? `${item.calories} ккал` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      ) : null}
                       <div className="cafe-menu-row">
                         <strong>{Number(item.price).toLocaleString("ru-RU")} ₽</strong>
                         <div className="cafe-qty">

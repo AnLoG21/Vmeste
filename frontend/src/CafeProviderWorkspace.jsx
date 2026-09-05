@@ -1133,6 +1133,30 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
                     Состав
                     <textarea rows={2} defaultValue={item.composition} onBlur={(e) => patchItem(item.id, { composition: e.target.value })} />
                   </label>
+                  <label>
+                    Граммы
+                    <input
+                      type="number"
+                      defaultValue={item.weight_grams ?? ""}
+                      onBlur={(e) =>
+                        patchItem(item.id, {
+                          weight_grams: e.target.value === "" ? null : Number(e.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Ккал
+                    <input
+                      type="number"
+                      defaultValue={item.calories ?? ""}
+                      onBlur={(e) =>
+                        patchItem(item.id, {
+                          calories: e.target.value === "" ? null : Number(e.target.value),
+                        })
+                      }
+                    />
+                  </label>
                   <label className="checkbox">
                     <input type="checkbox" checked={Boolean(item.is_new)} onChange={(e) => patchItem(item.id, { is_new: e.target.checked })} />
                     <span>Новинка</span>

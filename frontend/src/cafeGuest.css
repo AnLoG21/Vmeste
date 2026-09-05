@@ -352,6 +352,10 @@
   margin: 8px 0 4px;
   font-size: 1rem;
 }
+.cafe-menu-nutrition {
+  margin: 0 0 6px;
+  font-variant-numeric: tabular-nums;
+}
 .cafe-menu-row {
   display: flex;
   justify-content: space-between;
