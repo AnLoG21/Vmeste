@@ -2,66 +2,19 @@
 
 from __future__ import annotations
 
-import logging
-import os
-import platform
 from decimal import Decimal
 
 from django.utils import timezone
 from fpdf import FPDF
 
 from booking.booking_actions import client_display_name
+from pdf_fonts import PdfFontError, find_cyrillic_font
 
 from .models import InspectionItem, InspectionReport
-
-logger = logging.getLogger(__name__)
 
 
 def _rub(value) -> str:
     return f"{Decimal(value):.2f} руб."
-
-
-def _find_cyrillic_font() -> tuple[str | None, str | None]:
-    """Return (regular_path, bold_path). Prefer packaged fonts, then system."""
-    pkg_dir = os.path.join(os.path.dirname(__file__), "fonts")
-    regular_candidates = [
-        os.path.join(pkg_dir, "DejaVuSans.ttf"),
-        os.path.join(pkg_dir, "arial.ttf"),
-    ]
-    bold_candidates = [
-        os.path.join(pkg_dir, "DejaVuSans-Bold.ttf"),
-        os.path.join(pkg_dir, "arialbd.ttf"),
-    ]
-    if platform.system() == "Windows":
-        regular_candidates.extend(
-            [
-                r"C:\Windows\Fonts\arial.ttf",
-                r"C:\Windows\Fonts\segoeui.ttf",
-            ]
-        )
-        bold_candidates.extend(
-            [
-                r"C:\Windows\Fonts\arialbd.ttf",
-                r"C:\Windows\Fonts\segoeuib.ttf",
-            ]
-        )
-    regular_candidates.extend(
-        [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/TTF/DejaVuSans.ttf",
-            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-        ]
-    )
-    bold_candidates.extend(
-        [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
-            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
-        ]
-    )
-    regular = next((p for p in regular_candidates if os.path.isfile(p)), None)
-    bold = next((p for p in bold_candidates if os.path.isfile(p)), None)
-    return regular, bold
 
 
 def _org_name(report: InspectionReport) -> str:
@@ -82,7 +35,7 @@ SEVERITY_LABELS = {
 
 
 def _safe(text: str) -> str:
-    """Strip characters that break core fonts; keep Cyrillic via Unicode fonts."""
+    """Normalize symbols that some fonts lack; keep Cyrillic via Unicode TTF."""
     if not text:
         return ""
     return (
@@ -101,17 +54,12 @@ def _build_pdf(report: InspectionReport, *, doc_title: str, selected_only: bool)
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    font_path, bold_path = _find_cyrillic_font()
-    if font_path:
-        pdf.add_font("Main", "", font_path)
-        if bold_path:
-            pdf.add_font("Main", "B", bold_path)
-        family = "Main"
-        can_bold = bool(bold_path)
-    else:
-        family = "Helvetica"
-        can_bold = True
-        logger.warning("No Cyrillic TTF found for inspection PDF; text may be incomplete")
+    font_path, bold_path = find_cyrillic_font()
+    pdf.add_font("Main", "", font_path)
+    if bold_path:
+        pdf.add_font("Main", "B", bold_path)
+    family = "Main"
+    can_bold = bool(bold_path)
 
     def write_line(text: str, size: int = 11, bold: bool = False):
         style = "B" if bold and can_bold else ""
@@ -121,7 +69,7 @@ def _build_pdf(report: InspectionReport, *, doc_title: str, selected_only: bool)
 
     write_line(_org_name(report), size=16, bold=True)
     write_line(doc_title, size=13, bold=True)
-    write_line(f"Otchet N{report.id}" if family == "Helvetica" else f"Отчёт №{report.id}", size=11)
+    write_line(f"Отчёт №{report.id}", size=11)
     client = client_display_name(report.client) or (report.client.username if report.client else "")
     write_line(f"Клиент: {client}", size=10)
     write_line(f"Авто: {_vehicle_line(report)}", size=10)
@@ -182,3 +130,10 @@ def build_work_order_pdf(report: InspectionReport) -> bytes:
         doc_title="Заказ-наряд",
         selected_only=True,
     )
+
+
+__all__ = [
+    "PdfFontError",
+    "build_agreement_pdf",
+    "build_work_order_pdf",
+]

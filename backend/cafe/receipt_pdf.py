@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import io
-import os
-import platform
 from decimal import Decimal
 
 from fpdf import FPDF
+
+from pdf_fonts import find_cyrillic_font
 
 PAY_METHOD_LABELS = {
     "online": "Онлайн",
@@ -17,32 +16,7 @@ PAY_METHOD_LABELS = {
 
 
 def _rub(value) -> str:
-    return f"{Decimal(value):.2f} ₽"
-
-
-def _find_cyrillic_font() -> str | None:
-    pkg_font = os.path.join(os.path.dirname(__file__), "..", "inspections", "fonts", "DejaVuSans.ttf")
-    candidates = [
-        os.path.normpath(pkg_font),
-    ]
-    if platform.system() == "Windows":
-        candidates.extend(
-            [
-                r"C:\Windows\Fonts\arial.ttf",
-                r"C:\Windows\Fonts\segoeui.ttf",
-            ]
-        )
-    candidates.extend(
-        [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/TTF/DejaVuSans.ttf",
-            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-        ]
-    )
-    for path in candidates:
-        if os.path.isfile(path):
-            return path
-    return None
+    return f"{Decimal(value):.2f} руб."
 
 
 def build_cafe_order_receipt_pdf(
@@ -65,30 +39,14 @@ def build_cafe_order_receipt_pdf(
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    font_path = _find_cyrillic_font()
-    bold_path = None
-    if font_path:
-        pdf.add_font("Main", "", font_path)
-        bold_candidates = [
-            os.path.normpath(
-                os.path.join(os.path.dirname(__file__), "..", "inspections", "fonts", "DejaVuSans-Bold.ttf")
-            ),
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        ]
-        if platform.system() == "Windows":
-            bold_candidates.extend([r"C:\Windows\Fonts\arialbd.ttf", r"C:\Windows\Fonts\segoeuib.ttf"])
-        for p in bold_candidates:
-            if os.path.isfile(p):
-                bold_path = p
-                break
-        if bold_path:
-            pdf.add_font("Main", "B", bold_path)
-        family = "Main"
-    else:
-        family = "Helvetica"
+    font_path, bold_path = find_cyrillic_font()
+    pdf.add_font("Main", "", font_path)
+    if bold_path:
+        pdf.add_font("Main", "B", bold_path)
+    family = "Main"
 
     def write_line(text: str, size: int = 11, bold: bool = False):
-        style = "B" if bold and (family == "Helvetica" or bold_path) else ""
+        style = "B" if bold and bold_path else ""
         pdf.set_font(family, style=style, size=size)
         pdf.multi_cell(0, size * 0.5, text)
         pdf.ln(1)
@@ -104,7 +62,7 @@ def build_cafe_order_receipt_pdf(
         removed = row.get("removed") or []
         suffix = f" (без: {', '.join(removed)})" if removed else ""
         write_line(
-            f"• {row['name']}{suffix} — {row['quantity']} × {_rub(row['unit_price'])} = {_rub(row['line_total'])}",
+            f"- {row['name']}{suffix} — {row['quantity']} × {_rub(row['unit_price'])} = {_rub(row['line_total'])}",
             size=10,
         )
 

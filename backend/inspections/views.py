@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 from booking.models import Booking, ProviderStaff
 from users.models import User
 
-from .documents import build_agreement_pdf, build_work_order_pdf
+from .documents import PdfFontError, build_agreement_pdf, build_work_order_pdf
 from .models import InspectionItem, InspectionItemMedia, InspectionReport
 from .serializers import (
     InspectionItemMediaSerializer,
@@ -232,6 +232,8 @@ class InspectionReportViewSet(viewsets.ModelViewSet):
             else:
                 raw = build_work_order_pdf(report)
                 filename = f"work-order-{report.id}.pdf"
+        except PdfFontError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except Exception:
             import logging
 
@@ -387,6 +389,8 @@ class InspectionPublicPdfView(APIView):
             else:
                 raw = build_work_order_pdf(report)
                 filename = f"work-order-{report.id}.pdf"
+        except PdfFontError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except Exception:
             import logging
 
