@@ -74,6 +74,7 @@ jobs:
           users.test_working_hours
           users.test_oauth_find_user
           users.test_oauth_credentials
+          users.test_onboarding_p3
           vmenu.tests_units
           subscriptions.tests_promos
           notifications.tests_channels

@@ -200,8 +200,18 @@ class MeView(APIView):
                 )
                 if isinstance(link.permissions, dict):
                     data["staff_permissions"] = link.permissions
+                from .setup_progress import build_setup_progress
+
+                data["setup_progress"] = build_setup_progress(link.provider)
             else:
                 data["employer_sphere"] = ""
+                data["setup_progress"] = []
+        elif u.role == User.Role.PROVIDER:
+            from .setup_progress import build_setup_progress
+
+            data["setup_progress"] = build_setup_progress(u)
+        else:
+            data["setup_progress"] = []
         return Response(data)
 
     def patch(self, request):

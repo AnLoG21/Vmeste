@@ -61,10 +61,14 @@ import {
   intervalAssigneeValue,
 } from "./bookingCalendarUtils.jsx";
 import SalonLoyaltyPackagesPanel from "./SalonLoyaltyPackagesPanel.jsx";
-import PlatformTour from "./PlatformTour.jsx";import {
+import PlatformTour from "./PlatformTour.jsx";
+import SetupChecklist from "./SetupChecklist.jsx";
+import {
   buildPlatformTourSteps,
   readPlatformTourDone,
   writePlatformTourDone,
+  readSetupChecklistDismissed,
+  writeSetupChecklistDismissed,
 } from "./platformTour.js";
 import {
   SUBNAV_BOOKMARKS_KEY,
@@ -170,6 +174,7 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [platformTourPhase, setPlatformTourPhase] = useState("hidden");
   const [platformTourStep, setPlatformTourStep] = useState(0);
+  const [setupChecklistDismissed, setSetupChecklistDismissed] = useState(false);
   const platformTourOfferedRef = useRef(false);
   const [currentView, setCurrentViewState] = useState(() => viewFromPath(window.location.pathname) || "bookings");
   const setCurrentView = useCallback((view) => {
@@ -701,11 +706,36 @@ export default function App() {
     if (me.role !== "provider" && me.role !== "staff") return;
     if (needsOnboarding || needsCredentialsSetup || me.profile_complete === false) return;
     if (me.is_demo) return;
-    if (readPlatformTourDone(me.id)) return;
+    if (me.platform_tour_completed) {
+      platformTourOfferedRef.current = true;
+      return;
+    }
+    // Migrate older clients that already finished the tour in localStorage.
+    if (readPlatformTourDone(me.id)) {
+      platformTourOfferedRef.current = true;
+      void authFetch(`${API_URL}/users/me/`, {
+        method: "PATCH",
+        body: JSON.stringify({ platform_tour_completed: true }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data) setMe(data);
+        })
+        .catch(() => {});
+      return;
+    }
     platformTourOfferedRef.current = true;
     setPlatformTourStep(0);
     setPlatformTourPhase("welcome");
   }, [accessToken, me, needsOnboarding, needsCredentialsSetup]);
+
+  useEffect(() => {
+    if (!me?.id) {
+      setSetupChecklistDismissed(false);
+      return;
+    }
+    setSetupChecklistDismissed(readSetupChecklistDismissed(me.id));
+  }, [me?.id]);
 
   useEffect(() => {
     if (!accessToken && !showAuthModal) return;
@@ -2202,6 +2232,17 @@ export default function App() {
     setPlatformTourPhase("hidden");
     setPlatformTourStep(0);
     setMenuOpen(false);
+    if (me && !me.platform_tour_completed) {
+      void authFetch(`${API_URL}/users/me/`, {
+        method: "PATCH",
+        body: JSON.stringify({ platform_tour_completed: true }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data) setMe(data);
+        })
+        .catch(() => {});
+    }
   }
 
   function startPlatformTour() {
@@ -2214,6 +2255,11 @@ export default function App() {
     setPlatformTourStep(0);
     setPlatformTourPhase("welcome");
     setMenuOpen(false);
+  }
+
+  function dismissSetupChecklist() {
+    if (me?.id) writeSetupChecklistDismissed(me.id);
+    setSetupChecklistDismissed(true);
   }
 
   async function requestPasswordResetFromLogin(event) {
@@ -2748,6 +2794,24 @@ export default function App() {
         intervalToast={intervalToast}
       >
       <main className={`grid${centeredWorkspace ? " grid-centered-workspace" : ""}${profileWide ? " grid-profile-wide" : ""}`}>
+        {accessToken &&
+        (me?.role === "provider" || me?.role === "staff") &&
+        !me?.is_demo &&
+        me?.platform_tour_completed &&
+        !setupChecklistDismissed &&
+        Array.isArray(me?.setup_progress) &&
+        me.setup_progress.some((s) => !s.done) ? (
+          <SetupChecklist
+            steps={me.setup_progress}
+            onOpen={(view) => {
+              if (view === "marketplaces") {
+                setMarketplaceInitialTab("settings");
+              }
+              setCurrentView(view);
+            }}
+            onDismiss={dismissSetupChecklist}
+          />
+        ) : null}
         {!accessToken && (
           <LandingPage
             onLogin={() => openAuth("login")}

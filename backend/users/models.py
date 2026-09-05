@@ -116,6 +116,10 @@ class User(AbstractUser):
         default=True,
         help_text="Клиент: уведомления о подтверждении / отмене / завершении.",
     )
+    platform_tour_completed = models.BooleanField(
+        default=False,
+        help_text="Онбординг: пользователь завершил или пропустил тур по кабинету.",
+    )
     telegram_chat_id = models.CharField(
         max_length=64,
         blank=True,

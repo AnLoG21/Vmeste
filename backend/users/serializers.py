@@ -65,6 +65,7 @@ class UserSerializer(serializers.ModelSerializer):
             "is_demo",
             "notify_booking_reminders",
             "notify_booking_status",
+            "platform_tour_completed",
             "telegram_chat_id",
             "has_usable_password",
             "needs_credentials_setup",

@@ -1,6 +1,7 @@
 /** Platform-wide onboarding tour for provider/staff organizations. */
 
 export const PLATFORM_TOUR_KEY = "vmeste_platform_tour_done";
+export const SETUP_CHECKLIST_DISMISS_KEY = "vmeste_setup_checklist_dismiss";
 
 export function platformTourStorageKey(userId) {
   return `${PLATFORM_TOUR_KEY}_${userId || "anon"}`;
@@ -17,6 +18,26 @@ export function readPlatformTourDone(userId) {
 export function writePlatformTourDone(userId) {
   try {
     localStorage.setItem(platformTourStorageKey(userId), "1");
+  } catch {
+    /* ignore */
+  }
+}
+
+export function setupChecklistDismissKey(userId) {
+  return `${SETUP_CHECKLIST_DISMISS_KEY}_${userId || "anon"}`;
+}
+
+export function readSetupChecklistDismissed(userId) {
+  try {
+    return localStorage.getItem(setupChecklistDismissKey(userId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function writeSetupChecklistDismissed(userId) {
+  try {
+    localStorage.setItem(setupChecklistDismissKey(userId), "1");
   } catch {
     /* ignore */
   }
