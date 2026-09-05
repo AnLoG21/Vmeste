@@ -9,6 +9,7 @@
     "build:mobile": "node node_modules/vite/bin/vite.js build --mode mobile",
     "preview": "vite preview",
     "cap:sync": "npm run build:mobile && npx cap sync android",
+    "cap:sync:assets": "npm run build:mobile && node scripts/sync-android-assets.mjs",
     "cap:open": "npx cap open android",
     "cap:run": "npm run cap:sync && npx cap run android"
   },
