@@ -16,6 +16,8 @@ export const VIEW_PATHS = {
   analytics: "/analytics",
   inspections: "/inspections",
   marketplaces: "/marketplaces",
+  shop: "/shop",
+  shop_orders: "/shop-orders",
   service_apps: "/services",
   vmenu: "/vmenu",
   client_map: "/map",
@@ -25,6 +27,7 @@ export const VIEW_PATHS = {
   loyalty: "/loyalty",
   client_bookings: "/my-bookings",
   client_reviews: "/my-reviews",
+  services: "/service-catalog",
 };
 
 const PATH_TO_VIEW = Object.fromEntries(Object.entries(VIEW_PATHS).map(([k, v]) => [v, k]));

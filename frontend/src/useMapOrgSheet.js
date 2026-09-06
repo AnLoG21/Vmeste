@@ -34,6 +34,7 @@ export function useMapOrgSheet({
   const [mapOrgStaff, setMapOrgStaff] = useState([]);
   const [mapOrgCarouselIndex, setMapOrgCarouselIndex] = useState(0);
   const [mapOrgPackages, setMapOrgPackages] = useState([]);
+  const [mapOrgFeaturedProducts, setMapOrgFeaturedProducts] = useState([]);
   const [staffReviewModal, setStaffReviewModal] = useState(null);
 
   async function onClientLocationSelect(locationId, presetDate = "") {
@@ -170,6 +171,7 @@ export function useMapOrgSheet({
     setMapOrgSheetCollapsed(false);
     setMapOrgProfile(null);
     setMapOrgStaff([]);
+    setMapOrgFeaturedProducts([]);
     setMapOrgReviewsOpen(false);
     setMapOrgReviews([]);
     setStaffReviewModal(null);
@@ -203,6 +205,7 @@ export function useMapOrgSheet({
     // Публично показываем карточки сотрудников организации
     void loadMapOrgStaff(loc.provider);
     setMapOrgPackages([]);
+    setMapOrgFeaturedProducts([]);
     if (accessToken && me?.role === "client") {
       authFetch(`${API_URL}/booking/packages/?provider=${loc.provider}`)
         .then((r) => (r.ok ? r.json() : []))
@@ -210,6 +213,16 @@ export function useMapOrgSheet({
           setMapOrgPackages(Array.isArray(list) ? list.filter((p) => p.is_active !== false) : []),
         )
         .catch(() => setMapOrgPackages([]));
+    }
+    const slug = profile?.organization_slug;
+    if (slug) {
+      fetch(`${API_URL}/shop/public/${encodeURIComponent(slug)}/?featured=1`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          const list = Array.isArray(data?.products) ? data.products : [];
+          setMapOrgFeaturedProducts(list.slice(0, 5));
+        })
+        .catch(() => setMapOrgFeaturedProducts([]));
     }
     window.setTimeout(fitClientDiscoverMapViewport, 0);
   }
@@ -231,6 +244,7 @@ export function useMapOrgSheet({
     mapOrgCarouselIndex,
     setMapOrgCarouselIndex,
     mapOrgPackages,
+    mapOrgFeaturedProducts,
     staffReviewModal,
     setStaffReviewModal,
     onClientLocationSelect,

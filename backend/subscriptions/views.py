@@ -529,6 +529,11 @@ class YooKassaWebhookView(APIView):
                 if not was_paid:
                     send_order_receipt_after_payment(cafe_order)
                 return Response({"detail": "ok"})
+        if meta.get("type") == "shop_order":
+            if _mark_shop_paid_by_payment_id(yk_id, meta):
+                return Response({"detail": "ok"})
+        if _mark_shop_paid_by_payment_id(yk_id, meta):
+            return Response({"detail": "ok"})
 
         payment = Payment.objects.filter(yookassa_payment_id=yk_id).select_related("subscription").first()
         if not payment:
@@ -560,6 +565,19 @@ def _mark_cafe_paid_by_payment_id(payment_id: str, meta: dict | None = None) -> 
         cafe_order.save(update_fields=["status", "paid_at", "updated_at"])
     if not was_paid:
         send_order_receipt_after_payment(cafe_order)
+    return True
+
+
+def _mark_shop_paid_by_payment_id(payment_id: str, meta: dict | None = None) -> bool:
+    from shop.models import ShopOrder
+    from shop.payments import mark_shop_order_paid
+
+    shop_order = ShopOrder.objects.filter(yookassa_payment_id=payment_id).first()
+    if not shop_order and meta and meta.get("order_id"):
+        shop_order = ShopOrder.objects.filter(pk=meta.get("order_id")).first()
+    if not shop_order:
+        return False
+    mark_shop_order_paid(shop_order)
     return True
 
 
@@ -602,7 +620,7 @@ class TBankWebhookView(APIView):
         if password and not verify_tbank_token(dict(data), password):
             return Response({"detail": "bad token"}, status=status.HTTP_400_BAD_REQUEST)
         meta = data.get("DATA") if isinstance(data.get("DATA"), dict) else {}
-        if _mark_booking_paid_by_payment_id(payment_id, meta) or _mark_cafe_paid_by_payment_id(payment_id, meta):
+        if _mark_booking_paid_by_payment_id(payment_id, meta) or _mark_cafe_paid_by_payment_id(payment_id, meta) or _mark_shop_paid_by_payment_id(payment_id, meta):
             return Response("OK")
         order_id = str(data.get("OrderId") or "")
         if order_id.startswith("b") and order_id[1:].isdigit():
@@ -610,6 +628,9 @@ class TBankWebhookView(APIView):
                 return Response("OK")
         if order_id.startswith("c") and order_id[1:].isdigit():
             if _mark_cafe_paid_by_payment_id(payment_id, {"order_id": order_id[1:]}):
+                return Response("OK")
+        if order_id.startswith("s") and order_id[1:].isdigit():
+            if _mark_shop_paid_by_payment_id(payment_id, {"order_id": order_id[1:]}):
                 return Response("OK")
         return Response("OK")
 
@@ -641,8 +662,14 @@ class CloudPaymentsWebhookView(APIView):
             _mark_booking_paid_by_payment_id(tx or invoice, {"booking_id": invoice[1:]})
         elif invoice.startswith("c") and invoice[1:].isdigit():
             _mark_cafe_paid_by_payment_id(tx or invoice, {"order_id": invoice[1:]})
+        elif invoice.startswith("s") and invoice[1:].isdigit():
+            _mark_shop_paid_by_payment_id(tx or invoice, {"order_id": invoice[1:]})
         else:
-            _mark_booking_paid_by_payment_id(tx or invoice) or _mark_cafe_paid_by_payment_id(tx or invoice)
+            (
+                _mark_booking_paid_by_payment_id(tx or invoice)
+                or _mark_cafe_paid_by_payment_id(tx or invoice)
+                or _mark_shop_paid_by_payment_id(tx or invoice)
+            )
         return Response({"code": 0})
 
 
@@ -689,8 +716,14 @@ class RobokassaWebhookView(APIView):
         order_id = shp.get("Shp_order_id") or ""
         if meta_type == "booking" or booking_id:
             _mark_booking_paid_by_payment_id(inv_id, {"booking_id": booking_id})
-        elif meta_type == "cafe_order" or order_id:
+        elif meta_type == "cafe_order" or (order_id and meta_type != "shop_order"):
             _mark_cafe_paid_by_payment_id(inv_id, {"order_id": order_id})
+        elif meta_type == "shop_order" or order_id:
+            _mark_shop_paid_by_payment_id(inv_id, {"order_id": order_id})
         else:
-            _mark_booking_paid_by_payment_id(inv_id) or _mark_cafe_paid_by_payment_id(inv_id)
+            (
+                _mark_booking_paid_by_payment_id(inv_id)
+                or _mark_cafe_paid_by_payment_id(inv_id)
+                or _mark_shop_paid_by_payment_id(inv_id)
+            )
         return HttpResponse(f"OK{inv_id}")

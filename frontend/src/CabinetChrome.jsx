@@ -29,6 +29,10 @@ function bookmarkMenuIcon(id) {
       color: "#c2185b",
       d: "M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z",
     },
+    shop: {
+      color: "#ef6c00",
+      d: "M20 4H4v2h16V4zm1 10v-2l-1-5H4l-1 5v2h1v6h10v-6h4v6h2v-6h1zm-9 4H6v-4h6v4z",
+    },
     chats: {
       color: "#0277bd",
       d: "M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z",
@@ -195,6 +199,8 @@ function menuOverflowBookmarkIds(me, subnavBookmarks, isBookmarkAvailable) {
     "my_bookings",
     "intervals",
     "services",
+    "shop",
+    "shop_orders",
     "service_apps",
     "analytics",
     "bookings",
@@ -522,7 +528,13 @@ export default function CabinetChrome({
                     <span className="menu-item-label">Приёмка</span>
                   </button>
                 )}
-                {isBookmarkAvailable("service_apps") && (
+                {isBookmarkAvailable("shop") && !subnavBookmarks.includes("shop") && (
+                  <button type="button" className="menu-dropdown-item" onClick={() => navigateBookmark("shop")}>
+                    <span className="menu-item-icon" aria-hidden="true">{bookmarkMenuIcon("shop")}</span>
+                    <span className="menu-item-label">Магазин / склад</span>
+                  </button>
+                )}
+                {isBookmarkAvailable("service_apps") && !subnavBookmarks.includes("service_apps") && (
                   <button type="button" className="menu-dropdown-item" onClick={() => navigateBookmark("service_apps")}>
                     <span className="menu-item-icon" aria-hidden="true">{bookmarkMenuIcon("service_apps")}</span>
                     <span className="menu-item-label">Сервисы</span>

@@ -1,4 +1,5 @@
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
+import ServiceMaterialsBlock from "./ServiceMaterialsBlock.jsx";
 
 export function buildServiceDraftFromService(service) {
   return {
@@ -17,7 +18,15 @@ export function serviceDraftEqualsService(draft, service) {
   );
 }
 
-export default function ServiceEditor({ service, draft, dirty, onDraftChange, onUploadPhotos, onDeletePhoto }) {
+export default function ServiceEditor({
+  service,
+  draft,
+  dirty,
+  onDraftChange,
+  onUploadPhotos,
+  onDeletePhoto,
+  authFetch,
+}) {
   const local = draft ?? buildServiceDraftFromService(service);
   const photos = service.photos || [];
   const gallery = service.gallery || [];
@@ -106,6 +115,7 @@ export default function ServiceEditor({ service, draft, dirty, onDraftChange, on
           <p className="muted small">Допы появляются после «Загрузить каталог». Гость отмечает их плюсиком при записи.</p>
         </div>
       ) : null}
+      <ServiceMaterialsBlock serviceId={service.id} authFetch={authFetch} />
       {(gallery.length > 0 || photos.length > 0) && (
         <div className="service-editor-photos">
           <ServicePhotoCarousel items={gallery.length ? gallery : photos} className="service-editor-carousel" />

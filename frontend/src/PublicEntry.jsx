@@ -11,6 +11,7 @@ import NotFoundPage from "./legal/NotFoundPage.jsx";
 import OfferPage from "./legal/OfferPage.jsx";
 import PrivacyPage from "./legal/PrivacyPage.jsx";
 import PublicOrgPage from "./legal/PublicOrgPage.jsx";
+import PublicShopPage from "./PublicShopPage.jsx";
 import HomeFallback from "./HomeFallback.jsx";
 import { shouldLoadApp } from "./viewRoutes.js";
 import "./landing.css";
@@ -104,6 +105,7 @@ export default function PublicEntry() {
   const widgetMatch = path.match(/^\/w\/([^/]+)$/);
   const tableMatch = path.match(/^\/t\/([^/]+)$/);
   const menuMatch = path.match(/^\/m\/([^/]+)$/);
+  const shopMatch = path.match(/^\/s\/([^/]+)$/);
   const inspectionMatch = path.match(/^\/i\/([^/]+)$/);
   const cityMatch = path.match(/^\/city\/([^/]+)$/);
   const appView = shouldLoadApp(path);
@@ -113,6 +115,7 @@ export default function PublicEntry() {
   else if (LegalPage) content = <LegalPage />;
   else if (widgetMatch) content = <BookingWidgetPage slug={decodeURIComponent(widgetMatch[1])} />;
   else if (orgMatch) content = <PublicOrgPage slug={decodeURIComponent(orgMatch[1])} />;
+  else if (shopMatch) content = <PublicShopPage slug={decodeURIComponent(shopMatch[1])} />;
   else if (inspectionMatch) content = <InspectionPublicPage token={decodeURIComponent(inspectionMatch[1])} />;
   else if (tableMatch) content = <CafeGuestPage mode="table" keyId={decodeURIComponent(tableMatch[1])} />;
   else if (menuMatch) content = <CafeGuestPage mode="org" keyId={decodeURIComponent(menuMatch[1])} />;

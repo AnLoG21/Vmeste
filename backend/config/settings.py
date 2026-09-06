@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     "voice",
     "vmenu",
     "moy_nalog",
+    "shop",
 ]
 
 MIDDLEWARE = [

@@ -28,6 +28,7 @@ export default function ClientMapPanel({
   mapOrgCarouselIndex,
   setMapOrgCarouselIndex,
   mapOrgPackages,
+  mapOrgFeaturedProducts,
   authFetch,
   API_URL,
   showToast,
@@ -307,6 +308,54 @@ export default function ClientMapPanel({
                   </article>
                 ))}
               </div>
+            ) : null}
+
+            {Array.isArray(mapOrgFeaturedProducts) && mapOrgFeaturedProducts.length > 0 ? (
+              <div className="map-org-featured-products">
+                <p className="field-label">Популярные товары</p>
+                <div className="loyalty-packages-scroll">
+                  {mapOrgFeaturedProducts.map((p) => {
+                    const cover = p.photos?.[0]?.thumb_url || p.photos?.[0]?.image;
+                    return (
+                      <article key={p.id} className="loyalty-package-card">
+                        {cover ? (
+                          <img src={cover} alt="" className="loyalty-package-cover" />
+                        ) : (
+                          <div className="loyalty-package-cover loyalty-package-cover--empty" />
+                        )}
+                        <strong>{p.name}</strong>
+                        <p className="muted small">{Number(p.price).toLocaleString("ru-RU")} ₽</p>
+                      </article>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  style={{ marginTop: 8 }}
+                  onClick={() => {
+                    const slug = mapOrgProfile?.organization_slug;
+                    if (slug) window.location.href = `/s/${slug}`;
+                    else showToast("У организации ещё нет публичной ссылки магазина.");
+                  }}
+                >
+                  Смотреть все товары
+                </button>
+              </div>
+            ) : mapOrgProfile?.organization_slug &&
+              (mapOrgPopup?.provider_sphere === "hair_salon" ||
+                mapOrgPopup?.provider_sphere === "service_center" ||
+                mapOrgProfile?.provider_sphere === "hair_salon" ||
+                mapOrgProfile?.provider_sphere === "service_center") ? (
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() => {
+                  window.location.href = `/s/${mapOrgProfile.organization_slug}`;
+                }}
+              >
+                Смотреть все товары
+              </button>
             ) : null}
 
             <div className="map-org-sheet-actions row-2">

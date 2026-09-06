@@ -120,6 +120,12 @@ export function useCabinetNavigation({
       return false;
     }
     if (id === "service_apps" || id === "vmenu") return Boolean(accessToken);
+    if (id === "shop" || id === "shop_orders") {
+      const sphere = me?.provider_sphere || me?.employer_sphere;
+      if (sphere !== "hair_salon" && sphere !== "service_center") return false;
+      if (role === "staff" && !staffHasPerm("manage_services")) return false;
+      return role === "provider" || role === "staff";
+    }
     return true;
   }
 

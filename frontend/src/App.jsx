@@ -14,6 +14,7 @@ import ClientLoyaltyPage from "./ClientLoyaltyPage.jsx";
 import ClientActivityFeed from "./ClientActivityFeed.jsx";
 import WaitlistPanel from "./WaitlistPanel.jsx";
 import MarketplaceWorkspace from "./MarketplaceWorkspace.jsx";
+import ShopWorkspace from "./ShopWorkspace.jsx";
 import VmenuApp, { ServicesHub } from "./vmenu/VmenuApp.jsx";
 import { CabinetErrorBoundary } from "./CabinetErrorBoundary.jsx";
 import CabinetChrome from "./CabinetChrome.jsx";
@@ -1600,6 +1601,7 @@ export default function App() {
     mapOrgCarouselIndex,
     setMapOrgCarouselIndex,
     mapOrgPackages,
+    mapOrgFeaturedProducts,
     staffReviewModal,
     setStaffReviewModal,
     onClientLocationSelect,
@@ -2473,6 +2475,7 @@ export default function App() {
         updateServiceDraft={updateServiceDraft}
         uploadServicePhotos={uploadServicePhotos}
         deleteServicePhoto={deleteServicePhoto}
+        authFetch={authFetch}
       />
     );
   }
@@ -2763,7 +2766,7 @@ export default function App() {
     me?.role === "provider" ||
     me?.role === "staff";
   const chatsPortalTarget = currentView === "vmenu" ? vmenuChatsHostEl : mainChatsHostEl;
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "service_apps", "vmenu"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "shop_orders", "service_apps", "vmenu"].includes(currentView);
   const profileWide = accessToken && ["profile", "subscriptions"].includes(currentView);
 
   return (
@@ -3184,6 +3187,16 @@ export default function App() {
         )}
 
         {accessToken &&
+          (currentView === "shop" || currentView === "shop_orders") &&
+          isBookmarkAvailable("shop") && (
+          <ShopWorkspace
+            authFetch={authFetch}
+            me={me}
+            initialTab={currentView === "shop_orders" ? "orders" : "catalog"}
+          />
+        )}
+
+        {accessToken &&
           currentView === "services" &&
           me?.provider_sphere !== "cafe_restaurant" &&
           me?.provider_sphere !== "marketplaces" &&
@@ -3260,6 +3273,7 @@ export default function App() {
             mapOrgCarouselIndex={mapOrgCarouselIndex}
             setMapOrgCarouselIndex={setMapOrgCarouselIndex}
             mapOrgPackages={mapOrgPackages}
+            mapOrgFeaturedProducts={mapOrgFeaturedProducts}
             authFetch={authFetch}
             API_URL={API_URL}
             showToast={showToast}

@@ -254,6 +254,12 @@ def mark_booking_done(booking, actor):
     except Exception:
         logger.exception("award_loyalty_for_visit failed for booking %s", getattr(booking, "id", None))
     try:
+        from shop.stock import writeoff_booking_materials
+
+        writeoff_booking_materials(booking, actor=actor)
+    except Exception:
+        logger.exception("writeoff_booking_materials failed for booking %s", getattr(booking, "id", None))
+    try:
         from notifications.delivery import deliver_booking_event
 
         deliver_booking_event(

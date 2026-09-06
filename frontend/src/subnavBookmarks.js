@@ -10,6 +10,8 @@ export const BOOKMARK_CATALOG = [
   { id: "reviews", label: "Отзывы", roles: ["provider", "staff"] },
   { id: "intervals", label: "Календарь интервалов", roles: ["provider", "staff"], menuIcon: "calendar" },
   { id: "services", label: "Услуги и категории", roles: ["provider", "staff"], menuIcon: "services" },
+  { id: "shop", label: "Магазин / склад", roles: ["provider", "staff"], menuIcon: "services" },
+  { id: "shop_orders", label: "Заказы магазина", roles: ["provider", "staff"] },
   { id: "chats", label: "Чаты", roles: ["client", "provider", "staff"] },
   { id: "service_apps", label: "Сервисы", roles: ["client", "provider", "staff"] },
   { id: "settings", label: "Настройки", roles: ["client", "provider", "staff"] },
@@ -34,8 +36,8 @@ export const DEFAULT_SUBNAV_BOOKMARKS = {
   staff: ["bookings", "reviews", "analytics", "service_apps", "chats"],
   provider_cafe: ["cafe_orders", "cafe", "reviews", "analytics", "client_map", "service_apps", "chats"],
   staff_cafe: ["cafe_orders", "cafe", "analytics", "service_apps", "chats"],
-  provider_service: ["bookings", "client_map", "my_bookings", "analytics", "service_apps", "chats", "inspections"],
-  provider_salon: ["bookings", "client_map", "my_bookings", "analytics", "service_apps", "chats"],
+  provider_service: ["bookings", "client_map", "my_bookings", "analytics", "shop", "service_apps", "chats", "inspections"],
+  provider_salon: ["bookings", "client_map", "my_bookings", "analytics", "shop", "service_apps", "chats"],
   provider_marketplaces: ["marketplaces", "analytics", "reviews", "service_apps", "chats"],
 };
 
