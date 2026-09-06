@@ -331,8 +331,7 @@ export default function ClientMapPanel({
                 </div>
                 <button
                   type="button"
-                  className="ghost-btn"
-                  style={{ marginTop: 8 }}
+                  className="ghost-btn map-org-all-products-btn"
                   onClick={() => {
                     const slug = mapOrgProfile?.organization_slug;
                     if (slug) window.location.href = `/s/${slug}`;
@@ -349,7 +348,7 @@ export default function ClientMapPanel({
                 mapOrgProfile?.provider_sphere === "service_center") ? (
               <button
                 type="button"
-                className="ghost-btn"
+                className="ghost-btn map-org-all-products-btn"
                 onClick={() => {
                   window.location.href = `/s/${mapOrgProfile.organization_slug}`;
                 }}

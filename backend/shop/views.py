@@ -65,7 +65,16 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
         provider = resolve_shop_provider(self.request.user)
         if not provider:
             return ProductCategory.objects.none()
-        return ProductCategory.objects.filter(provider=provider).prefetch_related("subcategories")
+        qs = ProductCategory.objects.filter(provider=provider).prefetch_related(
+            "children", "subcategories", "products"
+        )
+        parent = self.request.query_params.get("parent")
+        roots_only = str(self.request.query_params.get("roots") or "").lower() in ("1", "true", "yes")
+        if parent:
+            qs = qs.filter(parent_id=parent)
+        elif roots_only:
+            qs = qs.filter(parent__isnull=True)
+        return qs
 
     def perform_create(self, serializer):
         if not can_manage_shop(self.request.user):
@@ -73,6 +82,49 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
 
             raise PermissionDenied()
         serializer.save(provider=resolve_shop_provider(self.request.user))
+
+    @action(detail=False, methods=["post"], url_path="from-pool")
+    def from_pool(self, request):
+        """Добавить категорию (и при необходимости родителей) из пула по ключу path."""
+        if not can_manage_shop(request.user):
+            return Response({"detail": "Нет доступа"}, status=403)
+        provider = resolve_shop_provider(request.user)
+        path = request.data.get("path") or []
+        if not isinstance(path, list) or not path:
+            return Response({"detail": "Нужен path: [{key,name},…]"}, status=400)
+        parent = None
+        created = []
+        for i, node in enumerate(path[:12]):
+            key = str(node.get("key") or "").strip()
+            name = str(node.get("name") or "").strip()[:120]
+            if not key or not name:
+                continue
+            obj = ProductCategory.objects.filter(provider=provider, pool_key=key).first()
+            if not obj:
+                obj = ProductCategory.objects.create(
+                    provider=provider,
+                    parent=parent,
+                    name=name,
+                    pool_key=key,
+                    sort_order=i,
+                )
+            else:
+                if obj.parent_id != (parent.id if parent else None):
+                    obj.parent = parent
+                    obj.save(update_fields=["parent"])
+            parent = obj
+            created.append(obj)
+        if not created:
+            return Response({"detail": "Пустой path"}, status=400)
+        return Response(
+            {
+                "leaf": ProductCategorySerializer(created[-1], context={"request": request}).data,
+                "path": [
+                    {"id": c.id, "name": c.name, "pool_key": c.pool_key} for c in created
+                ],
+            },
+            status=201,
+        )
 
     def perform_update(self, serializer):
         if not can_manage_shop(self.request.user):
@@ -183,12 +235,25 @@ class ProductViewSet(viewsets.ModelViewSet):
         product = self.get_object()
         if not can_manage_shop(request.user):
             return Response({"detail": "Нет доступа"}, status=status.HTTP_403_FORBIDDEN)
-        image = request.FILES.get("image")
-        if not image:
+        files = request.FILES.getlist("image") or request.FILES.getlist("images")
+        if not files and request.FILES.get("image"):
+            files = [request.FILES.get("image")]
+        if not files:
             return Response({"detail": "Нужен файл image"}, status=status.HTTP_400_BAD_REQUEST)
-        sort_order = int(request.data.get("sort_order") or product.photos.count())
-        photo = ProductPhoto.objects.create(product=product, image=image, sort_order=sort_order)
-        return Response(ProductPhotoSerializer(photo, context={"request": request}).data, status=201)
+        existing = product.photos.count()
+        room = max(0, 5 - existing)
+        if room <= 0:
+            return Response({"detail": "Можно не больше 5 фото"}, status=400)
+        created = []
+        for i, image in enumerate(files[:room]):
+            photo = ProductPhoto.objects.create(
+                product=product, image=image, sort_order=existing + i
+            )
+            created.append(photo)
+        return Response(
+            ProductPhotoSerializer(created, many=True, context={"request": request}).data,
+            status=201,
+        )
 
     @action(detail=True, methods=["delete"], url_path=r"photos/(?P<photo_id>[^/.]+)")
     def delete_photo(self, request, pk=None, photo_id=None):

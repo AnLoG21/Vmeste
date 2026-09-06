@@ -4292,6 +4292,22 @@ body.theme-dark .client-map-locate-btn {
 
 .map-org-sheet-actions {
   margin-bottom: 10px;
+  margin-top: 4px;
+  clear: both;
+}
+
+.map-org-featured-products {
+  margin: 8px 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.map-org-all-products-btn {
+  display: block;
+  width: 100%;
+  margin: 6px 0 0;
+  position: relative;
+  z-index: 2;
 }
 
 .map-org-sheet-actions button {
@@ -10455,3 +10471,34 @@ body.theme-dark .password-eye-btn:hover {
   margin: 16px 0 8px;
   font-size: 1rem;
 }
+
+/* Shop workspace + public shop */
+.shop-workspace { display: grid; gap: 12px; }
+.shop-tabs { gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.shop-section-title { margin: 18px 0 8px; font-size: 1.05rem; }
+.shop-field { display: grid; gap: 6px; margin-bottom: 12px; }
+.shop-field-label { font-weight: 600; font-size: 0.92rem; }
+.shop-field input,
+.shop-field textarea,
+.shop-field select { width: 100%; box-sizing: border-box; }
+.shop-check { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.shop-pool-hits { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; max-height: 220px; overflow: auto; }
+.shop-pool-hits button { width: 100%; text-align: left; }
+.shop-pool-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.shop-pool-chip { border-radius: 999px; padding: 8px 12px; }
+.shop-own-nav { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.shop-photos { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.shop-photo-chip { position: relative; width: 72px; height: 72px; padding: 0; border: none; border-radius: 10px; overflow: hidden; cursor: pointer; }
+.shop-photo-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.shop-photo-chip span { position: absolute; top: 2px; right: 4px; background: rgba(0,0,0,.55); color: #fff; border-radius: 999px; width: 18px; height: 18px; line-height: 16px; font-size: 14px; }
+.shop-photo-add { position: relative; }
+.shop-settings .shop-field { max-width: 520px; }
+.shop-public-cats { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.shop-public-grid { margin-bottom: 80px; }
+.shop-product-sheet { max-width: 560px; }
+.shop-product-price { font-size: 1.25rem; font-weight: 700; }
+.shop-product-attrs { display: grid; gap: 6px; margin: 12px 0; }
+.shop-product-attrs > div { display: grid; grid-template-columns: 1fr 1.2fr; gap: 8px; font-size: 0.92rem; }
+.shop-product-attrs dt { color: #666; margin: 0; }
+.shop-product-attrs dd { margin: 0; }
+.shop-product-reviews { margin-top: 20px; border-top: 1px solid rgba(0,0,0,.08); padding-top: 12px; }

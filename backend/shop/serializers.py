@@ -41,12 +41,40 @@ class ProductSubcategorySerializer(serializers.ModelSerializer):
 
 
 class ProductCategorySerializer(serializers.ModelSerializer):
+    children = serializers.SerializerMethodField()
+    products_count = serializers.SerializerMethodField()
     subcategories = ProductSubcategorySerializer(many=True, read_only=True)
 
     class Meta:
         model = ProductCategory
-        fields = ["id", "name", "sort_order", "subcategories", "provider"]
-        read_only_fields = ["provider"]
+        fields = [
+            "id",
+            "name",
+            "sort_order",
+            "parent",
+            "pool_key",
+            "children",
+            "products_count",
+            "subcategories",
+            "provider",
+        ]
+        read_only_fields = ["provider", "pool_key", "children", "products_count", "subcategories"]
+
+    def get_children(self, obj):
+        kids = list(obj.children.all())
+        return [
+            {
+                "id": c.id,
+                "name": c.name,
+                "sort_order": c.sort_order,
+                "parent": c.parent_id,
+                "pool_key": c.pool_key,
+            }
+            for c in kids
+        ]
+
+    def get_products_count(self, obj):
+        return obj.products.count()
 
 
 class ProductSerializer(serializers.ModelSerializer):

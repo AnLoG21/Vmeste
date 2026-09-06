@@ -2,8 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_URL } from "./config.js";
 import { showToast } from "./toast.js";
 import CafeDeliveryZonesEditor from "./CafeDeliveryZonesEditor.jsx";
+import {
+  browseShopCategoryChildren,
+  searchShopCategoryPool,
+} from "./shopCategoryPool.js";
+import "./cafeProvider.css";
 
 const ORDER_STATUSES = [
+  ["awaiting_payment", "Ожидает оплаты"],
   ["paid", "Оплачен"],
   ["assembling", "Собирается"],
   ["ready", "Готов"],
@@ -11,6 +17,12 @@ const ORDER_STATUSES = [
   ["delivering", "В пути"],
   ["done", "Завершён"],
   ["cancelled", "Отменён"],
+];
+
+const STOCK_ACTIONS = [
+  { kind: "in", label: "Добавить на склад (приход)" },
+  { kind: "out_manual", label: "Списать со склада" },
+  { kind: "adjust", label: "Установить остаток (+/−)" },
 ];
 
 function emptyProductForm() {
@@ -21,7 +33,6 @@ function emptyProductForm() {
     unit: "шт",
     price: "0",
     category: "",
-    subcategory: "",
     attrsText: "",
     is_active: true,
     is_featured: false,
@@ -52,9 +63,30 @@ function textToAttrs(text) {
   return out;
 }
 
+function CameraPlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M9 2 7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"
+      />
+      <circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.35" />
+    </svg>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <label className="shop-field">
+      <span className="shop-field-label">{label}</span>
+      {children}
+    </label>
+  );
+}
+
 /** Кабинет: каталог товаров, заказы, настройки доставки. */
-export default function ShopWorkspace({ authFetch, me, initialTab = "catalog" }) {
-  const [tab, setTab] = useState(initialTab);
+export default function ShopWorkspace({ authFetch, me }) {
+  const [tab, setTab] = useState("catalog");
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -63,27 +95,26 @@ export default function ShopWorkspace({ authFetch, me, initialTab = "catalog" })
   const [form, setForm] = useState(emptyProductForm());
   const [stockQty, setStockQty] = useState("");
   const [stockKind, setStockKind] = useState("in");
-  const [catName, setCatName] = useState("");
-  const [subName, setSubName] = useState("");
-  const [subParent, setSubParent] = useState("");
   const [busy, setBusy] = useState(false);
-  const [categoryOpen, setCategoryOpen] = useState({});
+  const [browseStack, setBrowseStack] = useState([]);
+  const [ownStack, setOwnStack] = useState([]);
+  const [poolQuery, setPoolQuery] = useState("");
+  const [poolHits, setPoolHits] = useState([]);
 
   const selected = useMemo(
     () => products.find((p) => String(p.id) === String(selectedId)) || null,
     [products, selectedId],
   );
 
-  useEffect(() => {
-    setTab(initialTab || "catalog");
-  }, [initialTab]);
-
   const loadCatalog = useCallback(async () => {
     const [cRes, pRes] = await Promise.all([
       authFetch(`${API_URL}/shop/categories/`),
       authFetch(`${API_URL}/shop/products/`),
     ]);
-    if (cRes.ok) setCategories(await cRes.json());
+    if (cRes.ok) {
+      const list = await cRes.json();
+      setCategories(Array.isArray(list) ? list : list.results || []);
+    }
     if (pRes.ok) {
       const list = await pRes.json();
       setProducts(Array.isArray(list) ? list : list.results || []);
@@ -124,7 +155,6 @@ export default function ShopWorkspace({ authFetch, me, initialTab = "catalog" })
       unit: selected.unit || "шт",
       price: String(selected.price ?? 0),
       category: selected.category != null ? String(selected.category) : "",
-      subcategory: selected.subcategory != null ? String(selected.subcategory) : "",
       attrsText: attrsToText(selected.attrs),
       is_active: Boolean(selected.is_active),
       is_featured: Boolean(selected.is_featured),
@@ -132,38 +162,48 @@ export default function ShopWorkspace({ authFetch, me, initialTab = "catalog" })
     });
   }, [selected]);
 
-  async function createCategory() {
-    const name = catName.trim();
-    if (!name) return;
-    setBusy(true);
-    try {
-      const res = await authFetch(`${API_URL}/shop/categories/`, {
-        method: "POST",
-        body: JSON.stringify({ name }),
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Ошибка");
-      setCatName("");
-      await loadCatalog();
-      showToast("Категория добавлена");
-    } catch (e) {
-      showToast(e.message || "Ошибка", { tone: "error" });
-    } finally {
-      setBusy(false);
-    }
-  }
+  useEffect(() => {
+    setPoolHits(searchShopCategoryPool(poolQuery, 36));
+  }, [poolQuery]);
 
-  async function createSubcategory() {
-    if (!subParent || !subName.trim()) return;
+  const rootCats = useMemo(
+    () => categories.filter((c) => !c.parent),
+    [categories],
+  );
+
+  const currentOwnParentId = ownStack.length ? ownStack[ownStack.length - 1].id : null;
+  const ownChildren = useMemo(() => {
+    if (!currentOwnParentId) return rootCats;
+    return categories.filter((c) => Number(c.parent) === Number(currentOwnParentId));
+  }, [categories, currentOwnParentId, rootCats]);
+
+  const productsInView = useMemo(() => {
+    if (!currentOwnParentId) {
+      return products.filter((p) => !p.category || Number(p.category) === 0);
+    }
+    return products.filter((p) => Number(p.category) === Number(currentOwnParentId));
+  }, [products, currentOwnParentId]);
+
+  const poolNodes = browseShopCategoryChildren(browseStack);
+
+  async function addFromPool(path) {
     setBusy(true);
     try {
-      const res = await authFetch(`${API_URL}/shop/categories/${subParent}/subcategories/`, {
+      const res = await authFetch(`${API_URL}/shop/categories/from-pool/`, {
         method: "POST",
-        body: JSON.stringify({ name: subName.trim() }),
+        body: JSON.stringify({ path }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Ошибка");
-      setSubName("");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Не удалось добавить категорию");
       await loadCatalog();
-      showToast("Подкатегория добавлена");
+      const leafName = data.leaf?.name || data.name || path[path.length - 1]?.name;
+      showToast(`Категория «${leafName}» добавлена`);
+      setPoolQuery("");
+      setBrowseStack([]);
+      const nav = data.path || [];
+      if (nav.length) {
+        setOwnStack(nav.map((c) => ({ id: c.id, name: c.name })));
+      }
     } catch (e) {
       showToast(e.message || "Ошибка", { tone: "error" });
     } finally {
@@ -180,8 +220,8 @@ export default function ShopWorkspace({ authFetch, me, initialTab = "catalog" })
         sku: form.sku,
         unit: form.unit || "шт",
         price: form.price,
-        category: form.category || null,
-        subcategory: form.subcategory || null,
+        category: form.category || currentOwnParentId || null,
+        subcategory: null,
         attrs: textToAttrs(form.attrsText),
         is_active: form.is_active,
         is_featured: form.is_featured,
@@ -223,19 +263,43 @@ export default function ShopWorkspace({ authFetch, me, initialTab = "catalog" })
 
   async function uploadPhotos(files) {
     if (!selected || !files?.length) return;
+    const room = Math.max(0, 5 - (selected.photos || []).length);
+    if (!room) {
+      showToast("Можно не больше 5 фото", { tone: "error" });
+      return;
+    }
     setBusy(true);
     try {
-      for (const file of Array.from(files)) {
-        const fd = new FormData();
-        fd.append("image", file);
-        const res = await authFetch(`${API_URL}/shop/products/${selected.id}/photos/`, {
-          method: "POST",
-          body: fd,
-        });
-        if (!res.ok) throw new Error("Ошибка загрузки фото");
+      const fd = new FormData();
+      Array.from(files)
+        .slice(0, room)
+        .forEach((file) => fd.append("image", file));
+      const res = await authFetch(`${API_URL}/shop/products/${selected.id}/photos/`, {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Ошибка загрузки фото");
       }
       await loadCatalog();
       showToast("Фото добавлены");
+    } catch (e) {
+      showToast(e.message || "Ошибка", { tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deletePhoto(photoId) {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      const res = await authFetch(`${API_URL}/shop/products/${selected.id}/photos/${photoId}/`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Не удалось удалить фото");
+      await loadCatalog();
     } catch (e) {
       showToast(e.message || "Ошибка", { tone: "error" });
     } finally {
@@ -298,18 +362,13 @@ export default function ShopWorkspace({ authFetch, me, initialTab = "catalog" })
   const shopSlug = me?.organization_slug;
   const publicUrl = shopSlug ? `${window.location.origin}/s/${shopSlug}` : "";
 
-  const subsForCat = useMemo(() => {
-    const cat = categories.find((c) => String(c.id) === String(form.category));
-    return cat?.subcategories || [];
-  }, [categories, form.category]);
-
   return (
     <div className="shop-workspace">
-      <div className="row-2" style={{ marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
+      <div className="row-2 shop-tabs">
         {[
           ["catalog", "Каталог"],
           ["orders", "Заказы"],
-          ["settings", "Доставка и оплата"],
+          ["settings", "Самовывоз и доставка"],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -331,235 +390,181 @@ export default function ShopWorkspace({ authFetch, me, initialTab = "catalog" })
               {publicUrl ? (
                 <>
                   {" "}
-                  Публичная витрина:{" "}
+                  Витрина:{" "}
                   <a href={publicUrl} target="_blank" rel="noreferrer">
                     {publicUrl}
                   </a>
                 </>
-              ) : (
-                " Сохраните slug организации в профиле — появится ссылка витрины."
-              )}
+              ) : null}
             </p>
 
-            <div className="row-2" style={{ gap: 8, marginBottom: 12 }}>
+            <h3 className="shop-section-title">Добавить категорию из каталога</h3>
+            <Field label="Поиск категории">
               <input
-                placeholder="Новая категория"
-                value={catName}
-                onChange={(e) => setCatName(e.target.value)}
+                value={poolQuery}
+                onChange={(e) => setPoolQuery(e.target.value)}
+                placeholder="Например: краска, масла, фильтры…"
               />
-              <button type="button" disabled={busy} onClick={() => void createCategory()}>
-                + Категория
-              </button>
-            </div>
-            <div className="row-2" style={{ gap: 8, marginBottom: 16 }}>
-              <select value={subParent} onChange={(e) => setSubParent(e.target.value)}>
-                <option value="">Категория для подкатегории</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
+            </Field>
+            {poolQuery.trim() ? (
+              <ul className="shop-pool-hits">
+                {poolHits.map(({ node, path }) => (
+                  <li key={node.key}>
+                    <button type="button" disabled={busy} onClick={() => void addFromPool(path)}>
+                      {path.map((p) => p.name).join(" → ")}
+                    </button>
+                  </li>
                 ))}
-              </select>
-              <input
-                placeholder="Подкатегория"
-                value={subName}
-                onChange={(e) => setSubName(e.target.value)}
-              />
-              <button type="button" disabled={busy} onClick={() => void createSubcategory()}>
-                + Подкат.
-              </button>
-            </div>
+                {!poolHits.length ? <li className="muted small">Ничего не найдено</li> : null}
+              </ul>
+            ) : (
+              <div className="shop-pool-browse">
+                {browseStack.length ? (
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    onClick={() => setBrowseStack((s) => s.slice(0, -1))}
+                  >
+                    ← Назад
+                  </button>
+                ) : null}
+                <div className="shop-pool-grid">
+                  {poolNodes.map((n) => (
+                    <button
+                      key={n.key}
+                      type="button"
+                      className="shop-pool-chip"
+                      onClick={() => {
+                        if (n.children?.length) setBrowseStack((s) => [...s, { key: n.key, name: n.name }]);
+                        else void addFromPool([...browseStack, { key: n.key, name: n.name }]);
+                      }}
+                    >
+                      {n.name}
+                      {n.children?.length ? " ›" : " +"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
+            <h3 className="shop-section-title">Ваши категории</h3>
+            <div className="shop-own-nav">
+              <button type="button" className="ghost-btn" onClick={() => setOwnStack([])}>
+                Корень
+              </button>
+              {ownStack.map((s, idx) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className="ghost-btn"
+                  onClick={() => setOwnStack((prev) => prev.slice(0, idx + 1))}
+                >
+                  › {s.name}
+                </button>
+              ))}
+            </div>
+            <div className="tree-list catalog-tree">
+              {ownChildren.map((cat) => {
+                const childCount = (cat.children || []).length;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    className="tree-toggle"
+                    onClick={() => setOwnStack((prev) => [...prev, { id: cat.id, name: cat.name }])}
+                  >
+                    {childCount ? "▶ " : ""}
+                    {cat.name}
+                    {childCount ? (
+                      <span className="catalog-tree-meta">{childCount}</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+              {productsInView.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={
+                    String(selectedId) === String(p.id)
+                      ? "ghost-btn catalog-tree-service is-active"
+                      : "ghost-btn catalog-tree-service"
+                  }
+                  onClick={() => setSelectedId(p.id)}
+                >
+                  {p.name}
+                  {p.is_featured ? " ★" : ""} · {Number(p.stock_qty)} {p.unit}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               className="ghost-btn"
-              style={{ marginBottom: 12 }}
+              style={{ marginTop: 10 }}
               onClick={() => {
                 setSelectedId(null);
-                setForm(emptyProductForm());
+                setForm({
+                  ...emptyProductForm(),
+                  category: currentOwnParentId ? String(currentOwnParentId) : "",
+                });
               }}
             >
-              + Новый товар
+              + Новый товар здесь
             </button>
-
-            <div className="tree-list catalog-tree">
-              {categories.map((cat) => {
-                const open = categoryOpen[cat.id] ?? true;
-                const catProducts = products.filter((p) => Number(p.category) === Number(cat.id));
-                const loose = products.filter((p) => !p.category);
-                return (
-                  <div key={cat.id} className="tree-node catalog-tree-category">
-                    <button
-                      type="button"
-                      className="tree-toggle"
-                      onClick={() => setCategoryOpen((prev) => ({ ...prev, [cat.id]: !open }))}
-                    >
-                      {open ? "▼" : "▶"} {cat.name}
-                      <span className="catalog-tree-meta">{catProducts.length}</span>
-                    </button>
-                    {open && (
-                      <div className="tree-children">
-                        {(cat.subcategories || []).map((sub) => {
-                          const items = catProducts.filter((p) => Number(p.subcategory) === Number(sub.id));
-                          return (
-                            <div key={sub.id} className="catalog-tree-subcategory">
-                              <div className="tree-toggle tree-toggle--sub">{sub.name}</div>
-                              {items.map((p) => (
-                                <button
-                                  key={p.id}
-                                  type="button"
-                                  className={
-                                    String(selectedId) === String(p.id)
-                                      ? "ghost-btn catalog-tree-service is-active"
-                                      : "ghost-btn catalog-tree-service"
-                                  }
-                                  onClick={() => setSelectedId(p.id)}
-                                >
-                                  {p.name}
-                                  {p.is_featured ? " ★" : ""} · {Number(p.stock_qty)} {p.unit}
-                                </button>
-                              ))}
-                            </div>
-                          );
-                        })}
-                        {catProducts
-                          .filter((p) => !p.subcategory)
-                          .map((p) => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              className={
-                                String(selectedId) === String(p.id)
-                                  ? "ghost-btn catalog-tree-service is-active"
-                                  : "ghost-btn catalog-tree-service"
-                              }
-                              onClick={() => setSelectedId(p.id)}
-                            >
-                              {p.name}
-                              {p.is_featured ? " ★" : ""} · {Number(p.stock_qty)} {p.unit}
-                            </button>
-                          ))}
-                      </div>
-                    )}
-                    {cat === categories[0] && loose.length > 0 ? null : null}
-                  </div>
-                );
-              })}
-              {products
-                .filter((p) => !p.category)
-                .map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className={
-                      String(selectedId) === String(p.id)
-                        ? "ghost-btn catalog-tree-service is-active"
-                        : "ghost-btn catalog-tree-service"
-                    }
-                    onClick={() => setSelectedId(p.id)}
-                  >
-                    {p.name}
-                    {p.is_featured ? " ★" : ""} · {Number(p.stock_qty)} {p.unit}
-                  </button>
-                ))}
-            </div>
           </section>
 
           <section className="card right-stack">
             <h2>{selected ? "Карточка товара" : "Новый товар"}</h2>
-            <label>
-              Название
-              <input
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              />
-            </label>
-            <label>
-              Описание
+            <Field label="Название">
+              <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+            </Field>
+            <Field label="Описание">
               <textarea
                 rows={3}
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               />
-            </label>
+            </Field>
             <div className="row-2">
-              <label>
-                Цена
+              <Field label="Цена, ₽">
                 <input
                   type="number"
                   value={form.price}
                   onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
                 />
-              </label>
-              <label>
-                Ед.
-                <input
-                  value={form.unit}
-                  onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
-                />
-              </label>
+              </Field>
+              <Field label="Единица">
+                <input value={form.unit} onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))} />
+              </Field>
             </div>
-            <label>
-              Артикул
+            <Field label="Артикул">
               <input value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} />
-            </label>
-            <label>
-              Категория
-              <select
-                value={form.category}
-                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value, subcategory: "" }))}
-              >
-                <option value="">—</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Подкатегория
-              <select
-                value={form.subcategory}
-                onChange={(e) => setForm((f) => ({ ...f, subcategory: e.target.value }))}
-              >
-                <option value="">—</option>
-                {subsForCat.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Характеристики (строки «ключ: значение»)
+            </Field>
+            <Field label="Характеристики (строки «ключ: значение»)">
               <textarea
                 rows={3}
                 value={form.attrsText}
                 onChange={(e) => setForm((f) => ({ ...f, attrsText: e.target.value }))}
               />
+            </Field>
+            <label className="shop-check">
+              <input
+                type="checkbox"
+                checked={form.is_active}
+                onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))}
+              />
+              В продаже
             </label>
-            <label className="row-2">
-              <span>
-                <input
-                  type="checkbox"
-                  checked={form.is_active}
-                  onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))}
-                />{" "}
-                В продаже
-              </span>
-              <span>
-                <input
-                  type="checkbox"
-                  checked={form.is_featured}
-                  onChange={(e) => setForm((f) => ({ ...f, is_featured: e.target.checked }))}
-                />{" "}
-                Популярный (витрина, до 5)
-              </span>
+            <label className="shop-check">
+              <input
+                type="checkbox"
+                checked={form.is_featured}
+                onChange={(e) => setForm((f) => ({ ...f, is_featured: e.target.checked }))}
+              />
+              Показывать в популярных на карточке (до 5)
             </label>
-            {form.is_featured && (
-              <label>
-                Порядок на витрине
+            {form.is_featured ? (
+              <Field label="Порядок на витрине (0–4)">
                 <input
                   type="number"
                   min="0"
@@ -567,69 +572,81 @@ export default function ShopWorkspace({ authFetch, me, initialTab = "catalog" })
                   value={form.featured_order}
                   onChange={(e) => setForm((f) => ({ ...f, featured_order: e.target.value }))}
                 />
-              </label>
-            )}
+              </Field>
+            ) : null}
             <div className="row-2" style={{ marginTop: 8 }}>
               <button type="button" className="primary-btn" disabled={busy} onClick={() => void saveProduct()}>
                 Сохранить
               </button>
-              {selected && (
+              {selected ? (
                 <button type="button" className="ghost-btn" disabled={busy} onClick={() => void deleteProduct()}>
                   Удалить
                 </button>
-              )}
+              ) : null}
             </div>
 
-            {selected && (
+            {selected ? (
               <>
-                <h3 style={{ marginTop: 20 }}>Фото</h3>
-                <div className="row-2" style={{ flexWrap: "wrap", gap: 8 }}>
+                <h3 className="shop-section-title">Фото (до 5)</h3>
+                <div className="shop-photos">
                   {(selected.photos || []).map((ph) => (
-                    <img
+                    <button
                       key={ph.id}
-                      src={ph.thumb_url || ph.image}
-                      alt=""
-                      style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8 }}
-                    />
+                      type="button"
+                      className="shop-photo-chip"
+                      title="Удалить фото"
+                      onClick={() => void deletePhoto(ph.id)}
+                    >
+                      <img src={ph.thumb_url || ph.image} alt="" />
+                      <span aria-hidden>×</span>
+                    </button>
                   ))}
+                  {(selected.photos || []).length < 5 ? (
+                    <label className="service-editor-camera-btn shop-photo-add" title="Добавить фото">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        hidden
+                        onChange={(e) => {
+                          void uploadPhotos(e.target.files);
+                          e.target.value = "";
+                        }}
+                      />
+                      <CameraPlusIcon />
+                      <span className="service-editor-camera-plus" aria-hidden>
+                        +
+                      </span>
+                    </label>
+                  ) : null}
                 </div>
-                <label className="ghost-btn" style={{ marginTop: 8, display: "inline-block" }}>
-                  Добавить фото
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    hidden
-                    onChange={(e) => {
-                      void uploadPhotos(e.target.files);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
 
-                <h3 style={{ marginTop: 20 }}>Склад</h3>
+                <h3 className="shop-section-title">Склад</h3>
                 <p className="muted">
-                  Остаток: <strong>{Number(selected.stock_qty)}</strong> {selected.unit}
+                  Сейчас на складе: <strong>{Number(selected.stock_qty)}</strong> {selected.unit}
                 </p>
-                <div className="row-2">
+                <Field label="Действие">
                   <select value={stockKind} onChange={(e) => setStockKind(e.target.value)}>
-                    <option value="in">Приход</option>
-                    <option value="out_manual">Списание</option>
-                    <option value="adjust">Корректировка (+/−)</option>
+                    {STOCK_ACTIONS.map((a) => (
+                      <option key={a.kind} value={a.kind}>
+                        {a.label}
+                      </option>
+                    ))}
                   </select>
+                </Field>
+                <Field label="Количество">
                   <input
                     type="number"
                     step="0.001"
-                    placeholder="Кол-во"
                     value={stockQty}
                     onChange={(e) => setStockQty(e.target.value)}
                   />
-                  <button type="button" disabled={busy} onClick={() => void applyStock()}>
-                    Применить
-                  </button>
-                </div>
+                </Field>
+                <button type="button" disabled={busy} onClick={() => void applyStock()}>
+                  Применить
+                </button>
               </>
-            )}
+            ) : null}
           </section>
         </div>
       )}
@@ -655,16 +672,12 @@ export default function ShopWorkspace({ authFetch, me, initialTab = "catalog" })
                     </li>
                   ))}
                 </ul>
-                <select
-                  value={o.status}
-                  onChange={(e) => void updateOrderStatus(o.id, e.target.value)}
-                >
+                <select value={o.status} onChange={(e) => void updateOrderStatus(o.id, e.target.value)}>
                   {ORDER_STATUSES.map(([v, l]) => (
                     <option key={v} value={v}>
                       {l}
                     </option>
                   ))}
-                  <option value="awaiting_payment">Ожидает оплаты</option>
                 </select>
               </article>
             ))}
@@ -673,34 +686,34 @@ export default function ShopWorkspace({ authFetch, me, initialTab = "catalog" })
       )}
 
       {tab === "settings" && settings && (
-        <section className="card">
+        <section className="card shop-settings">
           <h2>Самовывоз и доставка</h2>
-          <label>
+          <label className="shop-check">
             <input
               type="checkbox"
               checked={Boolean(settings.enable_pickup)}
               onChange={(e) => void saveSettings({ enable_pickup: e.target.checked })}
-            />{" "}
+            />
             Самовывоз
           </label>
-          <label>
+          <label className="shop-check">
             <input
               type="checkbox"
               checked={Boolean(settings.enable_delivery)}
               onChange={(e) => void saveSettings({ enable_delivery: e.target.checked })}
-            />{" "}
+            />
             Доставка
           </label>
-          <label>
+          <label className="shop-check">
             <input
               type="checkbox"
               checked={Boolean(settings.accept_online_payment)}
               onChange={(e) => void saveSettings({ accept_online_payment: e.target.checked })}
-            />{" "}
+            />
             Онлайн-оплата
           </label>
-          <label>
-            Провайдер доставки
+
+          <Field label="Провайдер доставки">
             <select
               value={settings.delivery_provider || "own"}
               onChange={(e) => void saveSettings({ delivery_provider: e.target.value })}
@@ -709,35 +722,31 @@ export default function ShopWorkspace({ authFetch, me, initialTab = "catalog" })
               <option value="yandex">Яндекс Доставка (скоро)</option>
               <option value="cdek">СДЭК (скоро)</option>
             </select>
-          </label>
-          <p className="muted small">
-            Яндекс и СДЭК подключим по API после договора; сейчас работает свой курьер и зоны на карте.
-          </p>
-          <label>
-            Стоимость доставки по умолчанию
+          </Field>
+          <p className="muted small">Яндекс и СДЭК подключим по API позже; сейчас — свой курьер и зоны.</p>
+
+          <Field label="Стоимость доставки по умолчанию, ₽">
             <input
               type="number"
               defaultValue={settings.delivery_fee}
               onBlur={(e) => void saveSettings({ delivery_fee: e.target.value })}
             />
-          </label>
-          <label>
-            Мин. сумма заказа
+          </Field>
+          <Field label="Минимальная сумма заказа, ₽">
             <input
               type="number"
               defaultValue={settings.delivery_min_order}
               onBlur={(e) => void saveSettings({ delivery_min_order: e.target.value })}
             />
-          </label>
-          <label>
-            Инфо о доставке
+          </Field>
+          <Field label="Информация о доставке">
             <textarea
-              rows={2}
+              rows={3}
               defaultValue={settings.delivery_info || ""}
               onBlur={(e) => void saveSettings({ delivery_info: e.target.value })}
             />
-          </label>
-          <h3>Зоны доставки</h3>
+          </Field>
+
           <CafeDeliveryZonesEditor
             zones={settings.delivery_zones || []}
             onChange={(zones) => void saveSettings({ delivery_zones: zones })}

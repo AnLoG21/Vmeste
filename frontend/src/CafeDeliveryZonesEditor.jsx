@@ -326,6 +326,16 @@ export default function CafeDeliveryZonesEditor({
     poly.editor.events.add("statechange", onState);
   }
 
+  function finishDrawingNow() {
+    const poly = draftPolyRef.current;
+    if (!poly?.editor) return;
+    try {
+      poly.editor.stopDrawing();
+    } catch {
+      finishDrawnPolygon(poly, draftRef.current);
+    }
+  }
+
   function stopEditing(commit = true) {
     const id = editingId;
     if (!id) return;
@@ -370,8 +380,8 @@ export default function CafeDeliveryZonesEditor({
     <div className="cafe-zones cafe-form-span2">
       <h3>Зоны доставки на карте</h3>
       <p className="muted small">
-        Нарисуйте полигоны районов. Как только начнёте ставить точки — внизу появятся настройки зоны.
-        Двойной клик по последней точке завершает контур. Зоны сохраняются автоматически.
+        Нарисуйте полигоны районов. После точек нажмите «Завершить зону» рядом с добавлением.
+        Зоны сохраняются автоматически.
       </p>
       {mapError ? <p className="status">{mapError}</p> : null}
       <div className="cafe-toolbar cafe-zones-toolbar">
@@ -383,6 +393,11 @@ export default function CafeDeliveryZonesEditor({
         >
           {drawing ? "Ставьте точки на карте…" : "+ Зона на карте"}
         </button>
+        {drawing ? (
+          <button type="button" className="landing-btn landing-btn--outline" onClick={finishDrawingNow}>
+            Завершить зону
+          </button>
+        ) : null}
         {drawing ? (
           <button type="button" className="ghost-btn" onClick={cancelDraft}>
             Отмена
@@ -455,7 +470,7 @@ export default function CafeDeliveryZonesEditor({
           ) : null}
           {selectedIsDraft ? (
             <p className="muted small cafe-zones-edit-hint">
-              Ставьте точки на карте. Двойной клик — завершить контур.
+              Ставьте точки на карте, затем нажмите «Завершить зону».
             </p>
           ) : null}
           <div className="cafe-form-grid">
@@ -466,13 +481,21 @@ export default function CafeDeliveryZonesEditor({
                 onChange={(e) => updateZone(selected.id, { name: e.target.value })}
               />
             </label>
-            <label>
+            <label className="cafe-zones-color-field">
               Цвет
-              <input
-                type="color"
-                value={selected.color || "#ff6a00"}
-                onChange={(e) => updateZone(selected.id, { color: e.target.value })}
-              />
+              <span className="cafe-zones-color-wrap">
+                <span
+                  className="cafe-zones-color-swatch"
+                  style={{ background: selected.color || "#ff6a00" }}
+                >
+                  <input
+                    type="color"
+                    value={selected.color || "#ff6a00"}
+                    onChange={(e) => updateZone(selected.id, { color: e.target.value })}
+                    aria-label="Выбор цвета зоны"
+                  />
+                </span>
+              </span>
             </label>
             <label>
               Доставка, ₽

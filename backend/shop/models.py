@@ -9,11 +9,32 @@ class ProductCategory(models.Model):
     provider = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="product_categories"
     )
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="children",
+    )
     name = models.CharField(max_length=120)
     sort_order = models.PositiveIntegerField(default=0)
+    pool_key = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Ключ из пула готовых категорий (если добавлена из каталога)",
+    )
 
     class Meta:
         ordering = ["sort_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "pool_key"],
+                condition=models.Q(pool_key__gt=""),
+                name="uniq_provider_product_category_pool_key",
+            ),
+        ]
 
 
 class ProductSubcategory(models.Model):

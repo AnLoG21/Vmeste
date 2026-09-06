@@ -902,7 +902,6 @@ class CafeOrgPublicView(APIView):
         provider = User.objects.filter(
             role=User.Role.PROVIDER,
             is_active=True,
-            map_hidden=False,
             provider_sphere=User.ProviderSphere.CAFE_RESTAURANT,
         ).filter(
             organization_slug__iexact=slug
@@ -938,7 +937,6 @@ class CafeOrgPublicView(APIView):
         provider = User.objects.filter(
             role=User.Role.PROVIDER,
             is_active=True,
-            map_hidden=False,
             provider_sphere=User.ProviderSphere.CAFE_RESTAURANT,
             organization_slug__iexact=slug,
         ).first()
@@ -987,7 +985,6 @@ class CafeOrgDineInAttachView(APIView):
         provider = User.objects.filter(
             role=User.Role.PROVIDER,
             is_active=True,
-            map_hidden=False,
             provider_sphere=User.ProviderSphere.CAFE_RESTAURANT,
             organization_slug__iexact=slug,
         ).first()

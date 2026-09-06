@@ -2766,7 +2766,7 @@ export default function App() {
     me?.role === "provider" ||
     me?.role === "staff";
   const chatsPortalTarget = currentView === "vmenu" ? vmenuChatsHostEl : mainChatsHostEl;
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "shop_orders", "service_apps", "vmenu"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "service_apps", "vmenu"].includes(currentView);
   const profileWide = accessToken && ["profile", "subscriptions"].includes(currentView);
 
   return (
@@ -3186,14 +3186,8 @@ export default function App() {
           chatsPortalTarget,
         )}
 
-        {accessToken &&
-          (currentView === "shop" || currentView === "shop_orders") &&
-          isBookmarkAvailable("shop") && (
-          <ShopWorkspace
-            authFetch={authFetch}
-            me={me}
-            initialTab={currentView === "shop_orders" ? "orders" : "catalog"}
-          />
+        {accessToken && currentView === "shop" && isBookmarkAvailable("shop") && (
+          <ShopWorkspace authFetch={authFetch} me={me} />
         )}
 
         {accessToken &&

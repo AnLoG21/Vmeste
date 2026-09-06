@@ -200,7 +200,6 @@ function menuOverflowBookmarkIds(me, subnavBookmarks, isBookmarkAvailable) {
     "intervals",
     "services",
     "shop",
-    "shop_orders",
     "service_apps",
     "analytics",
     "bookings",

@@ -17,7 +17,6 @@ export const VIEW_PATHS = {
   inspections: "/inspections",
   marketplaces: "/marketplaces",
   shop: "/shop",
-  shop_orders: "/shop-orders",
   service_apps: "/services",
   vmenu: "/vmenu",
   client_map: "/map",
