@@ -4,6 +4,7 @@ Allow: /contacts
 Allow: /offer
 Allow: /privacy
 Allow: /businesses
+Allow: /apps
 Allow: /o/
 Allow: /m/
 Allow: /city/
