@@ -24,7 +24,7 @@ function CloseIcon() {
 }
 
 /**
- * Публичная витрина магазина — UX как у гостевого меню кафе.
+ * Публичная витрина магазина — тот же UX, что у гостевого меню кафе.
  */
 export default function PublicShopPage({ slug }) {
   const [data, setData] = useState(null);
@@ -38,7 +38,6 @@ export default function PublicShopPage({ slug }) {
   const [cartOpen, setCartOpen] = useState(false);
   const [product, setProduct] = useState(null);
   const [reviews, setReviews] = useState([]);
-  const [catFilter, setCatFilter] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +77,15 @@ export default function PublicShopPage({ slug }) {
   }, [slug]);
 
   useEffect(() => {
+    if (!data?.products?.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const pid = params.get("product");
+    if (!pid) return;
+    const found = data.products.find((p) => String(p.id) === String(pid));
+    if (found) setProduct(found);
+  }, [data]);
+
+  useEffect(() => {
     const pid = data?.provider?.id;
     if (!pid) return undefined;
     let cancelled = false;
@@ -97,10 +105,17 @@ export default function PublicShopPage({ slug }) {
   const categories = data?.categories || [];
   const settings = data?.settings || {};
 
-  const visibleProducts = useMemo(() => {
-    if (!catFilter) return products;
-    return products.filter((p) => String(p.category) === String(catFilter));
-  }, [products, catFilter]);
+  const menuByCategory = useMemo(() => {
+    const withProducts = categories
+      .map((c) => ({
+        ...c,
+        items: products.filter((p) => String(p.category) === String(c.id)),
+      }))
+      .filter((c) => c.items.length);
+    const loose = products.filter((p) => !p.category);
+    if (loose.length) withProducts.push({ id: "loose", name: "Другое", items: loose });
+    return withProducts;
+  }, [categories, products]);
 
   const cartLines = useMemo(() => {
     return Object.entries(cart)
@@ -116,7 +131,15 @@ export default function PublicShopPage({ slug }) {
   const cartCount = cartLines.reduce((s, l) => s + l.qty, 0);
 
   function addToCart(productId, n = 1) {
-    setCart((prev) => ({ ...prev, [productId]: (prev[productId] || 0) + n }));
+    setCart((prev) => {
+      const nextQty = (prev[productId] || 0) + n;
+      if (nextQty <= 0) {
+        const next = { ...prev };
+        delete next[productId];
+        return next;
+      }
+      return { ...prev, [productId]: nextQty };
+    });
   }
 
   function setQty(productId, qty) {
@@ -128,7 +151,8 @@ export default function PublicShopPage({ slug }) {
     });
   }
 
-  async function checkout() {
+  async function checkout(e) {
+    e?.preventDefault?.();
     if (!cartLines.length) return;
     setBusy(true);
     setError("");
@@ -158,8 +182,8 @@ export default function PublicShopPage({ slug }) {
       setOrderInfo({ id: json.order_id, status: json.status, total: json.total });
       setCart({});
       setCartOpen(false);
-    } catch (e) {
-      setError(e.message || "Ошибка заказа");
+    } catch (err) {
+      setError(err.message || "Ошибка заказа");
     } finally {
       setBusy(false);
     }
@@ -167,55 +191,75 @@ export default function PublicShopPage({ slug }) {
 
   if (error && !data) {
     return (
-      <main className="cafe-guest page">
-        <header className="cafe-guest-topbar">
-          <a className="cafe-guest-back" href="/">
-            ← На главную
-          </a>
+      <div className="cafe-guest">
+        <header className="cafe-guest-header">
+          <button type="button" className="cafe-guest-back" onClick={() => { window.location.href = "/"; }}>
+            ←
+          </button>
+          <div className="cafe-guest-brand">
+            <img src={logoMain} alt="Вместе" className="cafe-guest-logo" />
+            <div className="cafe-guest-head-copy">
+              <h1>Магазин</h1>
+            </div>
+          </div>
         </header>
-        <h1>Магазин</h1>
         <p className="status error">{error}</p>
-      </main>
+      </div>
     );
   }
 
   if (!data) {
     return (
-      <main className="cafe-guest page">
+      <div className="cafe-guest">
         <p className="muted">Загрузка витрины…</p>
-      </main>
+      </div>
     );
   }
 
   const orgName = data.provider?.organization_name || "Магазин";
+  const logoUrl = data.provider?.logo_url || "";
 
   return (
-    <main className="cafe-guest page shop-public-page">
-      <header className="cafe-guest-topbar">
+    <div className="cafe-guest shop-public-page">
+      <header className="cafe-guest-header">
         <button
           type="button"
           className="cafe-guest-back"
           aria-label="Назад на карту"
+          title="Назад на карту"
           onClick={() => {
-            window.location.href = "/map";
+            window.location.href = "/";
           }}
         >
           ←
         </button>
-        <img src={logoMain} alt="Вместе" className="cafe-guest-logo" />
-        <button type="button" className="cafe-guest-cart-btn" onClick={() => setCartOpen(true)} aria-label="Корзина">
-          <CartIcon />
-          {cartCount > 0 ? <span className="cafe-guest-cart-badge">{cartCount}</span> : null}
+        <div className="cafe-guest-brand">
+          <img
+            src={logoUrl || logoMain}
+            alt={orgName}
+            className={`cafe-guest-logo${logoUrl ? " is-org" : ""}`}
+          />
+          <div className="cafe-guest-head-copy">
+            <h1>{orgName}</h1>
+            <p>Товары · самовывоз и доставка</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="cafe-cart-fab"
+          onClick={() => setCartOpen(true)}
+          aria-label={`Корзина, ${itemsTotal.toLocaleString("ru-RU")} ₽`}
+        >
+          <span className="cafe-cart-fab-icon">
+            <CartIcon />
+          </span>
+          <span className="cafe-cart-fab-price">{itemsTotal.toLocaleString("ru-RU")} ₽</span>
+          {cartCount > 0 ? <span className="cafe-cart-fab-count">{cartCount}</span> : null}
         </button>
       </header>
 
-      <div className="cafe-guest-hero">
-        <h1>{orgName}</h1>
-        <p className="muted">Товары · самовывоз и доставка</p>
-      </div>
-
       {orderInfo ? (
-        <section className="card cafe-guest-order-card">
+        <section className="cafe-guest-card">
           <h2>Заказ #{orderInfo.id}</h2>
           <p>
             Статус: <strong>{orderInfo.status}</strong>
@@ -226,59 +270,60 @@ export default function PublicShopPage({ slug }) {
 
       {error ? <p className="status error">{error}</p> : null}
 
-      <div className="shop-public-cats">
-        <button
-          type="button"
-          className={!catFilter ? "primary-btn" : "ghost-btn"}
-          onClick={() => setCatFilter("")}
-        >
-          Все
-        </button>
-        {categories
-          .filter((c) => products.some((p) => String(p.category) === String(c.id)))
-          .map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            className={String(catFilter) === String(c.id) ? "primary-btn" : "ghost-btn"}
-            onClick={() => setCatFilter(String(c.id))}
-          >
-            {c.name}
-          </button>
+      <section className="cafe-guest-menu">
+        {menuByCategory.map((cat) => (
+          <div key={cat.id} className="cafe-menu-cat">
+            <h2>{cat.name}</h2>
+            <div className="cafe-menu-grid">
+              {cat.items.map((p) => {
+                const cover = p.photos?.[0]?.thumb_url || p.photos?.[0]?.image;
+                const qty = cart[p.id] || 0;
+                return (
+                  <article key={p.id} className="cafe-menu-item">
+                    {cover ? (
+                      <button type="button" className="cafe-menu-photo-btn" onClick={() => setProduct(p)}>
+                        <img src={cover} alt={p.name || "Товар"} loading="lazy" decoding="async" width={96} height={96} />
+                      </button>
+                    ) : (
+                      <button type="button" className="cafe-menu-photo-btn" onClick={() => setProduct(p)}>
+                        <div className="cafe-menu-ph" />
+                      </button>
+                    )}
+                    <h3>
+                      <button type="button" className="shop-menu-name-btn" onClick={() => setProduct(p)}>
+                        {p.name}
+                      </button>
+                    </h3>
+                    <div className="cafe-menu-row">
+                      <button
+                        type="button"
+                        className="cafe-menu-cart-price"
+                        onClick={() => addToCart(p.id, 1)}
+                        aria-label={`В корзину, ${Number(p.price).toLocaleString("ru-RU")} ₽`}
+                      >
+                        <CartIcon />
+                        <span>{Number(p.price).toLocaleString("ru-RU")} ₽</span>
+                        {qty > 0 ? <em className="cafe-menu-cart-price-count">{qty}</em> : null}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
         ))}
-      </div>
-
-      <div className="cafe-guest-menu-grid shop-public-grid">
-        {visibleProducts.map((p) => {
-          const cover = p.photos?.[0]?.thumb_url || p.photos?.[0]?.image;
-          return (
-            <article key={p.id} className="cafe-guest-dish-card" onClick={() => setProduct(p)}>
-              {cover ? <img src={cover} alt="" className="cafe-guest-dish-photo" /> : <div className="cafe-guest-dish-photo is-empty" />}
-              <div className="cafe-guest-dish-body">
-                <strong>{p.name}</strong>
-                <p className="muted small">{Number(p.price).toLocaleString("ru-RU")} ₽</p>
-                <button
-                  type="button"
-                  className="landing-btn landing-btn--primary"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    addToCart(p.id);
-                  }}
-                >
-                  В корзину
-                </button>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+        {!menuByCategory.length ? <p className="muted">Пока нет товаров на витрине.</p> : null}
+      </section>
 
       {product ? (
-        <div className="cafe-guest-sheet" role="dialog" aria-label="Карточка товара">
-          <div className="cafe-guest-sheet-panel shop-product-sheet">
-            <button type="button" className="cafe-guest-sheet-close" onClick={() => setProduct(null)} aria-label="Закрыть">
-              <CloseIcon />
-            </button>
+        <div className="cafe-product-modal" onClick={() => setProduct(null)} role="dialog" aria-label="Карточка товара">
+          <div className="cafe-product-sheet shop-product-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="cafe-cart-sheet-head">
+              <h2>{product.name}</h2>
+              <button type="button" className="cafe-cart-close" onClick={() => setProduct(null)} aria-label="Закрыть">
+                <CloseIcon />
+              </button>
+            </div>
             <ServicePhotoCarousel
               items={(product.photos || []).map((ph) => ({
                 id: ph.id,
@@ -288,7 +333,6 @@ export default function PublicShopPage({ slug }) {
               }))}
               className="shop-product-carousel"
             />
-            <h2>{product.name}</h2>
             <p className="shop-product-price">{Number(product.price).toLocaleString("ru-RU")} ₽</p>
             {product.description ? <p className="shop-product-desc">{product.description}</p> : null}
             {product.attrs && Object.keys(product.attrs).length ? (
@@ -303,14 +347,15 @@ export default function PublicShopPage({ slug }) {
             ) : null}
             <button
               type="button"
-              className="landing-btn landing-btn--primary"
+              className="cafe-menu-cart-price cafe-menu-cart-price--wide"
               onClick={() => {
-                addToCart(product.id);
+                addToCart(product.id, 1);
                 setProduct(null);
                 setCartOpen(true);
               }}
             >
-              В корзину
+              <CartIcon />
+              <span>В корзину · {Number(product.price).toLocaleString("ru-RU")} ₽</span>
             </button>
 
             <section className="shop-product-reviews">
@@ -327,96 +372,121 @@ export default function PublicShopPage({ slug }) {
       ) : null}
 
       {cartOpen ? (
-        <div className="cafe-guest-sheet" role="dialog" aria-label="Корзина">
-          <div className="cafe-guest-sheet-panel">
-            <button type="button" className="cafe-guest-sheet-close" onClick={() => setCartOpen(false)} aria-label="Закрыть">
-              <CloseIcon />
-            </button>
-            <h2>Корзина · {itemsTotal.toLocaleString("ru-RU")} ₽</h2>
-            {!cartLines.length ? <p className="muted">Пока пусто</p> : null}
-            <ul className="cafe-guest-cart-lines">
-              {cartLines.map((l) => (
-                <li key={l.product.id}>
-                  <span>
-                    {l.product.name} · {Number(l.product.price).toLocaleString("ru-RU")} ₽
-                  </span>
-                  <span className="cafe-guest-qty">
-                    <button type="button" onClick={() => setQty(l.product.id, l.qty - 1)}>
-                      −
-                    </button>
-                    <em>{l.qty}</em>
-                    <button type="button" onClick={() => setQty(l.product.id, l.qty + 1)}>
-                      +
-                    </button>
-                  </span>
-                </li>
-              ))}
-            </ul>
-
-            <div className="row-2" style={{ margin: "12px 0" }}>
-              {settings.enable_pickup ? (
-                <button
-                  type="button"
-                  className={mode === "pickup" ? "primary-btn" : "ghost-btn"}
-                  onClick={() => setMode("pickup")}
-                >
-                  Самовывоз
-                </button>
-              ) : null}
-              {settings.enable_delivery ? (
-                <button
-                  type="button"
-                  className={mode === "delivery" ? "primary-btn" : "ghost-btn"}
-                  onClick={() => setMode("delivery")}
-                >
-                  Доставка
-                </button>
-              ) : null}
+        <div className="cafe-cart-modal" onClick={() => setCartOpen(false)}>
+          <div className="cafe-cart-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="cafe-cart-sheet-head">
+              <h2>Корзина</h2>
+              <button type="button" className="cafe-cart-close" onClick={() => setCartOpen(false)} aria-label="Закрыть">
+                <CloseIcon />
+              </button>
             </div>
+            {!cartLines.length ? <p className="muted">Корзина пока пустая.</p> : null}
+            {cartLines.length > 0 ? (
+              <form className="cafe-guest-card cafe-checkout" onSubmit={(e) => void checkout(e)}>
+                <ul className="cafe-cart-lines">
+                  {cartLines.map((l) => {
+                    const cover = l.product.photos?.[0]?.thumb_url || l.product.photos?.[0]?.image;
+                    return (
+                      <li key={l.product.id} className="cafe-cart-line">
+                        {cover ? (
+                          <img className="cafe-cart-line-photo" src={cover} alt="" loading="lazy" decoding="async" />
+                        ) : (
+                          <div className="cafe-cart-line-photo cafe-menu-ph" />
+                        )}
+                        <div className="cafe-cart-line-body">
+                          <strong>{l.product.name}</strong>
+                          <div className="cafe-qty cafe-cart-line-qty">
+                            <button type="button" onClick={() => setQty(l.product.id, l.qty - 1)}>
+                              −
+                            </button>
+                            <span>{l.qty}</span>
+                            <button type="button" onClick={() => setQty(l.product.id, l.qty + 1)}>
+                              +
+                            </button>
+                            <span className="muted small">× {Number(l.product.price).toLocaleString("ru-RU")} ₽</span>
+                          </div>
+                        </div>
+                        <strong className="cafe-cart-line-price">
+                          {(Number(l.product.price) * l.qty).toLocaleString("ru-RU")} ₽
+                        </strong>
+                      </li>
+                    );
+                  })}
+                </ul>
 
-            <label className="shop-field">
-              <span className="shop-field-label">Имя</span>
-              <input value={guest.name} onChange={(e) => setGuest((g) => ({ ...g, name: e.target.value }))} />
-            </label>
-            <label className="shop-field">
-              <span className="shop-field-label">Телефон</span>
-              <input value={guest.phone} onChange={(e) => setGuest((g) => ({ ...g, phone: e.target.value }))} />
-            </label>
-            <label className="shop-field">
-              <span className="shop-field-label">Email</span>
-              <input value={guest.email} onChange={(e) => setGuest((g) => ({ ...g, email: e.target.value }))} />
-            </label>
-            {mode === "delivery" ? (
-              <>
-                <label className="shop-field">
-                  <span className="shop-field-label">Адрес</span>
-                  <input
-                    value={guest.address}
-                    onChange={(e) => setGuest((g) => ({ ...g, address: e.target.value }))}
-                  />
-                </label>
-                <CafeGuestDeliveryMap
-                  zones={settings.delivery_zones || []}
-                  pin={pin}
-                  onPick={(next) => {
-                    setPin(next);
-                    if (next?.address) setGuest((g) => ({ ...g, address: next.address }));
-                  }}
+                <div className="cafe-guest-modes" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                  {settings.enable_pickup ? (
+                    <button
+                      type="button"
+                      className={`cafe-mode-btn${mode === "pickup" ? " is-active" : ""}`}
+                      onClick={() => setMode("pickup")}
+                    >
+                      <span>🏪</span>
+                      Самовывоз
+                    </button>
+                  ) : null}
+                  {settings.enable_delivery ? (
+                    <button
+                      type="button"
+                      className={`cafe-mode-btn${mode === "delivery" ? " is-active" : ""}`}
+                      onClick={() => setMode("delivery")}
+                    >
+                      <span>🚗</span>
+                      Доставка
+                    </button>
+                  ) : null}
+                </div>
+
+                <input
+                  placeholder="Имя"
+                  value={guest.name}
+                  onChange={(e) => setGuest((g) => ({ ...g, name: e.target.value }))}
+                  autoComplete="name"
                 />
-              </>
-            ) : null}
+                <input
+                  placeholder="Телефон *"
+                  value={guest.phone}
+                  onChange={(e) => setGuest((g) => ({ ...g, phone: e.target.value }))}
+                  required
+                  autoComplete="tel"
+                />
+                <input
+                  placeholder="Email для чека (необязательно)"
+                  type="email"
+                  value={guest.email}
+                  onChange={(e) => setGuest((g) => ({ ...g, email: e.target.value }))}
+                  autoComplete="email"
+                />
+                {mode === "delivery" ? (
+                  <>
+                    <input
+                      placeholder="Адрес доставки *"
+                      value={guest.address}
+                      onChange={(e) => setGuest((g) => ({ ...g, address: e.target.value }))}
+                      required
+                    />
+                    <CafeGuestDeliveryMap
+                      zones={settings.delivery_zones || []}
+                      pin={pin}
+                      onPick={(next) => {
+                        setPin(next);
+                        if (next?.address) setGuest((g) => ({ ...g, address: next.address }));
+                      }}
+                    />
+                  </>
+                ) : null}
 
-            <button
-              type="button"
-              className="landing-btn landing-btn--primary"
-              disabled={busy || !cartLines.length}
-              onClick={() => void checkout()}
-            >
-              {busy ? "Оформляем…" : "Оплатить"}
-            </button>
+                <p className="cafe-cart-total">
+                  Итого: <strong>{itemsTotal.toLocaleString("ru-RU")} ₽</strong>
+                </p>
+                <button type="submit" className="landing-btn landing-btn--primary" disabled={busy}>
+                  {busy ? "Оформляем…" : "Оплатить"}
+                </button>
+              </form>
+            ) : null}
           </div>
         </div>
       ) : null}
-    </main>
+    </div>
   );
 }

@@ -20,19 +20,31 @@ const ORDER_STATUSES = [
 ];
 
 const STOCK_ACTIONS = [
-  { kind: "in", label: "Добавить на склад (приход)" },
-  { kind: "out_manual", label: "Списать со склада" },
-  { kind: "adjust", label: "Установить остаток (+/−)" },
+  {
+    kind: "in",
+    label: "Добавить на склад (приход)",
+    hint: "Увеличивает остаток — когда товар привезли или закупили.",
+  },
+  {
+    kind: "out_manual",
+    label: "Списать со склада",
+    hint: "Уменьшает остаток — порча, использование вне услуг или ручное списание.",
+  },
+  {
+    kind: "adjust",
+    label: "Установить остаток",
+    hint: "Задаёт точное количество после инвентаризации (можно указать отрицательное для уменьшения).",
+  },
 ];
 
-function emptyProductForm() {
+function emptyProductForm(category = "") {
   return {
     name: "",
     description: "",
     sku: "",
-    unit: "шт",
+    unit: "",
     price: "0",
-    category: "",
+    category: category ? String(category) : "",
     attrsText: "",
     is_active: true,
     is_featured: false,
@@ -75,12 +87,146 @@ function CameraPlusIcon() {
   );
 }
 
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="currentColor">
+      <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="currentColor">
+      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+    </svg>
+  );
+}
+
 function Field({ label, children }) {
   return (
     <label className="shop-field">
       <span className="shop-field-label">{label}</span>
       {children}
     </label>
+  );
+}
+
+function categoryPathLabel(cat, byId) {
+  const parts = [];
+  let cur = cat;
+  let guard = 0;
+  while (cur && guard < 12) {
+    parts.unshift(cur.name);
+    cur = cur.parent ? byId.get(Number(cur.parent)) : null;
+    guard += 1;
+  }
+  return parts.join(" → ");
+}
+
+function ProductRow({ product, selected, onEdit, onDelete }) {
+  const cover = product.photos?.[0]?.thumb_url || product.photos?.[0]?.image;
+  return (
+    <div className={`shop-product-row${selected ? " is-active" : ""}${!product.is_active ? " is-inactive" : ""}`}>
+      {cover ? <img src={cover} alt="" className="shop-product-row-photo" /> : <div className="shop-product-row-photo is-empty" />}
+      <div className="shop-product-row-body">
+        <strong>{product.name}</strong>
+        <p className="muted small">
+          {product.sku ? `арт. ${product.sku} · ` : ""}
+          {Number(product.price).toLocaleString("ru-RU")} ₽ · {Number(product.stock_qty)} {product.unit || "шт"}
+          {product.is_featured ? " · ★" : ""}
+        </p>
+      </div>
+      <div className="shop-product-row-actions">
+        <button type="button" className="org-icon-btn" title="Редактировать" aria-label="Редактировать" onClick={onEdit}>
+          <PencilIcon />
+        </button>
+        <button
+          type="button"
+          className="org-icon-btn org-icon-btn--danger"
+          title="Удалить"
+          aria-label="Удалить"
+          onClick={onDelete}
+        >
+          <TrashIcon />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CategoryBranch({
+  cat,
+  categories,
+  products,
+  categoryOpen,
+  setCategoryOpen,
+  selectedId,
+  onEditProduct,
+  onDeleteProduct,
+  onCreateProduct,
+  onDeleteCategory,
+}) {
+  const open = categoryOpen[cat.id] ?? false;
+  const children = categories.filter((c) => Number(c.parent) === Number(cat.id));
+  const items = products.filter((p) => Number(p.category) === Number(cat.id));
+  const nestedCount = children.length + items.length;
+
+  return (
+    <div className="tree-node catalog-tree-category">
+      <div className="shop-cat-head">
+        <button
+          type="button"
+          className="tree-toggle"
+          onClick={() => setCategoryOpen((prev) => ({ ...prev, [cat.id]: !open }))}
+        >
+          {open ? "▼" : "▶"} {cat.name}
+          <span className="catalog-tree-meta">{nestedCount}</span>
+        </button>
+        <button
+          type="button"
+          className="org-icon-btn org-icon-btn--danger"
+          title="Удалить категорию"
+          aria-label="Удалить категорию"
+          onClick={() => onDeleteCategory(cat)}
+        >
+          <TrashIcon />
+        </button>
+      </div>
+      {open ? (
+        <div className="tree-children">
+          {children.map((child) => (
+            <CategoryBranch
+              key={child.id}
+              cat={child}
+              categories={categories}
+              products={products}
+              categoryOpen={categoryOpen}
+              setCategoryOpen={setCategoryOpen}
+              selectedId={selectedId}
+              onEditProduct={onEditProduct}
+              onDeleteProduct={onDeleteProduct}
+              onCreateProduct={onCreateProduct}
+              onDeleteCategory={onDeleteCategory}
+            />
+          ))}
+          <div className="tree-children catalog-tree-services">
+            {items.map((p) => (
+              <ProductRow
+                key={p.id}
+                product={p}
+                selected={String(selectedId) === String(p.id)}
+                onEdit={() => onEditProduct(p.id)}
+                onDelete={() => onDeleteProduct(p)}
+              />
+            ))}
+          </div>
+          <button type="button" className="ghost-btn shop-create-here" onClick={() => onCreateProduct(cat.id)}>
+            + Создать товар здесь
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -97,9 +243,9 @@ export default function ShopWorkspace({ authFetch, me }) {
   const [stockKind, setStockKind] = useState("in");
   const [busy, setBusy] = useState(false);
   const [browseStack, setBrowseStack] = useState([]);
-  const [ownStack, setOwnStack] = useState([]);
   const [poolQuery, setPoolQuery] = useState("");
   const [poolHits, setPoolHits] = useState([]);
+  const [categoryOpen, setCategoryOpen] = useState({});
 
   const selected = useMemo(
     () => products.find((p) => String(p.id) === String(selectedId)) || null,
@@ -144,15 +290,12 @@ export default function ShopWorkspace({ authFetch, me }) {
   }, [tab, loadOrders, loadSettings]);
 
   useEffect(() => {
-    if (!selected) {
-      setForm(emptyProductForm());
-      return;
-    }
+    if (!selected) return;
     setForm({
       name: selected.name || "",
       description: selected.description || "",
       sku: selected.sku || "",
-      unit: selected.unit || "шт",
+      unit: selected.unit || "",
       price: String(selected.price ?? 0),
       category: selected.category != null ? String(selected.category) : "",
       attrsText: attrsToText(selected.attrs),
@@ -166,25 +309,28 @@ export default function ShopWorkspace({ authFetch, me }) {
     setPoolHits(searchShopCategoryPool(poolQuery, 36));
   }, [poolQuery]);
 
-  const rootCats = useMemo(
-    () => categories.filter((c) => !c.parent),
-    [categories],
+  const rootCats = useMemo(() => categories.filter((c) => !c.parent), [categories]);
+  const looseProducts = useMemo(
+    () => products.filter((p) => !p.category || Number(p.category) === 0),
+    [products],
   );
 
-  const currentOwnParentId = ownStack.length ? ownStack[ownStack.length - 1].id : null;
-  const ownChildren = useMemo(() => {
-    if (!currentOwnParentId) return rootCats;
-    return categories.filter((c) => Number(c.parent) === Number(currentOwnParentId));
-  }, [categories, currentOwnParentId, rootCats]);
+  const categoryById = useMemo(() => {
+    const map = new Map();
+    categories.forEach((c) => map.set(Number(c.id), c));
+    return map;
+  }, [categories]);
 
-  const productsInView = useMemo(() => {
-    if (!currentOwnParentId) {
-      return products.filter((p) => !p.category || Number(p.category) === 0);
-    }
-    return products.filter((p) => Number(p.category) === Number(currentOwnParentId));
-  }, [products, currentOwnParentId]);
+  const categoryOptions = useMemo(
+    () =>
+      categories
+        .map((c) => ({ id: c.id, label: categoryPathLabel(c, categoryById) }))
+        .sort((a, b) => a.label.localeCompare(b.label, "ru")),
+    [categories, categoryById],
+  );
 
   const poolNodes = browseShopCategoryChildren(browseStack);
+  const stockHint = STOCK_ACTIONS.find((a) => a.kind === stockKind)?.hint || "";
 
   async function addFromPool(path) {
     setBusy(true);
@@ -202,13 +348,24 @@ export default function ShopWorkspace({ authFetch, me }) {
       setBrowseStack([]);
       const nav = data.path || [];
       if (nav.length) {
-        setOwnStack(nav.map((c) => ({ id: c.id, name: c.name })));
+        setCategoryOpen((prev) => {
+          const next = { ...prev };
+          nav.forEach((c) => {
+            next[c.id] = true;
+          });
+          return next;
+        });
       }
     } catch (e) {
       showToast(e.message || "Ошибка", { tone: "error" });
     } finally {
       setBusy(false);
     }
+  }
+
+  function startCreate(categoryId) {
+    setSelectedId(null);
+    setForm(emptyProductForm(categoryId || ""));
   }
 
   async function saveProduct() {
@@ -218,9 +375,9 @@ export default function ShopWorkspace({ authFetch, me }) {
         name: form.name.trim(),
         description: form.description,
         sku: form.sku,
-        unit: form.unit || "шт",
+        unit: form.unit.trim() || "шт",
         price: form.price,
-        category: form.category || currentOwnParentId || null,
+        category: form.category || null,
         subcategory: null,
         attrs: textToAttrs(form.attrsText),
         is_active: form.is_active,
@@ -236,6 +393,9 @@ export default function ShopWorkspace({ authFetch, me }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Не удалось сохранить");
       setSelectedId(data.id);
+      if (data.category) {
+        setCategoryOpen((prev) => ({ ...prev, [data.category]: true }));
+      }
       await loadCatalog();
       showToast("Товар сохранён");
     } catch (e) {
@@ -245,15 +405,34 @@ export default function ShopWorkspace({ authFetch, me }) {
     }
   }
 
-  async function deleteProduct() {
-    if (!selected || !window.confirm(`Удалить «${selected.name}»?`)) return;
+  async function deleteProduct(product) {
+    const target = product || selected;
+    if (!target || !window.confirm(`Удалить «${target.name}»?`)) return;
     setBusy(true);
     try {
-      const res = await authFetch(`${API_URL}/shop/products/${selected.id}/`, { method: "DELETE" });
+      const res = await authFetch(`${API_URL}/shop/products/${target.id}/`, { method: "DELETE" });
       if (!res.ok) throw new Error("Не удалось удалить");
-      setSelectedId(null);
+      if (String(selectedId) === String(target.id)) {
+        setSelectedId(null);
+        setForm(emptyProductForm());
+      }
       await loadCatalog();
       showToast("Удалено");
+    } catch (e) {
+      showToast(e.message || "Ошибка", { tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteCategory(cat) {
+    if (!window.confirm(`Удалить категорию «${cat.name}» и вложенные? Товары останутся без категории.`)) return;
+    setBusy(true);
+    try {
+      const res = await authFetch(`${API_URL}/shop/categories/${cat.id}/`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Не удалось удалить категорию");
+      await loadCatalog();
+      showToast("Категория удалена");
     } catch (e) {
       showToast(e.message || "Ошибка", { tone: "error" });
     } finally {
@@ -384,19 +563,21 @@ export default function ShopWorkspace({ authFetch, me }) {
       {tab === "catalog" && (
         <div className="services-layout">
           <section className="card">
-            <h2>Магазин / склад</h2>
-            <p className="muted small">
-              Популярных на витрине: {featuredCount}/5.
-              {publicUrl ? (
-                <>
-                  {" "}
-                  Витрина:{" "}
-                  <a href={publicUrl} target="_blank" rel="noreferrer">
-                    {publicUrl}
-                  </a>
-                </>
-              ) : null}
-            </p>
+            <div className="catalog-tree-head">
+              <h2>Магазин / склад</h2>
+              <p className="muted small">
+                Популярных на витрине: {featuredCount}/5.
+                {publicUrl ? (
+                  <>
+                    {" "}
+                    Витрина:{" "}
+                    <a href={publicUrl} target="_blank" rel="noreferrer">
+                      {publicUrl}
+                    </a>
+                  </>
+                ) : null}
+              </p>
+            </div>
 
             <h3 className="shop-section-title">Добавить категорию из каталога</h3>
             <Field label="Поиск категории">
@@ -448,75 +629,59 @@ export default function ShopWorkspace({ authFetch, me }) {
             )}
 
             <h3 className="shop-section-title">Ваши категории</h3>
-            <div className="shop-own-nav">
-              <button type="button" className="ghost-btn" onClick={() => setOwnStack([])}>
-                Корень
-              </button>
-              {ownStack.map((s, idx) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  className="ghost-btn"
-                  onClick={() => setOwnStack((prev) => prev.slice(0, idx + 1))}
-                >
-                  › {s.name}
-                </button>
-              ))}
-            </div>
             <div className="tree-list catalog-tree">
-              {ownChildren.map((cat) => {
-                const childCount = (cat.children || []).length;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    className="tree-toggle"
-                    onClick={() => setOwnStack((prev) => [...prev, { id: cat.id, name: cat.name }])}
-                  >
-                    {childCount ? "▶ " : ""}
-                    {cat.name}
-                    {childCount ? (
-                      <span className="catalog-tree-meta">{childCount}</span>
-                    ) : null}
-                  </button>
-                );
-              })}
-              {productsInView.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className={
-                    String(selectedId) === String(p.id)
-                      ? "ghost-btn catalog-tree-service is-active"
-                      : "ghost-btn catalog-tree-service"
-                  }
-                  onClick={() => setSelectedId(p.id)}
-                >
-                  {p.name}
-                  {p.is_featured ? " ★" : ""} · {Number(p.stock_qty)} {p.unit}
-                </button>
+              {rootCats.map((cat) => (
+                <CategoryBranch
+                  key={cat.id}
+                  cat={cat}
+                  categories={categories}
+                  products={products}
+                  categoryOpen={categoryOpen}
+                  setCategoryOpen={setCategoryOpen}
+                  selectedId={selectedId}
+                  onEditProduct={setSelectedId}
+                  onDeleteProduct={(p) => void deleteProduct(p)}
+                  onCreateProduct={startCreate}
+                  onDeleteCategory={(c) => void deleteCategory(c)}
+                />
               ))}
+              {looseProducts.length ? (
+                <div className="tree-children catalog-tree-services">
+                  <p className="muted small">Без категории</p>
+                  {looseProducts.map((p) => (
+                    <ProductRow
+                      key={p.id}
+                      product={p}
+                      selected={String(selectedId) === String(p.id)}
+                      onEdit={() => setSelectedId(p.id)}
+                      onDelete={() => void deleteProduct(p)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              {!rootCats.length && !looseProducts.length ? (
+                <p className="muted small">Добавьте категорию из каталога выше.</p>
+              ) : null}
             </div>
-            <button
-              type="button"
-              className="ghost-btn"
-              style={{ marginTop: 10 }}
-              onClick={() => {
-                setSelectedId(null);
-                setForm({
-                  ...emptyProductForm(),
-                  category: currentOwnParentId ? String(currentOwnParentId) : "",
-                });
-              }}
-            >
-              + Новый товар здесь
-            </button>
           </section>
 
           <section className="card right-stack">
             <h2>{selected ? "Карточка товара" : "Новый товар"}</h2>
             <Field label="Название">
               <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+            </Field>
+            <Field label="Категория">
+              <select
+                value={form.category}
+                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+              >
+                <option value="">Без категории</option>
+                {categoryOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Описание">
               <textarea
@@ -534,7 +699,11 @@ export default function ShopWorkspace({ authFetch, me }) {
                 />
               </Field>
               <Field label="Единица">
-                <input value={form.unit} onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))} />
+                <input
+                  value={form.unit}
+                  placeholder="шт"
+                  onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
+                />
               </Field>
             </div>
             <Field label="Артикул">
@@ -547,21 +716,22 @@ export default function ShopWorkspace({ authFetch, me }) {
                 onChange={(e) => setForm((f) => ({ ...f, attrsText: e.target.value }))}
               />
             </Field>
-            <label className="shop-check">
+
+            <label className="checkbox shop-check">
               <input
                 type="checkbox"
                 checked={form.is_active}
                 onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))}
               />
-              В продаже
+              <span>В продаже</span>
             </label>
-            <label className="shop-check">
+            <label className="checkbox shop-check">
               <input
                 type="checkbox"
                 checked={form.is_featured}
                 onChange={(e) => setForm((f) => ({ ...f, is_featured: e.target.checked }))}
               />
-              Показывать в популярных на карточке (до 5)
+              <span>Показывать в популярных на карточке (до 5)</span>
             </label>
             {form.is_featured ? (
               <Field label="Порядок на витрине (0–4)">
@@ -574,33 +744,11 @@ export default function ShopWorkspace({ authFetch, me }) {
                 />
               </Field>
             ) : null}
-            <div className="row-2" style={{ marginTop: 8 }}>
-              <button type="button" className="primary-btn" disabled={busy} onClick={() => void saveProduct()}>
-                Сохранить
-              </button>
-              {selected ? (
-                <button type="button" className="ghost-btn" disabled={busy} onClick={() => void deleteProduct()}>
-                  Удалить
-                </button>
-              ) : null}
-            </div>
 
             {selected ? (
               <>
                 <h3 className="shop-section-title">Фото (до 5)</h3>
                 <div className="shop-photos">
-                  {(selected.photos || []).map((ph) => (
-                    <button
-                      key={ph.id}
-                      type="button"
-                      className="shop-photo-chip"
-                      title="Удалить фото"
-                      onClick={() => void deletePhoto(ph.id)}
-                    >
-                      <img src={ph.thumb_url || ph.image} alt="" />
-                      <span aria-hidden>×</span>
-                    </button>
-                  ))}
                   {(selected.photos || []).length < 5 ? (
                     <label className="service-editor-camera-btn shop-photo-add" title="Добавить фото">
                       <input
@@ -619,11 +767,40 @@ export default function ShopWorkspace({ authFetch, me }) {
                       </span>
                     </label>
                   ) : null}
+                  {(selected.photos || []).map((ph) => (
+                    <button
+                      key={ph.id}
+                      type="button"
+                      className="shop-photo-chip"
+                      title="Удалить фото"
+                      onClick={() => void deletePhoto(ph.id)}
+                    >
+                      <img src={ph.thumb_url || ph.image} alt="" />
+                      <span aria-hidden>×</span>
+                    </button>
+                  ))}
                 </div>
+              </>
+            ) : (
+              <p className="muted small">Сначала сохраните товар — затем можно добавить фото.</p>
+            )}
 
+            <div className="row-2" style={{ marginTop: 8 }}>
+              <button type="button" className="primary-btn" disabled={busy} onClick={() => void saveProduct()}>
+                Сохранить
+              </button>
+              {selected ? (
+                <button type="button" className="ghost-btn" disabled={busy} onClick={() => void deleteProduct()}>
+                  Удалить
+                </button>
+              ) : null}
+            </div>
+
+            {selected ? (
+              <>
                 <h3 className="shop-section-title">Склад</h3>
                 <p className="muted">
-                  Сейчас на складе: <strong>{Number(selected.stock_qty)}</strong> {selected.unit}
+                  Сейчас на складе: <strong>{Number(selected.stock_qty)}</strong> {selected.unit || "шт"}
                 </p>
                 <Field label="Действие">
                   <select value={stockKind} onChange={(e) => setStockKind(e.target.value)}>
@@ -634,12 +811,14 @@ export default function ShopWorkspace({ authFetch, me }) {
                     ))}
                   </select>
                 </Field>
+                <p className="muted small shop-stock-hint">{stockHint}</p>
                 <Field label="Количество">
                   <input
                     type="number"
                     step="0.001"
                     value={stockQty}
                     onChange={(e) => setStockQty(e.target.value)}
+                    placeholder="Например: 10"
                   />
                 </Field>
                 <button type="button" disabled={busy} onClick={() => void applyStock()}>
@@ -688,29 +867,29 @@ export default function ShopWorkspace({ authFetch, me }) {
       {tab === "settings" && settings && (
         <section className="card shop-settings">
           <h2>Самовывоз и доставка</h2>
-          <label className="shop-check">
+          <label className="checkbox shop-check">
             <input
               type="checkbox"
               checked={Boolean(settings.enable_pickup)}
               onChange={(e) => void saveSettings({ enable_pickup: e.target.checked })}
             />
-            Самовывоз
+            <span>Самовывоз</span>
           </label>
-          <label className="shop-check">
+          <label className="checkbox shop-check">
             <input
               type="checkbox"
               checked={Boolean(settings.enable_delivery)}
               onChange={(e) => void saveSettings({ enable_delivery: e.target.checked })}
             />
-            Доставка
+            <span>Доставка</span>
           </label>
-          <label className="shop-check">
+          <label className="checkbox shop-check">
             <input
               type="checkbox"
               checked={Boolean(settings.accept_online_payment)}
               onChange={(e) => void saveSettings({ accept_online_payment: e.target.checked })}
             />
-            Онлайн-оплата
+            <span>Онлайн-оплата</span>
           </label>
 
           <Field label="Провайдер доставки">

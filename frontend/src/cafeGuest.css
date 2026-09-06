@@ -18,8 +18,8 @@
 .cafe-guest-brand {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 14px;
+  justify-content: flex-start;
+  gap: 12px;
   flex: 1;
   min-width: 0;
 }
@@ -681,4 +681,78 @@
   .cafe-cart-sheet {
     width: 100%;
   }
+}
+
+.cafe-menu-cart-price {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 12px;
+  background: #c45c00;
+  color: #fff;
+  padding: 8px 12px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+.cafe-menu-cart-price--wide {
+  width: 100%;
+  justify-content: center;
+  margin-top: 10px;
+  padding: 12px 14px;
+}
+.cafe-menu-cart-price-count {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
+  color: #c45c00;
+  font-size: 0.75rem;
+  font-style: normal;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+.shop-menu-name-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-weight: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cafe-product-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: rgba(33, 16, 5, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 12px;
+}
+.cafe-product-sheet {
+  width: min(560px, 100%);
+  max-height: min(92vh, 900px);
+  overflow-y: auto;
+  background: #fffaf5;
+  border-radius: 18px 18px 12px 12px;
+  padding: 16px 14px 28px;
+  box-shadow: 0 -8px 30px rgba(0,0,0,.18);
+}
+.cafe-cart-total {
+  margin: 8px 0 0;
+  font-size: 1.05rem;
+}
+.map-org-featured-products .loyalty-package-card {
+  cursor: pointer;
 }

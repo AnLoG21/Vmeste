@@ -317,7 +317,24 @@ export default function ClientMapPanel({
                   {mapOrgFeaturedProducts.map((p) => {
                     const cover = p.photos?.[0]?.thumb_url || p.photos?.[0]?.image;
                     return (
-                      <article key={p.id} className="loyalty-package-card">
+                      <article
+                        key={p.id}
+                        className="loyalty-package-card"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                          const slug = mapOrgProfile?.organization_slug;
+                          if (slug) window.location.href = `/s/${slug}?product=${p.id}`;
+                          else showToast("У организации ещё нет публичной ссылки магазина.");
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            const slug = mapOrgProfile?.organization_slug;
+                            if (slug) window.location.href = `/s/${slug}?product=${p.id}`;
+                          }
+                        }}
+                      >
                         {cover ? (
                           <img src={cover} alt="" className="loyalty-package-cover" />
                         ) : (

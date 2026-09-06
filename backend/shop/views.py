@@ -473,6 +473,15 @@ class PublicShopCatalogView(APIView):
             qs = qs.order_by("category__sort_order", "name", "id")
         settings_obj = _get_or_create_settings(provider)
         categories = ProductCategory.objects.filter(provider=provider).prefetch_related("subcategories")
+        logo_url = ""
+        first_photo = (
+            provider.gallery_photos.filter(image__isnull=False).exclude(image="").order_by("id").first()
+        )
+        if first_photo and first_photo.image:
+            from common.media_urls import photo_urls
+
+            urls = photo_urls(request, first_photo.image)
+            logo_url = urls.get("thumb_url") or urls.get("url") or ""
         return Response(
             {
                 "provider": {
@@ -480,6 +489,7 @@ class PublicShopCatalogView(APIView):
                     "organization_name": provider.organization_name or provider.username,
                     "slug": provider.organization_slug,
                     "sphere": provider.provider_sphere,
+                    "logo_url": logo_url,
                 },
                 "settings": {
                     "enable_pickup": settings_obj.enable_pickup,

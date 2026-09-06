@@ -736,18 +736,18 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
     <div className="cafe-guest">
       {menuJsonLd ? <JsonLd id="vmeste-menu-jsonld" data={menuJsonLd} /> : null}
       <header className="cafe-guest-header">
+        <button
+          type="button"
+          className="cafe-guest-back"
+          aria-label="Назад на карту"
+          title="Назад на карту"
+          onClick={() => {
+            window.location.href = "/";
+          }}
+        >
+          ←
+        </button>
         <div className="cafe-guest-brand">
-          <button
-            type="button"
-            className="cafe-guest-back"
-            aria-label="Назад на карту"
-            title="Назад на карту"
-            onClick={() => {
-              window.location.href = "/";
-            }}
-          >
-            ←
-          </button>
           <img
             src={info?.logo_url || unlock?.logo_url || logoMain}
             alt={orgName}
