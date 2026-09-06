@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadYandexMaps } from "./yandexMapsLoader.js";
 import { buildYmapOrgPlacemark, resetOrgPinLayoutClass } from "./clientOrgFeatures.js";
-import { getDevicePosition, hasCoords, peekCachedPosition } from "./geoPosition.js";
+import { getDevicePositionProgressive, hasCoords, peekCachedPosition } from "./geoPosition.js";
 import { showToast } from "./toast.js";
 
 async function queryGeoPermission() {
@@ -107,8 +107,8 @@ export function useClientMap({
   }
 
   /**
-   * Поставить метку «я» по устройству.
-   * @param {{ force?: boolean, center?: boolean, silent?: boolean }} opts
+   * Поставить метку «я»: сначала быстрый фикс (сеть/кэш), затем уточнение GPS.
+   * На телефоне иначе кнопка «висит» 20–40 с на highAccuracy.
    */
   async function resolveMyLocation({ force = false, center = true, silent = false } = {}) {
     const map = clientDiscoverMapRef.current;
@@ -117,15 +117,29 @@ export function useClientMap({
       throw new Error("Карта ещё не загрузилась — подождите секунду");
     }
 
+    let last = null;
     try {
-      // Без IP: иначе метка улетает далеко от реального места.
-      const pos = await getDevicePosition({ force, allowIpFallback: false });
-      const ok = setMyLocationPin(pos.lat, pos.lon, { center });
-      if (!ok) {
-        if (silent) return null;
-        throw new Error("Не удалось поставить метку на карту");
+      if (!force) {
+        const cached = peekCachedPosition();
+        const src = String(cached?.source || "");
+        if (cached && hasCoords(cached.lat, cached.lon) && !src.startsWith("yandex:yandex")) {
+          setMyLocationPin(cached.lat, cached.lon, { center });
+          last = cached;
+        }
       }
-      return pos;
+
+      last = await getDevicePositionProgressive({
+        allowIpFallback: false,
+        onFix: (pos) => {
+          if (!clientDiscoverMapRef.current) return;
+          setMyLocationPin(pos.lat, pos.lon, { center });
+        },
+      });
+      if (!last || !hasCoords(last.lat, last.lon)) {
+        if (silent) return null;
+        throw new Error("Не удалось получить геолокацию");
+      }
+      return last;
     } catch (err) {
       if (silent) return null;
       const perm = await queryGeoPermission();
@@ -135,7 +149,7 @@ export function useClientMap({
           [
             "Браузер отклонил геолокацию.",
             "Откройте замочек у адреса → Геолокация → Разрешить, затем обновите страницу.",
-            "На Windows также включите «Службы геолокации» в параметрах системы.",
+            "На телефоне также разрешите геолокацию для браузера в настройках системы.",
           ].join(" "),
         );
       }
@@ -143,18 +157,13 @@ export function useClientMap({
     }
   }
 
-  /** Явный клик «Где я». */
+  /** Явный клик «Где я» — быстрый ответ; GPS уточняет метку в фоне. */
   function locateMeNow() {
-    return resolveMyLocation({ force: true, center: true, silent: false });
+    return resolveMyLocation({ force: false, center: true, silent: false });
   }
 
   /** При открытии карты — без тоста, если гео недоступна. */
   async function autoLocateOnOpen({ preferCityCenter = false } = {}) {
-    const cached = peekCachedPosition();
-    const src = String(cached?.source || "");
-    if (cached && hasCoords(cached.lat, cached.lon) && !src.startsWith("yandex:yandex")) {
-      setMyLocationPin(cached.lat, cached.lon, { center: !preferCityCenter });
-    }
     await resolveMyLocation({ force: false, center: !preferCityCenter, silent: true });
   }
 

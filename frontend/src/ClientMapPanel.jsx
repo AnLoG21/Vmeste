@@ -98,7 +98,7 @@ export default function ClientMapPanel({
           disabled={locateBusy || !locateMeNow}
           onClick={onLocateMe}
         >
-          {locateBusy ? "…" : "Где я"}
+          {locateBusy ? "Ищем…" : "Где я"}
         </button>
         {mapOrgPopup && (
           <div
