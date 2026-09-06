@@ -1,25 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { loadYandexMaps } from "./yandexMapsLoader.js";
 import { buildYmapOrgPlacemark, resetOrgPinLayoutClass } from "./clientOrgFeatures.js";
-import { hasCoords } from "./geoPosition.js";
+import { getDevicePosition, hasCoords } from "./geoPosition.js";
 import { showToast } from "./toast.js";
 
-function geoErrorMessage(err) {
-  if (!err) return "Не удалось получить геолокацию";
-  if (err.code === 1) return "Разрешите доступ к геолокации в браузере";
-  if (err.code === 2) return "Местоположение недоступно";
-  if (err.code === 3) return "Таймаут геолокации — попробуйте ещё раз";
-  return err.message || "Не удалось получить геолокацию";
-}
-
-function browserGetPosition(options) {
-  return new Promise((resolve, reject) => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      reject(new Error("Геолокация недоступна в этом браузере"));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(resolve, reject, options);
-  });
+async function queryGeoPermission() {
+  try {
+    if (!navigator.permissions?.query) return null;
+    const status = await navigator.permissions.query({ name: "geolocation" });
+    return status?.state || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -115,8 +107,7 @@ export function useClientMap({
   }
 
   /**
-   * Явный клик пользователя (нужен жест браузеру).
-   * Тот же путь, что кнопка «Обновить местоположение курьера».
+   * Явный клик пользователя. Тот же getDevicePosition, что у курьера.
    */
   async function locateMeNow() {
     const map = clientDiscoverMapRef.current;
@@ -124,34 +115,26 @@ export function useClientMap({
       throw new Error("Карта ещё не загрузилась — подождите секунду");
     }
 
-    let pos;
     try {
-      pos = await browserGetPosition({
-        enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 0,
-      });
-    } catch (err1) {
-      try {
-        pos = await browserGetPosition({
-          enableHighAccuracy: false,
-          timeout: 20000,
-          maximumAge: 5000,
-        });
-      } catch (err2) {
-        throw new Error(geoErrorMessage(err2 || err1));
+      // Как кнопка курьера: Capacitor → browser → ymaps browser (без IP).
+      const pos = await getDevicePosition({ force: true, allowIpFallback: false });
+      const ok = setMyLocationPin(pos.lat, pos.lon, { center: true });
+      if (!ok) throw new Error("Не удалось поставить метку на карту");
+      return pos;
+    } catch (err) {
+      const perm = await queryGeoPermission();
+      const msg = String(err?.message || "");
+      if (err?.code === 1 || /разрешите|permission|denied/i.test(msg) || perm === "denied") {
+        throw new Error(
+          [
+            "Браузер отклонил геолокацию.",
+            "Откройте замочек у адреса → Геолокация → Разрешить, затем обновите страницу.",
+            "На Windows также включите «Службы геолокации» в параметрах системы.",
+          ].join(" "),
+        );
       }
+      throw err instanceof Error ? err : new Error(msg || "Не удалось получить геолокацию");
     }
-
-    const lat = pos?.coords?.latitude;
-    const lon = pos?.coords?.longitude;
-    if (!hasCoords(lat, lon)) {
-      throw new Error("Получены некорректные координаты");
-    }
-
-    const ok = setMyLocationPin(lat, lon, { center: true });
-    if (!ok) throw new Error("Не удалось поставить метку на карту");
-    return { lat: Number(lat), lon: Number(lon) };
   }
 
   function attachBrowserGeolocationControl(ymaps, map) {
