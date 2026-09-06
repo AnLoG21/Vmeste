@@ -168,8 +168,8 @@ class SitemapXmlView(APIView):
             .exclude(organization_name="")
             .exclude(organization_slug="")
             .exclude(provider_sphere=User.ProviderSphere.MARKETPLACES)
-            .order_by("id")[:1000]
-        )
+            .order_by("id")
+        )[:1000]
         for u in qs:
             slug = ensure_organization_slug(u)
             if not slug:
