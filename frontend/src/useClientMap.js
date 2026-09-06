@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadYandexMaps } from "./yandexMapsLoader.js";
 import { buildYmapOrgPlacemark, resetOrgPinLayoutClass } from "./clientOrgFeatures.js";
-import { getDevicePosition, hasCoords } from "./geoPosition.js";
+import { getDevicePosition, hasCoords, peekCachedPosition } from "./geoPosition.js";
 import { showToast } from "./toast.js";
 
 async function queryGeoPermission() {
@@ -107,21 +107,27 @@ export function useClientMap({
   }
 
   /**
-   * Явный клик пользователя. Тот же getDevicePosition, что у курьера.
+   * Поставить метку «я» по устройству.
+   * @param {{ force?: boolean, center?: boolean, silent?: boolean }} opts
    */
-  async function locateMeNow() {
+  async function resolveMyLocation({ force = false, center = true, silent = false } = {}) {
     const map = clientDiscoverMapRef.current;
     if (!map || !window.ymaps) {
+      if (silent) return null;
       throw new Error("Карта ещё не загрузилась — подождите секунду");
     }
 
     try {
-      // Как кнопка курьера: Capacitor → browser → ymaps browser (без IP).
-      const pos = await getDevicePosition({ force: true, allowIpFallback: false });
-      const ok = setMyLocationPin(pos.lat, pos.lon, { center: true });
-      if (!ok) throw new Error("Не удалось поставить метку на карту");
+      // Без IP: иначе метка улетает далеко от реального места.
+      const pos = await getDevicePosition({ force, allowIpFallback: false });
+      const ok = setMyLocationPin(pos.lat, pos.lon, { center });
+      if (!ok) {
+        if (silent) return null;
+        throw new Error("Не удалось поставить метку на карту");
+      }
       return pos;
     } catch (err) {
+      if (silent) return null;
       const perm = await queryGeoPermission();
       const msg = String(err?.message || "");
       if (err?.code === 1 || /разрешите|permission|denied/i.test(msg) || perm === "denied") {
@@ -135,6 +141,21 @@ export function useClientMap({
       }
       throw err instanceof Error ? err : new Error(msg || "Не удалось получить геолокацию");
     }
+  }
+
+  /** Явный клик «Где я». */
+  function locateMeNow() {
+    return resolveMyLocation({ force: true, center: true, silent: false });
+  }
+
+  /** При открытии карты — без тоста, если гео недоступна. */
+  async function autoLocateOnOpen({ preferCityCenter = false } = {}) {
+    const cached = peekCachedPosition();
+    const src = String(cached?.source || "");
+    if (cached && hasCoords(cached.lat, cached.lon) && !src.startsWith("yandex:yandex")) {
+      setMyLocationPin(cached.lat, cached.lon, { center: !preferCityCenter });
+    }
+    await resolveMyLocation({ force: false, center: !preferCityCenter, silent: true });
   }
 
   function attachBrowserGeolocationControl(ymaps, map) {
@@ -320,6 +341,8 @@ export function useClientMap({
                 /* ignore */
               }
             }
+            // Сразу определяем «где я» (кнопка остаётся как ручной повтор).
+            void autoLocateOnOpen({ preferCityCenter: Boolean(city) });
           });
         })
         .catch(() => showToast("Не удалось загрузить карту.", { tone: "error" }));
