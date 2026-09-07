@@ -76,6 +76,26 @@ class Product(models.Model):
     is_active = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False, db_index=True)
     featured_order = models.PositiveSmallIntegerField(default=0)
+    view_count = models.PositiveIntegerField(default=0, db_index=True)
+    class AuthenticityStatus(models.TextChoices):
+        NONE = "none", "Не заявлен"
+        PENDING = "pending", "На проверке"
+        VERIFIED = "verified", "Оригинал подтверждён"
+        REJECTED = "rejected", "Отклонён"
+
+    authenticity_status = models.CharField(
+        max_length=20,
+        choices=AuthenticityStatus.choices,
+        default=AuthenticityStatus.NONE,
+        db_index=True,
+    )
+    authenticity_note = models.TextField(blank=True, default="")
+    authenticity_requested_at = models.DateTimeField(null=True, blank=True)
+    authenticity_verified_at = models.DateTimeField(null=True, blank=True)
+    bonus_points = models.PositiveIntegerField(
+        default=0,
+        help_text="Бонусы за покупку 1 шт (0 = по правилам магазина)",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -210,6 +230,18 @@ class ShopSettings(models.Model):
     )
     dostavista_token = models.CharField(max_length=255, blank=True, default="")
     accept_online_payment = models.BooleanField(default=True)
+    bonus_earn_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        help_text="% от суммы позиций в бонусы при завершении заказа",
+    )
+    bonus_max_spend_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=50,
+        help_text="Макс. % заказа, который можно оплатить бонусами",
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
 

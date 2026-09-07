@@ -101,11 +101,26 @@ class ProductSerializer(serializers.ModelSerializer):
             "is_active",
             "is_featured",
             "featured_order",
+            "view_count",
+            "authenticity_status",
+            "authenticity_note",
+            "authenticity_requested_at",
+            "authenticity_verified_at",
+            "bonus_points",
             "photos",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["provider", "stock_qty", "created_at", "updated_at"]
+        read_only_fields = [
+            "provider",
+            "stock_qty",
+            "view_count",
+            "authenticity_status",
+            "authenticity_requested_at",
+            "authenticity_verified_at",
+            "created_at",
+            "updated_at",
+        ]
 
 
 class ProductPublicSerializer(serializers.ModelSerializer):
@@ -129,7 +144,16 @@ class ProductPublicSerializer(serializers.ModelSerializer):
             "category_name",
             "photos",
             "stock_qty",
+            "view_count",
+            "authenticity_status",
+            "is_original",
+            "bonus_points",
         ]
+
+    is_original = serializers.SerializerMethodField()
+
+    def get_is_original(self, obj):
+        return obj.authenticity_status == Product.AuthenticityStatus.VERIFIED
 
 
 class StockMovementSerializer(serializers.ModelSerializer):
@@ -188,6 +212,8 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "russian_post_user_key",
             "dostavista_token",
             "accept_online_payment",
+            "bonus_earn_percent",
+            "bonus_max_spend_percent",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]

@@ -495,6 +495,13 @@ class ShopOrderViewSet(viewsets.ModelViewSet):
             if "external_tracking_id" in [f.name for f in order._meta.fields]:
                 update_fields.extend(["external_delivery_provider", "external_tracking_id"])
             order.save(update_fields=list(dict.fromkeys(update_fields)))
+            if new_status == ShopOrder.Status.DONE:
+                try:
+                    from vmagazine.bonuses import accrue_order_bonuses
+
+                    accrue_order_bonuses(order)
+                except Exception:
+                    pass
         if "courier_user" in request.data:
             order.courier_user_id = request.data.get("courier_user") or None
             order.save(update_fields=["courier_user", "updated_at"])

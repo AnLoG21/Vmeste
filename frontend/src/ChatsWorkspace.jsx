@@ -157,12 +157,13 @@ export default function ChatsWorkspace({
   togglePinChatForFolder,
   updateChatScrollUi,
 }) {
+  const microAppChats = currentView === "vmenu" || currentView === "vmagazine";
   return (
-          <section className={`card full-width tg-chats-card${currentView === "vmenu" ? " tg-chats-card--vmenu" : ""}`}>
+          <section className={`card full-width tg-chats-card${microAppChats ? " tg-chats-card--vmenu" : ""}`}>
             <div
               className={[
                 "tg-body",
-                currentView === "vmenu"
+                microAppChats
                   ? `tg-body--vmenu${selectedChatId ? " tg-body--mobile-thread" : " tg-body--mobile-list"}`
                   : selectedChatId
                     ? "tg-body--mobile-thread"
@@ -172,7 +173,7 @@ export default function ChatsWorkspace({
               <aside className="tg-sidebar">
                 <div className="tg-sidebar-head">
                   <span className="tg-sidebar-title">Чаты</span>
-                  {me?.role === "provider" && currentView !== "vmenu" && (
+                  {me?.role === "provider" && !microAppChats && (
                     <div className="tg-fab-wrap">
                       <button
                         type="button"
@@ -192,12 +193,12 @@ export default function ChatsWorkspace({
                 <input
                   type="search"
                   className="tg-chat-search"
-                  placeholder={currentView === "vmenu" ? "Поиск по людям..." : "Поиск по чатам..."}
+                  placeholder={microAppChats ? "Поиск по людям..." : "Поиск по чатам..."}
                   value={chatSearchQuery}
                   onChange={(e) => setChatSearchQuery(e.target.value)}
                   onFocus={() => setChatFabOpen(false)}
                 />
-                {currentView !== "vmenu" && (me?.role === "provider" || me?.role === "staff") && (
+                {!microAppChats && (me?.role === "provider" || me?.role === "staff") && (
                 <div className="tg-folder-tabs">
                   <button type="button" className={chatFolder === "org" ? "active" : ""} onClick={() => setChatFolder("org")}>
                     <span className="tg-folder-tab-label">Организация</span>
@@ -214,19 +215,19 @@ export default function ChatsWorkspace({
                 </div>
                 )}
                 <div className="tg-sidebar-scroll">
-                {filteredSidebarChats.length > 0 && currentView === "vmenu" ? (
+                {filteredSidebarChats.length > 0 && microAppChats ? (
                   <div className="vmenu-chat-section-label">Переписки</div>
                 ) : null}
                 <div className="tg-chat-list">
                   {filteredSidebarChats.map((c) => {
-                    const peerM = currentView === "vmenu"
+                    const peerM = microAppChats
                       ? (c.members || []).find((m) => Number(m.user) !== Number(me?.id))
                       : (chatFolder === "org" ? getOrgDmPeerMember(c, me?.id) : null);
                     const showPresenceDot = Boolean(peerM) && !c.is_group && !c.is_saved_messages && (
-                      currentView === "vmenu" ? c.is_user_direct : !c.is_client_correspondence
+                      microAppChats ? c.is_user_direct : !c.is_client_correspondence
                     );
                     const pinsList = (chatFolder === "clients" ? chatPins?.clients : chatPins?.org) || [];
-                    const isPinned = currentView !== "vmenu" && pinsList.map(Number).includes(Number(c.id));
+                    const isPinned = !microAppChats && pinsList.map(Number).includes(Number(c.id));
                     const unreadN = Number(c.unread_message_count) || 0;
                     return (
                     <div
@@ -294,7 +295,7 @@ export default function ChatsWorkspace({
                           {unreadN > 99 ? "99+" : unreadN}
                         </span>
                       )}
-                      {currentView !== "vmenu" && (
+                      {!microAppChats && (
                       <div className="tg-chat-row-actions">
                         <button
                           type="button"
@@ -366,7 +367,7 @@ export default function ChatsWorkspace({
                   );
                   })}
                 </div>
-                {currentView === "vmenu" && filteredVmenuChatContacts.length > 0 ? (
+                {microAppChats && filteredVmenuChatContacts.length > 0 ? (
                   <>
                     <div className="vmenu-chat-section-label">Подписчики</div>
                     <div className="tg-chat-list vmenu-chat-contacts">
@@ -402,7 +403,7 @@ export default function ChatsWorkspace({
                     </div>
                   </>
                 ) : null}
-                {currentView === "vmenu"
+                {microAppChats
                   ? filteredSidebarChats.length === 0 && filteredVmenuChatContacts.length === 0 && (
                     <p className="tg-empty">Пока нет переписок. Напишите подписчику или откройте профиль пользователя.</p>
                   )

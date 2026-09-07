@@ -1,4 +1,4 @@
-/** API helpers for Вмагазине microservice. */
+/** API helpers for Вмагазине */
 
 export async function vmagazineFetch(authFetch, API_URL, path, options = {}) {
   const res = await authFetch(`${API_URL}/vmagazine${path}`, options);
@@ -10,33 +10,110 @@ export async function vmagazineFetch(authFetch, API_URL, path, options = {}) {
   return res.json();
 }
 
-export function searchShops(authFetch, API_URL, params = {}) {
+export function loadHome(authFetch, API_URL, { originals } = {}) {
+  const q = originals ? "?originals=1" : "";
+  return vmagazineFetch(authFetch, API_URL, `/home/${q}`);
+}
+
+export function searchSuggest(authFetch, API_URL, params = {}) {
   const q = new URLSearchParams();
   if (params.q) q.set("q", params.q);
-  if (params.lat != null && params.lat !== "") q.set("lat", String(params.lat));
-  if (params.lon != null && params.lon !== "") q.set("lon", String(params.lon));
-  const qs = q.toString();
-  return vmagazineFetch(authFetch, API_URL, `/shops/${qs ? `?${qs}` : ""}`);
+  if (params.originals) q.set("originals", "1");
+  return vmagazineFetch(authFetch, API_URL, `/search/suggest/?${q}`);
 }
 
-export function loadFavorites(authFetch, API_URL) {
-  return vmagazineFetch(authFetch, API_URL, "/favorites/");
+export function loadProductLikes(authFetch, API_URL) {
+  return vmagazineFetch(authFetch, API_URL, "/product-likes/");
 }
 
-export function addFavorite(authFetch, API_URL, providerId) {
-  return vmagazineFetch(authFetch, API_URL, "/favorites/", {
+export function likeProduct(authFetch, API_URL, productId) {
+  return vmagazineFetch(authFetch, API_URL, "/product-likes/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ provider_id: providerId }),
+    body: JSON.stringify({ product_id: productId }),
   });
 }
 
-export function removeFavorite(authFetch, API_URL, providerId) {
-  return vmagazineFetch(authFetch, API_URL, `/favorites/?provider_id=${providerId}`, {
+export function unlikeProduct(authFetch, API_URL, productId) {
+  return vmagazineFetch(authFetch, API_URL, `/product-likes/?product_id=${productId}`, {
     method: "DELETE",
   });
 }
 
+export function loadCart(authFetch, API_URL) {
+  return vmagazineFetch(authFetch, API_URL, "/cart/");
+}
+
+export function setCartItem(authFetch, API_URL, productId, quantity, useBonuses) {
+  const body = { product_id: productId, quantity };
+  if (useBonuses != null) body.use_bonuses = useBonuses;
+  return vmagazineFetch(authFetch, API_URL, "/cart/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export function removeCartItem(authFetch, API_URL, productId) {
+  return vmagazineFetch(authFetch, API_URL, `/cart/?product_id=${productId}`, { method: "DELETE" });
+}
+
+export function trackProductView(authFetch, API_URL, productId) {
+  return vmagazineFetch(authFetch, API_URL, `/products/${productId}/view/`, { method: "POST", body: "{}" });
+}
+
+export function loadRecentlyViewed(authFetch, API_URL, { all } = {}) {
+  return vmagazineFetch(authFetch, API_URL, `/recently-viewed/${all ? "?all=1" : ""}`);
+}
+
+export function loadAddresses(authFetch, API_URL) {
+  return vmagazineFetch(authFetch, API_URL, "/addresses/");
+}
+
+export function saveAddress(authFetch, API_URL, payload) {
+  return vmagazineFetch(authFetch, API_URL, "/addresses/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function loadBonuses(authFetch, API_URL) {
+  return vmagazineFetch(authFetch, API_URL, "/bonuses/");
+}
+
+export function loadPaymentCards(authFetch, API_URL) {
+  return vmagazineFetch(authFetch, API_URL, "/payment-cards/");
+}
+
+export function savePaymentCard(authFetch, API_URL, payload) {
+  return vmagazineFetch(authFetch, API_URL, "/payment-cards/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function loadProfileHub(authFetch, API_URL) {
+  return vmagazineFetch(authFetch, API_URL, "/profile/");
+}
+
 export function loadMyOrders(authFetch, API_URL) {
   return vmagazineFetch(authFetch, API_URL, "/my-orders/");
+}
+
+export function requestAuthenticity(authFetch, API_URL, productId, note) {
+  return vmagazineFetch(authFetch, API_URL, `/products/${productId}/authenticity/request/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ note: note || "" }),
+  });
+}
+
+export function verifyAuthenticity(authFetch, API_URL, productId, action = "verify") {
+  return vmagazineFetch(authFetch, API_URL, `/products/${productId}/authenticity/verify/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action }),
+  });
 }

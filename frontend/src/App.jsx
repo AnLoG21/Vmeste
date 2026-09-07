@@ -377,6 +377,7 @@ export default function App() {
     setConversations,
   });
   const [vmenuTab, setVmenuTab] = useState("feed");
+  const [vmagazineTab, setVmagazineTab] = useState("home");
   const [vmenuChatsHostEl, setVmenuChatsHostEl] = useState(null);
   const [mainChatsHostEl, setMainChatsHostEl] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
@@ -498,7 +499,9 @@ export default function App() {
   const currentViewRef = useRef(currentView);
   const meRef = useRef(me);
   const chatsSurfaceActive =
-    currentView === "chats" || (currentView === "vmenu" && vmenuTab === "chats");
+    currentView === "chats" ||
+    (currentView === "vmenu" && vmenuTab === "chats") ||
+    (currentView === "vmagazine" && vmagazineTab === "chats");
   const chatsSurfaceActiveRef = useRef(chatsSurfaceActive);
   const lastConvMsgDigestRef = useRef({});
   const digestPrimedRef = useRef(false);
@@ -1003,14 +1006,16 @@ export default function App() {
 
   const prevVmenuChatsModeRef = useRef(false);
   useEffect(() => {
-    const vmenuChatsMode = currentView === "vmenu" && vmenuTab === "chats";
+    const vmenuChatsMode =
+      (currentView === "vmenu" && vmenuTab === "chats") ||
+      (currentView === "vmagazine" && vmagazineTab === "chats");
     const was = prevVmenuChatsModeRef.current;
     prevVmenuChatsModeRef.current = vmenuChatsMode;
     if (was && !vmenuChatsMode && accessToken) {
       loadChats();
       setVmenuChatContacts([]);
     }
-  }, [accessToken, currentView, vmenuTab]);
+  }, [accessToken, currentView, vmenuTab, vmagazineTab]);
 
   useEffect(() => {
     if (!chatsSurfaceActive || !conversations.length) return;
@@ -2776,10 +2781,12 @@ export default function App() {
   const tgMainDark = activeChatWallpaper === "#1e2a24";
   const chatsRoleOk =
     currentView === "vmenu" ||
+    currentView === "vmagazine" ||
     me?.role === "client" ||
     me?.role === "provider" ||
     me?.role === "staff";
-  const chatsPortalTarget = currentView === "vmenu" ? vmenuChatsHostEl : mainChatsHostEl;
+  const chatsPortalTarget =
+    currentView === "vmenu" || currentView === "vmagazine" ? vmenuChatsHostEl : mainChatsHostEl;
   const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "service_apps", "vmenu", "vmagazine"].includes(currentView);
   const profileWide = accessToken && ["profile", "subscriptions"].includes(currentView);
 
@@ -2986,7 +2993,12 @@ export default function App() {
           />
         )}
         {accessToken && currentView === "vmagazine" && (
-          <VmagazineApp authFetch={authFetch} API_URL={API_URL} />
+          <VmagazineApp
+            authFetch={authFetch}
+            API_URL={API_URL}
+            onTabChange={setVmagazineTab}
+            onChatsHostReady={setVmenuChatsHostEl}
+          />
         )}
         {accessToken &&
           currentView === "marketplaces" &&

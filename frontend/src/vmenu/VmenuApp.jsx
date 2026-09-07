@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./vmenu.css";
 import VmenuLogo from "./VmenuLogo.jsx";
+import VmagazineLogo from "../vmagazine/VmagazineLogo.jsx";
 import { vmenuFetch, VMENU_DRAFT_KEY } from "./vmenuApi.js";
 import { VmenuErrorBoundary } from "./VmenuErrorBoundary.jsx";
 import { readVmenuUrlState, writeVmenuUrlState } from "./vmenuUrl.js";
@@ -309,12 +310,10 @@ export function ServicesHub({ onOpenVmenu, onOpenVmagazine }) {
         </div>
       </button>
       <button type="button" className="services-hub-card services-hub-card--shop" onClick={onOpenVmagazine}>
-        <span className="vmagazine-hub-mark" aria-hidden>
-          В
-        </span>
+        <VmagazineLogo size={48} />
         <div>
           <strong>Вмагазине</strong>
-          <p className="muted small">Поиск магазинов, избранное и ваши заказы с витрин.</p>
+          <p className="muted small">Маркетплейс Вместе: поиск, избранное, корзина, заказы и Вбонусы.</p>
         </div>
       </button>
     </section>

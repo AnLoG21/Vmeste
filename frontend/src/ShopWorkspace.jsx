@@ -746,6 +746,58 @@ export default function ShopWorkspace({ authFetch, me }) {
             ) : null}
 
             {selected ? (
+              <div className="shop-auth-box">
+                <p className="field-label">Подлинность (оранжевая галочка)</p>
+                <p className="muted small">
+                  Статус:{" "}
+                  {selected.authenticity_status === "verified"
+                    ? "оригинал подтверждён"
+                    : selected.authenticity_status === "pending"
+                      ? "на проверке"
+                      : selected.authenticity_status === "rejected"
+                        ? "отклонён"
+                        : "не заявлен"}
+                </p>
+                <div className="row-2" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    disabled={busy}
+                    onClick={async () => {
+                      try {
+                        const { requestAuthenticity } = await import("./vmagazine/vmagazineApi.js");
+                        await requestAuthenticity(authFetch, API_URL, selected.id, "Заявка на проверку оригинала");
+                        showToast("Заявка на проверку отправлена");
+                        await loadCatalog();
+                      } catch (e) {
+                        showToast(e.message || "Ошибка");
+                      }
+                    }}
+                  >
+                    Запросить проверку
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    disabled={busy}
+                    onClick={async () => {
+                      try {
+                        const { verifyAuthenticity } = await import("./vmagazine/vmagazineApi.js");
+                        await verifyAuthenticity(authFetch, API_URL, selected.id, "verify");
+                        showToast("Товар отмечен как оригинал");
+                        await loadCatalog();
+                      } catch (e) {
+                        showToast(e.message || "Ошибка");
+                      }
+                    }}
+                  >
+                    Подтвердить оригинал
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {selected ? (
               <>
                 <h3 className="shop-section-title">Фото (до 5)</h3>
                 <div className="shop-photos">

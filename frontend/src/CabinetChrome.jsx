@@ -1,5 +1,6 @@
 import logoMain from "./assets/logo-main.png";
 import VmenuLogo from "./vmenu/VmenuLogo.jsx";
+import VmagazineLogo from "./vmagazine/VmagazineLogo.jsx";
 import { bookmarkLabel } from "./subnavBookmarks.js";
 import { formatDistanceKm, sphereMapIconHref } from "./clientOrgFeatures.js";
 
@@ -273,9 +274,7 @@ export default function CabinetChrome({
               </svg>
               {currentView === "vmagazine" ? (
                 <>
-                  <span className="vmagazine-header-mark" aria-hidden>
-                    В
-                  </span>
+                  <VmagazineLogo size={28} />
                   <strong>Вмагазине</strong>
                 </>
               ) : (
