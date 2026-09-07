@@ -25,6 +25,9 @@ export default function VmagazineApp({
   onTabChange,
   onChatsHostReady,
   onRegisterBackHandler,
+  onOpenPhotos,
+  openChatWithProvider,
+  me,
 }) {
   const [tab, setTab] = useState("home");
   const [stack, setStack] = useState(null);
@@ -98,6 +101,14 @@ export default function VmagazineApp({
             API_URL={API_URL}
             onOpenRelated={(id) => openProduct(id)}
             onOpenShop={openShop}
+            onClose={popStack}
+            onOpenPhotos={onOpenPhotos}
+            onWriteSeller={async (providerId) => {
+              if (!openChatWithProvider) return;
+              await openChatWithProvider(providerId);
+              setStack(null);
+              setTab("chats");
+            }}
           />
         ) : null}
         {stack?.kind === "shop" ? (
@@ -108,6 +119,13 @@ export default function VmagazineApp({
               onBack={popStack}
               onConsumeBack={(fn) => {
                 shopBackRef.current = fn;
+              }}
+              onOpenPhotos={onOpenPhotos}
+              onWriteSeller={async (providerId) => {
+                if (!openChatWithProvider) return;
+                await openChatWithProvider(providerId);
+                setStack(null);
+                setTab("chats");
               }}
             />
           </div>
@@ -126,7 +144,14 @@ export default function VmagazineApp({
             {tab === "favorites" ? (
               <FavoritesTab authFetch={authFetch} API_URL={API_URL} onOpenProduct={openProduct} />
             ) : null}
-            {tab === "cart" ? <CartTab authFetch={authFetch} API_URL={API_URL} /> : null}
+            {tab === "cart" ? (
+              <CartTab
+                authFetch={authFetch}
+                API_URL={API_URL}
+                me={me}
+                onOpenProduct={openProduct}
+              />
+            ) : null}
             {tab === "profile" ? (
               <ProfileTab authFetch={authFetch} API_URL={API_URL} onOpenProduct={openProduct} />
             ) : null}

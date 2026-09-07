@@ -26,7 +26,14 @@ function CloseIcon() {
 /**
  * Публичная витрина магазина — тот же UX, что у гостевого меню кафе.
  */
-export default function PublicShopPage({ slug, embedded = false, onBack = null, onConsumeBack = null }) {
+export default function PublicShopPage({
+  slug,
+  embedded = false,
+  onBack = null,
+  onConsumeBack = null,
+  onOpenPhotos = null,
+  onWriteSeller = null,
+}) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [cart, setCart] = useState({});
@@ -345,6 +352,14 @@ export default function PublicShopPage({ slug, embedded = false, onBack = null, 
         </header>
       ) : null}
 
+      {!product && onWriteSeller && data?.provider?.id ? (
+        <div className="shop-write-seller-bar">
+          <button type="button" className="ghost-btn" onClick={() => onWriteSeller(data.provider.id)}>
+            Написать продавцу
+          </button>
+        </div>
+      ) : null}
+
       {!product && orderInfo ? (
         <section className="cafe-guest-card">
           <h2>Заказ #{orderInfo.id}</h2>
@@ -439,6 +454,7 @@ export default function PublicShopPage({ slug, embedded = false, onBack = null, 
                 source: "product",
               }))}
               className="shop-product-carousel"
+              onOpen={(list, idx) => onOpenPhotos?.(list, idx)}
             />
 
             {(product.related_products || []).length ? (
@@ -484,7 +500,7 @@ export default function PublicShopPage({ slug, embedded = false, onBack = null, 
 
             <p className="shop-product-price">{Number(product.price).toLocaleString("ru-RU")} ₽</p>
 
-            <div className="shop-detail-tabs">
+            <div className="shop-detail-tabs shop-detail-tabs--outlined">
               <button
                 type="button"
                 className={detailTab === "description" ? "is-active" : ""}
@@ -569,6 +585,15 @@ export default function PublicShopPage({ slug, embedded = false, onBack = null, 
                   →
                 </span>
               </button>
+              {onWriteSeller && data?.provider?.id ? (
+                <button
+                  type="button"
+                  className="ghost-btn shop-write-seller"
+                  onClick={() => onWriteSeller(data.provider.id)}
+                >
+                  Написать продавцу
+                </button>
+              ) : null}
             </section>
 
             <section className="shop-product-reviews">

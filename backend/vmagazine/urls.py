@@ -13,6 +13,7 @@ from .commerce_views import (
     ProductViewTrackView,
     ProfileHubView,
     RecentlyViewedView,
+    ReturnRequestsView,
     SearchSuggestView,
 )
 from .views import VmagazineFavoritesView, VmagazineMyOrdersView, VmagazineShopsSearchView
@@ -32,6 +33,7 @@ urlpatterns = [
     path("bonuses/", BonusesView.as_view()),
     path("payment-cards/", PaymentCardsView.as_view()),
     path("profile/", ProfileHubView.as_view()),
+    path("returns/", ReturnRequestsView.as_view()),
     path(
         "products/<int:product_id>/authenticity/request/",
         ProductAuthenticityRequestView.as_view(),

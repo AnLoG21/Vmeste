@@ -691,7 +691,19 @@ class PublicShopOrderCreateView(APIView):
                 return Response({"detail": "Укажите адрес доставки"}, status=400)
 
         total = items_total + delivery_fee
+        service_fee = Decimal("0")
+        if str(request.data.get("service_fee") or "").lower() in ("1", "true", "yes"):
+            service_fee = (total * Decimal("0.015")).quantize(Decimal("0.01"))
+            total = total + service_fee
         client = request.user if request.user and request.user.is_authenticated else None
+        payment_method = str(request.data.get("payment_method") or "online").strip().lower()
+        if payment_method not in ("online", "cash", "on_receipt"):
+            payment_method = "online"
+
+        comment = str(request.data.get("comment") or "").strip()[:500]
+        if service_fee > 0:
+            fee_note = f"Сервисный сбор 1,5%: {service_fee} ₽"
+            comment = f"{comment}\n{fee_note}".strip()[:500]
 
         with transaction.atomic():
             order = ShopOrder.objects.create(
@@ -714,7 +726,7 @@ class PublicShopOrderCreateView(APIView):
                 delivery_fee=delivery_fee,
                 items_total=items_total,
                 total=total,
-                comment=str(request.data.get("comment") or "").strip()[:500],
+                comment=comment,
             )
             for product, qty, price in lines:
                 ShopOrderItem.objects.create(
@@ -724,6 +736,21 @@ class PublicShopOrderCreateView(APIView):
                     unit_price=price,
                     quantity=qty,
                 )
+
+        if payment_method in ("cash", "on_receipt"):
+            order.status = ShopOrder.Status.PAID
+            order.save(update_fields=["status", "updated_at"])
+            return Response(
+                {
+                    "order_id": order.id,
+                    "total": str(order.total),
+                    "status": order.status,
+                    "payment_method": payment_method,
+                    "service_fee": str(service_fee),
+                    "confirmation_url": "",
+                },
+                status=201,
+            )
 
         if not settings_obj.accept_online_payment:
             return Response(
@@ -759,6 +786,8 @@ class PublicShopOrderCreateView(APIView):
                 "total": str(order.total),
                 "confirmation_url": order.confirmation_url,
                 "status": order.status,
+                "payment_method": "online",
+                "service_fee": str(service_fee),
             },
             status=201,
         )

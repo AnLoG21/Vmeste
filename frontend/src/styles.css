@@ -10641,6 +10641,25 @@ body.theme-dark .password-eye-btn:hover {
   color: #222;
   border-bottom-color: #ff8a00;
 }
+.shop-detail-tabs--outlined {
+  gap: 0.5rem;
+}
+.shop-detail-tabs--outlined button {
+  flex: 1;
+  border: 1px solid #d9d0e6;
+  border-radius: 999px;
+  border-bottom: 1px solid #d9d0e6;
+  background: #fff;
+  padding: 0.45rem 0.7rem;
+  color: #5c5470;
+}
+.shop-detail-tabs--outlined button.is-active {
+  color: #3d2f57;
+  border-color: #6a4c93;
+  background: #f6f1fb;
+  border-bottom-color: #6a4c93;
+  box-shadow: none;
+}
 .shop-detail-body {
   position: relative;
   max-height: 7.5rem;

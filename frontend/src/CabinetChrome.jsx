@@ -281,8 +281,8 @@ export default function CabinetChrome({
                 </>
               ) : (
                 <>
-                  <VmenuLogo size={28} />
-                  <strong>Вменю</strong>
+                  <VmenuLogo size={56} />
+                  <strong className="vmenu-header-title">Вменю</strong>
                 </>
               )}
             </span>

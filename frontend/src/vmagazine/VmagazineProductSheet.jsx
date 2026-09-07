@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import logoMain from "../assets/logo-main.png";
 import ServicePhotoCarousel from "../ServicePhotoCarousel.jsx";
 import { showToast } from "../toast.js";
 import { OriginalBadge } from "./VmagazineComponents.jsx";
@@ -10,6 +11,9 @@ export default function VmagazineProductSheet({
   API_URL,
   onOpenRelated,
   onOpenShop,
+  onClose,
+  onOpenPhotos,
+  onWriteSeller,
 }) {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -48,7 +52,7 @@ export default function VmagazineProductSheet({
         await removeCartItem(authFetch, API_URL, productId);
         setQty(0);
       } else {
-        await setCartItem(authFetch, API_URL, productId, n);
+        await setCartItem(authFetch, API_URL, productId, n, undefined, selectedSize);
         setQty(n);
       }
     } catch (e) {
@@ -67,27 +71,32 @@ export default function VmagazineProductSheet({
   }));
 
   return (
-    <div className="vmag-product-sheet">
+    <div className="vmag-product-sheet shop-product-sheet">
+      <div className="vmag-product-sheet-toolbar">
+        <button type="button" className="ghost-btn vmag-product-back" onClick={() => onClose?.()}>
+          ← Назад
+        </button>
+      </div>
+
       {photos.length ? (
-        <ServicePhotoCarousel items={photos} className="shop-product-carousel" />
+        <ServicePhotoCarousel
+          items={photos}
+          className="shop-product-carousel"
+          onOpen={(list, idx) => onOpenPhotos?.(list, idx)}
+        />
       ) : product.cover_url ? (
-        <img className="vmag-product-sheet-cover" src={product.cover_url} alt="" />
+        <button
+          type="button"
+          className="vmag-product-sheet-cover-btn"
+          onClick={() =>
+            onOpenPhotos?.([{ id: "cover", url: product.cover_url, thumb_url: product.cover_url }], 0)
+          }
+        >
+          <img className="vmag-product-sheet-cover" src={product.cover_url} alt="" />
+        </button>
       ) : (
         <div className="vmag-product-sheet-cover is-empty" />
       )}
-
-      <div className="vmag-product-sheet-head">
-        <h2>
-          {product.name}
-          {product.is_original ? (
-            <span title="Оригинал" style={{ marginLeft: 8, display: "inline-flex", verticalAlign: "middle" }}>
-              <OriginalBadge />
-            </span>
-          ) : null}
-        </h2>
-        <strong className="shop-product-price">{Number(product.price).toLocaleString("ru-RU")} ₽</strong>
-        {product.provider_name ? <p className="muted small">{product.provider_name}</p> : null}
-      </div>
 
       {(product.related_products || []).length ? (
         <section className="shop-product-related">
@@ -127,7 +136,19 @@ export default function VmagazineProductSheet({
         </section>
       ) : null}
 
-      <div className="shop-detail-tabs">
+      <div className="vmag-product-sheet-head">
+        <h2>
+          {product.name}
+          {product.is_original ? (
+            <span title="Оригинал" style={{ marginLeft: 8, display: "inline-flex", verticalAlign: "middle" }}>
+              <OriginalBadge />
+            </span>
+          ) : null}
+        </h2>
+        <strong className="shop-product-price">{Number(product.price).toLocaleString("ru-RU")} ₽</strong>
+      </div>
+
+      <div className="shop-detail-tabs shop-detail-tabs--outlined">
         <button
           type="button"
           className={detailTab === "description" ? "is-active" : ""}
@@ -191,25 +212,37 @@ export default function VmagazineProductSheet({
         </button>
       )}
 
-      {product.shop_slug || product.provider_name ? (
-        <section className="shop-product-seller">
-          <h3>Магазин</h3>
+      <section className="shop-product-seller">
+        <h3>Магазин</h3>
+        <button
+          type="button"
+          className="shop-product-seller-card"
+          onClick={() => onOpenShop?.(product.shop_slug, product)}
+          disabled={!product.shop_slug}
+        >
+          <img
+            src={product.shop_logo_url || logoMain}
+            alt=""
+            className={`shop-product-seller-logo${product.shop_logo_url ? " is-org" : ""}`}
+          />
+          <span className="shop-product-seller-copy">
+            <strong>{product.provider_name || "Магазин"}</strong>
+            <em>Все товары и доставка</em>
+          </span>
+          <span className="shop-product-seller-chevron" aria-hidden>
+            →
+          </span>
+        </button>
+        {product.provider_id && onWriteSeller ? (
           <button
             type="button"
-            className="shop-product-seller-card"
-            onClick={() => onOpenShop?.(product.shop_slug, product)}
-            disabled={!product.shop_slug}
+            className="ghost-btn shop-write-seller"
+            onClick={() => onWriteSeller(product.provider_id)}
           >
-            <span className="shop-product-seller-copy">
-              <strong>{product.provider_name || "Магазин"}</strong>
-              <em>Все товары и доставка</em>
-            </span>
-            <span className="shop-product-seller-chevron" aria-hidden>
-              →
-            </span>
+            Написать продавцу
           </button>
-        </section>
-      ) : null}
+        ) : null}
+      </section>
     </div>
   );
 }

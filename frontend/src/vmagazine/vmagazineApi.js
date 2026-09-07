@@ -49,9 +49,10 @@ export function loadCart(authFetch, API_URL) {
   return vmagazineFetch(authFetch, API_URL, "/cart/");
 }
 
-export function setCartItem(authFetch, API_URL, productId, quantity, useBonuses) {
+export function setCartItem(authFetch, API_URL, productId, quantity, useBonuses, selectedSize) {
   const body = { product_id: productId, quantity };
   if (useBonuses != null) body.use_bonuses = useBonuses;
+  if (selectedSize != null) body.selected_size = selectedSize;
   return vmagazineFetch(authFetch, API_URL, "/cart/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -113,6 +114,18 @@ export function loadProfileHub(authFetch, API_URL) {
 
 export function loadMyOrders(authFetch, API_URL) {
   return vmagazineFetch(authFetch, API_URL, "/my-orders/");
+}
+
+export function loadReturns(authFetch, API_URL) {
+  return vmagazineFetch(authFetch, API_URL, "/returns/");
+}
+
+export function createReturn(authFetch, API_URL, payload) {
+  return vmagazineFetch(authFetch, API_URL, "/returns/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function requestAuthenticity(authFetch, API_URL, productId, note) {

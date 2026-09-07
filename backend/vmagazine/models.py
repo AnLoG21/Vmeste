@@ -60,6 +60,7 @@ class CartItem(models.Model):
     )
     quantity = models.PositiveIntegerField(default=1)
     use_bonuses = models.BooleanField(default=False)
+    selected_size = models.CharField(max_length=32, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -194,3 +195,36 @@ class PopularSearchQuery(models.Model):
 
     class Meta:
         ordering = ["-hits", "query"]
+
+
+class ReturnRequest(models.Model):
+    """Заявка на возврат товара из завершённого заказа."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "На рассмотрении"
+        APPROVED = "approved", "Одобрен"
+        REJECTED = "rejected", "Отклонён"
+        DONE = "done", "Выполнен"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="shop_return_requests",
+    )
+    order = models.ForeignKey(
+        "shop.ShopOrder",
+        on_delete=models.CASCADE,
+        related_name="return_requests",
+    )
+    order_item = models.ForeignKey(
+        "shop.ShopOrderItem",
+        on_delete=models.CASCADE,
+        related_name="return_requests",
+    )
+    reason = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]

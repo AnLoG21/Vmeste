@@ -3003,8 +3003,11 @@ export default function App() {
           <VmagazineApp
             authFetch={authFetch}
             API_URL={API_URL}
+            me={me}
             onTabChange={setVmagazineTab}
             onChatsHostReady={setVmenuChatsHostEl}
+            onOpenPhotos={openOrgPhotoLightbox}
+            openChatWithProvider={openChatWithProvider}
             onRegisterBackHandler={(fn) => {
               vmagazineBackRef.current = fn;
             }}

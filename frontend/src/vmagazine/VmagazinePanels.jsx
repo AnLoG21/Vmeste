@@ -4,7 +4,9 @@ import { fetchAddressSuggestions } from "../addressSuggest.js";
 import { showToast } from "../toast.js";
 import { HorizontalRail, ProductCard, orderStatusLabel } from "./VmagazineComponents.jsx";
 import {
+  createReturn,
   deletePaymentCard,
+  loadAddresses,
   loadBonuses,
   loadCart,
   loadHome,
@@ -12,12 +14,21 @@ import {
   loadProductLikes,
   loadProfileHub,
   loadRecentlyViewed,
+  loadReturns,
   removeCartItem,
   saveAddress,
   savePaymentCard,
   searchSuggest,
   setCartItem,
 } from "./vmagazineApi.js";
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="currentColor">
+      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+    </svg>
+  );
+}
 
 function MagnifierIcon() {
   return (
@@ -611,14 +622,37 @@ export function FavoritesTab({ authFetch, API_URL, onOpenProduct }) {
   );
 }
 
-export function CartTab({ authFetch, API_URL }) {
+export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
   const [items, setItems] = useState([]);
+  const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(() => new Set());
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [totalOpen, setTotalOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState("delivery");
+  const [addressId, setAddressId] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState("online");
+  const [serviceFee, setServiceFee] = useState(true);
+  const [guest, setGuest] = useState({
+    name: "",
+    phone: "",
+    email: "",
+  });
+  const [agree, setAgree] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setItems(await loadCart(authFetch, API_URL));
+      const [cart, addrs] = await Promise.all([
+        loadCart(authFetch, API_URL),
+        loadAddresses(authFetch, API_URL).catch(() => []),
+      ]);
+      setItems(cart || []);
+      setAddresses(addrs || []);
+      setSelected(new Set((cart || []).map((r) => r.id)));
+      const def = (addrs || []).find((a) => a.is_default) || (addrs || [])[0];
+      if (def) setAddressId(def.id);
     } catch (e) {
       showToast(e.message || "Не удалось загрузить корзину");
     } finally {
@@ -630,75 +664,343 @@ export function CartTab({ authFetch, API_URL }) {
     void load();
   }, [load]);
 
-  const total = useMemo(
-    () => items.reduce((s, row) => s + Number(row.product?.price || 0) * Number(row.quantity || 0), 0),
-    [items],
+  useEffect(() => {
+    setGuest({
+      name: [me?.first_name, me?.last_name].filter(Boolean).join(" ") || me?.username || "",
+      phone: me?.phone || "",
+      email: me?.email || "",
+    });
+  }, [me]);
+
+  const selectedRows = useMemo(
+    () => items.filter((r) => selected.has(r.id)),
+    [items, selected],
   );
+  const selectedSum = useMemo(
+    () => selectedRows.reduce((s, row) => s + Number(row.product?.price || 0) * Number(row.quantity || 0), 0),
+    [selectedRows],
+  );
+  const feeAmount = serviceFee ? Math.round(selectedSum * 0.015 * 100) / 100 : 0;
+  const payTotal = selectedSum + feeAmount;
+  const allSelected = items.length > 0 && selected.size === items.length;
+  const currentAddress = addresses.find((a) => a.id === addressId) || addresses[0];
+
+  function toggleOne(id) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function placeOrders() {
+    if (!agree) {
+      showToast("Нужно согласие с условиями");
+      return;
+    }
+    if (!selectedRows.length) {
+      showToast("Выберите товары");
+      return;
+    }
+    if (mode === "delivery" && !currentAddress?.address) {
+      showToast("Укажите адрес доставки");
+      return;
+    }
+    if (!guest.name.trim() || !guest.phone.trim()) {
+      showToast("Укажите имя и телефон получателя");
+      return;
+    }
+    setBusy(true);
+    try {
+      const bySlug = new Map();
+      for (const row of selectedRows) {
+        const slug = row.product?.shop_slug;
+        if (!slug) throw new Error(`Нет витрины у «${row.product?.name}»`);
+        if (!bySlug.has(slug)) bySlug.set(slug, []);
+        bySlug.get(slug).push(row);
+      }
+      let lastUrl = "";
+      for (const [slug, rows] of bySlug.entries()) {
+        const body = {
+          mode,
+          payment_method: paymentMethod,
+          service_fee: serviceFee,
+          guest_name: guest.name.trim(),
+          guest_phone: guest.phone.trim(),
+          guest_email: guest.email.trim(),
+          items: rows.map((r) => ({ product_id: r.product.id, quantity: r.quantity })),
+          return_url: `${window.location.origin}/vmagazine`,
+        };
+        if (mode === "delivery" && currentAddress) {
+          body.delivery_address = currentAddress.address;
+          body.apartment = currentAddress.apartment || "";
+          body.entrance = currentAddress.entrance || "";
+          body.intercom = currentAddress.intercom || "";
+          body.delivery_lat = currentAddress.lat;
+          body.delivery_lon = currentAddress.lon;
+          body.delivery_method = "own";
+        }
+        const res = await authFetch(`${API_URL}/shop/public/${encodeURIComponent(slug)}/order/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || `Ошибка заказа (${slug})`);
+        if (data.confirmation_url) lastUrl = data.confirmation_url;
+        for (const r of rows) {
+          await removeCartItem(authFetch, API_URL, r.product.id);
+        }
+      }
+      showToast(paymentMethod === "online" ? "Заказ создан" : "Заказ оформлен");
+      setCheckoutOpen(false);
+      await load();
+      if (lastUrl) window.location.href = lastUrl;
+    } catch (e) {
+      showToast(e.message || "Не удалось оформить");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (checkoutOpen) {
+    return (
+      <div className="vmag-checkout">
+        <button type="button" className="ghost-btn" onClick={() => setCheckoutOpen(false)}>
+          ← К корзине
+        </button>
+        <h2>Оформление</h2>
+
+        <section className="vmag-widget">
+          <h3>Способ получения</h3>
+          <div className="vmag-checkout-modes">
+            <label className="checkbox">
+              <input type="radio" checked={mode === "delivery"} onChange={() => setMode("delivery")} />
+              Доставка
+            </label>
+            <label className="checkbox">
+              <input type="radio" checked={mode === "pickup"} onChange={() => setMode("pickup")} />
+              Самовывоз
+            </label>
+          </div>
+          {mode === "delivery" ? (
+            addresses.length ? (
+              <select value={addressId || ""} onChange={(e) => setAddressId(Number(e.target.value))}>
+                {addresses.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label ? `${a.label}: ` : ""}
+                    {a.address}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="muted small">Добавьте адрес на главной Вмагазине.</p>
+            )
+          ) : (
+            <p className="muted small">Заберёте заказ в магазине продавца.</p>
+          )}
+        </section>
+
+        <section className="vmag-widget">
+          <h3>Получатель</h3>
+          <input
+            placeholder="Имя"
+            value={guest.name}
+            onChange={(e) => setGuest((g) => ({ ...g, name: e.target.value }))}
+          />
+          <input
+            placeholder="Телефон"
+            value={guest.phone}
+            onChange={(e) => setGuest((g) => ({ ...g, phone: e.target.value }))}
+          />
+          <input
+            placeholder="Email"
+            value={guest.email}
+            onChange={(e) => setGuest((g) => ({ ...g, email: e.target.value }))}
+          />
+        </section>
+
+        <section className="vmag-widget">
+          <h3>Оплата</h3>
+          <label className="checkbox">
+            <input
+              type="radio"
+              checked={paymentMethod === "online"}
+              onChange={() => setPaymentMethod("online")}
+            />
+            Онлайн
+          </label>
+          <label className="checkbox">
+            <input
+              type="radio"
+              checked={paymentMethod === "on_receipt"}
+              onChange={() => setPaymentMethod("on_receipt")}
+            />
+            При получении
+          </label>
+        </section>
+
+        <label className="checkbox vmag-service-fee">
+          <input type="checkbox" checked={serviceFee} onChange={(e) => setServiceFee(e.target.checked)} />
+          Сервисный сбор 1,5% ({feeAmount.toLocaleString("ru-RU")} ₽)
+        </label>
+
+        <button type="button" className="vmag-total-toggle" onClick={() => setTotalOpen((v) => !v)}>
+          Итого {totalOpen ? "▴" : "▾"} <strong>{payTotal.toLocaleString("ru-RU")} ₽</strong>
+        </button>
+        {totalOpen ? (
+          <ul className="vmag-total-breakdown muted small">
+            <li>Товары: {selectedSum.toLocaleString("ru-RU")} ₽</li>
+            {serviceFee ? <li>Сервисный сбор: {feeAmount.toLocaleString("ru-RU")} ₽</li> : null}
+          </ul>
+        ) : null}
+
+        <button type="button" className="primary-btn" disabled={busy} onClick={() => void placeOrders()}>
+          {paymentMethod === "online" ? "Оплатить онлайн" : "Заказать"} · {payTotal.toLocaleString("ru-RU")} ₽
+        </button>
+
+        <label className="checkbox vmag-checkout-agree">
+          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
+          <span>
+            Нажимая кнопку, вы соглашаетесь с{" "}
+            <a href="/offer" target="_blank" rel="noopener noreferrer">
+              публичной офертой
+            </a>{" "}
+            и{" "}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer">
+              политикой конфиденциальности
+            </a>
+          </span>
+        </label>
+      </div>
+    );
+  }
 
   return (
-    <div>
+    <div className="vmag-cart">
       <h2>Корзина</h2>
-      {loading ? <p className="muted">Загрузка…</p> : null}
-      <div className="vmagazine-list">
-        {items.map((row) => (
-          <article key={row.id} className="vmagazine-card">
-            <div className="vmagazine-card-head">
-              <div>
-                <strong>{row.product?.name}</strong>
-                <p className="muted small">{row.product?.provider_name}</p>
-                {Number(row.bonus_balance) > 0 ? (
-                  <p className="muted small">Вбонусы магазина: {Number(row.bonus_balance).toLocaleString("ru-RU")}</p>
-                ) : null}
-              </div>
-              <strong>{(Number(row.product?.price) * row.quantity).toLocaleString("ru-RU")} ₽</strong>
-            </div>
-            <div className="vmag-cart-row">
-              <input
-                type="number"
-                min={1}
-                value={row.quantity}
-                onChange={(e) => {
-                  const qty = Math.max(1, Number(e.target.value) || 1);
-                  void setCartItem(authFetch, API_URL, row.product.id, qty, row.use_bonuses).then(load);
-                }}
-              />
-              {Number(row.bonus_balance) > 0 ? (
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(row.use_bonuses)}
-                    onChange={(e) =>
-                      void setCartItem(authFetch, API_URL, row.product.id, row.quantity, e.target.checked).then(load)
-                    }
-                  />
-                  Списать Вбонусы
-                </label>
-              ) : null}
+      {addresses.length ? (
+        <div className="vmag-cart-addresses">
+          <p className="muted small" style={{ margin: "0 0 0.35rem" }}>
+            Адрес доставки
+          </p>
+          <div className="vmag-cart-address-chips">
+            {addresses.map((a) => (
               <button
+                key={a.id}
                 type="button"
-                className="ghost-btn"
-                onClick={() => void removeCartItem(authFetch, API_URL, row.product.id).then(load)}
+                className={`shop-size-chip${Number(addressId) === Number(a.id) ? " is-on" : ""}`}
+                onClick={() => setAddressId(a.id)}
               >
-                Удалить
+                {a.label || a.address}
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (row.product?.shop_url) window.location.href = row.product.shop_url;
-                }}
-              >
-                К витрине
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
+            ))}
+          </div>
+          {currentAddress?.address ? (
+            <p className="muted small vmag-cart-address">{currentAddress.address}</p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="muted small">Укажите адрес на главной — он понадобится для доставки.</p>
+      )}
+
       {items.length ? (
-        <p className="cafe-cart-total">
-          Итого: <strong>{total.toLocaleString("ru-RU")} ₽</strong>
-        </p>
+        <label className="checkbox vmag-cart-select-all">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={() => {
+              if (allSelected) setSelected(new Set());
+              else setSelected(new Set(items.map((r) => r.id)));
+            }}
+          />
+          Выбрать все
+        </label>
       ) : null}
+
+      {loading ? <p className="muted">Загрузка…</p> : null}
+      <div className="vmag-cart-list">
+        {items.map((row) => {
+          const cover = row.product?.cover_url || row.product?.photos?.[0]?.thumb_url;
+          const line = Number(row.product?.price || 0) * Number(row.quantity || 0);
+          return (
+            <article key={row.id} className="vmag-cart-item">
+              <label className="vmag-cart-check">
+                <input
+                  type="checkbox"
+                  checked={selected.has(row.id)}
+                  onChange={() => toggleOne(row.id)}
+                />
+              </label>
+              <button
+                type="button"
+                className="vmag-cart-item-main"
+                onClick={() => onOpenProduct?.(row.product)}
+              >
+                {cover ? <img src={cover} alt="" /> : <div className="vmag-cart-ph" />}
+                <div className="vmag-cart-item-body">
+                  <strong>{line.toLocaleString("ru-RU")} ₽</strong>
+                  <span>{row.product?.name}</span>
+                  {row.selected_size ? <em>Размер: {row.selected_size}</em> : null}
+                  <em className="muted">{row.product?.provider_name}</em>
+                </div>
+              </button>
+              <div className="vmag-cart-item-actions">
+                <div className="shop-cart-stepper">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const q = Math.max(0, Number(row.quantity) - 1);
+                      if (q <= 0) void removeCartItem(authFetch, API_URL, row.product.id).then(load);
+                      else void setCartItem(authFetch, API_URL, row.product.id, q, row.use_bonuses).then(load);
+                    }}
+                  >
+                    −
+                  </button>
+                  <span>{row.quantity}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void setCartItem(
+                        authFetch,
+                        API_URL,
+                        row.product.id,
+                        Number(row.quantity) + 1,
+                        row.use_bonuses,
+                      ).then(load)
+                    }
+                  >
+                    +
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="vmag-cart-trash"
+                  aria-label="Удалить"
+                  onClick={() => void removeCartItem(authFetch, API_URL, row.product.id).then(load)}
+                >
+                  <TrashIcon />
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
       {!loading && !items.length ? <p className="muted vmagazine-empty">Корзина пуста.</p> : null}
+
+      {items.length ? (
+        <div className="vmag-cart-footer">
+          <button
+            type="button"
+            className="primary-btn"
+            disabled={!selectedRows.length}
+            onClick={() => setCheckoutOpen(true)}
+          >
+            К оформлению · {selectedSum.toLocaleString("ru-RU")} ₽
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -708,27 +1010,35 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct }) {
   const [bonuses, setBonuses] = useState([]);
   const [cards, setCards] = useState([]);
   const [recent, setRecent] = useState([]);
+  const [returns, setReturns] = useState([]);
   const [recentAll, setRecentAll] = useState(false);
   const [cardFormOpen, setCardFormOpen] = useState(false);
   const [cardForm, setCardForm] = useState({ number: "", exp_month: "", exp_year: "" });
+  const [returnForm, setReturnForm] = useState(null); // { orderId, itemId, name }
 
   async function reloadCards() {
     setCards(await loadPaymentCards(authFetch, API_URL));
   }
 
+  async function reloadReturns() {
+    setReturns(await loadReturns(authFetch, API_URL));
+  }
+
   useEffect(() => {
     (async () => {
       try {
-        const [p, b, c, r] = await Promise.all([
+        const [p, b, c, r, ret] = await Promise.all([
           loadProfileHub(authFetch, API_URL),
           loadBonuses(authFetch, API_URL),
           loadPaymentCards(authFetch, API_URL),
           loadRecentlyViewed(authFetch, API_URL, { all: false }),
+          loadReturns(authFetch, API_URL).catch(() => []),
         ]);
         setHub(p);
         setBonuses(b || []);
         setCards(c || []);
         setRecent(r || []);
+        setReturns(ret || []);
       } catch (e) {
         showToast(e.message || "Не удалось загрузить профиль");
       }
@@ -745,6 +1055,30 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct }) {
   }
 
   const previewBrand = detectBrandClient(cardForm.number);
+  const returnableOrders = useMemo(() => {
+    const list = [];
+    for (const o of hub?.purchases || []) list.push(o);
+    for (const o of hub?.active_orders || []) {
+      if (["ready", "delivering", "done"].includes(String(o.status))) list.push(o);
+    }
+    const seen = new Set();
+    return list.filter((o) => {
+      if (seen.has(o.id)) return false;
+      seen.add(o.id);
+      return true;
+    });
+  }, [hub]);
+
+  function returnStatusLabel(status) {
+    return (
+      {
+        pending: "На рассмотрении",
+        approved: "Одобрен",
+        rejected: "Отклонён",
+        done: "Выполнен",
+      }[status] || status
+    );
+  }
 
   return (
     <div className="vmag-profile">
@@ -790,6 +1124,105 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct }) {
           ))}
           {!hub?.reviewable?.length ? <p className="muted">Пока нет товаров для отзыва.</p> : null}
         </div>
+      </section>
+
+      <section className="vmag-widget">
+        <h3>Возвраты</h3>
+        <div className="vmagazine-list">
+          {returnableOrders.map((o) => (
+            <article key={`ret-src-${o.id}`} className="vmagazine-card">
+              <div className="vmagazine-card-head">
+                <div>
+                  <strong>{o.provider_name || `Заказ #${o.id}`}</strong>
+                  <p className="muted small">
+                    {o.created_at ? new Date(o.created_at).toLocaleDateString("ru-RU") : ""} ·{" "}
+                    {orderStatusLabel(o.status)}
+                  </p>
+                </div>
+                <strong>{Number(o.total).toLocaleString("ru-RU")} ₽</strong>
+              </div>
+              <ul className="muted small">
+                {(o.items || []).map((it) => {
+                  const existing = returns.find((r) => Number(r.order_item_id) === Number(it.id));
+                  return (
+                    <li key={it.id}>
+                      {it.name} × {it.quantity}
+                      {existing ? (
+                        <span> — {returnStatusLabel(existing.status)}</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="ghost-btn"
+                          style={{ marginLeft: 8 }}
+                          onClick={() =>
+                            setReturnForm({
+                              orderId: o.id,
+                              itemId: it.id,
+                              name: it.name,
+                              reason: "",
+                            })
+                          }
+                        >
+                          Вернуть
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </article>
+          ))}
+          {!returnableOrders.length ? <p className="muted">Нет заказов для возврата.</p> : null}
+        </div>
+        {returnForm ? (
+          <div className="vmag-return-form">
+            <strong>Возврат: {returnForm.name}</strong>
+            <textarea
+              placeholder="Причина возврата"
+              value={returnForm.reason}
+              onChange={(e) => setReturnForm((f) => ({ ...f, reason: e.target.value }))}
+            />
+            <div className="vmag-addr-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+              <button type="button" className="ghost-btn" onClick={() => setReturnForm(null)}>
+                Отмена
+              </button>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={async () => {
+                  try {
+                    await createReturn(authFetch, API_URL, {
+                      order_id: returnForm.orderId,
+                      order_item_id: returnForm.itemId,
+                      reason: returnForm.reason,
+                    });
+                    setReturnForm(null);
+                    await reloadReturns();
+                    showToast("Заявка на возврат отправлена");
+                  } catch (e) {
+                    showToast(e.message || "Не удалось создать заявку");
+                  }
+                }}
+              >
+                Отправить
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {returns.length ? (
+          <div className="vmagazine-list" style={{ marginTop: "0.75rem" }}>
+            <h4 style={{ margin: 0 }}>Мои заявки</h4>
+            {returns.map((r) => (
+              <article key={r.id} className="vmagazine-card">
+                <strong>{r.product_name}</strong>
+                <p className="muted small">
+                  {r.provider_name} · {returnStatusLabel(r.status)}
+                </p>
+                {r.reason ? <p className="small">{r.reason}</p> : null}
+              </article>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section className="vmag-widget">

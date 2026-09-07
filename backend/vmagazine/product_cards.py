@@ -64,6 +64,19 @@ def product_detail(product: Product, request=None, *, liked: bool | None = None)
     for p in product.related_products.filter(is_active=True).prefetch_related("photos")[:12]:
         related.append(product_card(p, request))
     card["related_products"] = related
+    logo_url = ""
+    provider = product.provider
+    if provider:
+        first_photo = (
+            provider.gallery_photos.filter(image__isnull=False).exclude(image="").order_by("id").first()
+        )
+        if first_photo and first_photo.image:
+            if request is not None:
+                urls = photo_urls(request, first_photo.image)
+                logo_url = urls.get("thumb_url") or urls.get("url") or ""
+            else:
+                logo_url = first_photo.image.url
+    card["shop_logo_url"] = logo_url
     return card
 
 

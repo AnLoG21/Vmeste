@@ -18,6 +18,7 @@ from .models import (
     PopularSearchQuery,
     ProductLike,
     ProductViewHistory,
+    ReturnRequest,
     SavedPaymentCard,
     ShopBonusBalance,
 )
@@ -298,6 +299,7 @@ class CartView(APIView):
                     "id": row.id,
                     "quantity": row.quantity,
                     "use_bonuses": row.use_bonuses,
+                    "selected_size": row.selected_size or "",
                     "product": card,
                     "bonus_balance": str(bal),
                 }
@@ -315,16 +317,31 @@ class CartView(APIView):
         product = active_products_qs().filter(pk=pid).first()
         if not product:
             return Response({"detail": "Товар не найден"}, status=404)
+        selected_size = str(request.data.get("selected_size") or "").strip()[:32]
         item, created = CartItem.objects.get_or_create(
-            user=request.user, product=product, defaults={"quantity": qty}
+            user=request.user,
+            product=product,
+            defaults={"quantity": qty, "selected_size": selected_size},
         )
         if not created:
             item.quantity = qty
-            item.save(update_fields=["quantity", "updated_at"])
+            fields = ["quantity", "updated_at"]
+            if "selected_size" in request.data:
+                item.selected_size = selected_size
+                fields.append("selected_size")
+            item.save(update_fields=fields)
         if "use_bonuses" in request.data:
             item.use_bonuses = bool(request.data.get("use_bonuses"))
             item.save(update_fields=["use_bonuses", "updated_at"])
-        return Response({"id": item.id, "quantity": item.quantity, "use_bonuses": item.use_bonuses}, status=201 if created else 200)
+        return Response(
+            {
+                "id": item.id,
+                "quantity": item.quantity,
+                "use_bonuses": item.use_bonuses,
+                "selected_size": item.selected_size,
+            },
+            status=201 if created else 200,
+        )
 
     def delete(self, request):
         try:
@@ -661,3 +678,64 @@ class ProductAuthenticityVerifyView(APIView):
             product.authenticity_verified_at = timezone.now()
         product.save(update_fields=["authenticity_status", "authenticity_verified_at", "updated_at"])
         return Response({"id": product.id, "authenticity_status": product.authenticity_status})
+
+
+class ReturnRequestsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        rows = (
+            ReturnRequest.objects.filter(user=request.user)
+            .select_related("order", "order_item", "order__provider")
+            .order_by("-created_at")[:40]
+        )
+        return Response(
+            [
+                {
+                    "id": r.id,
+                    "status": r.status,
+                    "reason": r.reason,
+                    "created_at": r.created_at,
+                    "order_id": r.order_id,
+                    "order_item_id": r.order_item_id,
+                    "product_name": r.order_item.name,
+                    "provider_name": r.order.provider.organization_name or r.order.provider.username,
+                    "shop_url": (
+                        f"/s/{r.order.provider.organization_slug}"
+                        if r.order.provider.organization_slug
+                        else ""
+                    ),
+                }
+                for r in rows
+            ]
+        )
+
+    def post(self, request):
+        try:
+            order_id = int(request.data.get("order_id"))
+            item_id = int(request.data.get("order_item_id") or request.data.get("item_id"))
+        except (TypeError, ValueError):
+            return Response({"detail": "Укажите order_id и order_item_id"}, status=400)
+        order = (
+            ShopOrder.objects.filter(pk=order_id, client=request.user)
+            .exclude(status=ShopOrder.Status.CANCELLED)
+            .first()
+        )
+        if not order:
+            return Response({"detail": "Заказ не найден"}, status=404)
+        if order.status not in (ShopOrder.Status.DONE, ShopOrder.Status.DELIVERING, ShopOrder.Status.READY):
+            return Response({"detail": "Возврат доступен после выдачи/доставки заказа"}, status=400)
+        item = order.items.filter(pk=item_id).first()
+        if not item:
+            return Response({"detail": "Позиция заказа не найдена"}, status=404)
+        if ReturnRequest.objects.filter(user=request.user, order_item=item).exclude(
+            status=ReturnRequest.Status.REJECTED
+        ).exists():
+            return Response({"detail": "Заявка по этой позиции уже есть"}, status=400)
+        row = ReturnRequest.objects.create(
+            user=request.user,
+            order=order,
+            order_item=item,
+            reason=str(request.data.get("reason") or "").strip()[:2000],
+        )
+        return Response({"id": row.id, "status": row.status}, status=201)
