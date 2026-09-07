@@ -171,9 +171,22 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "delivery_min_order",
             "delivery_zones",
             "delivery_provider",
+            "enable_own_courier",
+            "enable_yandex_delivery",
+            "enable_cdek_delivery",
+            "enable_russian_post",
+            "enable_dostavista",
+            "own_eta_text",
+            "yandex_eta_text",
+            "cdek_eta_text",
+            "russian_post_eta_text",
+            "dostavista_eta_text",
             "yandex_delivery_token",
             "cdek_client_id",
             "cdek_client_secret",
+            "russian_post_token",
+            "russian_post_user_key",
+            "dostavista_token",
             "accept_online_payment",
             "updated_at",
         ]
@@ -181,6 +194,9 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "yandex_delivery_token": {"write_only": True, "required": False},
             "cdek_client_secret": {"write_only": True, "required": False},
+            "russian_post_token": {"write_only": True, "required": False},
+            "russian_post_user_key": {"write_only": True, "required": False},
+            "dostavista_token": {"write_only": True, "required": False},
         }
 
 
@@ -201,6 +217,8 @@ class ShopOrderSerializer(serializers.ModelSerializer):
             "client",
             "mode",
             "status",
+            "chosen_delivery_provider",
+            "eta_text",
             "guest_name",
             "guest_phone",
             "guest_email",

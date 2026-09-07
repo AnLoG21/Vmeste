@@ -840,6 +840,22 @@ export default function ShopWorkspace({ authFetch, me }) {
                 <strong>
                   #{o.id} · {o.mode === "delivery" ? "Доставка" : "Самовывоз"} · {o.status}
                 </strong>
+                {o.mode === "delivery" && (o.chosen_delivery_provider || o.eta_text) ? (
+                  <p className="muted small">
+                    {o.chosen_delivery_provider === "yandex"
+                      ? "Яндекс Доставка"
+                      : o.chosen_delivery_provider === "cdek"
+                        ? "СДЭК"
+                        : o.chosen_delivery_provider === "russian_post"
+                          ? "Почта России"
+                          : o.chosen_delivery_provider === "dostavista"
+                            ? "Dostavista"
+                            : o.chosen_delivery_provider === "own"
+                              ? "Курьер продавца"
+                              : o.chosen_delivery_provider || "Доставка"}
+                    {o.eta_text ? ` · ≈ ${o.eta_text}` : ""}
+                  </p>
+                ) : null}
                 <p className="muted small">
                   {o.guest_name || "Гость"} {o.guest_phone} · {Number(o.total).toLocaleString("ru-RU")} ₽
                 </p>
@@ -898,58 +914,207 @@ export default function ShopWorkspace({ authFetch, me }) {
             <span>Онлайн-оплата</span>
           </label>
 
-          <Field label="Провайдер доставки">
-            <select
-              value={settings.delivery_provider || "own"}
-              onChange={(e) => void saveSettings({ delivery_provider: e.target.value })}
-            >
-              <option value="own">Свой курьер</option>
-              <option value="yandex">Яндекс Доставка</option>
-              <option value="cdek">СДЭК</option>
-            </select>
-          </Field>
-          <p className="muted small">
-            При статусе «Курьеру» заказ уходит в выбранный сервис. Для Яндекса и СДЭК нужны ключи из личного кабинета
-            перевозчика и заполненный адрес организации с координатами.
-          </p>
-
-          {settings.delivery_provider === "yandex" ? (
-            <Field label="Токен Яндекс Доставки">
-              <input
-                type="password"
-                autoComplete="off"
-                placeholder={settings.has_yandex_token ? "•••••••• (сохранён, введите новый чтобы заменить)" : "Bearer-токен из кабинета Яндекс Доставки"}
-                onBlur={(e) => {
-                  const v = e.target.value.trim();
-                  if (v) void saveSettings({ yandex_delivery_token: v });
-                  e.target.value = "";
-                }}
-              />
-            </Field>
-          ) : null}
-
-          {settings.delivery_provider === "cdek" ? (
-            <>
-              <Field label="СДЭК Account (client_id)">
+          {settings.enable_delivery ? (
+            <div className="shop-delivery-methods">
+              <h3 className="shop-section-title">Способы доставки для покупателя</h3>
+              <p className="muted small">
+                Можно включить несколько. Покупатель выберет удобный способ и увидит примерный срок.
+              </p>
+              <label className="checkbox shop-check">
                 <input
-                  defaultValue={settings.cdek_client_id || ""}
-                  onBlur={(e) => void saveSettings({ cdek_client_id: e.target.value.trim() })}
-                  placeholder="Идентификатор из кабинета СДЭК"
+                  type="checkbox"
+                  checked={Boolean(settings.enable_own_courier)}
+                  onChange={(e) => void saveSettings({ enable_own_courier: e.target.checked })}
                 />
-              </Field>
-              <Field label="СДЭК Secure password (client_secret)">
+                <span>Курьер продавца</span>
+              </label>
+              {settings.enable_own_courier ? (
+                <Field label="Срок для курьера продавца">
+                  <input
+                    defaultValue={settings.own_eta_text || "1–3 часа"}
+                    onBlur={(e) => void saveSettings({ own_eta_text: e.target.value.trim() || "1–3 часа" })}
+                    placeholder="1–3 часа"
+                  />
+                </Field>
+              ) : null}
+
+              <label className="checkbox shop-check">
                 <input
-                  type="password"
-                  autoComplete="off"
-                  placeholder={settings.has_cdek_secret ? "•••••••• (сохранён, введите новый чтобы заменить)" : "Секретный ключ СДЭК"}
-                  onBlur={(e) => {
-                    const v = e.target.value.trim();
-                    if (v) void saveSettings({ cdek_client_secret: v });
-                    e.target.value = "";
-                  }}
+                  type="checkbox"
+                  checked={Boolean(settings.enable_yandex_delivery)}
+                  onChange={(e) => void saveSettings({ enable_yandex_delivery: e.target.checked })}
                 />
-              </Field>
-            </>
+                <span>Яндекс Доставка</span>
+              </label>
+              {settings.enable_yandex_delivery ? (
+                <>
+                  <Field label="Срок для Яндекс Доставки">
+                    <input
+                      defaultValue={settings.yandex_eta_text || "от 40 минут"}
+                      onBlur={(e) => void saveSettings({ yandex_eta_text: e.target.value.trim() || "от 40 минут" })}
+                      placeholder="от 40 минут"
+                    />
+                  </Field>
+                  <Field label="Токен Яндекс Доставки">
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      placeholder={
+                        settings.has_yandex_token
+                          ? "•••••••• (сохранён, введите новый чтобы заменить)"
+                          : "Bearer-токен из кабинета Яндекс Доставки"
+                      }
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v) void saveSettings({ yandex_delivery_token: v });
+                        e.target.value = "";
+                      }}
+                    />
+                  </Field>
+                </>
+              ) : null}
+
+              <label className="checkbox shop-check">
+                <input
+                  type="checkbox"
+                  checked={Boolean(settings.enable_cdek_delivery)}
+                  onChange={(e) => void saveSettings({ enable_cdek_delivery: e.target.checked })}
+                />
+                <span>СДЭК</span>
+              </label>
+              {settings.enable_cdek_delivery ? (
+                <>
+                  <Field label="Срок для СДЭК">
+                    <input
+                      defaultValue={settings.cdek_eta_text || "1–5 дней"}
+                      onBlur={(e) => void saveSettings({ cdek_eta_text: e.target.value.trim() || "1–5 дней" })}
+                      placeholder="1–5 дней"
+                    />
+                  </Field>
+                  <Field label="СДЭК Account (client_id)">
+                    <input
+                      defaultValue={settings.cdek_client_id || ""}
+                      onBlur={(e) => void saveSettings({ cdek_client_id: e.target.value.trim() })}
+                      placeholder="Идентификатор из кабинета СДЭК"
+                    />
+                  </Field>
+                  <Field label="СДЭК Secure password (client_secret)">
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      placeholder={
+                        settings.has_cdek_secret
+                          ? "•••••••• (сохранён, введите новый чтобы заменить)"
+                          : "Секретный ключ СДЭК"
+                      }
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v) void saveSettings({ cdek_client_secret: v });
+                        e.target.value = "";
+                      }}
+                    />
+                  </Field>
+                </>
+              ) : null}
+
+              <label className="checkbox shop-check">
+                <input
+                  type="checkbox"
+                  checked={Boolean(settings.enable_russian_post)}
+                  onChange={(e) => void saveSettings({ enable_russian_post: e.target.checked })}
+                />
+                <span>Почта России</span>
+              </label>
+              {settings.enable_russian_post ? (
+                <>
+                  <Field label="Срок для Почты России">
+                    <input
+                      defaultValue={settings.russian_post_eta_text || "3–10 дней"}
+                      onBlur={(e) =>
+                        void saveSettings({ russian_post_eta_text: e.target.value.trim() || "3–10 дней" })
+                      }
+                      placeholder="3–10 дней"
+                    />
+                  </Field>
+                  <Field label="Токен API Почты России (AccessToken)">
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      placeholder={
+                        settings.has_russian_post
+                          ? "•••••••• (сохранён, введите новый чтобы заменить)"
+                          : "Токен из ЛК otpravka.pochta.ru"
+                      }
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v) void saveSettings({ russian_post_token: v });
+                        e.target.value = "";
+                      }}
+                    />
+                  </Field>
+                  <Field label="Ключ пользователя (Basic / X-User-Authorization)">
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      placeholder={
+                        settings.has_russian_post
+                          ? "•••••••• (сохранён)"
+                          : "Ключ авторизации пользователя из ЛК"
+                      }
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v) void saveSettings({ russian_post_user_key: v });
+                        e.target.value = "";
+                      }}
+                    />
+                  </Field>
+                  <p className="muted small">В адресе получателя нужен почтовый индекс из 6 цифр.</p>
+                </>
+              ) : null}
+
+              <label className="checkbox shop-check">
+                <input
+                  type="checkbox"
+                  checked={Boolean(settings.enable_dostavista)}
+                  onChange={(e) => void saveSettings({ enable_dostavista: e.target.checked })}
+                />
+                <span>Dostavista</span>
+              </label>
+              {settings.enable_dostavista ? (
+                <>
+                  <Field label="Срок для Dostavista">
+                    <input
+                      defaultValue={settings.dostavista_eta_text || "1–3 часа"}
+                      onBlur={(e) =>
+                        void saveSettings({ dostavista_eta_text: e.target.value.trim() || "1–3 часа" })
+                      }
+                      placeholder="1–3 часа"
+                    />
+                  </Field>
+                  <Field label="Токен Dostavista (X-DV-Auth-Token)">
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      placeholder={
+                        settings.has_dostavista_token
+                          ? "•••••••• (сохранён, введите новый чтобы заменить)"
+                          : "Токен из кабинета Dostavista Business"
+                      }
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v) void saveSettings({ dostavista_token: v });
+                        e.target.value = "";
+                      }}
+                    />
+                  </Field>
+                </>
+              ) : null}
+
+              <p className="muted small">
+                Для внешних служб нужны ключи из их ЛК. Яндекс/Dostavista — ещё адрес организации с координатами.
+                Почта России — индекс в адресе. При статусе «Курьеру» заказ уходит в способ, выбранный покупателем.
+              </p>
+            </div>
           ) : null}
 
           <Field label="Стоимость доставки по умолчанию, ₽">

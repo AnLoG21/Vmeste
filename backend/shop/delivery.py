@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal
@@ -414,13 +415,338 @@ class CdekProvider(DeliveryProvider):
             return "unknown"
 
 
-def get_delivery_provider(settings_obj) -> DeliveryProvider:
-    kind = getattr(settings_obj, "delivery_provider", "own") or "own"
-    if kind == "yandex":
+POCHTA_API = "https://otpravka-api.pochta.ru/1.0"
+DOSTAVISTA_API = "https://robot.dostavista.ru/api/business/1.3"
+
+
+def _extract_postal_code(address: str) -> str:
+    m = re.search(r"\b(\d{6})\b", address or "")
+    return m.group(1) if m else ""
+
+
+class RussianPostProvider(DeliveryProvider):
+    """Почта России: API «Отправка» (otpravka-api.pochta.ru)."""
+
+    kind = "russian_post"
+
+    def __init__(self, token: str = "", user_key: str = ""):
+        self.token = (token or "").strip()
+        # user_key — Base64(login:password) или уже с префиксом Basic
+        key = (user_key or "").strip()
+        if key.lower().startswith("basic "):
+            key = key[6:].strip()
+        self.user_key = key
+
+    def _headers(self) -> dict:
+        return {
+            "Authorization": f"AccessToken {self.token}",
+            "X-User-Authorization": f"Basic {self.user_key}",
+            "Content-Type": "application/json;charset=UTF-8",
+            "Accept": "application/json",
+        }
+
+    def create_shipment(self, order) -> ShipmentResult:
+        if not self.token or not self.user_key:
+            raise RuntimeError("Укажите токен и ключ пользователя Почты России в настройках")
+
+        to_address = (order.delivery_address or "").strip()
+        index_to = _extract_postal_code(to_address)
+        if not index_to:
+            raise RuntimeError("Для Почты России в адресе нужен индекс (6 цифр), например: 101000, …")
+
+        to_phone = "".join(ch for ch in _normalize_phone(order.guest_phone) if ch.isdigit())
+        if not to_phone:
+            raise RuntimeError("У заказа нет телефона получателя")
+
+        guest_name = (order.guest_name or "Получатель").strip()
+        weight = _order_items_weight_grams(order)
+        payload = [
+            {
+                "order-num": f"vmeste-{order.id}",
+                "address-type-to": "DEFAULT",
+                "mail-category": "ORDINARY",
+                "mail-type": "POSTAL_PARCEL",
+                "mass": weight,
+                "index-to": int(index_to),
+                "place-to": to_address[:250],
+                "street-to": to_address[:250],
+                "recipient-name": guest_name[:120],
+                "tel-address": to_phone,
+                "given-name": guest_name.split()[0][:50] if guest_name else "Получатель",
+                "surname": (guest_name.split()[-1] if len(guest_name.split()) > 1 else guest_name)[:50],
+            }
+        ]
+
+        try:
+            res = requests.put(
+                f"{POCHTA_API}/user/backlog",
+                headers=self._headers(),
+                json=payload,
+                timeout=35,
+            )
+        except requests.RequestException as exc:
+            logger.exception("russian post create failed")
+            raise RuntimeError(f"Почта России недоступна: {exc}") from exc
+
+        raw = {}
+        try:
+            raw = res.json() if res.content else {}
+        except ValueError:
+            raw = {"text": res.text[:500]}
+
+        if res.status_code >= 400:
+            detail = raw.get("desc") or raw.get("message") or raw or res.text[:300]
+            raise RuntimeError(f"Почта России: {detail}")
+
+        # ответ: {"result-ids":[…]} или errors
+        result_ids = raw.get("result-ids") or raw.get("result_ids") or []
+        errors = raw.get("errors") or []
+        if errors and not result_ids:
+            raise RuntimeError(f"Почта России: {errors}")
+        tracking = str(result_ids[0] if result_ids else raw.get("barcode") or f"rp-{order.id}")
+        return ShipmentResult(tracking_id=tracking, provider=self.kind, status="created", raw=raw)
+
+    def sync_status(self, tracking_id: str) -> str:
+        if not tracking_id or not self.token:
+            return "unknown"
+        try:
+            res = requests.get(
+                f"{POCHTA_API}/backlog/{tracking_id}",
+                headers=self._headers(),
+                timeout=20,
+            )
+            data = res.json() if res.content else {}
+            return str(data.get("mail-status") or data.get("status") or "unknown")
+        except Exception:
+            logger.exception("russian post sync failed")
+            return "unknown"
+
+
+class DostavistaProvider(DeliveryProvider):
+    """Dostavista Business API."""
+
+    kind = "dostavista"
+
+    def __init__(self, token: str = ""):
+        self.token = (token or "").strip()
+
+    def _headers(self) -> dict:
+        return {
+            "X-DV-Auth-Token": self.token,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+    def create_shipment(self, order) -> ShipmentResult:
+        if not self.token:
+            raise RuntimeError("Укажите токен Dostavista в настройках магазина")
+
+        provider = order.provider
+        from_lat = _float_or_none(getattr(provider, "organization_latitude", None))
+        from_lon = _float_or_none(getattr(provider, "organization_longitude", None))
+        to_lat = _float_or_none(order.delivery_lat)
+        to_lon = _float_or_none(order.delivery_lon)
+        from_address = (getattr(provider, "organization_address", None) or "").strip()
+        to_address = (order.delivery_address or "").strip()
+        if not from_address:
+            raise RuntimeError("В профиле организации нужен адрес отправителя для Dostavista")
+        if not to_address:
+            raise RuntimeError("У заказа нет адреса доставки")
+
+        from_phone = _normalize_phone(_provider_phone(provider))
+        to_phone = _normalize_phone(order.guest_phone)
+        if not from_phone:
+            raise RuntimeError("Укажите телефон организации в профиле")
+        if not to_phone:
+            raise RuntimeError("У заказа нет телефона получателя")
+
+        org_name = (getattr(provider, "organization_name", None) or provider.username or "Отправитель").strip()
+        guest_name = (order.guest_name or "Получатель").strip()
+
+        point_a = {
+            "address": from_address,
+            "contact_person": {"phone": from_phone, "name": org_name[:100]},
+            "client_order_id": f"vmeste-from-{order.id}",
+            "required_order_id": False,
+        }
+        point_b = {
+            "address": to_address,
+            "contact_person": {"phone": to_phone, "name": guest_name[:100]},
+            "client_order_id": f"vmeste-to-{order.id}",
+            "required_order_id": False,
+            "note": (order.comment or "")[:200],
+        }
+        if from_lat is not None and from_lon is not None:
+            point_a["latitude"] = from_lat
+            point_a["longitude"] = from_lon
+        if to_lat is not None and to_lon is not None:
+            point_b["latitude"] = to_lat
+            point_b["longitude"] = to_lon
+
+        payload = {
+            "matter": f"Заказ Вместе #{order.id}",
+            "vehicle_type_id": 1,
+            "total_weight_kg": max(1, round(_order_items_weight_grams(order) / 1000)),
+            "points": [point_a, point_b],
+        }
+
+        try:
+            res = requests.post(
+                f"{DOSTAVISTA_API}/create-order",
+                headers=self._headers(),
+                json=payload,
+                timeout=35,
+            )
+        except requests.RequestException as exc:
+            logger.exception("dostavista create failed")
+            raise RuntimeError(f"Dostavista недоступна: {exc}") from exc
+
+        raw = {}
+        try:
+            raw = res.json() if res.content else {}
+        except ValueError:
+            raw = {"text": res.text[:500]}
+
+        if res.status_code >= 400 or raw.get("is_successful") is False:
+            errors = raw.get("errors") or raw.get("parameter_errors") or raw
+            raise RuntimeError(f"Dostavista: {errors}")
+
+        order_obj = raw.get("order") or {}
+        tracking = str(order_obj.get("order_id") or order_obj.get("id") or "").strip()
+        if not tracking:
+            raise RuntimeError("Dostavista: не получен order_id")
+        return ShipmentResult(
+            tracking_id=tracking,
+            provider=self.kind,
+            status=str(order_obj.get("status") or "created"),
+            raw=raw,
+        )
+
+    def sync_status(self, tracking_id: str) -> str:
+        if not tracking_id or not self.token:
+            return "unknown"
+        try:
+            res = requests.get(
+                f"{DOSTAVISTA_API}/orders",
+                headers=self._headers(),
+                params={"order_id": tracking_id},
+                timeout=20,
+            )
+            data = res.json() if res.content else {}
+            orders = data.get("orders") or []
+            if orders:
+                return str(orders[0].get("status") or "unknown")
+            return "unknown"
+        except Exception:
+            logger.exception("dostavista sync failed")
+            return "unknown"
+
+
+def get_delivery_provider(settings_obj, kind: str | None = None) -> DeliveryProvider:
+    selected = (kind or getattr(settings_obj, "delivery_provider", "own") or "own").strip()
+    if selected == "yandex":
         return YandexDeliveryProvider(getattr(settings_obj, "yandex_delivery_token", ""))
-    if kind == "cdek":
+    if selected == "cdek":
         return CdekProvider(
             getattr(settings_obj, "cdek_client_id", ""),
             getattr(settings_obj, "cdek_client_secret", ""),
         )
+    if selected == "russian_post":
+        return RussianPostProvider(
+            getattr(settings_obj, "russian_post_token", ""),
+            getattr(settings_obj, "russian_post_user_key", ""),
+        )
+    if selected == "dostavista":
+        return DostavistaProvider(getattr(settings_obj, "dostavista_token", ""))
     return OwnCourierProvider()
+
+
+def available_delivery_methods(settings_obj) -> list[dict]:
+    """Список способов доставки, которые продавец включил и для которых есть ключи."""
+    if not getattr(settings_obj, "enable_delivery", False):
+        return []
+
+    fee = str(getattr(settings_obj, "delivery_fee", 0) or 0)
+    out: list[dict] = []
+
+    if getattr(settings_obj, "enable_own_courier", True):
+        out.append(
+            {
+                "id": "own",
+                "label": "Курьер продавца",
+                "eta": (getattr(settings_obj, "own_eta_text", None) or "1–3 часа").strip(),
+                "fee": fee,
+                "needs_credentials": False,
+                "ready": True,
+            }
+        )
+
+    if getattr(settings_obj, "enable_yandex_delivery", False):
+        has_token = bool((getattr(settings_obj, "yandex_delivery_token", "") or "").strip())
+        out.append(
+            {
+                "id": "yandex",
+                "label": "Яндекс Доставка",
+                "eta": (getattr(settings_obj, "yandex_eta_text", None) or "от 40 минут").strip(),
+                "fee": fee,
+                "needs_credentials": True,
+                "ready": has_token,
+            }
+        )
+
+    if getattr(settings_obj, "enable_cdek_delivery", False):
+        has_keys = bool(
+            (getattr(settings_obj, "cdek_client_id", "") or "").strip()
+            and (getattr(settings_obj, "cdek_client_secret", "") or "").strip()
+        )
+        out.append(
+            {
+                "id": "cdek",
+                "label": "СДЭК",
+                "eta": (getattr(settings_obj, "cdek_eta_text", None) or "1–5 дней").strip(),
+                "fee": fee,
+                "needs_credentials": True,
+                "ready": has_keys,
+            }
+        )
+
+    if getattr(settings_obj, "enable_russian_post", False):
+        has_keys = bool(
+            (getattr(settings_obj, "russian_post_token", "") or "").strip()
+            and (getattr(settings_obj, "russian_post_user_key", "") or "").strip()
+        )
+        out.append(
+            {
+                "id": "russian_post",
+                "label": "Почта России",
+                "eta": (getattr(settings_obj, "russian_post_eta_text", None) or "3–10 дней").strip(),
+                "fee": fee,
+                "needs_credentials": True,
+                "ready": has_keys,
+            }
+        )
+
+    if getattr(settings_obj, "enable_dostavista", False):
+        has_token = bool((getattr(settings_obj, "dostavista_token", "") or "").strip())
+        out.append(
+            {
+                "id": "dostavista",
+                "label": "Dostavista",
+                "eta": (getattr(settings_obj, "dostavista_eta_text", None) or "1–3 часа").strip(),
+                "fee": fee,
+                "needs_credentials": True,
+                "ready": has_token,
+            }
+        )
+
+    return [m for m in out if m.get("ready")]
+
+
+KNOWN_DELIVERY_KINDS = ("own", "yandex", "cdek", "russian_post", "dostavista")
+
+
+def resolve_order_delivery_kind(order, settings_obj) -> str:
+    chosen = (getattr(order, "chosen_delivery_provider", None) or "").strip()
+    if chosen in KNOWN_DELIVERY_KINDS:
+        return chosen
+    return (getattr(settings_obj, "delivery_provider", None) or "own").strip() or "own"

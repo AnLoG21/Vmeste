@@ -16,7 +16,7 @@ from users.models import User
 from users.slug_utils import ensure_organization_slug
 
 from .access import can_manage_shop, provider_sphere_allows_shop, resolve_shop_provider
-from .delivery import get_delivery_provider
+from .delivery import available_delivery_methods, get_delivery_provider, resolve_order_delivery_kind
 from .models import (
     Product,
     ProductCategory,
@@ -367,6 +367,9 @@ class ShopSettingsView(APIView):
         data = ShopSettingsSerializer(settings_obj).data
         data["has_yandex_token"] = bool(settings_obj.yandex_delivery_token)
         data["has_cdek_secret"] = bool(settings_obj.cdek_client_secret)
+        data["has_russian_post"] = bool(settings_obj.russian_post_token and settings_obj.russian_post_user_key)
+        data["has_dostavista_token"] = bool(settings_obj.dostavista_token)
+        data["delivery_options"] = available_delivery_methods(settings_obj)
         return Response(data)
 
     def patch(self, request):
@@ -378,15 +381,45 @@ class ShopSettingsView(APIView):
         if "delivery_zones" in data:
             data["delivery_zones"] = normalize_delivery_zones(data.get("delivery_zones"))
         # empty secrets keep previous
-        for secret_field in ("yandex_delivery_token", "cdek_client_secret"):
+        for secret_field in (
+            "yandex_delivery_token",
+            "cdek_client_secret",
+            "russian_post_token",
+            "russian_post_user_key",
+            "dostavista_token",
+        ):
             if secret_field in data and not str(data.get(secret_field) or "").strip():
                 data.pop(secret_field)
         ser = ShopSettingsSerializer(settings_obj, data=data, partial=True)
         ser.is_valid(raise_exception=True)
         ser.save()
+        # синхронизируем legacy delivery_provider с первым включённым методом
+        settings_obj.refresh_from_db()
+        methods = available_delivery_methods(settings_obj)
+        if methods:
+            settings_obj.delivery_provider = methods[0]["id"]
+            settings_obj.save(update_fields=["delivery_provider"])
+        elif settings_obj.enable_yandex_delivery:
+            settings_obj.delivery_provider = "yandex"
+            settings_obj.save(update_fields=["delivery_provider"])
+        elif settings_obj.enable_cdek_delivery:
+            settings_obj.delivery_provider = "cdek"
+            settings_obj.save(update_fields=["delivery_provider"])
+        elif settings_obj.enable_russian_post:
+            settings_obj.delivery_provider = "russian_post"
+            settings_obj.save(update_fields=["delivery_provider"])
+        elif settings_obj.enable_dostavista:
+            settings_obj.delivery_provider = "dostavista"
+            settings_obj.save(update_fields=["delivery_provider"])
+        else:
+            settings_obj.delivery_provider = "own"
+            settings_obj.save(update_fields=["delivery_provider"])
         out = ShopSettingsSerializer(settings_obj).data
         out["has_yandex_token"] = bool(settings_obj.yandex_delivery_token)
         out["has_cdek_secret"] = bool(settings_obj.cdek_client_secret)
+        out["has_russian_post"] = bool(settings_obj.russian_post_token and settings_obj.russian_post_user_key)
+        out["has_dostavista_token"] = bool(settings_obj.dostavista_token)
+        out["delivery_options"] = available_delivery_methods(settings_obj)
         return Response(out)
 
 
@@ -420,19 +453,11 @@ class ShopOrderViewSet(viewsets.ModelViewSet):
             if new_status == ShopOrder.Status.TO_COURIER and order.mode == ShopOrder.Mode.DELIVERY:
                 try:
                     settings_obj = _get_or_create_settings(provider)
-                    dp = get_delivery_provider(settings_obj)
-                    if settings_obj.delivery_provider == ShopSettings.DeliveryProviderKind.OWN:
-                        result = dp.create_shipment(order)
-                        order.external_delivery_provider = result.provider
-                        order.external_tracking_id = result.tracking_id
-                    else:
-                        # External providers: attempt or keep own until integrated
-                        try:
-                            result = dp.create_shipment(order)
-                            order.external_delivery_provider = result.provider
-                            order.external_tracking_id = result.tracking_id
-                        except RuntimeError as e:
-                            return Response({"detail": str(e)}, status=400)
+                    kind = resolve_order_delivery_kind(order, settings_obj)
+                    dp = get_delivery_provider(settings_obj, kind)
+                    result = dp.create_shipment(order)
+                    order.external_delivery_provider = result.provider
+                    order.external_tracking_id = result.tracking_id
                 except Exception as e:
                     return Response({"detail": str(e)}, status=400)
             update_fields = ["status", "updated_at"]
@@ -499,6 +524,7 @@ class PublicShopCatalogView(APIView):
                     "delivery_min_order": str(settings_obj.delivery_min_order),
                     "delivery_zones": settings_obj.delivery_zones or [],
                     "accept_online_payment": settings_obj.accept_online_payment,
+                    "delivery_options": available_delivery_methods(settings_obj),
                 },
                 "categories": ProductCategorySerializer(categories, many=True).data,
                 "products": ProductPublicSerializer(qs, many=True, context={"request": request}).data,
@@ -551,14 +577,26 @@ class PublicShopOrderCreateView(APIView):
         delivery_fee = Decimal("0")
         delivery_lat = delivery_lon = None
         delivery_address = str(request.data.get("delivery_address") or "").strip()
+        chosen_method = str(request.data.get("delivery_method") or request.data.get("chosen_delivery_provider") or "").strip()
+        eta_text = ""
         if mode == ShopOrder.Mode.DELIVERY:
+            options = available_delivery_methods(settings_obj)
+            if not options:
+                return Response({"detail": "Нет доступных способов доставки"}, status=400)
+            if not chosen_method:
+                chosen_method = options[0]["id"]
+            option = next((o for o in options if o["id"] == chosen_method), None)
+            if not option:
+                return Response({"detail": "Выбранный способ доставки недоступен"}, status=400)
+            eta_text = option.get("eta") or ""
             try:
                 delivery_lat = float(request.data.get("delivery_lat"))
                 delivery_lon = float(request.data.get("delivery_lon"))
             except (TypeError, ValueError):
                 delivery_lat = delivery_lon = None
             zones = settings_obj.delivery_zones or []
-            if zones and delivery_lat is not None and delivery_lon is not None:
+            # зоны и fee курьера продавца; для внешних — базовая стоимость из настроек
+            if chosen_method == "own" and zones and delivery_lat is not None and delivery_lon is not None:
                 zone = find_delivery_zone(delivery_lat, delivery_lon, zones)
                 if not zone:
                     return Response({"detail": "Адрес вне зоны доставки"}, status=400)
@@ -567,6 +605,8 @@ class PublicShopOrderCreateView(APIView):
                 if items_total < min_order:
                     return Response({"detail": f"Минимальный заказ для зоны: {min_order} ₽"}, status=400)
             else:
+                if chosen_method == "own" and zones and (delivery_lat is None or delivery_lon is None):
+                    return Response({"detail": "Укажите точку доставки на карте"}, status=400)
                 delivery_fee = Decimal(settings_obj.delivery_fee or 0)
                 min_order = Decimal(settings_obj.delivery_min_order or 0)
                 if items_total < min_order:
@@ -583,6 +623,8 @@ class PublicShopOrderCreateView(APIView):
                 client=client,
                 mode=mode,
                 status=ShopOrder.Status.AWAITING_PAYMENT,
+                chosen_delivery_provider=chosen_method if mode == ShopOrder.Mode.DELIVERY else "",
+                eta_text=eta_text if mode == ShopOrder.Mode.DELIVERY else "",
                 guest_name=str(request.data.get("guest_name") or "").strip()[:120],
                 guest_phone=str(request.data.get("guest_phone") or "").strip()[:32],
                 guest_email=str(request.data.get("guest_email") or "").strip()[:120],

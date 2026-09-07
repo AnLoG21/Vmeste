@@ -31,6 +31,7 @@ export default function PublicShopPage({ slug }) {
   const [error, setError] = useState("");
   const [cart, setCart] = useState({});
   const [mode, setMode] = useState("pickup");
+  const [deliveryMethod, setDeliveryMethod] = useState("");
   const [guest, setGuest] = useState({ name: "", phone: "", email: "", address: "" });
   const [pin, setPin] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -51,6 +52,8 @@ export default function PublicShopPage({ slug }) {
           const settings = json.settings || {};
           if (settings.enable_pickup) setMode("pickup");
           else if (settings.enable_delivery) setMode("delivery");
+          const opts = Array.isArray(settings.delivery_options) ? settings.delivery_options : [];
+          if (opts.length) setDeliveryMethod(opts[0].id);
         }
       } catch (e) {
         if (!cancelled) setError(e.message || "Ошибка загрузки");
@@ -104,6 +107,8 @@ export default function PublicShopPage({ slug }) {
   const products = data?.products || [];
   const categories = data?.categories || [];
   const settings = data?.settings || {};
+  const deliveryOptions = Array.isArray(settings.delivery_options) ? settings.delivery_options : [];
+  const selectedDelivery = deliveryOptions.find((o) => o.id === deliveryMethod) || deliveryOptions[0] || null;
 
   const menuByCategory = useMemo(() => {
     const withProducts = categories
@@ -129,6 +134,9 @@ export default function PublicShopPage({ slug }) {
 
   const itemsTotal = cartLines.reduce((s, l) => s + Number(l.product.price) * l.qty, 0);
   const cartCount = cartLines.reduce((s, l) => s + l.qty, 0);
+  const deliveryFeePreview =
+    mode === "delivery" && selectedDelivery ? Number(selectedDelivery.fee || settings.delivery_fee || 0) : 0;
+  const checkoutTotal = itemsTotal + deliveryFeePreview;
 
   function addToCart(productId, n = 1) {
     setCart((prev) => {
@@ -159,6 +167,7 @@ export default function PublicShopPage({ slug }) {
     try {
       const body = {
         mode,
+        delivery_method: mode === "delivery" ? deliveryMethod : "",
         items: cartLines.map((l) => ({ product_id: l.product.id, quantity: l.qty })),
         guest_name: guest.name,
         guest_phone: guest.phone,
@@ -248,12 +257,12 @@ export default function PublicShopPage({ slug }) {
           type="button"
           className="cafe-cart-fab"
           onClick={() => setCartOpen(true)}
-          aria-label={`Корзина, ${itemsTotal.toLocaleString("ru-RU")} ₽`}
+          aria-label={`Корзина, ${checkoutTotal.toLocaleString("ru-RU")} ₽`}
         >
           <span className="cafe-cart-fab-icon">
             <CartIcon />
           </span>
-          <span className="cafe-cart-fab-price">{itemsTotal.toLocaleString("ru-RU")} ₽</span>
+          <span className="cafe-cart-fab-price">{(cartOpen ? checkoutTotal : itemsTotal).toLocaleString("ru-RU")} ₽</span>
           {cartCount > 0 ? <span className="cafe-cart-fab-count">{cartCount}</span> : null}
         </button>
       </header>
@@ -429,7 +438,10 @@ export default function PublicShopPage({ slug }) {
                     <button
                       type="button"
                       className={`cafe-mode-btn${mode === "delivery" ? " is-active" : ""}`}
-                      onClick={() => setMode("delivery")}
+                      onClick={() => {
+                        setMode("delivery");
+                        if (!deliveryMethod && deliveryOptions[0]) setDeliveryMethod(deliveryOptions[0].id);
+                      }}
                     >
                       <span>🚗</span>
                       Доставка
@@ -459,6 +471,29 @@ export default function PublicShopPage({ slug }) {
                 />
                 {mode === "delivery" ? (
                   <>
+                    {deliveryOptions.length ? (
+                      <div className="shop-delivery-option-list">
+                        <p className="shop-field-label">Как доставить</p>
+                        {deliveryOptions.map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            className={`shop-delivery-option${deliveryMethod === opt.id ? " is-active" : ""}`}
+                            onClick={() => setDeliveryMethod(opt.id)}
+                          >
+                            <strong>{opt.label}</strong>
+                            <span className="muted small">≈ {opt.eta || "срок уточнит продавец"}</span>
+                            <span className="shop-delivery-option-fee">
+                              {Number(opt.fee || 0) > 0
+                                ? `${Number(opt.fee).toLocaleString("ru-RU")} ₽`
+                                : "по тарифу"}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="status error">Продавец ещё не настроил способы доставки.</p>
+                    )}
                     <input
                       placeholder="Адрес доставки *"
                       value={guest.address}
@@ -466,18 +501,24 @@ export default function PublicShopPage({ slug }) {
                       required
                     />
                     <CafeGuestDeliveryMap
-                      zones={settings.delivery_zones || []}
+                      zones={deliveryMethod === "own" ? settings.delivery_zones || [] : []}
                       pin={pin}
                       onPick={(next) => {
                         setPin(next);
                         if (next?.address) setGuest((g) => ({ ...g, address: next.address }));
                       }}
                     />
+                    {selectedDelivery?.eta ? (
+                      <p className="muted small">Примерное время получения: {selectedDelivery.eta}</p>
+                    ) : null}
                   </>
                 ) : null}
 
                 <p className="cafe-cart-total">
-                  Итого: <strong>{itemsTotal.toLocaleString("ru-RU")} ₽</strong>
+                  Итого: <strong>{checkoutTotal.toLocaleString("ru-RU")} ₽</strong>
+                  {mode === "delivery" && deliveryFeePreview > 0
+                    ? ` (товары ${itemsTotal.toLocaleString("ru-RU")} ₽ + доставка ${deliveryFeePreview.toLocaleString("ru-RU")} ₽)`
+                    : ""}
                 </p>
                 <button type="submit" className="landing-btn landing-btn--primary" disabled={busy}>
                   {busy ? "Оформляем…" : "Оплатить"}

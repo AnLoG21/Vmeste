@@ -756,3 +756,36 @@
 .map-org-featured-products .loyalty-package-card {
   cursor: pointer;
 }
+
+.shop-delivery-option-list {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+.shop-delivery-option {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 2px 10px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #ffd9bd;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+.shop-delivery-option strong { grid-column: 1; }
+.shop-delivery-option .muted { grid-column: 1; }
+.shop-delivery-option-fee {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-weight: 700;
+  color: #c45c00;
+}
+.shop-delivery-option.is-active {
+  border-color: #c45c00;
+  background: #fff3e8;
+  box-shadow: 0 0 0 2px rgba(196, 92, 0, 0.18);
+}

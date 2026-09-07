@@ -164,6 +164,8 @@ class ShopSettings(models.Model):
         OWN = "own", "Свой курьер"
         YANDEX = "yandex", "Яндекс Доставка"
         CDEK = "cdek", "СДЭК"
+        RUSSIAN_POST = "russian_post", "Почта России"
+        DOSTAVISTA = "dostavista", "Dostavista"
 
     provider = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -184,10 +186,29 @@ class ShopSettings(models.Model):
         max_length=20,
         choices=DeliveryProviderKind.choices,
         default=DeliveryProviderKind.OWN,
+        help_text="Устарело: используйте enable_* флаги. Оставлено для совместимости.",
     )
+    enable_own_courier = models.BooleanField(default=True)
+    enable_yandex_delivery = models.BooleanField(default=False)
+    enable_cdek_delivery = models.BooleanField(default=False)
+    enable_russian_post = models.BooleanField(default=False)
+    enable_dostavista = models.BooleanField(default=False)
+    own_eta_text = models.CharField(max_length=80, blank=True, default="1–3 часа")
+    yandex_eta_text = models.CharField(max_length=80, blank=True, default="от 40 минут")
+    cdek_eta_text = models.CharField(max_length=80, blank=True, default="1–5 дней")
+    russian_post_eta_text = models.CharField(max_length=80, blank=True, default="3–10 дней")
+    dostavista_eta_text = models.CharField(max_length=80, blank=True, default="1–3 часа")
     yandex_delivery_token = models.CharField(max_length=255, blank=True, default="")
     cdek_client_id = models.CharField(max_length=128, blank=True, default="")
     cdek_client_secret = models.CharField(max_length=128, blank=True, default="")
+    russian_post_token = models.CharField(max_length=255, blank=True, default="")
+    russian_post_user_key = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Ключ X-User-Authorization (Basic …) из ЛК Отправка",
+    )
+    dostavista_token = models.CharField(max_length=255, blank=True, default="")
     accept_online_payment = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -221,6 +242,13 @@ class ShopOrder(models.Model):
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.AWAITING_PAYMENT, db_index=True
     )
+    chosen_delivery_provider = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="Способ доставки, выбранный покупателем: own|yandex|cdek|russian_post|dostavista",
+    )
+    eta_text = models.CharField(max_length=80, blank=True, default="")
     guest_name = models.CharField(max_length=120, blank=True, default="")
     guest_phone = models.CharField(max_length=32, blank=True, default="")
     guest_email = models.EmailField(blank=True, default="")
