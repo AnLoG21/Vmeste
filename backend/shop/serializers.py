@@ -81,6 +81,12 @@ class ProductSerializer(serializers.ModelSerializer):
     photos = ProductPhotoSerializer(many=True, read_only=True)
     category_name = serializers.CharField(source="category.name", read_only=True)
     subcategory_name = serializers.CharField(source="subcategory.name", read_only=True)
+    related_product_ids = serializers.PrimaryKeyRelatedField(
+        source="related_products",
+        many=True,
+        queryset=Product.objects.all(),
+        required=False,
+    )
 
     class Meta:
         model = Product
@@ -98,6 +104,8 @@ class ProductSerializer(serializers.ModelSerializer):
             "price",
             "stock_qty",
             "attrs",
+            "sizes",
+            "related_product_ids",
             "is_active",
             "is_featured",
             "featured_order",
@@ -122,10 +130,42 @@ class ProductSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+  def validate_related_product_ids(self, value):
+        request = self.context.get("request")
+        provider = None
+        if request and getattr(request, "user", None):
+            from .access import resolve_shop_provider
+
+            provider = resolve_shop_provider(request.user)
+        if provider is None and self.instance is not None:
+            provider = self.instance.provider
+        if provider is None:
+            return value
+        bad = [p for p in value if p.provider_id != provider.id]
+        if bad:
+            raise serializers.ValidationError("Связанные товары должны быть из вашего магазина")
+        return value
+
+    def update(self, instance, validated_data):
+        related = validated_data.pop("related_products", None)
+        instance = super().update(instance, validated_data)
+        if related is not None:
+            instance.related_products.set(related)
+        return instance
+
+    def create(self, validated_data):
+        related = validated_data.pop("related_products", None)
+        instance = super().create(validated_data)
+        if related is not None:
+            instance.related_products.set(related)
+        return instance
+
 
 class ProductPublicSerializer(serializers.ModelSerializer):
     photos = ProductPhotoSerializer(many=True, read_only=True)
     category_name = serializers.CharField(source="category.name", read_only=True)
+    related_products = serializers.SerializerMethodField()
+    is_original = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -137,6 +177,8 @@ class ProductPublicSerializer(serializers.ModelSerializer):
             "unit",
             "price",
             "attrs",
+            "sizes",
+            "related_products",
             "is_featured",
             "featured_order",
             "category",
@@ -150,10 +192,36 @@ class ProductPublicSerializer(serializers.ModelSerializer):
             "bonus_points",
         ]
 
-    is_original = serializers.SerializerMethodField()
-
     def get_is_original(self, obj):
         return obj.authenticity_status == Product.AuthenticityStatus.VERIFIED
+
+    def get_related_products(self, obj):
+        request = self.context.get("request")
+        out = []
+        for p in obj.related_products.filter(is_active=True)[:12]:
+            photos = []
+            for ph in p.photos.all()[:1]:
+                if not ph.image:
+                    continue
+                urls = photo_urls(request, ph.image) if request is not None else {}
+                photos.append(
+                    {
+                        "id": ph.id,
+                        "image": urls.get("url") or (ph.image.url if ph.image else ""),
+                        "thumb_url": urls.get("thumb_url") or urls.get("url") or "",
+                    }
+                )
+            out.append(
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "price": str(p.price),
+                    "cover_url": (photos[0].get("thumb_url") or photos[0].get("image")) if photos else "",
+                    "photos": photos,
+                    "is_original": p.authenticity_status == Product.AuthenticityStatus.VERIFIED,
+                }
+            )
+        return out
 
 
 class StockMovementSerializer(serializers.ModelSerializer):

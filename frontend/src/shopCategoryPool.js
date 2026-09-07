@@ -14,6 +14,9 @@ export const SHOP_CATEGORY_POOL = [
           { key: "beauty-hair-styling", name: "Укладка и стайлинг" },
           { key: "beauty-hair-tools", name: "Инструменты для волос" },
           { key: "beauty-hair-ext", name: "Наращивание и аксессуары" },
+          { key: "beauty-hair-masks", name: "Маски и масла" },
+          { key: "beauty-hair-men", name: "Для мужчин" },
+          { key: "beauty-hair-kids", name: "Детский уход" },
         ],
       },
       {
@@ -34,6 +37,9 @@ export const SHOP_CATEGORY_POOL = [
           { key: "beauty-face-makeup", name: "Декоративная косметика" },
           { key: "beauty-face-spa", name: "SPA и маски" },
           { key: "beauty-face-clean", name: "Очищение" },
+          { key: "beauty-face-eyes", name: "Для глаз и бровей" },
+          { key: "beauty-face-lips", name: "Для губ" },
+          { key: "beauty-face-sun", name: "Солнцезащита" },
         ],
       },
       {
@@ -170,6 +176,8 @@ export const SHOP_CATEGORY_POOL = [
           { key: "electronics-phone-acc", name: "Аксессуары" },
           { key: "electronics-phone-audio", name: "Наушники" },
           { key: "electronics-phone-power", name: "Зарядка и powerbank" },
+          { key: "electronics-phone-cases", name: "Чехлы и стёкла" },
+          { key: "electronics-phone-smart", name: "Умные часы и браслеты" },
         ],
       },
       {
@@ -202,6 +210,9 @@ export const SHOP_CATEGORY_POOL = [
           { key: "fashion-women-clothes", name: "Одежда" },
           { key: "fashion-women-shoes", name: "Обувь" },
           { key: "fashion-women-acc", name: "Аксессуары" },
+          { key: "fashion-women-bags", name: "Сумки" },
+          { key: "fashion-women-underwear", name: "Бельё" },
+          { key: "fashion-women-sport", name: "Спортивная одежда" },
         ],
       },
       {
@@ -211,6 +222,9 @@ export const SHOP_CATEGORY_POOL = [
           { key: "fashion-men-clothes", name: "Одежда" },
           { key: "fashion-men-shoes", name: "Обувь" },
           { key: "fashion-men-acc", name: "Аксессуары" },
+          { key: "fashion-men-bags", name: "Сумки и рюкзаки" },
+          { key: "fashion-men-underwear", name: "Бельё" },
+          { key: "fashion-men-sport", name: "Спортивная одежда" },
         ],
       },
       {
@@ -466,6 +480,97 @@ export const SHOP_CATEGORY_POOL = [
         children: [
           { key: "books-nonfic-biz", name: "Бизнес" },
           { key: "books-nonfic-edu", name: "Учебная" },
+        ],
+      },
+    ],
+  },
+  {
+    key: "gifts",
+    name: "Подарки и праздник",
+    children: [
+      {
+        key: "gifts-wrap",
+        name: "Упаковка",
+        children: [
+          { key: "gifts-wrap-paper", name: "Бумага и пакеты" },
+          { key: "gifts-wrap-boxes", name: "Коробки" },
+          { key: "gifts-wrap-ribbons", name: "Ленты и банты" },
+        ],
+      },
+      {
+        key: "gifts-sets",
+        name: "Наборы",
+        children: [
+          { key: "gifts-sets-beauty", name: "Косметические" },
+          { key: "gifts-sets-food", name: "Вкусные" },
+          { key: "gifts-sets-home", name: "Для дома" },
+        ],
+      },
+      {
+        key: "gifts-party",
+        name: "Праздник",
+        children: [
+          { key: "gifts-party-decor", name: "Декор" },
+          { key: "gifts-party-candles", name: "Свечи" },
+          { key: "gifts-party-balloons", name: "Шары" },
+        ],
+      },
+    ],
+  },
+  {
+    key: "tools",
+    name: "Строительство и ремонт",
+    children: [
+      {
+        key: "tools-hand",
+        name: "Ручной инструмент",
+        children: [
+          { key: "tools-hand-basic", name: "Молотки и отвёртки" },
+          { key: "tools-hand-measure", name: "Измерение" },
+          { key: "tools-hand-cut", name: "Резка" },
+        ],
+      },
+      {
+        key: "tools-power",
+        name: "Электроинструмент",
+        children: [
+          { key: "tools-power-drill", name: "Дрели и шуруповёрты" },
+          { key: "tools-power-saw", name: "Пилы" },
+          { key: "tools-power-acc", name: "Оснастка" },
+        ],
+      },
+      {
+        key: "tools-materials",
+        name: "Материалы",
+        children: [
+          { key: "tools-materials-glue", name: "Клеи и герметики" },
+          { key: "tools-materials-tape", name: "Ленты" },
+          { key: "tools-materials-hardware", name: "Метизы" },
+        ],
+      },
+    ],
+  },
+  {
+    key: "jewelry",
+    name: "Украшения и часы",
+    children: [
+      {
+        key: "jewelry-bijou",
+        name: "Бижутерия",
+        children: [
+          { key: "jewelry-bijou-earrings", name: "Серьги" },
+          { key: "jewelry-bijou-neck", name: "Колье и цепочки" },
+          { key: "jewelry-bijou-bracelets", name: "Браслеты" },
+          { key: "jewelry-bijou-rings", name: "Кольца" },
+        ],
+      },
+      {
+        key: "jewelry-watches",
+        name: "Часы",
+        children: [
+          { key: "jewelry-watches-women", name: "Женские" },
+          { key: "jewelry-watches-men", name: "Мужские" },
+          { key: "jewelry-watches-smart", name: "Смарт-часы" },
         ],
       },
     ],

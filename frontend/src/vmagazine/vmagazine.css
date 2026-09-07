@@ -38,15 +38,16 @@
 }
 
 .vmagazine-header-title {
-  font-size: 1.55rem;
+  font-size: 1.85rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   color: #5b3d82;
+  line-height: 1.1;
 }
 
 .vmenu-app-header-brand:has(.vmagazine-header-title) {
-  gap: 12px;
-  font-size: 1.35rem;
+  gap: 14px;
+  font-size: 1.5rem;
 }
 
 .vmagazine-tabs {
@@ -463,6 +464,11 @@
   align-self: flex-start;
   padding: 0.2rem 0.55rem;
   font-size: 0.8rem;
+}
+
+.vmag-cart-stepper {
+  margin-top: 0.4rem;
+  align-self: flex-start;
 }
 
 .vmag-rail {

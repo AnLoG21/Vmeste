@@ -39,6 +39,9 @@ export default function PublicShopPage({ slug }) {
   const [cartOpen, setCartOpen] = useState(false);
   const [product, setProduct] = useState(null);
   const [reviews, setReviews] = useState([]);
+  const [detailTab, setDetailTab] = useState("description"); // description | attrs
+  const [detailExpanded, setDetailExpanded] = useState(false);
+  const [selectedSize, setSelectedSize] = useState("");
 
   const [deliveryOptionsLive, setDeliveryOptionsLive] = useState(null);
   const [etaLoading, setEtaLoading] = useState(false);
@@ -117,11 +120,14 @@ export default function PublicShopPage({ slug }) {
     const pid = params.get("product");
     if (!pid) return;
     const found = data.products.find((p) => String(p.id) === String(pid));
-    if (found) setProduct(found);
+    if (found) openProductCard(found);
   }, [data]);
 
   function closeProduct() {
     setProduct(null);
+    setDetailTab("description");
+    setDetailExpanded(false);
+    setSelectedSize("");
     try {
       const url = new URL(window.location.href);
       if (url.searchParams.has("product")) {
@@ -132,6 +138,13 @@ export default function PublicShopPage({ slug }) {
     } catch {
       /* ignore */
     }
+  }
+
+  function openProductCard(p) {
+    setProduct(p);
+    setDetailTab("description");
+    setDetailExpanded(false);
+    setSelectedSize("");
   }
 
   useEffect(() => {
@@ -343,30 +356,41 @@ export default function PublicShopPage({ slug }) {
                   return (
                     <article key={p.id} className="cafe-menu-item">
                       {cover ? (
-                        <button type="button" className="cafe-menu-photo-btn" onClick={() => setProduct(p)}>
+                        <button type="button" className="cafe-menu-photo-btn" onClick={() => openProductCard(p)}>
                           <img src={cover} alt={p.name || "Товар"} loading="lazy" decoding="async" width={96} height={96} />
                         </button>
                       ) : (
-                        <button type="button" className="cafe-menu-photo-btn" onClick={() => setProduct(p)}>
+                        <button type="button" className="cafe-menu-photo-btn" onClick={() => openProductCard(p)}>
                           <div className="cafe-menu-ph" />
                         </button>
                       )}
                       <h3>
-                        <button type="button" className="shop-menu-name-btn" onClick={() => setProduct(p)}>
+                        <button type="button" className="shop-menu-name-btn" onClick={() => openProductCard(p)}>
                           {p.name}
                         </button>
                       </h3>
                       <div className="cafe-menu-row">
-                        <button
-                          type="button"
-                          className="cafe-menu-cart-price"
-                          onClick={() => addToCart(p.id, 1)}
-                          aria-label={`В корзину, ${Number(p.price).toLocaleString("ru-RU")} ₽`}
-                        >
-                          <CartIcon />
-                          <span>{Number(p.price).toLocaleString("ru-RU")} ₽</span>
-                          {qty > 0 ? <em className="cafe-menu-cart-price-count">{qty}</em> : null}
-                        </button>
+                        {qty > 0 ? (
+                          <div className="shop-cart-stepper" aria-label="Количество в корзине">
+                            <button type="button" aria-label="Уменьшить" onClick={() => addToCart(p.id, -1)}>
+                              −
+                            </button>
+                            <span>{qty}</span>
+                            <button type="button" aria-label="Увеличить" onClick={() => addToCart(p.id, 1)}>
+                              +
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="cafe-menu-cart-price"
+                            onClick={() => addToCart(p.id, 1)}
+                            aria-label={`В корзину, ${Number(p.price).toLocaleString("ru-RU")} ₽`}
+                          >
+                            <CartIcon />
+                            <span>{Number(p.price).toLocaleString("ru-RU")} ₽</span>
+                          </button>
+                        )}
                       </div>
                     </article>
                   );
@@ -403,30 +427,118 @@ export default function PublicShopPage({ slug }) {
               }))}
               className="shop-product-carousel"
             />
-            <p className="shop-product-price">{Number(product.price).toLocaleString("ru-RU")} ₽</p>
-            {product.description ? <p className="shop-product-desc">{product.description}</p> : null}
-            {product.attrs && Object.keys(product.attrs).length ? (
-              <dl className="shop-product-attrs">
-                {Object.entries(product.attrs).map(([k, v]) => (
-                  <div key={k}>
-                    <dt>{k}</dt>
-                    <dd>{String(v)}</dd>
-                  </div>
-                ))}
-              </dl>
+
+            {(product.related_products || []).length ? (
+              <section className="shop-product-related">
+                <h3>Связанные товары</h3>
+                <div className="shop-product-related-scroll">
+                  {product.related_products.map((rp) => (
+                    <button
+                      key={rp.id}
+                      type="button"
+                      className="shop-product-related-card"
+                      onClick={() => {
+                        const full = (data.products || []).find((x) => String(x.id) === String(rp.id));
+                        if (full) openProductCard(full);
+                      }}
+                    >
+                      {rp.cover_url ? <img src={rp.cover_url} alt="" /> : <div className="shop-product-related-ph" />}
+                      <span>{rp.name}</span>
+                      <em>{Number(rp.price).toLocaleString("ru-RU")} ₽</em>
+                    </button>
+                  ))}
+                </div>
+              </section>
             ) : null}
-            <button
-              type="button"
-              className="cafe-menu-cart-price cafe-menu-cart-price--wide"
-              onClick={() => {
-                addToCart(product.id, 1);
-                closeProduct();
-                setCartOpen(true);
-              }}
-            >
-              <CartIcon />
-              <span>В корзину · {Number(product.price).toLocaleString("ru-RU")} ₽</span>
-            </button>
+
+            {(product.sizes || []).length ? (
+              <section className="shop-product-sizes">
+                <h3>Размер</h3>
+                <div className="shop-size-chips">
+                  {product.sizes.map((sz) => (
+                    <button
+                      key={sz}
+                      type="button"
+                      className={`shop-size-chip${selectedSize === String(sz) ? " is-on" : ""}`}
+                      onClick={() => setSelectedSize(String(sz))}
+                    >
+                      {sz}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            <p className="shop-product-price">{Number(product.price).toLocaleString("ru-RU")} ₽</p>
+
+            <div className="shop-detail-tabs">
+              <button
+                type="button"
+                className={detailTab === "description" ? "is-active" : ""}
+                onClick={() => {
+                  setDetailTab("description");
+                  setDetailExpanded(false);
+                }}
+              >
+                Описание
+              </button>
+              <button
+                type="button"
+                className={detailTab === "attrs" ? "is-active" : ""}
+                onClick={() => {
+                  setDetailTab("attrs");
+                  setDetailExpanded(false);
+                }}
+              >
+                Характеристики
+              </button>
+            </div>
+
+            <div className={`shop-detail-body${detailExpanded ? " is-expanded" : ""}`}>
+              {detailTab === "description" ? (
+                <p className="shop-product-desc">{product.description || "Описание пока не добавлено."}</p>
+              ) : product.attrs && Object.keys(product.attrs).length ? (
+                <dl className="shop-product-attrs">
+                  {Object.entries(product.attrs).map(([k, v]) => (
+                    <div key={k}>
+                      <dt>{k}</dt>
+                      <dd>{String(v)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : (
+                <p className="muted small">Характеристики не указаны.</p>
+              )}
+              <button
+                type="button"
+                className="shop-detail-expand"
+                aria-label={detailExpanded ? "Свернуть" : "Развернуть"}
+                onClick={() => setDetailExpanded((v) => !v)}
+              >
+                {detailExpanded ? "▴" : "▾"}
+              </button>
+            </div>
+
+            {(cart[product.id] || 0) > 0 ? (
+              <div className="shop-cart-stepper shop-cart-stepper--wide" aria-label="Количество в корзине">
+                <button type="button" aria-label="Уменьшить" onClick={() => addToCart(product.id, -1)}>
+                  −
+                </button>
+                <span>{cart[product.id]}</span>
+                <button type="button" aria-label="Увеличить" onClick={() => addToCart(product.id, 1)}>
+                  +
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="cafe-menu-cart-price cafe-menu-cart-price--wide"
+                onClick={() => addToCart(product.id, 1)}
+              >
+                <CartIcon />
+                <span>В корзину · {Number(product.price).toLocaleString("ru-RU")} ₽</span>
+              </button>
+            )}
 
             <section className="shop-product-seller">
               <h3>Магазин</h3>

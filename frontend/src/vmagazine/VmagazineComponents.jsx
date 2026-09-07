@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import { showToast } from "../toast.js";
-import { likeProduct, setCartItem, trackProductView, unlikeProduct } from "./vmagazineApi.js";
+import { likeProduct, loadCart, removeCartItem, setCartItem, trackProductView, unlikeProduct } from "./vmagazineApi.js";
 
 export function OriginalBadge() {
   return (
@@ -19,6 +20,25 @@ export function ProductCard({
   onLikedChange,
   compact = false,
 }) {
+  const [qty, setQty] = useState(0);
+
+  useEffect(() => {
+    if (!product?.id || !authFetch || !API_URL) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const items = await loadCart(authFetch, API_URL);
+        const row = (items || []).find((x) => Number(x.product?.id) === Number(product.id));
+        if (!cancelled) setQty(Number(row?.quantity) || 0);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [API_URL, authFetch, product?.id]);
+
   if (!product) return null;
 
   async function openProduct() {
@@ -48,13 +68,19 @@ export function ProductCard({
     }
   }
 
-  async function addToCart(e) {
+  async function changeQty(e, next) {
     e.stopPropagation();
+    const n = Math.max(0, Number(next) || 0);
     try {
-      await setCartItem(authFetch, API_URL, product.id, 1);
-      showToast("Добавлено в корзину");
+      if (n <= 0) {
+        await removeCartItem(authFetch, API_URL, product.id);
+        setQty(0);
+      } else {
+        await setCartItem(authFetch, API_URL, product.id, n);
+        setQty(n);
+      }
     } catch (err) {
-      showToast(err.message || "Не удалось добавить");
+      showToast(err.message || "Не удалось обновить корзину");
     }
   }
 
@@ -80,9 +106,21 @@ export function ProductCard({
         <p className="vmag-product-name">{product.name}</p>
         {product.provider_name ? <p className="muted small">{product.provider_name}</p> : null}
         {!compact ? (
-          <button type="button" className="ghost-btn vmag-cart-mini" onClick={addToCart}>
-            В корзину
-          </button>
+          qty > 0 ? (
+            <div className="shop-cart-stepper vmag-cart-stepper" onClick={(e) => e.stopPropagation()}>
+              <button type="button" aria-label="Уменьшить" onClick={(e) => void changeQty(e, qty - 1)}>
+                −
+              </button>
+              <span>{qty}</span>
+              <button type="button" aria-label="Увеличить" onClick={(e) => void changeQty(e, qty + 1)}>
+                +
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="ghost-btn vmag-cart-mini" onClick={(e) => void changeQty(e, 1)}>
+              В корзину
+            </button>
+          )
         ) : null}
       </div>
     </article>

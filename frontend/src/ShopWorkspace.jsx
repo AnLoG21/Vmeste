@@ -6,6 +6,7 @@ import {
   browseShopCategoryChildren,
   searchShopCategoryPool,
 } from "./shopCategoryPool.js";
+import { attrSchemaForPoolKey } from "./shopCategoryAttrs.js";
 import "./cafeProvider.css";
 
 const ORDER_STATUSES = [
@@ -45,7 +46,10 @@ function emptyProductForm(category = "") {
     unit: "",
     price: "0",
     category: category ? String(category) : "",
-    attrsText: "",
+    attrs: {},
+    attrsExtra: "",
+    sizes: [],
+    related_product_ids: [],
     is_active: true,
     is_featured: false,
     featured_order: "0",
@@ -72,6 +76,18 @@ function textToAttrs(text) {
       const v = line.slice(i + 1).trim();
       if (k) out[k] = v;
     });
+  return out;
+}
+
+function mergeAttrsFromSchema(schemaFields, attrsObj, extraText) {
+  const out = { ...(attrsObj || {}) };
+  const known = new Set((schemaFields || []).map((f) => f.key));
+  Object.entries(textToAttrs(extraText)).forEach(([k, v]) => {
+    if (!known.has(k)) out[k] = v;
+  });
+  Object.keys(out).forEach((k) => {
+    if (out[k] == null || String(out[k]).trim() === "") delete out[k];
+  });
   return out;
 }
 
@@ -289,26 +305,6 @@ export default function ShopWorkspace({ authFetch, me }) {
     if (tab === "settings") void loadSettings();
   }, [tab, loadOrders, loadSettings]);
 
-  useEffect(() => {
-    if (!selected) return;
-    setForm({
-      name: selected.name || "",
-      description: selected.description || "",
-      sku: selected.sku || "",
-      unit: selected.unit || "",
-      price: String(selected.price ?? 0),
-      category: selected.category != null ? String(selected.category) : "",
-      attrsText: attrsToText(selected.attrs),
-      is_active: Boolean(selected.is_active),
-      is_featured: Boolean(selected.is_featured),
-      featured_order: String(selected.featured_order ?? 0),
-    });
-  }, [selected]);
-
-  useEffect(() => {
-    setPoolHits(searchShopCategoryPool(poolQuery, 36));
-  }, [poolQuery]);
-
   const rootCats = useMemo(() => categories.filter((c) => !c.parent), [categories]);
   const looseProducts = useMemo(
     () => products.filter((p) => !p.category || Number(p.category) === 0),
@@ -321,12 +317,62 @@ export default function ShopWorkspace({ authFetch, me }) {
     return map;
   }, [categories]);
 
+  useEffect(() => {
+    if (!selected) return;
+    const attrs = selected.attrs && typeof selected.attrs === "object" ? { ...selected.attrs } : {};
+    const poolKey = categoryById.get(Number(selected.category))?.pool_key || "";
+    const schema = attrSchemaForPoolKey(poolKey);
+    const known = new Set((schema.fields || []).map((f) => f.key));
+    const extraLines = [];
+    Object.entries(attrs).forEach(([k, v]) => {
+      if (!known.has(k)) extraLines.push(`${k}: ${v}`);
+    });
+    setForm({
+      name: selected.name || "",
+      description: selected.description || "",
+      sku: selected.sku || "",
+      unit: selected.unit || "",
+      price: String(selected.price ?? 0),
+      category: selected.category != null ? String(selected.category) : "",
+      attrs,
+      sizes: Array.isArray(selected.sizes) ? selected.sizes.map(String) : [],
+      related_product_ids: Array.isArray(selected.related_product_ids)
+        ? selected.related_product_ids.map(Number)
+        : [],
+      is_active: Boolean(selected.is_active),
+      is_featured: Boolean(selected.is_featured),
+      featured_order: String(selected.featured_order ?? 0),
+      attrsExtra: extraLines.join("\n"),
+    });
+  }, [selected, categoryById]);
+
+  useEffect(() => {
+    setPoolHits(searchShopCategoryPool(poolQuery, 36));
+  }, [poolQuery]);
+
   const categoryOptions = useMemo(
     () =>
       categories
-        .map((c) => ({ id: c.id, label: categoryPathLabel(c, categoryById) }))
+        .map((c) => ({ id: c.id, label: categoryPathLabel(c, categoryById), pool_key: c.pool_key || "" }))
         .sort((a, b) => a.label.localeCompare(b.label, "ru")),
     [categories, categoryById],
+  );
+
+  const selectedPoolKey = useMemo(() => {
+    if (!form.category) return "";
+    return categoryById.get(Number(form.category))?.pool_key || "";
+  }, [form.category, categoryById]);
+
+  const attrSchema = useMemo(() => attrSchemaForPoolKey(selectedPoolKey), [selectedPoolKey]);
+
+  const relatedCandidates = useMemo(
+    () =>
+      products.filter(
+        (p) =>
+          String(p.id) !== String(selectedId || "") &&
+          p.is_active !== false,
+      ),
+    [products, selectedId],
   );
 
   const poolNodes = browseShopCategoryChildren(browseStack);
@@ -371,6 +417,7 @@ export default function ShopWorkspace({ authFetch, me }) {
   async function saveProduct() {
     setBusy(true);
     try {
+      const attrs = mergeAttrsFromSchema(attrSchema.fields, form.attrs, form.attrsExtra);
       const payload = {
         name: form.name.trim(),
         description: form.description,
@@ -379,7 +426,9 @@ export default function ShopWorkspace({ authFetch, me }) {
         price: form.price,
         category: form.category || null,
         subcategory: null,
-        attrs: textToAttrs(form.attrsText),
+        attrs,
+        sizes: Array.isArray(form.sizes) ? form.sizes : [],
+        related_product_ids: (form.related_product_ids || []).map(Number),
         is_active: form.is_active,
         is_featured: form.is_featured,
         featured_order: Number(form.featured_order) || 0,
@@ -709,12 +758,125 @@ export default function ShopWorkspace({ authFetch, me }) {
             <Field label="Артикул">
               <input value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} />
             </Field>
-            <Field label="Характеристики (строки «ключ: значение»)">
-              <textarea
-                rows={3}
-                value={form.attrsText}
-                onChange={(e) => setForm((f) => ({ ...f, attrsText: e.target.value }))}
-              />
+
+            <div className="shop-adaptive-attrs">
+              <p className="shop-field-label">Характеристики {selectedPoolKey ? "(по категории)" : ""}</p>
+              {(attrSchema.fields || []).map((field) => (
+                <Field key={field.key} label={field.key}>
+                  {field.type === "select" ? (
+                    <select
+                      value={form.attrs?.[field.key] || ""}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          attrs: { ...f.attrs, [field.key]: e.target.value },
+                        }))
+                      }
+                    >
+                      <option value="">Не указано</option>
+                      {(field.options || []).map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  ) : field.type === "textarea" ? (
+                    <textarea
+                      rows={2}
+                      placeholder={field.placeholder || ""}
+                      value={form.attrs?.[field.key] || ""}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          attrs: { ...f.attrs, [field.key]: e.target.value },
+                        }))
+                      }
+                    />
+                  ) : (
+                    <input
+                      placeholder={field.placeholder || ""}
+                      value={form.attrs?.[field.key] || ""}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          attrs: { ...f.attrs, [field.key]: e.target.value },
+                        }))
+                      }
+                    />
+                  )}
+                </Field>
+              ))}
+              <Field label="Дополнительно (строки «ключ: значение»)">
+                <textarea
+                  rows={2}
+                  value={form.attrsExtra || ""}
+                  placeholder={"Гарантия: 12 мес.\nСтрана: Италия"}
+                  onChange={(e) => setForm((f) => ({ ...f, attrsExtra: e.target.value }))}
+                />
+              </Field>
+            </div>
+
+            {attrSchema.sizeOptions?.length ? (
+              <div className="shop-sizes-picker">
+                <p className="shop-field-label">Доступные размеры</p>
+                <div className="shop-size-chips">
+                  {attrSchema.sizeOptions.map((sz) => {
+                    const on = (form.sizes || []).includes(sz);
+                    return (
+                      <button
+                        key={sz}
+                        type="button"
+                        className={`shop-size-chip${on ? " is-on" : ""}`}
+                        onClick={() =>
+                          setForm((f) => {
+                            const cur = new Set(f.sizes || []);
+                            if (cur.has(sz)) cur.delete(sz);
+                            else cur.add(sz);
+                            return { ...f, sizes: [...cur] };
+                          })
+                        }
+                      >
+                        {sz}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <Field label="Размеры (через запятую, если нужны)">
+                <input
+                  value={(form.sizes || []).join(", ")}
+                  placeholder="S, M, L"
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      sizes: e.target.value
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                    }))
+                  }
+                />
+              </Field>
+            )}
+
+            <Field label="Связанные товары">
+              <select
+                multiple
+                size={Math.min(6, Math.max(3, relatedCandidates.length || 3))}
+                value={(form.related_product_ids || []).map(String)}
+                onChange={(e) => {
+                  const ids = Array.from(e.target.selectedOptions).map((o) => Number(o.value));
+                  setForm((f) => ({ ...f, related_product_ids: ids }));
+                }}
+              >
+                {relatedCandidates.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <span className="muted small">Ctrl/⌘ — выбрать несколько. Показываются под фото в карточке.</span>
             </Field>
 
             <label className="checkbox shop-check">

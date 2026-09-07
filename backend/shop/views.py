@@ -220,7 +220,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         return (
             Product.objects.filter(provider=provider)
             .select_related("category", "subcategory")
-            .prefetch_related("photos")
+            .prefetch_related("photos", "related_products")
         )
 
     def perform_create(self, serializer):
@@ -528,7 +528,7 @@ class PublicShopCatalogView(APIView):
         qs = (
             Product.objects.filter(provider=provider, is_active=True)
             .select_related("category", "subcategory")
-            .prefetch_related("photos")
+            .prefetch_related("photos", "related_products", "related_products__photos")
         )
         if featured_only:
             qs = qs.filter(is_featured=True).order_by("featured_order", "id")[:FEATURED_LIMIT]

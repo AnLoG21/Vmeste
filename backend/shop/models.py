@@ -73,6 +73,17 @@ class Product(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     stock_qty = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     attrs = models.JSONField(blank=True, default=dict, help_text="Характеристики: {ключ: значение}")
+    sizes = models.JSONField(
+        blank=True,
+        default=list,
+        help_text="Доступные размеры: [\"S\", \"M\", …]",
+    )
+    related_products = models.ManyToManyField(
+        "self",
+        blank=True,
+        symmetrical=False,
+        related_name="related_from",
+    )
     is_active = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False, db_index=True)
     featured_order = models.PositiveSmallIntegerField(default=0)
