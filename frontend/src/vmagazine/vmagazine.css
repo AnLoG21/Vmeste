@@ -49,6 +49,17 @@
   position: static;
 }
 
+.page-logged:has(.vmagazine-app) {
+  overflow: hidden;
+  height: 100dvh;
+  max-height: 100dvh;
+}
+
+.page-logged:has(.vmagazine-app) > .grid {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .vmagazine-embedded-shop {
   min-height: 100%;
 }
