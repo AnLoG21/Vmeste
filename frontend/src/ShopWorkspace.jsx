@@ -843,6 +843,12 @@ export default function ShopWorkspace({ authFetch, me }) {
                 <p className="muted small">
                   {o.guest_name || "Гость"} {o.guest_phone} · {Number(o.total).toLocaleString("ru-RU")} ₽
                 </p>
+                {o.external_tracking_id ? (
+                  <p className="small">
+                    Доставка ({o.external_delivery_provider || "—"}):{" "}
+                    <code>{o.external_tracking_id}</code>
+                  </p>
+                ) : null}
                 {o.delivery_address ? <p className="small">{o.delivery_address}</p> : null}
                 <ul className="small">
                   {(o.items || []).map((it) => (
@@ -898,11 +904,53 @@ export default function ShopWorkspace({ authFetch, me }) {
               onChange={(e) => void saveSettings({ delivery_provider: e.target.value })}
             >
               <option value="own">Свой курьер</option>
-              <option value="yandex">Яндекс Доставка (скоро)</option>
-              <option value="cdek">СДЭК (скоро)</option>
+              <option value="yandex">Яндекс Доставка</option>
+              <option value="cdek">СДЭК</option>
             </select>
           </Field>
-          <p className="muted small">Яндекс и СДЭК подключим по API позже; сейчас — свой курьер и зоны.</p>
+          <p className="muted small">
+            При статусе «Курьеру» заказ уходит в выбранный сервис. Для Яндекса и СДЭК нужны ключи из личного кабинета
+            перевозчика и заполненный адрес организации с координатами.
+          </p>
+
+          {settings.delivery_provider === "yandex" ? (
+            <Field label="Токен Яндекс Доставки">
+              <input
+                type="password"
+                autoComplete="off"
+                placeholder={settings.has_yandex_token ? "•••••••• (сохранён, введите новый чтобы заменить)" : "Bearer-токен из кабинета Яндекс Доставки"}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if (v) void saveSettings({ yandex_delivery_token: v });
+                  e.target.value = "";
+                }}
+              />
+            </Field>
+          ) : null}
+
+          {settings.delivery_provider === "cdek" ? (
+            <>
+              <Field label="СДЭК Account (client_id)">
+                <input
+                  defaultValue={settings.cdek_client_id || ""}
+                  onBlur={(e) => void saveSettings({ cdek_client_id: e.target.value.trim() })}
+                  placeholder="Идентификатор из кабинета СДЭК"
+                />
+              </Field>
+              <Field label="СДЭК Secure password (client_secret)">
+                <input
+                  type="password"
+                  autoComplete="off"
+                  placeholder={settings.has_cdek_secret ? "•••••••• (сохранён, введите новый чтобы заменить)" : "Секретный ключ СДЭК"}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    if (v) void saveSettings({ cdek_client_secret: v });
+                    e.target.value = "";
+                  }}
+                />
+              </Field>
+            </>
+          ) : null}
 
           <Field label="Стоимость доставки по умолчанию, ₽">
             <input

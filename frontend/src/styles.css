@@ -10488,6 +10488,11 @@ body.theme-dark .password-eye-btn:hover {
 .shop-pool-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .shop-pool-chip { border-radius: 999px; padding: 8px 12px; }
 .shop-photos { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-start; }
+.shop-photos .service-editor-camera-btn,
+.shop-photo-add {
+  margin-left: 0 !important;
+  order: -1;
+}
 .shop-photo-chip { position: relative; width: 72px; height: 72px; padding: 0; border: none; border-radius: 10px; overflow: hidden; cursor: pointer; }
 .shop-photo-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .shop-photo-chip span { position: absolute; top: 2px; right: 4px; background: rgba(0,0,0,.55); color: #fff; border-radius: 999px; width: 18px; height: 18px; line-height: 16px; font-size: 14px; }
