@@ -244,6 +244,7 @@ export default function CabinetChrome({
   exitDemoSession,
   openAuth,
   intervalToast,
+  onMicroserviceBack,
   children,
 }) {
   const overflowIds = menuOverflowBookmarkIds(me, subnavBookmarks, isBookmarkAvailable);
@@ -256,6 +257,7 @@ export default function CabinetChrome({
           className="brand-link brand-btn"
           onClick={() => {
             if (currentView === "vmenu" || currentView === "vmagazine") {
+              if (typeof onMicroserviceBack === "function" && onMicroserviceBack()) return;
               setCurrentView("service_apps");
               return;
             }

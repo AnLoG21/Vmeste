@@ -5,31 +5,85 @@
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
-  height: calc(100vh - 120px);
-  min-height: 640px;
-  max-height: calc(100vh - 100px);
+  min-height: calc(100vh - 120px);
+  height: calc(100dvh - 108px - env(safe-area-inset-top, 0px));
+  max-height: calc(100dvh - 108px - env(safe-area-inset-top, 0px));
   padding: 0 !important;
   overflow: hidden;
   box-sizing: border-box;
+  overscroll-behavior: none;
+  position: relative;
+  min-width: 0;
 }
 
 .vmagazine-app-body {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   padding: 1rem 1rem 0.5rem;
   box-sizing: border-box;
+}
+
+.vmagazine-app--overlay .vmagazine-app-body {
+  padding: 0.75rem 0.85rem 1rem;
 }
 
 .vmagazine-app--chats .vmagazine-app-body {
   display: flex;
   flex-direction: column;
   padding: 0;
+  overflow: hidden;
 }
 
 .vmagazine-chats-host {
   flex: 1;
   min-height: 0;
+}
+
+.vmagazine-bottom-nav {
+  flex-shrink: 0;
+  position: static;
+}
+
+.vmagazine-embedded-shop {
+  min-height: 100%;
+}
+
+.vmagazine-embedded-shop .cafe-guest {
+  min-height: 0;
+  padding-bottom: 1rem;
+}
+
+.vmagazine-embedded-shop .shop-public-page.is-embedded {
+  background: transparent;
+}
+
+.vmag-product-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-bottom: 1rem;
+}
+
+.vmag-product-sheet-cover {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 14px;
+  background: #f3f0f8;
+}
+
+.vmag-product-sheet-cover.is-empty {
+  background: linear-gradient(145deg, #efeaf8, #f7f4fb);
+}
+
+.vmag-product-sheet-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
 }
 
 .vmagazine-bottom-nav button.active {
@@ -720,8 +774,9 @@
 @media (max-width: 640px) {
   .vmagazine-app {
     max-width: 100%;
-    height: calc(100dvh - 96px);
-    min-height: 520px;
+    height: calc(100dvh - 108px - env(safe-area-inset-top, 0px));
+    max-height: calc(100dvh - 108px - env(safe-area-inset-top, 0px));
+    min-height: 0;
   }
 
   .vmag-addr-grid {

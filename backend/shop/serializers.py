@@ -130,7 +130,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-  def validate_related_product_ids(self, value):
+    def validate_related_product_ids(self, value):
         request = self.context.get("request")
         provider = None
         if request and getattr(request, "user", None):

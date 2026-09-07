@@ -21,7 +21,7 @@ from .models import (
     SavedPaymentCard,
     ShopBonusBalance,
 )
-from .product_cards import active_products_qs, product_card, record_product_view
+from .product_cards import active_products_qs, product_card, product_detail, record_product_view
 
 
 def _liked_ids(user, product_ids):
@@ -344,6 +344,22 @@ class ProductViewTrackView(APIView):
             return Response({"detail": "Товар не найден"}, status=404)
         record_product_view(request.user, product)
         return Response(product_card(product, request))
+
+
+class ProductDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, product_id):
+        product = (
+            active_products_qs()
+            .filter(pk=product_id)
+            .prefetch_related("related_products", "related_products__photos")
+            .first()
+        )
+        if not product:
+            return Response({"detail": "Товар не найден"}, status=404)
+        liked = product.id in _liked_ids(request.user, [product.id])
+        return Response(product_detail(product, request, liked=liked))
 
 
 class RecentlyViewedView(APIView):

@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import PublicShopPage from "../PublicShopPage.jsx";
 import { CartTab, FavoritesTab, HomeTab, ProfileTab } from "./VmagazinePanels.jsx";
 import VmagazineLogo from "./VmagazineLogo.jsx";
+import VmagazineProductSheet from "./VmagazineProductSheet.jsx";
 import "./vmagazine.css";
 
 const TABS = [
@@ -11,13 +13,33 @@ const TABS = [
   { id: "profile", label: "Профиль", icon: "👤" },
 ];
 
+/**
+ * stack:
+ *  null
+ *  { kind: "product", productId }
+ *  { kind: "shop", slug, returnProductId }
+ */
 export default function VmagazineApp({
   authFetch,
   API_URL,
   onTabChange,
   onChatsHostReady,
+  onRegisterBackHandler,
 }) {
   const [tab, setTab] = useState("home");
+  const [stack, setStack] = useState(null);
+  const shopBackRef = useRef(null);
+
+  const popStack = useCallback(() => {
+    setStack((cur) => {
+      if (!cur) return null;
+      if (cur.kind === "shop" && cur.returnProductId) {
+        return { kind: "product", productId: cur.returnProductId };
+      }
+      return null;
+    });
+    return true;
+  }, []);
 
   useEffect(() => {
     onTabChange?.(tab);
@@ -27,37 +49,105 @@ export default function VmagazineApp({
     if (tab !== "chats") onChatsHostReady?.(null);
   }, [tab, onChatsHostReady]);
 
+  useEffect(() => {
+    if (!onRegisterBackHandler) return undefined;
+    onRegisterBackHandler(() => {
+      if (stack?.kind === "shop" && shopBackRef.current?.()) return true;
+      if (stack) {
+        popStack();
+        return true;
+      }
+      return false;
+    });
+    return () => onRegisterBackHandler(null);
+  }, [onRegisterBackHandler, stack, popStack]);
+
   function switchTab(id) {
+    setStack(null);
     setTab(id);
   }
 
+  function openProduct(productOrId) {
+    const id = typeof productOrId === "object" ? productOrId?.id : productOrId;
+    if (!id) return;
+    setStack({ kind: "product", productId: id });
+  }
+
+  function openShop(slug, fromProduct) {
+    if (!slug) return;
+    setStack({
+      kind: "shop",
+      slug,
+      returnProductId: fromProduct?.id || (stack?.kind === "product" ? stack.productId : null),
+    });
+  }
+
+  const overlayOpen = Boolean(stack);
+
   return (
-    <section className={`card vmagazine-app${tab === "chats" ? " vmagazine-app--chats" : ""}`}>
+    <section
+      className={`card vmagazine-app${tab === "chats" ? " vmagazine-app--chats" : ""}${
+        overlayOpen ? " vmagazine-app--overlay" : ""
+      }`}
+    >
       <div className="vmagazine-app-body">
-        {tab === "home" ? <HomeTab authFetch={authFetch} API_URL={API_URL} /> : null}
-        {tab === "chats" ? (
-          <div
-            className="vmenu-chats-host vmagazine-chats-host"
-            ref={(el) => onChatsHostReady?.(el)}
+        {stack?.kind === "product" ? (
+          <VmagazineProductSheet
+            productId={stack.productId}
+            authFetch={authFetch}
+            API_URL={API_URL}
+            onOpenRelated={(id) => openProduct(id)}
+            onOpenShop={openShop}
           />
         ) : null}
-        {tab === "favorites" ? <FavoritesTab authFetch={authFetch} API_URL={API_URL} /> : null}
-        {tab === "cart" ? <CartTab authFetch={authFetch} API_URL={API_URL} /> : null}
-        {tab === "profile" ? <ProfileTab authFetch={authFetch} API_URL={API_URL} /> : null}
+        {stack?.kind === "shop" ? (
+          <div className="vmagazine-embedded-shop">
+            <PublicShopPage
+              slug={stack.slug}
+              embedded
+              onBack={popStack}
+              onConsumeBack={(fn) => {
+                shopBackRef.current = fn;
+              }}
+            />
+          </div>
+        ) : null}
+        {!stack ? (
+          <>
+            {tab === "home" ? (
+              <HomeTab authFetch={authFetch} API_URL={API_URL} onOpenProduct={openProduct} />
+            ) : null}
+            {tab === "chats" ? (
+              <div
+                className="vmenu-chats-host vmagazine-chats-host"
+                ref={(el) => onChatsHostReady?.(el)}
+              />
+            ) : null}
+            {tab === "favorites" ? (
+              <FavoritesTab authFetch={authFetch} API_URL={API_URL} onOpenProduct={openProduct} />
+            ) : null}
+            {tab === "cart" ? <CartTab authFetch={authFetch} API_URL={API_URL} /> : null}
+            {tab === "profile" ? (
+              <ProfileTab authFetch={authFetch} API_URL={API_URL} onOpenProduct={openProduct} />
+            ) : null}
+          </>
+        ) : null}
       </div>
-      <nav className="vmenu-bottom-nav vmagazine-bottom-nav" aria-label="Вмагазине">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={tab === t.id ? "active" : ""}
-            onClick={() => switchTab(t.id)}
-          >
-            <span aria-hidden>{t.icon}</span>
-            <span>{t.label}</span>
-          </button>
-        ))}
-      </nav>
+      {!overlayOpen ? (
+        <nav className="vmenu-bottom-nav vmagazine-bottom-nav" aria-label="Вмагазине">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={tab === t.id ? "active" : ""}
+              onClick={() => switchTab(t.id)}
+            >
+              <span aria-hidden>{t.icon}</span>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </nav>
+      ) : null}
     </section>
   );
 }

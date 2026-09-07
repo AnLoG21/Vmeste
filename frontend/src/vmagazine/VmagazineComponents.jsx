@@ -18,6 +18,7 @@ export function ProductCard({
   authFetch,
   API_URL,
   onLikedChange,
+  onOpen,
   compact = false,
 }) {
   const [qty, setQty] = useState(0);
@@ -47,7 +48,8 @@ export function ProductCard({
     } catch {
       /* ignore */
     }
-    if (product.shop_url) window.location.href = product.shop_url;
+    if (onOpen) onOpen(product);
+    else if (product.shop_url) window.location.href = product.shop_url;
     else showToast("Нет ссылки на витрину");
   }
 

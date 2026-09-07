@@ -23,6 +23,10 @@ export function searchSuggest(authFetch, API_URL, params = {}) {
   return vmagazineFetch(authFetch, API_URL, `/search/suggest/?${q}`);
 }
 
+export function loadProductDetail(authFetch, API_URL, productId) {
+  return vmagazineFetch(authFetch, API_URL, `/products/${productId}/`);
+}
+
 export function loadProductLikes(authFetch, API_URL) {
   return vmagazineFetch(authFetch, API_URL, "/product-likes/");
 }

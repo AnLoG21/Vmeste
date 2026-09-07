@@ -52,7 +52,19 @@ def product_card(product: Product, request=None, *, liked: bool | None = None) -
         "liked": bool(liked) if liked is not None else False,
         "stock_qty": str(product.stock_qty),
         "attrs": product.attrs if isinstance(product.attrs, dict) else {},
+        "sizes": list(product.sizes or []) if isinstance(product.sizes, list) else [],
+        "description": product.description or "",
     }
+
+
+def product_detail(product: Product, request=None, *, liked: bool | None = None) -> dict:
+    """Полная карточка для экрана товара во Вмагазине."""
+    card = product_card(product, request, liked=liked)
+    related = []
+    for p in product.related_products.filter(is_active=True).prefetch_related("photos")[:12]:
+        related.append(product_card(p, request))
+    card["related_products"] = related
+    return card
 
 
 def record_product_view(user, product: Product) -> None:

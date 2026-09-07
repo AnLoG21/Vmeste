@@ -379,6 +379,7 @@ export default function App() {
   const [vmenuTab, setVmenuTab] = useState("feed");
   const [vmagazineTab, setVmagazineTab] = useState("home");
   const [vmenuChatsHostEl, setVmenuChatsHostEl] = useState(null);
+  const vmagazineBackRef = useRef(null);
   const [mainChatsHostEl, setMainChatsHostEl] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatHasMoreOlder, setChatHasMoreOlder] = useState(false);
@@ -2826,6 +2827,12 @@ export default function App() {
         exitDemoSession={exitDemoSession}
         openAuth={openAuth}
         intervalToast={intervalToast}
+        onMicroserviceBack={() => {
+          if (currentView === "vmagazine" && typeof vmagazineBackRef.current === "function") {
+            return Boolean(vmagazineBackRef.current());
+          }
+          return false;
+        }}
       >
       <main className={`grid${centeredWorkspace ? " grid-centered-workspace" : ""}${profileWide ? " grid-profile-wide" : ""}`}>
         {accessToken &&
@@ -2998,6 +3005,9 @@ export default function App() {
             API_URL={API_URL}
             onTabChange={setVmagazineTab}
             onChatsHostReady={setVmenuChatsHostEl}
+            onRegisterBackHandler={(fn) => {
+              vmagazineBackRef.current = fn;
+            }}
           />
         )}
         {accessToken &&

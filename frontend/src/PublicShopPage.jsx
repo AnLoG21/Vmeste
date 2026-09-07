@@ -26,7 +26,7 @@ function CloseIcon() {
 /**
  * Публичная витрина магазина — тот же UX, что у гостевого меню кафе.
  */
-export default function PublicShopPage({ slug }) {
+export default function PublicShopPage({ slug, embedded = false, onBack = null, onConsumeBack = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [cart, setCart] = useState({});
@@ -146,6 +146,18 @@ export default function PublicShopPage({ slug }) {
     setDetailExpanded(false);
     setSelectedSize("");
   }
+
+  useEffect(() => {
+    if (!embedded || !onConsumeBack) return undefined;
+    onConsumeBack(() => {
+      if (product) {
+        closeProduct();
+        return true;
+      }
+      return false;
+    });
+    return () => onConsumeBack(null);
+  }, [embedded, onConsumeBack, product]);
 
   useEffect(() => {
     const pid = data?.provider?.id;
@@ -292,16 +304,17 @@ export default function PublicShopPage({ slug }) {
   const logoUrl = data.provider?.logo_url || "";
 
   return (
-    <div className={`cafe-guest shop-public-page${product ? " is-product-open" : ""}`}>
+    <div className={`cafe-guest shop-public-page${product ? " is-product-open" : ""}${embedded ? " is-embedded" : ""}`}>
       {!product ? (
         <header className="cafe-guest-header">
           <button
             type="button"
             className="cafe-guest-back"
-            aria-label="Назад на карту"
-            title="Назад на карту"
+            aria-label={embedded ? "Назад" : "Назад на карту"}
+            title={embedded ? "Назад" : "Назад на карту"}
             onClick={() => {
-              window.location.href = "/";
+              if (embedded && onBack) onBack();
+              else window.location.href = "/";
             }}
           >
             ←

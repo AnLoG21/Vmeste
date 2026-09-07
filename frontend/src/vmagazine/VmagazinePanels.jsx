@@ -231,7 +231,7 @@ function AddressPickerModal({ open, onClose, onSaved, authFetch, API_URL, existi
   );
 }
 
-export function HomeTab({ authFetch, API_URL }) {
+export function HomeTab({ authFetch, API_URL, onOpenProduct }) {
   const [addresses, setAddresses] = useState([]);
   const [addressId, setAddressId] = useState(null);
   const [addrMenuOpen, setAddrMenuOpen] = useState(false);
@@ -526,6 +526,7 @@ export function HomeTab({ authFetch, API_URL }) {
                 authFetch={authFetch}
                 API_URL={API_URL}
                 onLikedChange={patchLiked}
+                onOpen={onOpenProduct}
               />
             ))}
           </div>
@@ -545,6 +546,7 @@ export function HomeTab({ authFetch, API_URL }) {
                 authFetch={authFetch}
                 API_URL={API_URL}
                 onLikedChange={patchLiked}
+                onOpen={onOpenProduct}
               />
             ))}
           </div>
@@ -566,7 +568,7 @@ export function HomeTab({ authFetch, API_URL }) {
   );
 }
 
-export function FavoritesTab({ authFetch, API_URL }) {
+export function FavoritesTab({ authFetch, API_URL, onOpenProduct }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -597,6 +599,7 @@ export function FavoritesTab({ authFetch, API_URL }) {
             product={p}
             authFetch={authFetch}
             API_URL={API_URL}
+            onOpen={onOpenProduct}
             onLikedChange={(id, liked) => {
               if (!liked) setItems((prev) => prev.filter((x) => x.id !== id));
             }}
@@ -700,7 +703,7 @@ export function CartTab({ authFetch, API_URL }) {
   );
 }
 
-export function ProfileTab({ authFetch, API_URL }) {
+export function ProfileTab({ authFetch, API_URL, onOpenProduct }) {
   const [hub, setHub] = useState(null);
   const [bonuses, setBonuses] = useState([]);
   const [cards, setCards] = useState([]);
@@ -943,7 +946,14 @@ export function ProfileTab({ authFetch, API_URL }) {
 
       <HorizontalRail title="Вы смотрели" onTitleClick={() => void openAllRecent()}>
         {recent.map((p) => (
-          <ProductCard key={p.id} product={p} authFetch={authFetch} API_URL={API_URL} compact />
+          <ProductCard
+            key={p.id}
+            product={p}
+            authFetch={authFetch}
+            API_URL={API_URL}
+            compact
+            onOpen={onOpenProduct}
+          />
         ))}
       </HorizontalRail>
       {recentAll ? <p className="muted small">Показаны все недавние просмотры (до 80).</p> : null}
