@@ -38,15 +38,15 @@
 }
 
 .vmagazine-header-title {
-  font-size: 1.28rem;
+  font-size: 1.55rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #5b3d82;
 }
 
 .vmenu-app-header-brand:has(.vmagazine-header-title) {
-  gap: 10px;
-  font-size: 1.15rem;
+  gap: 12px;
+  font-size: 1.35rem;
 }
 
 .vmagazine-tabs {

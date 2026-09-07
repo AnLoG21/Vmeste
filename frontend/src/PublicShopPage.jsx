@@ -120,6 +120,20 @@ export default function PublicShopPage({ slug }) {
     if (found) setProduct(found);
   }, [data]);
 
+  function closeProduct() {
+    setProduct(null);
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("product")) {
+        url.searchParams.delete("product");
+        const next = `${url.pathname}${url.search}${url.hash}`;
+        window.history.replaceState({}, "", next);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
   useEffect(() => {
     const pid = data?.provider?.id;
     if (!pid) return undefined;
@@ -265,45 +279,47 @@ export default function PublicShopPage({ slug }) {
   const logoUrl = data.provider?.logo_url || "";
 
   return (
-    <div className="cafe-guest shop-public-page">
-      <header className="cafe-guest-header">
-        <button
-          type="button"
-          className="cafe-guest-back"
-          aria-label="Назад на карту"
-          title="Назад на карту"
-          onClick={() => {
-            window.location.href = "/";
-          }}
-        >
-          ←
-        </button>
-        <div className="cafe-guest-brand">
-          <img
-            src={logoUrl || logoMain}
-            alt={orgName}
-            className={`cafe-guest-logo${logoUrl ? " is-org" : ""}`}
-          />
-          <div className="cafe-guest-head-copy">
-            <h1>{orgName}</h1>
-            <p>Товары · самовывоз и доставка</p>
+    <div className={`cafe-guest shop-public-page${product ? " is-product-open" : ""}`}>
+      {!product ? (
+        <header className="cafe-guest-header">
+          <button
+            type="button"
+            className="cafe-guest-back"
+            aria-label="Назад на карту"
+            title="Назад на карту"
+            onClick={() => {
+              window.location.href = "/";
+            }}
+          >
+            ←
+          </button>
+          <div className="cafe-guest-brand">
+            <img
+              src={logoUrl || logoMain}
+              alt={orgName}
+              className={`cafe-guest-logo${logoUrl ? " is-org" : ""}`}
+            />
+            <div className="cafe-guest-head-copy">
+              <h1>{orgName}</h1>
+              <p>Товары · самовывоз и доставка</p>
+            </div>
           </div>
-        </div>
-        <button
-          type="button"
-          className="cafe-cart-fab"
-          onClick={() => setCartOpen(true)}
-          aria-label={`Корзина, ${checkoutTotal.toLocaleString("ru-RU")} ₽`}
-        >
-          <span className="cafe-cart-fab-icon">
-            <CartIcon />
-          </span>
-          <span className="cafe-cart-fab-price">{(cartOpen ? checkoutTotal : itemsTotal).toLocaleString("ru-RU")} ₽</span>
-          {cartCount > 0 ? <span className="cafe-cart-fab-count">{cartCount}</span> : null}
-        </button>
-      </header>
+          <button
+            type="button"
+            className="cafe-cart-fab"
+            onClick={() => setCartOpen(true)}
+            aria-label={`Корзина, ${checkoutTotal.toLocaleString("ru-RU")} ₽`}
+          >
+            <span className="cafe-cart-fab-icon">
+              <CartIcon />
+            </span>
+            <span className="cafe-cart-fab-price">{(cartOpen ? checkoutTotal : itemsTotal).toLocaleString("ru-RU")} ₽</span>
+            {cartCount > 0 ? <span className="cafe-cart-fab-count">{cartCount}</span> : null}
+          </button>
+        </header>
+      ) : null}
 
-      {orderInfo ? (
+      {!product && orderInfo ? (
         <section className="cafe-guest-card">
           <h2>Заказ #{orderInfo.id}</h2>
           <p>
@@ -313,55 +329,57 @@ export default function PublicShopPage({ slug }) {
         </section>
       ) : null}
 
-      {error ? <p className="status error">{error}</p> : null}
+      {!product && error ? <p className="status error">{error}</p> : null}
 
-      <section className="cafe-guest-menu">
-        {menuByCategory.map((cat) => (
-          <div key={cat.id} className="cafe-menu-cat">
-            <h2>{cat.name}</h2>
-            <div className="cafe-menu-grid">
-              {cat.items.map((p) => {
-                const cover = p.photos?.[0]?.thumb_url || p.photos?.[0]?.image;
-                const qty = cart[p.id] || 0;
-                return (
-                  <article key={p.id} className="cafe-menu-item">
-                    {cover ? (
-                      <button type="button" className="cafe-menu-photo-btn" onClick={() => setProduct(p)}>
-                        <img src={cover} alt={p.name || "Товар"} loading="lazy" decoding="async" width={96} height={96} />
-                      </button>
-                    ) : (
-                      <button type="button" className="cafe-menu-photo-btn" onClick={() => setProduct(p)}>
-                        <div className="cafe-menu-ph" />
-                      </button>
-                    )}
-                    <h3>
-                      <button type="button" className="shop-menu-name-btn" onClick={() => setProduct(p)}>
-                        {p.name}
-                      </button>
-                    </h3>
-                    <div className="cafe-menu-row">
-                      <button
-                        type="button"
-                        className="cafe-menu-cart-price"
-                        onClick={() => addToCart(p.id, 1)}
-                        aria-label={`В корзину, ${Number(p.price).toLocaleString("ru-RU")} ₽`}
-                      >
-                        <CartIcon />
-                        <span>{Number(p.price).toLocaleString("ru-RU")} ₽</span>
-                        {qty > 0 ? <em className="cafe-menu-cart-price-count">{qty}</em> : null}
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
+      {!product ? (
+        <section className="cafe-guest-menu">
+          {menuByCategory.map((cat) => (
+            <div key={cat.id} className="cafe-menu-cat">
+              <h2>{cat.name}</h2>
+              <div className="cafe-menu-grid">
+                {cat.items.map((p) => {
+                  const cover = p.photos?.[0]?.thumb_url || p.photos?.[0]?.image;
+                  const qty = cart[p.id] || 0;
+                  return (
+                    <article key={p.id} className="cafe-menu-item">
+                      {cover ? (
+                        <button type="button" className="cafe-menu-photo-btn" onClick={() => setProduct(p)}>
+                          <img src={cover} alt={p.name || "Товар"} loading="lazy" decoding="async" width={96} height={96} />
+                        </button>
+                      ) : (
+                        <button type="button" className="cafe-menu-photo-btn" onClick={() => setProduct(p)}>
+                          <div className="cafe-menu-ph" />
+                        </button>
+                      )}
+                      <h3>
+                        <button type="button" className="shop-menu-name-btn" onClick={() => setProduct(p)}>
+                          {p.name}
+                        </button>
+                      </h3>
+                      <div className="cafe-menu-row">
+                        <button
+                          type="button"
+                          className="cafe-menu-cart-price"
+                          onClick={() => addToCart(p.id, 1)}
+                          aria-label={`В корзину, ${Number(p.price).toLocaleString("ru-RU")} ₽`}
+                        >
+                          <CartIcon />
+                          <span>{Number(p.price).toLocaleString("ru-RU")} ₽</span>
+                          {qty > 0 ? <em className="cafe-menu-cart-price-count">{qty}</em> : null}
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
-        {!menuByCategory.length ? <p className="muted">Пока нет товаров на витрине.</p> : null}
-      </section>
+          ))}
+          {!menuByCategory.length ? <p className="muted">Пока нет товаров на витрине.</p> : null}
+        </section>
+      ) : null}
 
       {product ? (
-        <div className="cafe-product-modal" onClick={() => setProduct(null)} role="dialog" aria-label="Карточка товара">
+        <div className="cafe-product-modal cafe-product-modal--solo" role="dialog" aria-label="Карточка товара">
           <div className="cafe-product-sheet shop-product-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="cafe-cart-sheet-head">
               <h2>
@@ -372,7 +390,7 @@ export default function PublicShopPage({ slug }) {
                   </span>
                 ) : null}
               </h2>
-              <button type="button" className="cafe-cart-close" onClick={() => setProduct(null)} aria-label="Закрыть">
+              <button type="button" className="cafe-cart-close" onClick={closeProduct} aria-label="Закрыть">
                 <CloseIcon />
               </button>
             </div>
@@ -402,13 +420,31 @@ export default function PublicShopPage({ slug }) {
               className="cafe-menu-cart-price cafe-menu-cart-price--wide"
               onClick={() => {
                 addToCart(product.id, 1);
-                setProduct(null);
+                closeProduct();
                 setCartOpen(true);
               }}
             >
               <CartIcon />
               <span>В корзину · {Number(product.price).toLocaleString("ru-RU")} ₽</span>
             </button>
+
+            <section className="shop-product-seller">
+              <h3>Магазин</h3>
+              <button type="button" className="shop-product-seller-card" onClick={closeProduct}>
+                <img
+                  src={logoUrl || logoMain}
+                  alt=""
+                  className={`shop-product-seller-logo${logoUrl ? " is-org" : ""}`}
+                />
+                <span className="shop-product-seller-copy">
+                  <strong>{orgName}</strong>
+                  <em>Все товары и доставка</em>
+                </span>
+                <span className="shop-product-seller-chevron" aria-hidden>
+                  →
+                </span>
+              </button>
+            </section>
 
             <section className="shop-product-reviews">
               <h3>Отзывы об организации</h3>
