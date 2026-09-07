@@ -2,7 +2,11 @@ from booking.models import ProviderStaff
 from users.models import User
 
 
-SHOP_SPHERES = {User.ProviderSphere.HAIR_SALON, User.ProviderSphere.SERVICE_CENTER}
+SHOP_SPHERES = {
+    User.ProviderSphere.HAIR_SALON,
+    User.ProviderSphere.SERVICE_CENTER,
+    User.ProviderSphere.SHOPS,
+}
 
 
 def staff_org_provider(user):

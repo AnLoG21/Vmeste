@@ -90,6 +90,23 @@ def build_public_org_payload(provider, request):
         "review_photos": review_photos,
         "public_url": f"/o/{provider.organization_slug}" if provider.organization_slug else "",
         "is_cafe": provider.provider_sphere == User.ProviderSphere.CAFE_RESTAURANT,
+        "is_shop": provider.provider_sphere
+        in (
+            User.ProviderSphere.SHOPS,
+            User.ProviderSphere.HAIR_SALON,
+            User.ProviderSphere.SERVICE_CENTER,
+        ),
+        "shop_url": (
+            f"/s/{provider.organization_slug}"
+            if provider.organization_slug
+            and provider.provider_sphere
+            in (
+                User.ProviderSphere.SHOPS,
+                User.ProviderSphere.HAIR_SALON,
+                User.ProviderSphere.SERVICE_CENTER,
+            )
+            else ""
+        ),
     }
 
 

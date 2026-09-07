@@ -43,6 +43,24 @@ def build_setup_progress(provider) -> list[dict]:
                 "view": "cafe",
             }
         )
+    elif sphere == "shops":
+        steps.append(_map_address_step(provider))
+        steps.append(
+            {
+                "id": "shop_products",
+                "label": "Добавьте первый товар в каталог",
+                "done": _has_shop_products(provider),
+                "view": "shop",
+            }
+        )
+        steps.append(
+            {
+                "id": "shop_delivery",
+                "label": "Включите самовывоз или доставку",
+                "done": _has_shop_fulfillment(provider),
+                "view": "shop",
+            }
+        )
     else:
         # hair_salon / service_center / default booking orgs
         steps.append(_map_address_step(provider))
@@ -125,6 +143,27 @@ def _has_cafe_floor_or_modes(provider) -> bool:
             return False
         # Default dine_in=True alone does not count as "set up".
         return bool(s.enable_takeaway or s.enable_delivery)
+    except Exception:
+        return False
+
+
+def _has_shop_products(provider) -> bool:
+    try:
+        from shop.models import Product
+
+        return Product.objects.filter(provider_id=provider.id).exists()
+    except Exception:
+        return False
+
+
+def _has_shop_fulfillment(provider) -> bool:
+    try:
+        from shop.models import ShopSettings
+
+        s = ShopSettings.objects.filter(provider_id=provider.id).first()
+        if not s:
+            return False
+        return bool(s.enable_pickup or s.enable_delivery)
     except Exception:
         return False
 

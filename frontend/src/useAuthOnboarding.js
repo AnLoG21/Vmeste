@@ -156,7 +156,15 @@ export function useAuthOnboarding({
     localStorage.setItem("vmeste_refresh", data.refresh);
     localStorage.setItem("vmeste_demo", "1");
     setShowAuthModal(false);
-    setCurrentView(sphere === "cafe_restaurant" ? "cafe" : sphere === "marketplaces" ? "marketplaces" : "bookings");
+    setCurrentView(
+      sphere === "cafe_restaurant"
+        ? "cafe"
+        : sphere === "marketplaces"
+          ? "marketplaces"
+          : sphere === "shops"
+            ? "shop"
+            : "bookings",
+    );
     setAuthStatus("");
   }
 
@@ -388,14 +396,21 @@ export function useAuthOnboarding({
     setAuthStatus("");
     onboardingPrefillIdRef.current = null;
     if (data.role === "provider" && data.provider_sphere === "cafe_restaurant") setCurrentView("cafe_orders");
-    if (
+    else if (
       data.role === "staff" &&
       (data.employer_sphere === "cafe_restaurant" || data.provider_sphere === "cafe_restaurant")
     ) {
       setCurrentView("cafe_orders");
+    } else if (data.role === "provider" && data.provider_sphere === "marketplaces") {
+      setCurrentView("marketplaces");
+    } else if (
+      (data.role === "provider" && data.provider_sphere === "shops") ||
+      (data.role === "staff" && (data.employer_sphere === "shops" || data.provider_sphere === "shops"))
+    ) {
+      setCurrentView("shop");
+    } else if (data.role === "provider") {
+      setCurrentView("bookings");
     }
-    else if (data.role === "provider" && data.provider_sphere === "marketplaces") setCurrentView("marketplaces");
-    else if (data.role === "provider") setCurrentView("bookings");
   }
 
   function initMap() {

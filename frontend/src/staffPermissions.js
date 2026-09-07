@@ -41,6 +41,15 @@ export function staffPermLabelsForSphere(sphere) {
     if (s === "cafe_restaurant") {
       return !BOOKING_KEYS.has(key) && !String(key).startsWith("marketplace_");
     }
+    if (s === "shops") {
+      return (
+        key === "manage_services" ||
+        key === "manage_chats" ||
+        key === "manage_client_chats" ||
+        key === "manage_staff" ||
+        key === "can_delegate_permissions"
+      );
+    }
     if (s === "service_center") {
       return !String(key).startsWith("marketplace_") && !String(key).startsWith("cafe_");
     }

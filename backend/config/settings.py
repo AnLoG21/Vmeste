@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     "marketplaces",
     "voice",
     "vmenu",
+    "vmagazine",
     "moy_nalog",
     "shop",
 ]

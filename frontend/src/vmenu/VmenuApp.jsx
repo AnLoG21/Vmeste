@@ -296,7 +296,7 @@ export default function VmenuApp({
   );
 }
 
-export function ServicesHub({ onOpenVmenu }) {
+export function ServicesHub({ onOpenVmenu, onOpenVmagazine }) {
   return (
     <section className="card services-hub">
       <h2>Сервисы</h2>
@@ -306,6 +306,15 @@ export function ServicesHub({ onOpenVmenu }) {
         <div>
           <strong>Вменю</strong>
           <p className="muted small">Социальная сеть рецептов: лента, книга, подписки и чаты.</p>
+        </div>
+      </button>
+      <button type="button" className="services-hub-card services-hub-card--shop" onClick={onOpenVmagazine}>
+        <span className="vmagazine-hub-mark" aria-hidden>
+          В
+        </span>
+        <div>
+          <strong>Вмагазине</strong>
+          <p className="muted small">Поиск магазинов, избранное и ваши заказы с витрин.</p>
         </div>
       </button>
     </section>

@@ -254,7 +254,7 @@ export default function CabinetChrome({
           type="button"
           className="brand-link brand-btn"
           onClick={() => {
-            if (currentView === "vmenu") {
+            if (currentView === "vmenu" || currentView === "vmagazine") {
               setCurrentView("service_apps");
               return;
             }
@@ -262,16 +262,28 @@ export default function CabinetChrome({
             else if (me?.role === "client") setCurrentView("client_map");
             else if (me?.provider_sphere === "marketplaces") setCurrentView("marketplaces");
             else if (me?.provider_sphere === "cafe_restaurant") setCurrentView("cafe_orders");
+            else if (me?.provider_sphere === "shops") setCurrentView("shop");
             else setCurrentView("bookings");
           }}
         >
-          {currentView === "vmenu" ? (
+          {currentView === "vmenu" || currentView === "vmagazine" ? (
             <span className="vmenu-app-header-brand">
               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
                 <path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
               </svg>
-              <VmenuLogo size={28} />
-              <strong>Вменю</strong>
+              {currentView === "vmagazine" ? (
+                <>
+                  <span className="vmagazine-header-mark" aria-hidden>
+                    В
+                  </span>
+                  <strong>Вмагазине</strong>
+                </>
+              ) : (
+                <>
+                  <VmenuLogo size={28} />
+                  <strong>Вменю</strong>
+                </>
+              )}
             </span>
           ) : (
             <img
@@ -289,7 +301,7 @@ export default function CabinetChrome({
           )}
         </button>
         <div>{verifyStatus && <p className="verify-note">{verifyStatus}</p>}</div>
-        {accessToken && currentView !== "vmenu" && (me?.role === "client" || (me?.role === "provider" && currentView === "client_map")) && (
+        {accessToken && currentView !== "vmenu" && currentView !== "vmagazine" && (me?.role === "client" || (me?.role === "provider" && currentView === "client_map")) && (
           <div className="client-header-search">
             <div className="client-header-search-input-wrap" ref={clientHeaderSearchWrapRef}>
               <input
@@ -461,7 +473,7 @@ export default function CabinetChrome({
                   </span>
                   <span className="menu-item-label">Настройки</span>
                 </button>
-                {me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" ? (
+                {me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" && me?.provider_sphere !== "shops" ? (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("booking_history"); setMenuOpen(false); }}>
                     <span className="menu-item-icon" aria-hidden="true">
                       {bookmarkMenuIcon("booking_history")}
@@ -569,7 +581,7 @@ export default function CabinetChrome({
         </div>
       )}
 
-      {accessToken && me?.role && currentView !== "vmenu" && (
+      {accessToken && me?.role && currentView !== "vmenu" && currentView !== "vmagazine" && (
         <nav
           className={[
             "app-subnav",

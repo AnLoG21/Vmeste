@@ -16,6 +16,8 @@ import WaitlistPanel from "./WaitlistPanel.jsx";
 import MarketplaceWorkspace from "./MarketplaceWorkspace.jsx";
 import ShopWorkspace from "./ShopWorkspace.jsx";
 import VmenuApp, { ServicesHub } from "./vmenu/VmenuApp.jsx";
+import VmagazineApp from "./vmagazine/VmagazineApp.jsx";
+import "./vmagazine/vmagazine.css";
 import { CabinetErrorBoundary } from "./CabinetErrorBoundary.jsx";
 import CabinetChrome from "./CabinetChrome.jsx";
 import InspectionWorkspace from "./InspectionWorkspace.jsx";
@@ -645,6 +647,7 @@ export default function App() {
         { key: "service_center", value: "Автосервис" },
         { key: "cafe_restaurant", value: "Кафе и рестораны" },
         { key: "marketplaces", value: "Маркетплейсы" },
+        { key: "shops", value: "Магазины" },
       ];
   const needsCredentialsSetup = Boolean(accessToken && me && me.needs_credentials_setup);
   const needsOnboarding = Boolean(
@@ -838,6 +841,17 @@ export default function App() {
       (currentView === "bookings" || currentView === "analytics" || currentView === "reviews")
     ) {
       setCurrentView("marketplaces");
+    }
+    if (
+      me?.role === "provider" &&
+      me?.provider_sphere === "shops" &&
+      (currentView === "bookings" ||
+        currentView === "my_bookings" ||
+        currentView === "booking_history" ||
+        currentView === "intervals" ||
+        currentView === "services")
+    ) {
+      setCurrentView("shop");
     }
   }, [me?.role, me?.provider_sphere, currentView, setCurrentView]);
 
@@ -2766,7 +2780,7 @@ export default function App() {
     me?.role === "provider" ||
     me?.role === "staff";
   const chatsPortalTarget = currentView === "vmenu" ? vmenuChatsHostEl : mainChatsHostEl;
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "service_apps", "vmenu"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "service_apps", "vmenu", "vmagazine"].includes(currentView);
   const profileWide = accessToken && ["profile", "subscriptions"].includes(currentView);
 
   return (
@@ -2954,7 +2968,10 @@ export default function App() {
           />
         )}
         {accessToken && currentView === "service_apps" && (
-          <ServicesHub onOpenVmenu={() => setCurrentView("vmenu")} />
+          <ServicesHub
+            onOpenVmenu={() => setCurrentView("vmenu")}
+            onOpenVmagazine={() => setCurrentView("vmagazine")}
+          />
         )}
         {accessToken && currentView === "vmenu" && (
           <VmenuApp
@@ -2967,6 +2984,9 @@ export default function App() {
             onChatsHostReady={setVmenuChatsHostEl}
             onExit={() => setCurrentView("service_apps")}
           />
+        )}
+        {accessToken && currentView === "vmagazine" && (
+          <VmagazineApp authFetch={authFetch} API_URL={API_URL} />
         )}
         {accessToken &&
           currentView === "marketplaces" &&
@@ -3019,7 +3039,7 @@ export default function App() {
         {accessToken && currentView === "staff" && canAccessStaffPage && renderStaffManagement()}
 
         {accessToken && canViewOrgReviews() && currentView === "reviews" && renderProviderReviewsBlock()}
-        {accessToken && me?.role === "provider" && currentView === "bookings" && me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" && (
+        {accessToken && me?.role === "provider" && currentView === "bookings" && me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" && me?.provider_sphere !== "shops" && (
           <>
             {cabinetLoadError ? (
               <LoadErrorBanner message={cabinetLoadError} onRetry={() => void loadSellerData()} />
@@ -3030,15 +3050,17 @@ export default function App() {
             ) : null}
           </>
         )}
-        {accessToken && me?.role === "provider" && currentView === "intervals" && me?.provider_sphere !== "cafe_restaurant" && renderSlotCalendar(true)}
+        {accessToken && me?.role === "provider" && currentView === "intervals" && me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "shops" && renderSlotCalendar(true)}
         {accessToken &&
           me?.role === "staff" &&
           currentView === "intervals" &&
           staffHasPerm("manage_intervals") &&
           me?.employer_sphere !== "cafe_restaurant" &&
           me?.provider_sphere !== "cafe_restaurant" &&
+          me?.employer_sphere !== "shops" &&
+          me?.provider_sphere !== "shops" &&
           renderSlotCalendar(true)}
-        {accessToken && me?.role === "staff" && currentView === "bookings" && staffHasPerm("manage_bookings") && me?.provider_sphere !== "cafe_restaurant" && me?.employer_sphere !== "cafe_restaurant" && (
+        {accessToken && me?.role === "staff" && currentView === "bookings" && staffHasPerm("manage_bookings") && me?.provider_sphere !== "cafe_restaurant" && me?.employer_sphere !== "cafe_restaurant" && me?.provider_sphere !== "shops" && me?.employer_sphere !== "shops" && (
           <>
             {cabinetLoadError ? (
               <LoadErrorBanner message={cabinetLoadError} onRetry={() => void loadStaffWorkspace()} />
@@ -3194,8 +3216,10 @@ export default function App() {
           currentView === "services" &&
           me?.provider_sphere !== "cafe_restaurant" &&
           me?.provider_sphere !== "marketplaces" &&
+          me?.provider_sphere !== "shops" &&
           me?.employer_sphere !== "cafe_restaurant" &&
           me?.employer_sphere !== "marketplaces" &&
+          me?.employer_sphere !== "shops" &&
           (me?.role === "provider" || (me?.role === "staff" && staffHasPerm("manage_services"))) && (
           <div className="services-layout">
             {cabinetLoadError ? (
@@ -3311,7 +3335,7 @@ export default function App() {
         {accessToken && me?.role === "client" && currentView === "loyalty" && (
           <ClientLoyaltyPage authFetch={authFetch} API_URL={API_URL} />
         )}
-        {accessToken && me?.role === "provider" && currentView === "my_bookings" && me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" && renderBookingsBlock("Мои записи")}
+        {accessToken && me?.role === "provider" && currentView === "my_bookings" && me?.provider_sphere !== "cafe_restaurant" && me?.provider_sphere !== "marketplaces" && me?.provider_sphere !== "shops" && renderBookingsBlock("Мои записи")}
 
         {accessToken && currentView === "booking_history" && renderBookingHistory()}
 

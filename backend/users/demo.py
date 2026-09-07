@@ -97,6 +97,25 @@ DEMO_SPHERES = {
             {"username": "demo_market_client_1", "first_name": "Роман", "last_name": "Егоров"},
         ],
     },
+    "shops": {
+        "username": "demo_shop",
+        "email": "demo.shop@vsevmeste.space",
+        "first_name": "Наталья",
+        "last_name": "Кузнецова",
+        "organization_name": "Магазин «Полка рядом»",
+        "organization_slug": "demo-shop",
+        "address": "Москва, ул. Арбат, 12",
+        "lat": Decimal("55.752023"),
+        "lng": Decimal("37.593845"),
+        "phone": "+7 495 000-55-66",
+        "label": "Магазины",
+        "staff": [
+            {"username": "demo_shop_staff_1", "first_name": "Олег", "last_name": "Мишин", "job_title": "Продавец"},
+        ],
+        "clients": [
+            {"username": "demo_shop_client_1", "first_name": "Дарья", "last_name": "Соловьёва"},
+        ],
+    },
 }
 
 
@@ -166,6 +185,7 @@ def _wipe_visitor_data(provider, cfg: dict):
     from reviews.models import Review
     from inspections.models import InspectionReport
     from marketplaces.models import MarketplaceApiLog, MarketplaceProductHistory, MarketplaceTemplate
+    from shop.models import Product, ProductCategory, ShopOrder
 
     InspectionReport.objects.filter(provider=provider).delete()
     Booking.objects.filter(provider=provider).delete()
@@ -173,6 +193,9 @@ def _wipe_visitor_data(provider, cfg: dict):
     Review.objects.filter(provider=provider).delete()
     CafeOrder.objects.filter(provider=provider).delete()
     CafeGuestSession.objects.filter(provider=provider).delete()
+    ShopOrder.objects.filter(provider=provider).delete()
+    Product.objects.filter(provider=provider).delete()
+    ProductCategory.objects.filter(provider=provider).delete()
     Service.objects.filter(provider=provider, template_slug="").delete()
     ServiceCategory.objects.filter(provider=provider, template_slug="").delete()
     CafeFloorPlan.objects.filter(provider=provider).delete()
@@ -517,6 +540,42 @@ def _seed_marketplaces(provider):
         )
 
 
+def _seed_shop(provider):
+    from shop.models import Product, ProductCategory, ShopSettings
+
+    ShopSettings.objects.update_or_create(
+        provider=provider,
+        defaults={
+            "enable_pickup": True,
+            "enable_delivery": True,
+            "enable_own_courier": True,
+            "delivery_info": "Демо-доставка по району.",
+            "delivery_fee": Decimal("199"),
+            "own_eta_text": "1–2 часа",
+        },
+    )
+    cat, _ = ProductCategory.objects.get_or_create(
+        provider=provider, name="Популярное", defaults={"sort_order": 1}
+    )
+    products = [
+        ("Набор чайный", Decimal("1290"), True, 20),
+        ("Кружка керамическая", Decimal("490"), True, 40),
+        ("Шоколад ассорти", Decimal("320"), False, 60),
+    ]
+    for name, price, featured, stock in products:
+        Product.objects.get_or_create(
+            provider=provider,
+            name=name,
+            defaults={
+                "category": cat,
+                "price": price,
+                "stock_qty": Decimal(stock),
+                "is_featured": featured,
+                "description": "Демо-товар витрины магазина.",
+            },
+        )
+
+
 def seed_sphere(sphere: str, *, reset: bool = True) -> User:
     cfg = DEMO_SPHERES[sphere]
     with transaction.atomic():
@@ -549,6 +608,8 @@ def seed_sphere(sphere: str, *, reset: bool = True) -> User:
             _seed_cafe(provider)
         elif sphere == User.ProviderSphere.MARKETPLACES:
             _seed_marketplaces(provider)
+        elif sphere == User.ProviderSphere.SHOPS:
+            _seed_shop(provider)
         else:
             _seed_slots_and_bookings(provider, staff_links, clients, services)
             _seed_reviews(provider, clients, staff_links)

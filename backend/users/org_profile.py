@@ -194,7 +194,24 @@ class OrganizationClientProfileView(APIView):
                 "provider_sphere": provider.provider_sphere or "",
                 "sphere_label": dict(User.ProviderSphere.choices).get(provider.provider_sphere or "", ""),
                 "is_cafe": provider.provider_sphere == User.ProviderSphere.CAFE_RESTAURANT,
+                "is_shop": provider.provider_sphere
+                in (
+                    User.ProviderSphere.SHOPS,
+                    User.ProviderSphere.HAIR_SALON,
+                    User.ProviderSphere.SERVICE_CENTER,
+                ),
                 "menu_url": f"/m/{provider.organization_slug}" if provider.provider_sphere == User.ProviderSphere.CAFE_RESTAURANT and provider.organization_slug else "",
+                "shop_url": (
+                    f"/s/{provider.organization_slug}"
+                    if provider.organization_slug
+                    and provider.provider_sphere
+                    in (
+                        User.ProviderSphere.SHOPS,
+                        User.ProviderSphere.HAIR_SALON,
+                        User.ProviderSphere.SERVICE_CENTER,
+                    )
+                    else ""
+                ),
                 "organization_address": provider.organization_address or "",
                 "working_hours": hours,
                 "phones": phones,

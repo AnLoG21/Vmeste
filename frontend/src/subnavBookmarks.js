@@ -38,6 +38,8 @@ export const DEFAULT_SUBNAV_BOOKMARKS = {
   provider_service: ["bookings", "client_map", "my_bookings", "analytics", "shop", "service_apps", "chats", "inspections"],
   provider_salon: ["bookings", "client_map", "my_bookings", "analytics", "shop", "service_apps", "chats"],
   provider_marketplaces: ["marketplaces", "analytics", "reviews", "service_apps", "chats"],
+  provider_shops: ["shop", "reviews", "analytics", "client_map", "service_apps", "chats"],
+  staff_shops: ["shop", "analytics", "service_apps", "chats"],
 };
 
 function ensureServiceAppsBookmark(list, allowed) {
@@ -62,6 +64,12 @@ export function defaultSubnavBookmarks(role, sphere) {
   }
   if (role === "provider" && sphere === "marketplaces") {
     return [...DEFAULT_SUBNAV_BOOKMARKS.provider_marketplaces];
+  }
+  if (role === "provider" && sphere === "shops") {
+    return [...DEFAULT_SUBNAV_BOOKMARKS.provider_shops];
+  }
+  if (role === "staff" && sphere === "shops") {
+    return [...DEFAULT_SUBNAV_BOOKMARKS.staff_shops];
   }
   if (role === "client") {
     return [...DEFAULT_SUBNAV_BOOKMARKS.client];
@@ -117,6 +125,25 @@ export function loadSubnavBookmarks(role, sphere) {
       );
       if (!next.includes("marketplaces")) next = ["marketplaces", ...next];
       else next = ["marketplaces", ...next.filter((id) => id !== "marketplaces")];
+    }
+    if (role === "provider" && sphere === "shops") {
+      next = next.filter(
+        (id) =>
+          id !== "bookings" &&
+          id !== "intervals" &&
+          id !== "services" &&
+          id !== "my_bookings" &&
+          id !== "cafe" &&
+          id !== "cafe_orders",
+      );
+      if (!next.includes("shop")) next = ["shop", ...next];
+      else next = ["shop", ...next.filter((id) => id !== "shop")];
+      if (!next.includes("client_map")) next = [...next, "client_map"];
+    }
+    if (role === "staff" && sphere === "shops") {
+      next = next.filter((id) => id !== "bookings" && id !== "intervals" && id !== "services");
+      if (!next.includes("shop")) next = ["shop", ...next];
+      else next = ["shop", ...next.filter((id) => id !== "shop")];
     }
     next = ensureServiceAppsBookmark(next, allowed);
     return next.length ? next : [...fallback];

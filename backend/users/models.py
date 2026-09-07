@@ -14,6 +14,7 @@ class User(AbstractUser):
         SERVICE_CENTER = "service_center", "Автосервис"
         CAFE_RESTAURANT = "cafe_restaurant", "Кафе и рестораны"
         MARKETPLACES = "marketplaces", "Маркетплейсы"
+        SHOPS = "shops", "Магазины"
 
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.CLIENT)
     phone = models.CharField(max_length=30, blank=True)

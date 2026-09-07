@@ -661,36 +661,120 @@ def get_delivery_provider(settings_obj, kind: str | None = None) -> DeliveryProv
     return OwnCourierProvider()
 
 
-def available_delivery_methods(settings_obj) -> list[dict]:
-    """Список способов доставки, которые продавец включил и для которых есть ключи."""
+KNOWN_DELIVERY_KINDS = ("own", "yandex", "cdek", "russian_post", "dostavista")
+
+# Курьерские способы: ETA зависит от расстояния до адреса.
+DISTANCE_BASED_KINDS = frozenset({"own", "yandex", "dostavista"})
+
+
+def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    import math
+
+    r = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlmb = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlmb / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(min(1.0, a)))
+
+
+def _round_minutes(value: float, step: int = 5) -> int:
+    return max(step, int(round(value / step) * step))
+
+
+def format_courier_eta(distance_m: float | None, *, kind: str = "own", fallback: str = "") -> str:
+    """Оценка времени доставки по прямой + запас на сборку и пробки."""
+    if distance_m is None or distance_m < 0:
+        return (fallback or "").strip()
+
+    # Сборка / передача курьеру
+    prep = 20 if kind == "own" else 25
+    # Средняя скорость по городу с учётом пробок (км/ч)
+    speed_kmh = 22.0 if kind == "own" else 26.0
+    travel_min = (float(distance_m) / 1000.0) / speed_kmh * 60.0
+    # Коэффициент «не по прямой»
+    total = prep + travel_min * 1.35
+    low = _round_minutes(total * 0.9)
+    high = _round_minutes(total * 1.25)
+    if high <= low:
+        high = low + 10
+
+    if high < 60:
+        return f"{low}–{high} мин"
+    if low < 60:
+        return f"{low} мин – {_format_hours(high)}"
+    return f"{_format_hours(low)} – {_format_hours(high)}"
+
+
+def _format_hours(minutes: int) -> str:
+    h = minutes // 60
+    m = minutes % 60
+    if h <= 0:
+        return f"{m} мин"
+    if m == 0:
+        return f"{h} ч" if h != 1 else "1 ч"
+    return f"{h} ч {m:02d} мин"
+
+
+def available_delivery_methods(
+    settings_obj,
+    *,
+    dest_lat: float | None = None,
+    dest_lon: float | None = None,
+    origin_lat: float | None = None,
+    origin_lon: float | None = None,
+) -> list[dict]:
+    """Список способов доставки, которые продавец включил и для которых есть ключи.
+
+    Если переданы координаты магазина и адреса — для курьерских способов
+    ETA считается от расстояния, иначе остаётся текст из настроек.
+    """
     if not getattr(settings_obj, "enable_delivery", False):
         return []
 
     fee = str(getattr(settings_obj, "delivery_fee", 0) or 0)
+    distance_m = None
+    if (
+        dest_lat is not None
+        and dest_lon is not None
+        and origin_lat is not None
+        and origin_lon is not None
+    ):
+        try:
+            distance_m = haversine_m(
+                float(origin_lat), float(origin_lon), float(dest_lat), float(dest_lon)
+            )
+        except (TypeError, ValueError):
+            distance_m = None
+
     out: list[dict] = []
 
     if getattr(settings_obj, "enable_own_courier", True):
+        fallback = (getattr(settings_obj, "own_eta_text", None) or "1–3 часа").strip()
         out.append(
             {
                 "id": "own",
                 "label": "Курьер продавца",
-                "eta": (getattr(settings_obj, "own_eta_text", None) or "1–3 часа").strip(),
+                "eta": format_courier_eta(distance_m, kind="own", fallback=fallback),
                 "fee": fee,
                 "needs_credentials": False,
                 "ready": True,
+                "distance_m": round(distance_m) if distance_m is not None else None,
             }
         )
 
     if getattr(settings_obj, "enable_yandex_delivery", False):
         has_token = bool((getattr(settings_obj, "yandex_delivery_token", "") or "").strip())
+        fallback = (getattr(settings_obj, "yandex_eta_text", None) or "от 40 минут").strip()
         out.append(
             {
                 "id": "yandex",
                 "label": "Яндекс Доставка",
-                "eta": (getattr(settings_obj, "yandex_eta_text", None) or "от 40 минут").strip(),
+                "eta": format_courier_eta(distance_m, kind="yandex", fallback=fallback),
                 "fee": fee,
                 "needs_credentials": True,
                 "ready": has_token,
+                "distance_m": round(distance_m) if distance_m is not None else None,
             }
         )
 
@@ -707,6 +791,7 @@ def available_delivery_methods(settings_obj) -> list[dict]:
                 "fee": fee,
                 "needs_credentials": True,
                 "ready": has_keys,
+                "distance_m": None,
             }
         )
 
@@ -723,26 +808,26 @@ def available_delivery_methods(settings_obj) -> list[dict]:
                 "fee": fee,
                 "needs_credentials": True,
                 "ready": has_keys,
+                "distance_m": None,
             }
         )
 
     if getattr(settings_obj, "enable_dostavista", False):
         has_token = bool((getattr(settings_obj, "dostavista_token", "") or "").strip())
+        fallback = (getattr(settings_obj, "dostavista_eta_text", None) or "1–3 часа").strip()
         out.append(
             {
                 "id": "dostavista",
                 "label": "Dostavista",
-                "eta": (getattr(settings_obj, "dostavista_eta_text", None) or "1–3 часа").strip(),
+                "eta": format_courier_eta(distance_m, kind="dostavista", fallback=fallback),
                 "fee": fee,
                 "needs_credentials": True,
                 "ready": has_token,
+                "distance_m": round(distance_m) if distance_m is not None else None,
             }
         )
 
     return [m for m in out if m.get("ready")]
-
-
-KNOWN_DELIVERY_KINDS = ("own", "yandex", "cdek", "russian_post", "dostavista")
 
 
 def resolve_order_delivery_kind(order, settings_obj) -> str:

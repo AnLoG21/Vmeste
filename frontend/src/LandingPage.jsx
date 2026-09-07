@@ -302,6 +302,12 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               <span>Зал, PIN столов, меню и заказы</span>
               <em>Открыть кабинет</em>
             </button>
+            <button type="button" className="landing-demo-sphere" onClick={() => startFromPage("shops")}>
+              <span className="landing-demo-sphere-emoji" aria-hidden="true">🛒</span>
+              <strong>Магазин</strong>
+              <span>Каталог, склад, самовывоз и доставка</span>
+              <em>Открыть кабинет</em>
+            </button>
             <button type="button" className="landing-demo-sphere" onClick={() => startFromPage("marketplaces")}>
               <span className="landing-demo-sphere-emoji" aria-hidden="true">📦</span>
               <strong>Маркетплейсы</strong>
@@ -315,7 +321,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           <h2>Что такое Вместе?</h2>
           <p className="landing-section-lead">
             Вместе — современная экосистема для сервисного бизнеса и селлеров: салонов красоты,
-            сервисных центров, кафе и кабинетов Ozon/Wildberries.
+            сервисных центров, кафе, магазинов и кабинетов Ozon/Wildberries.
           </p>
           <div className="landing-features">
             <article className="landing-feature">
@@ -390,6 +396,14 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               <span>Рецепты, лента, книга и чаты</span>
               <span className="landing-biz-link">Подробнее →</span>
             </a>
+            <a className="landing-biz-card landing-biz-card--app" href="/apps#vmagazine">
+              <span className="landing-biz-emoji" aria-hidden="true">
+                🛒
+              </span>
+              <strong>Вмагазине</strong>
+              <span>Поиск магазинов, избранное и заказы</span>
+              <span className="landing-biz-link">Подробнее →</span>
+            </a>
             <a className="landing-biz-card landing-biz-card--app" href="/apps#voice">
               <span className="landing-biz-emoji" aria-hidden="true">
                 🎙️
@@ -437,6 +451,14 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </span>
               <strong>Кафе и рестораны</strong>
               <span>Зал, QR, меню, оплата</span>
+              <span className="landing-biz-link">Подробнее →</span>
+            </a>
+            <a className="landing-biz-card" href="/businesses#shops">
+              <span className="landing-biz-emoji" aria-hidden="true">
+                🛒
+              </span>
+              <strong>Магазины</strong>
+              <span>Каталог, склад, доставка</span>
               <span className="landing-biz-link">Подробнее →</span>
             </a>
             <a className="landing-biz-card" href="/businesses#marketplaces">

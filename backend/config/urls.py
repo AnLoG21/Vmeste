@@ -25,6 +25,7 @@ urlpatterns = [
     path("api/marketplaces/", include("marketplaces.urls")),
     path("api/voice/", include("voice.urls")),
     path("api/vmenu/", include("vmenu.urls")),
+    path("api/vmagazine/", include("vmagazine.urls")),
     path("api/moy-nalog/", include("moy_nalog.urls")),
     path("api/shop/", include("shop.urls")),
 ]

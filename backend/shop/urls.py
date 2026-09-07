@@ -6,6 +6,7 @@ from .views import (
     ProductSubcategoryViewSet,
     ProductViewSet,
     PublicShopCatalogView,
+    PublicShopDeliveryQuoteView,
     PublicShopOrderCreateView,
     PublicShopOrderStatusView,
     ServiceMaterialViewSet,
@@ -25,6 +26,11 @@ router.register(r"orders", ShopOrderViewSet, basename="shop-orders")
 urlpatterns = [
     path("settings/", ShopSettingsView.as_view(), name="shop-settings"),
     path("public/<slug:slug>/", PublicShopCatalogView.as_view(), name="shop-public-catalog"),
+    path(
+        "public/<slug:slug>/delivery-quote/",
+        PublicShopDeliveryQuoteView.as_view(),
+        name="shop-public-delivery-quote",
+    ),
     path("public/<slug:slug>/order/", PublicShopOrderCreateView.as_view(), name="shop-public-order"),
     path(
         "public/<slug:slug>/order/<int:order_id>/",

@@ -50,6 +50,37 @@ def _get_or_create_settings(provider) -> ShopSettings:
     return obj
 
 
+def _parse_coord(value):
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _provider_origin_coords(provider):
+    lat = getattr(provider, "organization_latitude", None)
+    lon = getattr(provider, "organization_longitude", None)
+    if lat is None or lon is None:
+        return None, None
+    try:
+        return float(lat), float(lon)
+    except (TypeError, ValueError):
+        return None, None
+
+
+def _delivery_options(settings_obj, provider, *, dest_lat=None, dest_lon=None):
+    origin_lat, origin_lon = _provider_origin_coords(provider)
+    return available_delivery_methods(
+        settings_obj,
+        dest_lat=dest_lat,
+        dest_lon=dest_lon,
+        origin_lat=origin_lat,
+        origin_lon=origin_lon,
+    )
+
+
 def _provider_by_slug(slug: str) -> User:
     slug = (slug or "").strip().lower()
     provider = get_object_or_404(User, organization_slug__iexact=slug, role=User.Role.PROVIDER)
@@ -369,7 +400,7 @@ class ShopSettingsView(APIView):
         data["has_cdek_secret"] = bool(settings_obj.cdek_client_secret)
         data["has_russian_post"] = bool(settings_obj.russian_post_token and settings_obj.russian_post_user_key)
         data["has_dostavista_token"] = bool(settings_obj.dostavista_token)
-        data["delivery_options"] = available_delivery_methods(settings_obj)
+        data["delivery_options"] = _delivery_options(settings_obj, provider)
         return Response(data)
 
     def patch(self, request):
@@ -395,7 +426,7 @@ class ShopSettingsView(APIView):
         ser.save()
         # синхронизируем legacy delivery_provider с первым включённым методом
         settings_obj.refresh_from_db()
-        methods = available_delivery_methods(settings_obj)
+        methods = _delivery_options(settings_obj, provider)
         if methods:
             settings_obj.delivery_provider = methods[0]["id"]
             settings_obj.save(update_fields=["delivery_provider"])
@@ -419,7 +450,7 @@ class ShopSettingsView(APIView):
         out["has_cdek_secret"] = bool(settings_obj.cdek_client_secret)
         out["has_russian_post"] = bool(settings_obj.russian_post_token and settings_obj.russian_post_user_key)
         out["has_dostavista_token"] = bool(settings_obj.dostavista_token)
-        out["delivery_options"] = available_delivery_methods(settings_obj)
+        out["delivery_options"] = _delivery_options(settings_obj, provider)
         return Response(out)
 
 
@@ -507,6 +538,9 @@ class PublicShopCatalogView(APIView):
 
             urls = photo_urls(request, first_photo.image)
             logo_url = urls.get("thumb_url") or urls.get("url") or ""
+        dest_lat = _parse_coord(request.query_params.get("lat"))
+        dest_lon = _parse_coord(request.query_params.get("lon"))
+        origin_lat, origin_lon = _provider_origin_coords(provider)
         return Response(
             {
                 "provider": {
@@ -515,6 +549,8 @@ class PublicShopCatalogView(APIView):
                     "slug": provider.organization_slug,
                     "sphere": provider.provider_sphere,
                     "logo_url": logo_url,
+                    "latitude": origin_lat,
+                    "longitude": origin_lon,
                 },
                 "settings": {
                     "enable_pickup": settings_obj.enable_pickup,
@@ -524,10 +560,41 @@ class PublicShopCatalogView(APIView):
                     "delivery_min_order": str(settings_obj.delivery_min_order),
                     "delivery_zones": settings_obj.delivery_zones or [],
                     "accept_online_payment": settings_obj.accept_online_payment,
-                    "delivery_options": available_delivery_methods(settings_obj),
+                    "delivery_options": _delivery_options(
+                        settings_obj, provider, dest_lat=dest_lat, dest_lon=dest_lon
+                    ),
                 },
                 "categories": ProductCategorySerializer(categories, many=True).data,
                 "products": ProductPublicSerializer(qs, many=True, context={"request": request}).data,
+            }
+        )
+
+
+class PublicShopDeliveryQuoteView(APIView):
+    """Пересчёт ETA доставки по координатам адреса покупателя."""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request, slug):
+        provider = _provider_by_slug(slug)
+        if not provider_sphere_allows_shop(provider):
+            return Response({"detail": "Магазин недоступен"}, status=404)
+        settings_obj = _get_or_create_settings(provider)
+        dest_lat = _parse_coord(request.query_params.get("lat"))
+        dest_lon = _parse_coord(request.query_params.get("lon"))
+        if dest_lat is None or dest_lon is None:
+            return Response({"detail": "Укажите lat и lon адреса доставки"}, status=400)
+        options = _delivery_options(settings_obj, provider, dest_lat=dest_lat, dest_lon=dest_lon)
+        distance_m = next((o.get("distance_m") for o in options if o.get("distance_m") is not None), None)
+        return Response(
+            {
+                "delivery_options": options,
+                "distance_m": distance_m,
+                "origin": {
+                    "latitude": _provider_origin_coords(provider)[0],
+                    "longitude": _provider_origin_coords(provider)[1],
+                },
             }
         )
 
@@ -580,7 +647,14 @@ class PublicShopOrderCreateView(APIView):
         chosen_method = str(request.data.get("delivery_method") or request.data.get("chosen_delivery_provider") or "").strip()
         eta_text = ""
         if mode == ShopOrder.Mode.DELIVERY:
-            options = available_delivery_methods(settings_obj)
+            try:
+                delivery_lat = float(request.data.get("delivery_lat"))
+                delivery_lon = float(request.data.get("delivery_lon"))
+            except (TypeError, ValueError):
+                delivery_lat = delivery_lon = None
+            options = _delivery_options(
+                settings_obj, provider, dest_lat=delivery_lat, dest_lon=delivery_lon
+            )
             if not options:
                 return Response({"detail": "Нет доступных способов доставки"}, status=400)
             if not chosen_method:
@@ -589,11 +663,6 @@ class PublicShopOrderCreateView(APIView):
             if not option:
                 return Response({"detail": "Выбранный способ доставки недоступен"}, status=400)
             eta_text = option.get("eta") or ""
-            try:
-                delivery_lat = float(request.data.get("delivery_lat"))
-                delivery_lon = float(request.data.get("delivery_lon"))
-            except (TypeError, ValueError):
-                delivery_lat = delivery_lon = None
             zones = settings_obj.delivery_zones or []
             # зоны и fee курьера продавца; для внешних — базовая стоимость из настроек
             if chosen_method == "own" and zones and delivery_lat is not None and delivery_lon is not None:

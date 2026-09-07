@@ -108,6 +108,19 @@ export function useCabinetNavigation({
     } else if (id === "marketplaces") {
       return false;
     }
+    if (me?.provider_sphere === "shops" || me?.employer_sphere === "shops") {
+      if (
+        id === "intervals" ||
+        id === "bookings" ||
+        id === "services" ||
+        id === "my_bookings" ||
+        id === "booking_history" ||
+        id === "cafe" ||
+        id === "cafe_orders"
+      ) {
+        return false;
+      }
+    }
     if (id === "inspections") {
       if (role === "client") return true;
       if (role === "provider") return me?.provider_sphere === "service_center";
@@ -119,10 +132,10 @@ export function useCabinetNavigation({
       }
       return false;
     }
-    if (id === "service_apps" || id === "vmenu") return Boolean(accessToken);
+    if (id === "service_apps" || id === "vmenu" || id === "vmagazine") return Boolean(accessToken);
     if (id === "shop") {
       const sphere = me?.provider_sphere || me?.employer_sphere;
-      if (sphere !== "hair_salon" && sphere !== "service_center") return false;
+      if (sphere !== "hair_salon" && sphere !== "service_center" && sphere !== "shops") return false;
       if (role === "staff" && !staffHasPerm("manage_services")) return false;
       return role === "provider" || role === "staff";
     }

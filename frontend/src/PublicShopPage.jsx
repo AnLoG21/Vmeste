@@ -40,6 +40,9 @@ export default function PublicShopPage({ slug }) {
   const [product, setProduct] = useState(null);
   const [reviews, setReviews] = useState([]);
 
+  const [deliveryOptionsLive, setDeliveryOptionsLive] = useState(null);
+  const [etaLoading, setEtaLoading] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -63,6 +66,35 @@ export default function PublicShopPage({ slug }) {
       cancelled = true;
     };
   }, [slug]);
+
+  useEffect(() => {
+    if (!slug || !pin?.lat || !pin?.lon) {
+      setDeliveryOptionsLive(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setEtaLoading(true);
+      try {
+        const q = new URLSearchParams({ lat: String(pin.lat), lon: String(pin.lon) });
+        const res = await fetch(
+          `${API_URL}/shop/public/${encodeURIComponent(slug)}/delivery-quote/?${q}`,
+        );
+        const json = await res.json().catch(() => ({}));
+        if (!cancelled && res.ok && Array.isArray(json.delivery_options)) {
+          setDeliveryOptionsLive(json.delivery_options);
+        }
+      } catch {
+        /* keep previous ETA text */
+      } finally {
+        if (!cancelled) setEtaLoading(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [slug, pin?.lat, pin?.lon]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -107,7 +139,11 @@ export default function PublicShopPage({ slug }) {
   const products = data?.products || [];
   const categories = data?.categories || [];
   const settings = data?.settings || {};
-  const deliveryOptions = Array.isArray(settings.delivery_options) ? settings.delivery_options : [];
+  const deliveryOptions = Array.isArray(deliveryOptionsLive)
+    ? deliveryOptionsLive
+    : Array.isArray(settings.delivery_options)
+      ? settings.delivery_options
+      : [];
   const selectedDelivery = deliveryOptions.find((o) => o.id === deliveryMethod) || deliveryOptions[0] || null;
 
   const menuByCategory = useMemo(() => {
@@ -509,7 +545,13 @@ export default function PublicShopPage({ slug }) {
                       }}
                     />
                     {selectedDelivery?.eta ? (
-                      <p className="muted small">Примерное время получения: {selectedDelivery.eta}</p>
+                      <p className="muted small">
+                        {etaLoading
+                          ? "Считаем время доставки…"
+                          : pin?.lat
+                            ? `Примерное время получения по адресу: ${selectedDelivery.eta}`
+                            : `Примерное время получения: ${selectedDelivery.eta} (уточнится после выбора точки на карте)`}
+                      </p>
                     ) : null}
                   </>
                 ) : null}

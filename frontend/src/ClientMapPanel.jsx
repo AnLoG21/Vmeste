@@ -361,13 +361,16 @@ export default function ClientMapPanel({
             ) : mapOrgProfile?.organization_slug &&
               (mapOrgPopup?.provider_sphere === "hair_salon" ||
                 mapOrgPopup?.provider_sphere === "service_center" ||
+                mapOrgPopup?.provider_sphere === "shops" ||
                 mapOrgProfile?.provider_sphere === "hair_salon" ||
-                mapOrgProfile?.provider_sphere === "service_center") ? (
+                mapOrgProfile?.provider_sphere === "service_center" ||
+                mapOrgProfile?.provider_sphere === "shops" ||
+                mapOrgProfile?.is_shop) ? (
               <button
                 type="button"
                 className="ghost-btn map-org-all-products-btn"
                 onClick={() => {
-                  window.location.href = `/s/${mapOrgProfile.organization_slug}`;
+                  window.location.href = mapOrgProfile.shop_url || `/s/${mapOrgProfile.organization_slug}`;
                 }}
               >
                 Смотреть все товары
@@ -385,6 +388,17 @@ export default function ClientMapPanel({
                   }}
                 >
                   Заказать
+                </button>
+              ) : mapOrgPopup.provider_sphere === "shops" || mapOrgProfile?.provider_sphere === "shops" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const slug = mapOrgProfile?.organization_slug;
+                    if (slug) window.location.href = mapOrgProfile.shop_url || `/s/${slug}`;
+                    else showToast("У организации ещё нет публичной ссылки магазина.");
+                  }}
+                >
+                  Смотреть товары
                 </button>
               ) : (
                 <button
