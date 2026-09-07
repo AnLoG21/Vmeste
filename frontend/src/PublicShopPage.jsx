@@ -364,7 +364,14 @@ export default function PublicShopPage({ slug }) {
         <div className="cafe-product-modal" onClick={() => setProduct(null)} role="dialog" aria-label="Карточка товара">
           <div className="cafe-product-sheet shop-product-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="cafe-cart-sheet-head">
-              <h2>{product.name}</h2>
+              <h2>
+                {product.name}
+                {product.is_original || product.authenticity_status === "verified" ? (
+                  <span title="Оригинал" style={{ marginLeft: 8, color: "#ff8a00" }}>
+                    ✓
+                  </span>
+                ) : null}
+              </h2>
               <button type="button" className="cafe-cart-close" onClick={() => setProduct(null)} aria-label="Закрыть">
                 <CloseIcon />
               </button>

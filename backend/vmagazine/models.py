@@ -103,6 +103,8 @@ class DeliveryAddress(models.Model):
     entrance = models.CharField(max_length=32, blank=True, default="")
     floor = models.CharField(max_length=32, blank=True, default="")
     apartment = models.CharField(max_length=64, blank=True, default="")
+    intercom = models.CharField(max_length=64, blank=True, default="")
+    extra = models.CharField(max_length=255, blank=True, default="")
     lat = models.FloatField(null=True, blank=True)
     lon = models.FloatField(null=True, blank=True)
     is_default = models.BooleanField(default=False)

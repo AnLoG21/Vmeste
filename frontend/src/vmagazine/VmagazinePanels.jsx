@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import CafeGuestDeliveryMap from "../CafeGuestDeliveryMap.jsx";
+import { fetchAddressSuggestions } from "../addressSuggest.js";
 import { showToast } from "../toast.js";
 import { HorizontalRail, ProductCard, orderStatusLabel } from "./VmagazineComponents.jsx";
 import {
-  loadAddresses,
+  deletePaymentCard,
   loadBonuses,
   loadCart,
   loadHome,
@@ -17,20 +19,239 @@ import {
   setCartItem,
 } from "./vmagazineApi.js";
 
-export function HomeTab({ authFetch, API_URL, originalsOnly, setOriginalsOnly }) {
+function MagnifierIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function FilterIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="currentColor">
+      <path d="M4 6h16v2H4V6zm3 5h10v2H7v-2zm2 5h6v2H9v-2z" />
+    </svg>
+  );
+}
+
+function SortIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="currentColor">
+      <path d="M8 7h12v2H8V7zm0 4h8v2H8v-2zm0 4h4v2H8v-2zM4 7h2v2H4V7zm0 4h2v2H4v-2zm0 4h2v2H4v-2z" />
+    </svg>
+  );
+}
+
+function CardBrandMark({ brand }) {
+  const b = String(brand || "card").toLowerCase();
+  const label = b === "mir" ? "МИР" : b === "visa" ? "VISA" : b === "mastercard" ? "MC" : b === "amex" ? "AMEX" : "CARD";
+  const color =
+    b === "mir" ? "#0f6e56" : b === "visa" ? "#1a1f71" : b === "mastercard" ? "#eb001b" : b === "amex" ? "#2e77bc" : "#6a4c93";
+  return (
+    <span className="vmag-card-brand" style={{ background: color }} aria-hidden>
+      {label}
+    </span>
+  );
+}
+
+function detectBrandClient(number) {
+  const n = String(number || "").replace(/\D/g, "");
+  if (n.startsWith("220")) return "mir";
+  if (n.startsWith("4")) return "visa";
+  const two = Number(n.slice(0, 2));
+  const four = Number(n.slice(0, 4));
+  if ((two >= 51 && two <= 55) || (four >= 2221 && four <= 2720)) return "mastercard";
+  if (n.startsWith("34") || n.startsWith("37")) return "amex";
+  return "card";
+}
+
+function AddressPickerModal({ open, onClose, onSaved, authFetch, API_URL, existingCount }) {
+  const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+  const [pin, setPin] = useState(null);
+  const [form, setForm] = useState({
+    address: "",
+    entrance: "",
+    floor: "",
+    apartment: "",
+    intercom: "",
+    extra: "",
+    label: "Дом",
+  });
+  const [busy, setBusy] = useState(false);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    setQuery("");
+    setSuggestions([]);
+    setPin(null);
+    setForm({
+      address: "",
+      entrance: "",
+      floor: "",
+      apartment: "",
+      intercom: "",
+      extra: "",
+      label: "Дом",
+    });
+    return undefined;
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(async () => {
+      if (query.trim().length < 2) {
+        setSuggestions([]);
+        return;
+      }
+      const items = await fetchAddressSuggestions(query);
+      setSuggestions(items || []);
+    }, 250);
+    return () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+    };
+  }, [query, open]);
+
+  if (!open) return null;
+
+  async function save() {
+    if (!form.address.trim()) {
+      showToast("Укажите адрес");
+      return;
+    }
+    setBusy(true);
+    try {
+      await saveAddress(authFetch, API_URL, {
+        ...form,
+        lat: pin?.lat,
+        lon: pin?.lon,
+        is_default: existingCount === 0,
+      });
+      showToast("Адрес сохранён");
+      onSaved?.();
+      onClose?.();
+    } catch (e) {
+      showToast(e.message || "Не удалось сохранить");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="vmag-modal-overlay" role="dialog" aria-modal="true">
+      <div className="vmag-modal">
+        <div className="vmag-modal-head">
+          <strong>Указать адрес</strong>
+          <button type="button" className="ghost-btn" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <div className="vmag-modal-body">
+          <div className="vmag-suggest-wrap">
+            <input
+              type="search"
+              placeholder="Поиск адреса"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              autoComplete="street-address"
+            />
+            {suggestions.length ? (
+              <ul className="vmag-addr-suggest">
+                {suggestions.map((s) => (
+                  <li key={`${s.value}-${s.lat}-${s.lon}`}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm((f) => ({ ...f, address: s.value || s.full || "" }));
+                        setQuery(s.value || s.full || "");
+                        if (s.lat != null && s.lon != null) setPin({ lat: s.lat, lon: s.lon, address: s.value });
+                        setSuggestions([]);
+                      }}
+                    >
+                      {s.value || s.full}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+          <CafeGuestDeliveryMap
+            zones={[]}
+            pin={pin}
+            onPick={(next) => {
+              setPin(next);
+              if (next?.address) {
+                setForm((f) => ({ ...f, address: next.address }));
+                setQuery(next.address);
+              }
+            }}
+          />
+          <div className="vmag-addr-grid">
+            <input
+              placeholder="Адрес *"
+              value={form.address}
+              onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+            />
+            <input
+              placeholder="Подъезд"
+              value={form.entrance}
+              onChange={(e) => setForm((f) => ({ ...f, entrance: e.target.value }))}
+            />
+            <input
+              placeholder="Этаж"
+              value={form.floor}
+              onChange={(e) => setForm((f) => ({ ...f, floor: e.target.value }))}
+            />
+            <input
+              placeholder="Квартира"
+              value={form.apartment}
+              onChange={(e) => setForm((f) => ({ ...f, apartment: e.target.value }))}
+            />
+            <input
+              placeholder="Домофон"
+              value={form.intercom}
+              onChange={(e) => setForm((f) => ({ ...f, intercom: e.target.value }))}
+            />
+            <input
+              placeholder="Дополнительно"
+              value={form.extra}
+              onChange={(e) => setForm((f) => ({ ...f, extra: e.target.value }))}
+            />
+          </div>
+          <button type="button" className="primary-btn" disabled={busy} onClick={() => void save()}>
+            Сохранить адрес
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function HomeTab({ authFetch, API_URL }) {
   const [addresses, setAddresses] = useState([]);
   const [addressId, setAddressId] = useState(null);
+  const [addrMenuOpen, setAddrMenuOpen] = useState(false);
+  const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [suggest, setSuggest] = useState({ suggestions: [], sections: [], products: [] });
+  const [draftQuery, setDraftQuery] = useState("");
+  const [suggest, setSuggest] = useState({ suggestions: [], sections: [], products: [], filters: {} });
   const [recommended, setRecommended] = useState([]);
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [mode, setMode] = useState("home"); // home | search
   const [loading, setLoading] = useState(true);
-  const [newAddress, setNewAddress] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
+  const [originalsOnly, setOriginalsOnly] = useState(false);
+  const [sort, setSort] = useState("popular");
+  const [attrFilters, setAttrFilters] = useState({});
 
   const refreshHome = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await loadHome(authFetch, API_URL, { originals: originalsOnly });
+      const data = await loadHome(authFetch, API_URL);
       setAddresses(data.addresses || []);
       setRecommended(data.recommended || []);
       const def = (data.addresses || []).find((a) => a.is_default) || (data.addresses || [])[0];
@@ -40,27 +261,50 @@ export function HomeTab({ authFetch, API_URL, originalsOnly, setOriginalsOnly })
     } finally {
       setLoading(false);
     }
-  }, [API_URL, authFetch, originalsOnly]);
+  }, [API_URL, authFetch]);
 
   useEffect(() => {
     void refreshHome();
   }, [refreshHome]);
 
   useEffect(() => {
-    if (!searchOpen) return undefined;
+    if (mode !== "search") return undefined;
     const t = window.setTimeout(async () => {
       try {
         const data = await searchSuggest(authFetch, API_URL, {
           q: query,
           originals: originalsOnly,
+          sort,
         });
-        setSuggest(data || { suggestions: [], sections: [], products: [] });
+        setSuggest(data || { suggestions: [], sections: [], products: [], filters: {} });
+      } catch {
+        /* ignore */
+      }
+    }, 200);
+    return () => window.clearTimeout(t);
+  }, [API_URL, authFetch, query, originalsOnly, sort, mode]);
+
+  // подсказки при наборе до запуска поиска
+  useEffect(() => {
+    if (mode === "search") return undefined;
+    const t = window.setTimeout(async () => {
+      if (!draftQuery.trim()) {
+        setSuggest((s) => ({ ...s, suggestions: [], sections: [] }));
+        return;
+      }
+      try {
+        const data = await searchSuggest(authFetch, API_URL, { q: draftQuery });
+        setSuggest((s) => ({
+          ...s,
+          suggestions: data.suggestions || [],
+          sections: data.sections || [],
+        }));
       } catch {
         /* ignore */
       }
     }, 220);
     return () => window.clearTimeout(t);
-  }, [API_URL, authFetch, query, originalsOnly, searchOpen]);
+  }, [API_URL, authFetch, draftQuery, mode]);
 
   function patchLiked(id, liked) {
     setRecommended((prev) => prev.map((p) => (p.id === id ? { ...p, liked } : p)));
@@ -70,89 +314,192 @@ export function HomeTab({ authFetch, API_URL, originalsOnly, setOriginalsOnly })
     }));
   }
 
-  async function addAddress() {
-    const address = newAddress.trim();
-    if (!address) return;
-    try {
-      await saveAddress(authFetch, API_URL, { address, label: "Адрес", is_default: !addresses.length });
-      setNewAddress("");
-      await refreshHome();
-      showToast("Адрес сохранён");
-    } catch (e) {
-      showToast(e.message || "Не удалось сохранить адрес");
-    }
+  function runSearch(nextQ = draftQuery) {
+    const q = String(nextQ || "").trim();
+    setQuery(q);
+    setDraftQuery(q);
+    setMode("search");
+    setFilterOpen(false);
+    setSortOpen(false);
   }
 
   const currentAddress = addresses.find((a) => a.id === addressId) || addresses[0];
 
+  const filteredProducts = useMemo(() => {
+    let list = suggest.products || [];
+    if (originalsOnly) list = list.filter((p) => p.is_original);
+    Object.entries(attrFilters).forEach(([key, val]) => {
+      if (!val) return;
+      list = list.filter((p) => String(p.attrs?.[key] ?? "") === String(val));
+    });
+    return list;
+  }, [suggest.products, originalsOnly, attrFilters]);
+
+  const displayProducts = filteredProducts;
+
   return (
     <div className="vmag-home">
       <div className="vmag-address-bar">
-        <label className="muted small">Куда доставить</label>
-        {addresses.length ? (
-          <select value={addressId || ""} onChange={(e) => setAddressId(Number(e.target.value))}>
-            {addresses.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.label ? `${a.label}: ` : ""}
-                {a.address}
-              </option>
-            ))}
-          </select>
+        {!addresses.length ? (
+          <button type="button" className="vmag-address-cta" onClick={() => setAddressModalOpen(true)}>
+            Указать адрес
+          </button>
         ) : (
-          <div className="vmag-address-add">
-            <input
-              placeholder="Улица, дом"
-              value={newAddress}
-              onChange={(e) => setNewAddress(e.target.value)}
-            />
-            <button type="button" onClick={() => void addAddress()}>
-              Сохранить
+          <div className="vmag-address-current">
+            <button
+              type="button"
+              className="vmag-address-main"
+              onClick={() => setAddrMenuOpen((v) => !v)}
+            >
+              <span className="vmag-address-label">Доставка</span>
+              <span className="vmag-address-line">
+                <strong>{currentAddress?.address}</strong>
+                <span className="vmag-address-chevron" aria-hidden>
+                  {addrMenuOpen ? "▴" : "▾"}
+                </span>
+              </span>
             </button>
+            <button
+              type="button"
+              className="vmag-address-plus"
+              aria-label="Добавить адрес"
+              onClick={() => setAddressModalOpen(true)}
+            >
+              +
+            </button>
+            {addrMenuOpen ? (
+              <ul className="vmag-address-menu">
+                {addresses.map((a) => (
+                  <li key={a.id}>
+                    <button
+                      type="button"
+                      className={a.id === currentAddress?.id ? "is-active" : ""}
+                      onClick={() => {
+                        setAddressId(a.id);
+                        setAddrMenuOpen(false);
+                      }}
+                    >
+                      {a.label ? `${a.label}: ` : ""}
+                      {a.address}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         )}
-        {currentAddress ? <p className="muted small">{currentAddress.address}</p> : null}
       </div>
 
-      <div className="vmag-search-box">
-        <input
-          type="search"
-          placeholder="Искать товары и магазины"
-          value={query}
-          onFocus={() => setSearchOpen(true)}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setSearchOpen(true);
-          }}
-        />
-        <label className="vmag-originals-filter checkbox">
+      <div className="vmag-search-row">
+        <div className="vmag-search-input-wrap">
           <input
-            type="checkbox"
-            checked={originalsOnly}
-            onChange={(e) => setOriginalsOnly(e.target.checked)}
+            type="search"
+            placeholder="Искать товары и магазины"
+            value={draftQuery}
+            onChange={(e) => setDraftQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") runSearch();
+            }}
           />
-          Только оригиналы
-        </label>
-      </div>
-
-      {searchOpen && (query || (suggest.suggestions || []).length) ? (
-        <div className="vmag-suggest">
-          {(suggest.suggestions || []).length ? (
-            <ul className="vmag-suggest-list">
+          {mode !== "search" && draftQuery.trim() && (suggest.suggestions || []).length ? (
+            <ul className="vmag-suggest-dropdown">
               {suggest.suggestions.map((s) => (
                 <li key={`${s.type}-${s.text}`}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuery(s.text);
-                      setSearchOpen(true);
-                    }}
-                  >
+                  <button type="button" onClick={() => runSearch(s.text)}>
                     {s.text}
                   </button>
                 </li>
               ))}
             </ul>
           ) : null}
+        </div>
+        <button type="button" className="vmag-icon-btn" aria-label="Найти" onClick={() => runSearch()}>
+          <MagnifierIcon />
+        </button>
+        {mode === "search" ? (
+          <>
+            <button
+              type="button"
+              className={`vmag-icon-btn${filterOpen ? " is-active" : ""}`}
+              aria-label="Фильтры"
+              onClick={() => {
+                setFilterOpen((v) => !v);
+                setSortOpen(false);
+              }}
+            >
+              <FilterIcon />
+            </button>
+            <button
+              type="button"
+              className={`vmag-icon-btn${sortOpen ? " is-active" : ""}`}
+              aria-label="Сортировка"
+              onClick={() => {
+                setSortOpen((v) => !v);
+                setFilterOpen(false);
+              }}
+            >
+              <SortIcon />
+            </button>
+          </>
+        ) : null}
+      </div>
+
+      {mode === "search" && filterOpen ? (
+        <div className="vmag-filter-sheet">
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={originalsOnly}
+              onChange={(e) => setOriginalsOnly(e.target.checked)}
+            />
+            Только оригинальные товары
+          </label>
+          {(suggest.filters?.attributes || []).map((facet) => (
+            <label key={facet.key} className="vmag-filter-attr">
+              <span>{facet.key}</span>
+              <select
+                value={attrFilters[facet.key] || ""}
+                onChange={(e) =>
+                  setAttrFilters((prev) => ({ ...prev, [facet.key]: e.target.value || undefined }))
+                }
+              >
+                <option value="">Все</option>
+                {(facet.values || []).map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
+      ) : null}
+
+      {mode === "search" && sortOpen ? (
+        <div className="vmag-sort-sheet">
+          {[
+            ["popular", "По популярности"],
+            ["price_asc", "Сначала дешевле"],
+            ["price_desc", "Сначала дороже"],
+            ["name", "По названию"],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={sort === id ? "is-active" : ""}
+              onClick={() => {
+                setSort(id);
+                setSortOpen(false);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {mode === "search" ? (
+        <div className="vmag-suggest">
           {(suggest.sections || []).length ? (
             <HorizontalRail title="Перейти в раздел">
               {suggest.sections.map((sec) => (
@@ -162,7 +509,7 @@ export function HomeTab({ authFetch, API_URL, originalsOnly, setOriginalsOnly })
                   className="vmag-section-card"
                   onClick={() => {
                     if (sec.shop_url) window.location.href = sec.shop_url;
-                    else setQuery(sec.title);
+                    else runSearch(sec.title);
                   }}
                 >
                   {sec.cover_url ? <img src={sec.cover_url} alt="" /> : <div className="vmag-section-ph" />}
@@ -171,26 +518,24 @@ export function HomeTab({ authFetch, API_URL, originalsOnly, setOriginalsOnly })
               ))}
             </HorizontalRail>
           ) : null}
-          {(suggest.products || []).length ? (
-            <div className="vmag-product-grid">
-              {suggest.products.map((p) => (
-                <ProductCard
-                  key={p.id}
-                  product={p}
-                  authFetch={authFetch}
-                  API_URL={API_URL}
-                  onLikedChange={patchLiked}
-                />
-              ))}
-            </div>
-          ) : null}
-          <button type="button" className="ghost-btn" onClick={() => setSearchOpen(false)}>
-            Закрыть поиск
+          <div className="vmag-product-grid">
+            {displayProducts.map((p) => (
+              <ProductCard
+                key={p.id}
+                product={p}
+                authFetch={authFetch}
+                API_URL={API_URL}
+                onLikedChange={patchLiked}
+              />
+            ))}
+          </div>
+          {!displayProducts.length ? <p className="muted vmagazine-empty">Ничего не найдено.</p> : null}
+          <button type="button" className="ghost-btn" onClick={() => setMode("home")}>
+            На главную
           </button>
         </div>
       ) : (
         <>
-          <h3 className="vmag-section-title">Рекомендуем</h3>
           {loading ? <p className="muted">Загрузка…</p> : null}
           <div className="vmag-product-grid">
             {recommended.map((p) => (
@@ -204,10 +549,19 @@ export function HomeTab({ authFetch, API_URL, originalsOnly, setOriginalsOnly })
             ))}
           </div>
           {!loading && !recommended.length ? (
-            <p className="muted vmagazine-empty">Пока мало просмотров — загляните в магазины на карте.</p>
+            <p className="muted vmagazine-empty">Пока нет товаров в витринах.</p>
           ) : null}
         </>
       )}
+
+      <AddressPickerModal
+        open={addressModalOpen}
+        onClose={() => setAddressModalOpen(false)}
+        onSaved={() => void refreshHome()}
+        authFetch={authFetch}
+        API_URL={API_URL}
+        existingCount={addresses.length}
+      />
     </div>
   );
 }
@@ -336,7 +690,11 @@ export function CartTab({ authFetch, API_URL }) {
           </article>
         ))}
       </div>
-      {items.length ? <p className="cafe-cart-total">Итого: <strong>{total.toLocaleString("ru-RU")} ₽</strong></p> : null}
+      {items.length ? (
+        <p className="cafe-cart-total">
+          Итого: <strong>{total.toLocaleString("ru-RU")} ₽</strong>
+        </p>
+      ) : null}
       {!loading && !items.length ? <p className="muted vmagazine-empty">Корзина пуста.</p> : null}
     </div>
   );
@@ -348,8 +706,12 @@ export function ProfileTab({ authFetch, API_URL }) {
   const [cards, setCards] = useState([]);
   const [recent, setRecent] = useState([]);
   const [recentAll, setRecentAll] = useState(false);
-  const [section, setSection] = useState("orders");
-  const [cardForm, setCardForm] = useState({ last4: "", brand: "MIR" });
+  const [cardFormOpen, setCardFormOpen] = useState(false);
+  const [cardForm, setCardForm] = useState({ number: "", exp_month: "", exp_year: "" });
+
+  async function reloadCards() {
+    setCards(await loadPaymentCards(authFetch, API_URL));
+  }
 
   useEffect(() => {
     (async () => {
@@ -379,29 +741,14 @@ export function ProfileTab({ authFetch, API_URL }) {
     }
   }
 
+  const previewBrand = detectBrandClient(cardForm.number);
+
   return (
     <div className="vmag-profile">
       <h2>Профиль</h2>
-      <div className="vmagazine-tabs" role="tablist">
-        {[
-          ["orders", "Заказы"],
-          ["reviews", "Отзывы"],
-          ["purchases", "Покупки"],
-          ["cards", "Карты"],
-          ["bonuses", "Вбонусы"],
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={section === id ? "is-active" : "ghost-btn"}
-            onClick={() => setSection(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
 
-      {section === "orders" ? (
+      <section className="vmag-widget">
+        <h3>Заказы</h3>
         <div className="vmagazine-list">
           {(hub?.active_orders || []).map((o) => (
             <article key={o.id} className="vmagazine-card">
@@ -419,9 +766,10 @@ export function ProfileTab({ authFetch, API_URL }) {
           ))}
           {!hub?.active_orders?.length ? <p className="muted">Нет активных заказов.</p> : null}
         </div>
-      ) : null}
+      </section>
 
-      {section === "reviews" ? (
+      <section className="vmag-widget">
+        <h3>Оставить отзыв</h3>
         <div className="vmagazine-list">
           {(hub?.reviewable || []).map((r) => (
             <article key={`${r.order_id}-${r.product_id}`} className="vmagazine-card">
@@ -439,9 +787,10 @@ export function ProfileTab({ authFetch, API_URL }) {
           ))}
           {!hub?.reviewable?.length ? <p className="muted">Пока нет товаров для отзыва.</p> : null}
         </div>
-      ) : null}
+      </section>
 
-      {section === "purchases" ? (
+      <section className="vmag-widget">
+        <h3>Покупки</h3>
         <div className="vmagazine-list">
           {(hub?.purchases || []).map((o) => (
             <article key={o.id} className="vmagazine-card">
@@ -466,55 +815,111 @@ export function ProfileTab({ authFetch, API_URL }) {
           ))}
           {!hub?.purchases?.length ? <p className="muted">Покупок пока нет.</p> : null}
         </div>
-      ) : null}
+      </section>
 
-      {section === "cards" ? (
-        <div>
-          <div className="vmagazine-list">
-            {cards.map((c) => (
-              <article key={c.id} className="vmagazine-card">
-                <strong>
-                  {c.brand} •••• {c.last4}
-                </strong>
-                <p className="muted small">
-                  {String(c.exp_month).padStart(2, "0")}/{c.exp_year}
-                  {c.is_default ? " · основная" : ""}
-                </p>
-              </article>
-            ))}
-          </div>
-          <div className="vmag-address-add">
+      <section className="vmag-widget">
+        <div className="vmag-widget-head">
+          <h3>Карты</h3>
+          <button
+            type="button"
+            className="vmag-address-plus"
+            aria-label="Добавить карту"
+            onClick={() => setCardFormOpen((v) => !v)}
+          >
+            +
+          </button>
+        </div>
+        <div className="vmag-cards-grid">
+          {cards.map((c) => (
+            <article key={c.id} className="vmag-pay-card">
+              <div className="vmag-pay-card-top">
+                <CardBrandMark brand={c.brand} />
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  aria-label="Удалить карту"
+                  onClick={async () => {
+                    try {
+                      await deletePaymentCard(authFetch, API_URL, c.id);
+                      await reloadCards();
+                    } catch (e) {
+                      showToast(e.message || "Не удалось удалить");
+                    }
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="vmag-pay-masked">•••• •••• •••• <span>{c.last4}</span></p>
+              <p className="muted small">
+                {String(c.exp_month).padStart(2, "0")}/{String(c.exp_year).slice(-2)}
+                {c.is_default ? " · основная" : ""}
+              </p>
+            </article>
+          ))}
+        </div>
+        {cardFormOpen ? (
+          <div className="vmag-card-form">
+            <div className="vmag-card-form-brand">
+              <CardBrandMark brand={previewBrand} />
+              <span className="muted small">Бренд определится автоматически</span>
+            </div>
             <input
-              placeholder="Последние 4 цифры"
-              maxLength={4}
-              value={cardForm.last4}
-              onChange={(e) => setCardForm((f) => ({ ...f, last4: e.target.value.replace(/\D/g, "").slice(0, 4) }))}
+              inputMode="numeric"
+              autoComplete="cc-number"
+              placeholder="Номер карты"
+              value={cardForm.number.replace(/(\d{4})(?=\d)/g, "$1 ").trim()}
+              onChange={(e) =>
+                setCardForm((f) => ({
+                  ...f,
+                  number: e.target.value.replace(/\D/g, "").slice(0, 19),
+                }))
+              }
             />
-            <input
-              placeholder="Бренд"
-              value={cardForm.brand}
-              onChange={(e) => setCardForm((f) => ({ ...f, brand: e.target.value }))}
-            />
+            <div className="vmag-addr-grid">
+              <input
+                inputMode="numeric"
+                placeholder="ММ"
+                maxLength={2}
+                value={cardForm.exp_month}
+                onChange={(e) => setCardForm((f) => ({ ...f, exp_month: e.target.value.replace(/\D/g, "").slice(0, 2) }))}
+              />
+              <input
+                inputMode="numeric"
+                placeholder="ГГГГ"
+                maxLength={4}
+                value={cardForm.exp_year}
+                onChange={(e) => setCardForm((f) => ({ ...f, exp_year: e.target.value.replace(/\D/g, "").slice(0, 4) }))}
+              />
+            </div>
             <button
               type="button"
+              className="primary-btn"
               onClick={async () => {
                 try {
-                  await savePaymentCard(authFetch, API_URL, { ...cardForm, is_default: !cards.length });
-                  setCards(await loadPaymentCards(authFetch, API_URL));
-                  setCardForm({ last4: "", brand: "MIR" });
+                  await savePaymentCard(authFetch, API_URL, {
+                    number: cardForm.number,
+                    exp_month: Number(cardForm.exp_month),
+                    exp_year: Number(cardForm.exp_year),
+                  });
+                  setCardForm({ number: "", exp_month: "", exp_year: "" });
+                  setCardFormOpen(false);
+                  await reloadCards();
                   showToast("Карта добавлена");
                 } catch (e) {
-                  showToast(e.message || "Ошибка");
+                  showToast(e.message || "Проверьте данные карты");
                 }
               }}
             >
-              Добавить
+              Сохранить карту
             </button>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+        {!cards.length && !cardFormOpen ? <p className="muted">Добавьте карту плюсиком.</p> : null}
+      </section>
 
-      {section === "bonuses" ? (
+      <section className="vmag-widget">
+        <h3>Вбонусы</h3>
         <div className="vmagazine-list">
           {bonuses.map((b) => (
             <article key={b.provider_id} className="vmagazine-card">
@@ -530,9 +935,11 @@ export function ProfileTab({ authFetch, API_URL }) {
               ) : null}
             </article>
           ))}
-          {!bonuses.length ? <p className="muted">Пока нет Вбонусов — появятся после покупок у продавцов с программой.</p> : null}
+          {!bonuses.length ? (
+            <p className="muted">Пока нет Вбонусов — появятся после покупок у продавцов с программой.</p>
+          ) : null}
         </div>
-      ) : null}
+      </section>
 
       <HorizontalRail title="Вы смотрели" onTitleClick={() => void openAllRecent()}>
         {recent.map((p) => (

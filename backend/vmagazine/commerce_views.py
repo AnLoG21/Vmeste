@@ -36,15 +36,22 @@ class HomeFeedView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        originals_only = str(request.query_params.get("originals") or "").lower() in ("1", "true", "yes")
         qs = active_products_qs()
-        if originals_only:
-            qs = qs.filter(authenticity_status=Product.AuthenticityStatus.VERIFIED)
-        recommended = list(qs.order_by("-view_count", "-id")[:40])
+        recommended = list(qs.order_by("-view_count", "-id")[:48])
         liked = _liked_ids(request.user, [p.id for p in recommended])
         addresses = list(
             DeliveryAddress.objects.filter(user=request.user).values(
-                "id", "label", "address", "lat", "lon", "is_default", "apartment", "entrance", "floor"
+                "id",
+                "label",
+                "address",
+                "lat",
+                "lon",
+                "is_default",
+                "apartment",
+                "entrance",
+                "floor",
+                "intercom",
+                "extra",
             )[:20]
         )
         return Response(
@@ -63,94 +70,154 @@ class SearchSuggestView(APIView):
     def get(self, request):
         q = (request.query_params.get("q") or "").strip()
         originals_only = str(request.query_params.get("originals") or "").lower() in ("1", "true", "yes")
+        sort = (request.query_params.get("sort") or "popular").strip()
         suggestions = []
         sections = []
 
-        if q:
-            obj, created = PopularSearchQuery.objects.get_or_create(query=q[:120], defaults={"hits": 1})
-            if not created:
-                PopularSearchQuery.objects.filter(pk=obj.pk).update(hits=F("hits") + 1)
+        base = active_products_qs()
+        if originals_only:
+            base = base.filter(authenticity_status=Product.AuthenticityStatus.VERIFIED)
 
-            popular = list(
-                PopularSearchQuery.objects.filter(query__icontains=q).order_by("-hits")[:8].values_list(
-                    "query", flat=True
-                )
+        def sort_qs(qs):
+            if sort == "price_asc":
+                return qs.order_by("price", "id")
+            if sort == "price_desc":
+                return qs.order_by("-price", "id")
+            if sort == "name":
+                return qs.order_by("name", "id")
+            return qs.order_by("-view_count", "-id")
+
+        if q:
+            # Подсказки только из реально существующих сущностей
+            product_names = list(
+                base.filter(name__icontains=q).order_by("-view_count").values_list("name", flat=True)[:8]
             )
             cats = list(
-                ProductCategory.objects.filter(name__icontains=q)
-                .values("id", "name")
-                .annotate(cnt=Count("products"))
+                ProductCategory.objects.filter(name__icontains=q, products__is_active=True)
+                .annotate(cnt=Count("products", filter=Q(products__is_active=True), distinct=True))
+                .filter(cnt__gt=0)
+                .values("id", "name", "cnt")
                 .order_by("-cnt")[:8]
             )
-            for name in popular:
-                suggestions.append({"type": "query", "text": name})
+            popular = list(
+                PopularSearchQuery.objects.filter(query__icontains=q)
+                .exclude(query__iexact=q)
+                .order_by("-hits")[:6]
+                .values_list("query", flat=True)
+            )
+            seen = set()
+            for name in product_names:
+                key = name.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                suggestions.append({"type": "product", "text": name})
             for c in cats:
+                key = c["name"].lower()
+                if key in seen:
+                    continue
+                seen.add(key)
                 suggestions.append({"type": "category", "text": c["name"], "category_id": c["id"]})
-            # synthetic expansions
-            for suffix in (" женские", " мужские", " набор", " детские"):
-                text = f"{q}{suffix}".strip()
-                if text.lower() not in {s["text"].lower() for s in suggestions}:
-                    suggestions.append({"type": "query", "text": text})
+            for name in popular:
+                # только если есть товары/категории под этот запрос
+                if not base.filter(
+                    Q(name__icontains=name) | Q(category__name__icontains=name)
+                ).exists():
+                    continue
+                key = name.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                suggestions.append({"type": "query", "text": name})
 
-            qs = active_products_qs().filter(
+            qs = base.filter(
                 Q(name__icontains=q)
                 | Q(category__name__icontains=q)
                 | Q(provider__organization_name__icontains=q)
             )
-            if originals_only:
-                qs = qs.filter(authenticity_status=Product.AuthenticityStatus.VERIFIED)
 
-            # sections carousel: top categories matching query
             for c in cats[:5]:
-                top = (
-                    active_products_qs()
-                    .filter(category_id=c["id"])
-                    .order_by("-view_count")
-                    .first()
-                )
-                cover = ""
-                if top:
-                    card = product_card(top, request)
-                    cover = card.get("cover_url") or ""
+                top = base.filter(category_id=c["id"]).order_by("-view_count").first()
+                if not top:
+                    continue
+                card = product_card(top, request)
                 sections.append(
                     {
                         "type": "category",
                         "id": c["id"],
                         "title": c["name"],
-                        "cover_url": cover,
+                        "cover_url": card.get("cover_url") or "",
                     }
                 )
 
-            # popular shops matching
-            shops = (
-                UserShopHints(q)[:3]
-            )
-            sections.extend(shops)
+            for shop in UserShopHints(q):
+                # только магазины с активными товарами
+                if not base.filter(provider_id=shop["id"]).exists():
+                    continue
+                sections.append(shop)
 
-            products = list(qs.order_by("-view_count")[:30])
+            products = list(sort_qs(qs)[:40])
             liked = _liked_ids(request.user, [p.id for p in products])
+            cards = [product_card(p, request, liked=p.id in liked) for p in products]
+            filter_facets = _build_filter_facets(products)
+
+            # фиксируем популярный запрос только если нашлись товары
+            if products:
+                obj, created = PopularSearchQuery.objects.get_or_create(query=q[:120], defaults={"hits": 1})
+                if not created:
+                    PopularSearchQuery.objects.filter(pk=obj.pk).update(hits=F("hits") + 1)
+
             return Response(
                 {
                     "suggestions": suggestions[:12],
                     "sections": sections[:5],
-                    "products": [product_card(p, request, liked=p.id in liked) for p in products],
+                    "products": cards,
+                    "filters": filter_facets,
                 }
             )
 
-        # empty query: popular searches + top sections
+        # пустой запрос — без синтетики
         popular = list(PopularSearchQuery.objects.order_by("-hits")[:10].values_list("query", flat=True))
         for name in popular:
-            suggestions.append({"type": "query", "text": name})
+            if base.filter(Q(name__icontains=name) | Q(category__name__icontains=name)).exists():
+                suggestions.append({"type": "query", "text": name})
         cats = (
-            ProductCategory.objects.values("id", "name")
-            .annotate(cnt=Count("products", filter=Q(products__is_active=True)))
+            ProductCategory.objects.filter(products__is_active=True)
+            .annotate(cnt=Count("products", filter=Q(products__is_active=True), distinct=True))
+            .filter(cnt__gt=0)
+            .values("id", "name", "cnt")
             .order_by("-cnt")[:5]
         )
         for c in cats:
-            top = active_products_qs().filter(category_id=c["id"]).order_by("-view_count").first()
-            cover = product_card(top, request).get("cover_url") if top else ""
+            top = base.filter(category_id=c["id"]).order_by("-view_count").first()
+            if not top:
+                continue
+            cover = product_card(top, request).get("cover_url") or ""
             sections.append({"type": "category", "id": c["id"], "title": c["name"], "cover_url": cover})
-        return Response({"suggestions": suggestions, "sections": sections, "products": []})
+        return Response({"suggestions": suggestions, "sections": sections, "products": [], "filters": {}})
+
+
+def _build_filter_facets(products: list) -> dict:
+    """Адаптивные фильтры по attrs товаров в выдаче + флаг оригиналов."""
+    attr_values: dict[str, set] = {}
+    has_original = False
+    for p in products:
+        if p.authenticity_status == Product.AuthenticityStatus.VERIFIED:
+            has_original = True
+        attrs = p.attrs if isinstance(p.attrs, dict) else {}
+        for key, val in attrs.items():
+            if val is None or val == "":
+                continue
+            attr_values.setdefault(str(key)[:40], set()).add(str(val)[:80])
+    facets = {
+        "originals_available": has_original,
+        "attributes": [
+            {"key": k, "values": sorted(list(vals))[:20]}
+            for k, vals in sorted(attr_values.items())
+            if len(vals) >= 1
+        ][:12],
+    }
+    return facets
 
 
 def UserShopHints(q: str) -> list[dict]:
@@ -312,6 +379,8 @@ class AddressesView(APIView):
                     "entrance": a.entrance,
                     "floor": a.floor,
                     "apartment": a.apartment,
+                    "intercom": a.intercom,
+                    "extra": a.extra,
                     "lat": a.lat,
                     "lon": a.lon,
                     "is_default": a.is_default,
@@ -334,9 +403,11 @@ class AddressesView(APIView):
                 entrance=str(request.data.get("entrance") or "")[:32],
                 floor=str(request.data.get("floor") or "")[:32],
                 apartment=str(request.data.get("apartment") or "")[:64],
+                intercom=str(request.data.get("intercom") or "")[:64],
+                extra=str(request.data.get("extra") or "")[:255],
                 lat=request.data.get("lat"),
                 lon=request.data.get("lon"),
-                is_default=bool(request.data.get("is_default")),
+                is_default=bool(request.data.get("is_default") if "is_default" in request.data else True),
             )
         return Response({"id": row.id}, status=201)
 
@@ -369,6 +440,36 @@ class BonusesView(APIView):
         )
 
 
+def _luhn_ok(number: str) -> bool:
+    digits = [int(c) for c in number if c.isdigit()]
+    if len(digits) < 13 or len(digits) > 19:
+        return False
+    checksum = 0
+    parity = len(digits) % 2
+    for i, d in enumerate(digits):
+        if i % 2 == parity:
+            d *= 2
+            if d > 9:
+                d -= 9
+        checksum += d
+    return checksum % 10 == 0
+
+
+def _detect_card_brand(number: str) -> str:
+    n = "".join(c for c in number if c.isdigit())
+    if n.startswith("220") or n.startswith("2200") or n.startswith("2204"):
+        return "mir"
+    if n.startswith("4"):
+        return "visa"
+    if n[:2] in {f"{i}" for i in range(51, 56)} or (2221 <= int(n[:4] or 0) <= 2720):
+        return "mastercard"
+    if n.startswith("34") or n.startswith("37"):
+        return "amex"
+    if n.startswith("62"):
+        return "unionpay"
+    return "card"
+
+
 class PaymentCardsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -389,21 +490,53 @@ class PaymentCardsView(APIView):
         )
 
     def post(self, request):
+        pan = str(request.data.get("number") or request.data.get("pan") or "").replace(" ", "").strip()
         last4 = str(request.data.get("last4") or "").strip()
-        if len(last4) != 4 or not last4.isdigit():
-            return Response({"detail": "Укажите last4 карты"}, status=400)
+        brand = str(request.data.get("brand") or "").strip().lower()
+        try:
+            exp_month = int(request.data.get("exp_month") or 0)
+            exp_year = int(request.data.get("exp_year") or 0)
+        except (TypeError, ValueError):
+            return Response({"detail": "Некорректный срок действия"}, status=400)
+
+        if pan:
+            if not _luhn_ok(pan):
+                return Response({"detail": "Некорректный номер карты"}, status=400)
+            last4 = pan[-4:]
+            brand = _detect_card_brand(pan)
+        elif len(last4) == 4 and last4.isdigit():
+            brand = brand or "card"
+        else:
+            return Response({"detail": "Укажите полный номер карты"}, status=400)
+
+        if not (1 <= exp_month <= 12) or exp_year < 2024 or exp_year > 2100:
+            return Response({"detail": "Укажите срок действия ММ/ГГГГ"}, status=400)
+
         with transaction.atomic():
-            if request.data.get("is_default"):
+            if request.data.get("is_default") or not SavedPaymentCard.objects.filter(user=request.user).exists():
                 SavedPaymentCard.objects.filter(user=request.user).update(is_default=False)
+                is_default = True
+            else:
+                is_default = bool(request.data.get("is_default"))
             card = SavedPaymentCard.objects.create(
                 user=request.user,
-                brand=str(request.data.get("brand") or "card")[:32],
+                brand=(brand or "card")[:32],
                 last4=last4,
-                exp_month=int(request.data.get("exp_month") or 1),
-                exp_year=int(request.data.get("exp_year") or 2030),
-                is_default=bool(request.data.get("is_default")),
+                exp_month=exp_month,
+                exp_year=exp_year,
+                is_default=is_default,
             )
-        return Response({"id": card.id}, status=201)
+        return Response(
+            {
+                "id": card.id,
+                "brand": card.brand,
+                "last4": card.last4,
+                "exp_month": card.exp_month,
+                "exp_year": card.exp_year,
+                "is_default": card.is_default,
+            },
+            status=201,
+        )
 
     def delete(self, request):
         try:

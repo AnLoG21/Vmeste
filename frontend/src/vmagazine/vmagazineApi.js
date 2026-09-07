@@ -19,6 +19,7 @@ export function searchSuggest(authFetch, API_URL, params = {}) {
   const q = new URLSearchParams();
   if (params.q) q.set("q", params.q);
   if (params.originals) q.set("originals", "1");
+  if (params.sort) q.set("sort", params.sort);
   return vmagazineFetch(authFetch, API_URL, `/search/suggest/?${q}`);
 }
 
@@ -92,6 +93,14 @@ export function savePaymentCard(authFetch, API_URL, payload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export function deletePaymentCard(authFetch, API_URL, id) {
+  return vmagazineFetch(authFetch, API_URL, `/payment-cards/?id=${id}`, { method: "DELETE" });
+}
+
+export function deleteAddress(authFetch, API_URL, id) {
+  return vmagazineFetch(authFetch, API_URL, `/addresses/?id=${id}`, { method: "DELETE" });
 }
 
 export function loadProfileHub(authFetch, API_URL) {

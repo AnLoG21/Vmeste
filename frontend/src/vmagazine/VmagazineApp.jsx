@@ -18,7 +18,6 @@ export default function VmagazineApp({
   onChatsHostReady,
 }) {
   const [tab, setTab] = useState("home");
-  const [originalsOnly, setOriginalsOnly] = useState(false);
 
   useEffect(() => {
     onTabChange?.(tab);
@@ -35,14 +34,7 @@ export default function VmagazineApp({
   return (
     <section className={`card vmagazine-app${tab === "chats" ? " vmagazine-app--chats" : ""}`}>
       <div className="vmagazine-app-body">
-        {tab === "home" ? (
-          <HomeTab
-            authFetch={authFetch}
-            API_URL={API_URL}
-            originalsOnly={originalsOnly}
-            setOriginalsOnly={setOriginalsOnly}
-          />
-        ) : null}
+        {tab === "home" ? <HomeTab authFetch={authFetch} API_URL={API_URL} /> : null}
         {tab === "chats" ? (
           <div
             className="vmenu-chats-host vmagazine-chats-host"

@@ -274,8 +274,8 @@ export default function CabinetChrome({
               </svg>
               {currentView === "vmagazine" ? (
                 <>
-                  <VmagazineLogo size={28} />
-                  <strong>Вмагазине</strong>
+                  <VmagazineLogo size={36} />
+                  <strong className="vmagazine-header-title">Вмагазине</strong>
                 </>
               ) : (
                 <>

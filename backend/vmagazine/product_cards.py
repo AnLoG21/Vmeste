@@ -51,6 +51,7 @@ def product_card(product: Product, request=None, *, liked: bool | None = None) -
         "bonus_points": product.bonus_points or 0,
         "liked": bool(liked) if liked is not None else False,
         "stock_qty": str(product.stock_qty),
+        "attrs": product.attrs if isinstance(product.attrs, dict) else {},
     }
 
 
@@ -68,9 +69,16 @@ def record_product_view(user, product: Product) -> None:
 
 
 def active_products_qs():
+    """Товары витрин сфер магазинов/салона/автосервиса (в т.ч. демо-аккаунты для отладки)."""
+    from shop.access import SHOP_SPHERES
+
     return (
-        Product.objects.filter(is_active=True, provider__is_active=True, provider__is_demo=False)
-        .exclude(provider__map_hidden=True)
+        Product.objects.filter(
+            is_active=True,
+            provider__is_active=True,
+            provider__role=User.Role.PROVIDER,
+            provider__provider_sphere__in=SHOP_SPHERES,
+        )
         .select_related("provider", "category")
         .prefetch_related("photos")
     )
