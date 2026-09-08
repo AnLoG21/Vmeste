@@ -935,6 +935,18 @@ export default function App() {
     const onCafe = () => {
       if (me?.role === "provider" || me?.role === "staff") setCurrentView("cafe_orders");
     };
+    const onVmagazine = (ev) => {
+      const oid = ev?.detail?.orderId;
+      if (oid) {
+        try {
+          sessionStorage.setItem("vmag_last_paid_order", String(oid));
+        } catch {
+          /* ignore */
+        }
+      }
+      if (me?.role === "client") setCurrentView("vmagazine");
+      else if (me?.role === "provider" || me?.role === "staff") setCurrentView("shop");
+    };
     const onInspections = () => {
       if (me?.role === "provider" || me?.role === "staff" || me?.role === "client") {
         setCurrentView("inspections");
@@ -959,12 +971,14 @@ export default function App() {
       if (conversationId) setSelectedChatId(conversationId);
     };
     window.addEventListener("vmeste:open-cafe-orders", onCafe);
+    window.addEventListener("vmeste:open-vmagazine", onVmagazine);
     window.addEventListener("vmeste:open-inspections", onInspections);
     window.addEventListener("vmeste:open-bookings", onBookings);
     window.addEventListener("vmeste:open-map", onMap);
     window.addEventListener("vmeste:open-chat", onChat);
     return () => {
       window.removeEventListener("vmeste:open-cafe-orders", onCafe);
+      window.removeEventListener("vmeste:open-vmagazine", onVmagazine);
       window.removeEventListener("vmeste:open-inspections", onInspections);
       window.removeEventListener("vmeste:open-bookings", onBookings);
       window.removeEventListener("vmeste:open-map", onMap);

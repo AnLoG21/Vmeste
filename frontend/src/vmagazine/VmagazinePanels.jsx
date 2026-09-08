@@ -895,12 +895,6 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
     Math.round((selectedSum - bonusesEstimate + deliveryFeeTotal + feeAmount) * 100) / 100,
   );
   const allSelected = items.length > 0 && selected.size === items.length;
-  const hasMapPin =
-    currentAddress &&
-    currentAddress.lat != null &&
-    currentAddress.lon != null &&
-    !Number.isNaN(Number(currentAddress.lat)) &&
-    !Number.isNaN(Number(currentAddress.lon));
 
   function shopWord(n) {
     const abs = Math.abs(n) % 100;
@@ -1536,6 +1530,7 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct, highlightOrderId
   const [cardFormOpen, setCardFormOpen] = useState(false);
   const [cardForm, setCardForm] = useState({ number: "", exp_month: "", exp_year: "" });
   const [returnForm, setReturnForm] = useState(null); // { orderId, itemId, name }
+  const [reviewForm, setReviewForm] = useState(null); // { orderId, providerId, name, rating, text }
 
   async function reloadCards() {
     setCards(await loadPaymentCards(authFetch, API_URL));
@@ -1686,16 +1681,90 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct, highlightOrderId
               <p className="muted small">{r.provider_name}</p>
               <button
                 type="button"
-                onClick={() => {
-                  if (r.shop_url) window.location.href = r.shop_url;
-                }}
+                className="primary-btn"
+                onClick={() =>
+                  setReviewForm({
+                    orderId: r.order_id,
+                    providerId: r.provider_id,
+                    name: r.name,
+                    rating: 5,
+                    text: "",
+                  })
+                }
               >
-                Оставить отзыв на витрине
+                Оставить отзыв
               </button>
             </article>
           ))}
           {!hub?.reviewable?.length ? <p className="muted">Пока нет товаров для отзыва.</p> : null}
         </div>
+        {reviewForm ? (
+          <div className="vmag-return-form">
+            <strong>Отзыв: {reviewForm.name}</strong>
+            <label className="vmag-field">
+              <span>Оценка</span>
+              <select
+                value={reviewForm.rating}
+                onChange={(e) => setReviewForm((f) => ({ ...f, rating: Number(e.target.value) }))}
+              >
+                {[5, 4, 3, 2, 1].map((n) => (
+                  <option key={n} value={n}>
+                    {"★".repeat(n)} ({n})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <textarea
+              placeholder="Что понравилось или нет"
+              value={reviewForm.text}
+              onChange={(e) => setReviewForm((f) => ({ ...f, text: e.target.value }))}
+            />
+            <div className="vmag-return-actions">
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() => setReviewForm(null)}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={async () => {
+                  try {
+                    const res = await authFetch(`${API_URL}/reviews/`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        provider: reviewForm.providerId,
+                        shop_order: reviewForm.orderId,
+                        rating: reviewForm.rating,
+                        text: reviewForm.text || "",
+                      }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                      const detail =
+                        data.shop_order?.[0] ||
+                        data.detail ||
+                        data.rating?.[0] ||
+                        "Не удалось отправить отзыв";
+                      throw new Error(typeof detail === "string" ? detail : "Не удалось отправить отзыв");
+                    }
+                    setReviewForm(null);
+                    const p = await loadProfileHub(authFetch, API_URL);
+                    setHub(p);
+                    showToast("Спасибо за отзыв");
+                  } catch (e) {
+                    showToast(e.message || "Не удалось отправить отзыв");
+                  }
+                }}
+              >
+                Отправить
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="vmag-widget">

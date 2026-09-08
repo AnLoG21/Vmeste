@@ -104,6 +104,17 @@ export async function initPushNotifications(authFetch, accessToken = "") {
           /* ignore */
         }
       }
+      if (data.view === "vmagazine" || data.kind === "shop_order") {
+        try {
+          window.dispatchEvent(
+            new CustomEvent("vmeste:open-vmagazine", {
+              detail: { orderId: data.order_id, status: data.status || "" },
+            })
+          );
+        } catch {
+          /* ignore */
+        }
+      }
       if (data.view === "inspections" || data.inspection_id) {
         try {
           window.dispatchEvent(

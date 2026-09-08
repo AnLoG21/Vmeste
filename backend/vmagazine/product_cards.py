@@ -59,6 +59,11 @@ def product_card(product: Product, request=None, *, liked: bool | None = None) -
 
 def product_detail(product: Product, request=None, *, liked: bool | None = None) -> dict:
     """Полная карточка для экрана товара во Вмагазине."""
+    from django.db.models import Avg, Count
+
+    from reviews.models import Review
+    from shop.models import ShopSettings
+
     card = product_card(product, request, liked=liked)
     related = []
     for p in product.related_products.filter(is_active=True).prefetch_related("photos")[:12]:
@@ -77,6 +82,31 @@ def product_detail(product: Product, request=None, *, liked: bool | None = None)
             else:
                 logo_url = first_photo.image.url
     card["shop_logo_url"] = logo_url
+    card["authenticity_note"] = (product.authenticity_note or "") if product.authenticity_status != "none" else ""
+
+    avg = None
+    count = 0
+    if product.provider_id:
+        agg = Review.objects.filter(provider_id=product.provider_id).aggregate(
+            avg=Avg("rating"),
+            cnt=Count("id"),
+        )
+        avg = agg.get("avg")
+        count = int(agg.get("cnt") or 0)
+    card["provider_average_rating"] = round(float(avg), 2) if avg is not None else None
+    card["provider_reviews_count"] = count
+
+    earn_hint = ""
+    if product.bonus_points and product.bonus_points > 0:
+        earn_hint = f"+{product.bonus_points} Вбонусов за шт."
+    elif product.provider_id:
+        settings_obj = ShopSettings.objects.filter(provider_id=product.provider_id).first()
+        percent = float(getattr(settings_obj, "bonus_earn_percent", 0) or 0)
+        if percent > 0:
+            pts = round(float(product.price or 0) * percent / 100, 2)
+            if pts > 0:
+                earn_hint = f"+≈{pts:g} Вбонусов ({percent:g}% от цены)"
+    card["bonus_earn_hint"] = earn_hint
     return card
 
 

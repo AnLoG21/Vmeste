@@ -1376,3 +1376,29 @@ body:has(.page-logged:has(.vmenu-app)) {
   font-weight: 600;
   color: #5b3d82;
 }
+
+.vmag-auth-note {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+  color: #8a6b3d;
+}
+
+.vmag-auth-note.is-ok {
+  color: #c45c00;
+  font-weight: 600;
+}
+
+.vmag-bonus-hint {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: #5b3d82;
+  font-weight: 600;
+}
+
+.vmag-product-reviews .reviews-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}

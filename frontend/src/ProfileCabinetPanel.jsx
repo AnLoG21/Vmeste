@@ -94,12 +94,26 @@ export default function ProfileCabinetPanel({
                     setCurrentView("cafe_orders");
                     return;
                   }
+                  if (n.kind === "shop_order" || n.payload?.view === "vmagazine" || n.payload?.sphere === "shops") {
+                    markInAppNotificationsRead([n.id]);
+                    const oid = n.payload?.order_id;
+                    if (oid) {
+                      try {
+                        sessionStorage.setItem("vmag_last_paid_order", String(oid));
+                      } catch {
+                        /* ignore */
+                      }
+                    }
+                    setCurrentView(me?.role === "client" ? "vmagazine" : "shop");
+                    return;
+                  }
                   markInAppNotificationsRead([n.id]);
                 }}
               >
                 {n.kind === "inspection" ||
                 n.kind === "cafe_new_order" ||
-                n.kind === "cafe_waiter_call"
+                n.kind === "cafe_waiter_call" ||
+                n.kind === "shop_order"
                   ? "Открыть"
                   : "Понятно"}
               </button>

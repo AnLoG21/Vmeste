@@ -23,6 +23,11 @@ class ReviewViewSet(viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     http_method_names = ["get", "post", "patch", "head", "options"]
 
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
+
     def get_serializer_class(self):
         if self.action == "create":
             return ReviewCreateSerializer
@@ -53,6 +58,8 @@ class ReviewViewSet(viewsets.ModelViewSet):
 
         if provider_id:
             qs = qs.filter(provider_id=provider_id)
+        elif not getattr(user, "is_authenticated", False):
+            qs = qs.none()
         elif user.role == User.Role.PROVIDER:
             qs = qs.filter(provider=user)
         elif user.role == User.Role.STAFF:

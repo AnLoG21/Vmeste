@@ -75,6 +75,7 @@ function emptyProductForm(category = "") {
     is_active: true,
     is_featured: false,
     featured_order: "0",
+    bonus_points: "0",
   };
 }
 
@@ -275,6 +276,7 @@ export default function ShopWorkspace({ authFetch, me }) {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [returnsList, setReturnsList] = useState([]);
+  const [returnNotes, setReturnNotes] = useState({});
   const [settings, setSettings] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [form, setForm] = useState(emptyProductForm());
@@ -374,6 +376,7 @@ export default function ShopWorkspace({ authFetch, me }) {
       is_active: Boolean(selected.is_active),
       is_featured: Boolean(selected.is_featured),
       featured_order: String(selected.featured_order ?? 0),
+      bonus_points: String(selected.bonus_points ?? 0),
       attrsExtra: extraLines.join("\n"),
     });
   }, [selected, categoryById]);
@@ -464,6 +467,7 @@ export default function ShopWorkspace({ authFetch, me }) {
         is_active: form.is_active,
         is_featured: form.is_featured,
         featured_order: Number(form.featured_order) || 0,
+        bonus_points: Number(form.bonus_points) || 0,
       };
       if (!payload.name) throw new Error("Укажите название");
       const url = selected ? `${API_URL}/shop/products/${selected.id}/` : `${API_URL}/shop/products/`;
@@ -634,19 +638,33 @@ export default function ShopWorkspace({ authFetch, me }) {
     }
   }
 
-  async function updateReturnStatus(returnId, statusValue) {
+  async function updateReturnStatus(returnId, statusValue, sellerNote = "") {
     const res = await authFetch(`${API_URL}/shop/returns/`, {
       method: "PATCH",
-      body: JSON.stringify({ id: returnId, status: statusValue }),
+      body: JSON.stringify({
+        id: returnId,
+        status: statusValue,
+        ...(sellerNote ? { seller_note: sellerNote } : {}),
+      }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       showToast(data.detail || "Не удалось обновить возврат", { tone: "error" });
       return;
     }
-    showToast(
-      data.refund_id ? "Возврат одобрен, деньги отправлены в ЮKassa" : "Заявка обновлена",
-    );
+    if (data.refund_error) {
+      showToast(data.detail || data.refund_error, { tone: "error" });
+    } else if (data.refund_id) {
+      showToast("Одобрено: деньги в ЮKassa" + (data.bonus_restored && data.bonus_restored !== "0" ? ", бонусы возвращены" : ""));
+    } else if (statusValue === "approved") {
+      showToast(
+        data.bonus_restored && data.bonus_restored !== "0"
+          ? "Одобрено: бонусы скорректированы (онлайн-оплаты не было)"
+          : "Заявка одобрена",
+      );
+    } else {
+      showToast("Заявка обновлена");
+    }
     await loadReturns();
   }
 
@@ -822,6 +840,15 @@ export default function ShopWorkspace({ authFetch, me }) {
             </div>
             <Field label="Артикул">
               <input value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} />
+            </Field>
+            <Field label="Вбонусы за шт. (0 = по % магазина)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.bonus_points}
+                onChange={(e) => setForm((f) => ({ ...f, bonus_points: e.target.value }))}
+              />
             </Field>
 
             <div className="shop-adaptive-attrs">
@@ -1200,7 +1227,7 @@ export default function ShopWorkspace({ authFetch, me }) {
         <section className="card">
           <h2>Возвраты</h2>
           <p className="muted small">
-            Одобрение по онлайн-заказу попытается вернуть сумму позиции через ЮKassa.
+            Одобрение: возврат денег через ЮKassa (если была онлайн-оплата) и корректировка Вбонусов.
           </p>
           {!returnsList.length ? <p className="muted">Заявок пока нет.</p> : null}
           <div className="stack" style={{ gap: 12 }}>
@@ -1224,23 +1251,35 @@ export default function ShopWorkspace({ authFetch, me }) {
                     Refund: <code>{r.refund_id}</code>
                   </p>
                 ) : null}
+                {r.seller_note ? <p className="muted small">Комментарий: {r.seller_note}</p> : null}
                 {r.status === "pending" ? (
-                  <div className="row-2" style={{ gap: 8 }}>
-                    <button
-                      type="button"
-                      className="primary-btn"
-                      onClick={() => void updateReturnStatus(r.id, "approved")}
-                    >
-                      Одобрить
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost-btn"
-                      onClick={() => void updateReturnStatus(r.id, "rejected")}
-                    >
-                      Отклонить
-                    </button>
-                  </div>
+                  <>
+                    <Field label="Комментарий покупателю (необязательно)">
+                      <input
+                        value={returnNotes[r.id] || ""}
+                        onChange={(e) =>
+                          setReturnNotes((prev) => ({ ...prev, [r.id]: e.target.value }))
+                        }
+                        placeholder="Причина отклонения или условия возврата"
+                      />
+                    </Field>
+                    <div className="row-2" style={{ gap: 8 }}>
+                      <button
+                        type="button"
+                        className="primary-btn"
+                        onClick={() => void updateReturnStatus(r.id, "approved", returnNotes[r.id] || "")}
+                      >
+                        Одобрить
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={() => void updateReturnStatus(r.id, "rejected", returnNotes[r.id] || "")}
+                      >
+                        Отклонить
+                      </button>
+                    </div>
+                  </>
                 ) : r.status === "approved" ? (
                   <button
                     type="button"
@@ -1284,8 +1323,21 @@ export default function ShopWorkspace({ authFetch, me }) {
             <span>Онлайн-оплата</span>
           </label>
 
-          <h3 className="shop-section-title">Вбонусы</h3>
-          <p className="muted small">Начисление после статуса «Завершён». Списание — на оформлении у покупателя.</p>
+          <h3 className="shop-section-title">Программа Вбонусов</h3>
+          <p className="muted small">
+            Покупатель видит начисление в карточке товара и может списывать бонусы на checkout.
+            Начисление — после статуса «Завершён». 0% начисления = программа выключена.
+          </p>
+          <div className="shop-bonus-preview">
+            <p className="small">
+              Сейчас:{" "}
+              {Number(settings.bonus_earn_percent) > 0
+                ? `+${Number(settings.bonus_earn_percent)}% за покупку`
+                : "начисление выключено"}
+              {" · "}
+              оплата бонусами до {Number(settings.bonus_max_spend_percent ?? 50)}% корзины
+            </p>
+          </div>
           <Field label="Начисление, % от суммы позиций">
             <input
               type="number"

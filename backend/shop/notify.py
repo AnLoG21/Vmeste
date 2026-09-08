@@ -17,6 +17,16 @@ STATUS_LABELS = {
     "cancelled": "отменён",
 }
 
+STATUS_CLIENT_COPY = {
+    "ready": "Заказ готов к выдаче",
+    "to_courier": "Заказ у курьера",
+    "delivering": "Курьер уже в пути",
+    "done": "Заказ завершён",
+    "cancelled": "Заказ отменён",
+    "paid": "Оплата принята, собираем заказ",
+    "assembling": "Заказ собирается",
+}
+
 
 def _provider_recipient_ids(provider) -> list[int]:
     from booking.models import ProviderStaff
@@ -65,11 +75,37 @@ def notify_shop_order_status(order, *, previous_status: str = "") -> None:
         return
     if previous_status and previous_status == order.status:
         return
-    label = STATUS_LABELS.get(order.status, order.status)
     shop = order.provider.organization_name or order.provider.username if order.provider_id else "Магазин"
+    headline = STATUS_CLIENT_COPY.get(order.status) or f"Статус «{STATUS_LABELS.get(order.status, order.status)}»"
+    extra = ""
+    if order.status == "ready" and order.mode == "pickup":
+        extra = " Можно забирать."
+    elif order.status in ("to_courier", "delivering"):
+        if getattr(order, "eta_text", None):
+            extra = f" ≈ {order.eta_text}."
+        elif order.status == "to_courier":
+            extra = " Следите за статусом в профиле."
     notify_shop_users(
         [order.client_id],
-        title=f"Заказ #{order.id}",
-        body=f"{shop}: статус «{label}»",
+        title=f"Заказ #{order.id} · {shop}",
+        body=f"{headline}{extra}",
         payload={"order_id": order.id, "status": order.status},
+    )
+
+
+def notify_new_return_request(return_request) -> None:
+    order = return_request.order
+    if not order or not order.provider_id:
+        return
+    name = getattr(return_request.order_item, "name", "") or "товар"
+    notify_shop_users(
+        _provider_recipient_ids(order.provider),
+        title=f"Возврат · заказ #{order.id}",
+        body=f"{name}: новая заявка",
+        payload={
+            "order_id": order.id,
+            "return_id": return_request.id,
+            "status": return_request.status,
+            "view": "vmagazine",
+        },
     )

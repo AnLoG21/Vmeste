@@ -57,6 +57,18 @@ export default function VmagazineApp({
     }
   }, []);
 
+  useEffect(() => {
+    function onOpenOrder(ev) {
+      const oid = ev?.detail?.orderId;
+      if (!oid) return;
+      setPaidOrderId(String(oid));
+      setTab("profile");
+      setStack(null);
+    }
+    window.addEventListener("vmeste:open-vmagazine", onOpenOrder);
+    return () => window.removeEventListener("vmeste:open-vmagazine", onOpenOrder);
+  }, []);
+
   const popStack = useCallback(() => {
     setStack((cur) => {
       if (!cur) return null;

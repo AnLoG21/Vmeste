@@ -609,15 +609,30 @@ class ProfileHubView(APIView):
             not in (ShopOrder.Status.DONE, ShopOrder.Status.CANCELLED, ShopOrder.Status.AWAITING_PAYMENT)
         ]
         purchases = [o for o in orders if o.status == ShopOrder.Status.DONE]
-        # товары для отзыва после покупки
+        # товары для отзыва после покупки (исключаем уже оставленные)
+        reviewed_order_ids = set()
+        try:
+            from reviews.models import Review
+
+            reviewed_order_ids = set(
+                Review.objects.filter(
+                    client=request.user,
+                    shop_order_id__in=[o.id for o in purchases],
+                ).values_list("shop_order_id", flat=True)
+            )
+        except Exception:
+            reviewed_order_ids = set()
         reviewable = []
         for o in purchases[:20]:
+            if o.id in reviewed_order_ids:
+                continue
             for item in o.items.all():
                 if item.product_id:
                     reviewable.append(
                         {
                             "order_id": o.id,
                             "product_id": item.product_id,
+                            "provider_id": o.provider_id,
                             "name": item.name,
                             "provider_name": o.provider.organization_name or o.provider.username,
                             "shop_url": f"/s/{o.provider.organization_slug}" if o.provider.organization_slug else "",
@@ -751,4 +766,10 @@ class ReturnRequestsView(APIView):
             order_item=item,
             reason=str(request.data.get("reason") or "").strip()[:2000],
         )
+        try:
+            from shop.notify import notify_new_return_request
+
+            notify_new_return_request(row)
+        except Exception:
+            pass
         return Response({"id": row.id, "status": row.status}, status=201)

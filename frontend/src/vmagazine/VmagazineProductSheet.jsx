@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
 import logoMain from "../assets/logo-main.png";
+import { ReviewListItem } from "../ProviderReviewsPanel.jsx";
 import ServicePhotoCarousel from "../ServicePhotoCarousel.jsx";
 import { showToast } from "../toast.js";
 import { OriginalBadge } from "./VmagazineComponents.jsx";
 import { loadProductDetail, removeCartItem, setCartItem, trackProductView } from "./vmagazineApi.js";
+
+function authenticityLabel(status) {
+  if (status === "verified") return "Оригинал подтверждён";
+  if (status === "pending") return "На проверке подлинности";
+  if (status === "rejected") return "Подлинность не подтверждена";
+  return "";
+}
 
 export default function VmagazineProductSheet({
   productId,
@@ -21,6 +29,7 @@ export default function VmagazineProductSheet({
   const [detailExpanded, setDetailExpanded] = useState(false);
   const [selectedSize, setSelectedSize] = useState("");
   const [qty, setQty] = useState(0);
+  const [reviews, setReviews] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,11 +38,26 @@ export default function VmagazineProductSheet({
       setDetailTab("description");
       setDetailExpanded(false);
       setSelectedSize("");
+      setReviews([]);
       try {
         const data = await loadProductDetail(authFetch, API_URL, productId);
         if (cancelled) return;
         setProduct(data);
         void trackProductView(authFetch, API_URL, productId).catch(() => {});
+        if (data?.provider_id) {
+          try {
+            const res = await authFetch(
+              `${API_URL}/reviews/?provider=${encodeURIComponent(data.provider_id)}&ordering=-created_at`,
+            );
+            if (res.ok && !cancelled) {
+              const list = await res.json();
+              const rows = Array.isArray(list) ? list : list.results || [];
+              setReviews(rows.slice(0, 12));
+            }
+          } catch {
+            /* ignore */
+          }
+        }
       } catch (e) {
         if (!cancelled) showToast(e.message || "Не удалось открыть товар");
       } finally {
@@ -69,6 +93,7 @@ export default function VmagazineProductSheet({
     thumb_url: ph.thumb_url,
     source: "product",
   }));
+  const authLabel = authenticityLabel(product.authenticity_status);
 
   return (
     <div className="vmag-product-sheet shop-product-sheet">
@@ -153,6 +178,19 @@ export default function VmagazineProductSheet({
           ) : null}
         </h2>
         <strong className="shop-product-price">{Number(product.price).toLocaleString("ru-RU")} ₽</strong>
+        {authLabel ? (
+          <p className={`vmag-auth-note${product.authenticity_status === "verified" ? " is-ok" : ""}`}>
+            {authLabel}
+            {product.authenticity_note ? ` — ${product.authenticity_note}` : ""}
+          </p>
+        ) : null}
+        {product.bonus_earn_hint ? <p className="vmag-bonus-hint">{product.bonus_earn_hint}</p> : null}
+        {product.provider_reviews_count > 0 ? (
+          <p className="muted small">
+            ★ {product.provider_average_rating?.toFixed?.(1) || product.provider_average_rating} ·{" "}
+            {product.provider_reviews_count} отз. о магазине
+          </p>
+        ) : null}
       </div>
 
       <div className="shop-detail-tabs shop-detail-tabs--outlined">
@@ -176,31 +214,55 @@ export default function VmagazineProductSheet({
         >
           Характеристики
         </button>
-      </div>
-
-      <div className={`shop-detail-body${detailExpanded ? " is-expanded" : ""}`}>
-        {detailTab === "description" ? (
-          <p className="shop-product-desc">{product.description || "Описание пока не добавлено."}</p>
-        ) : product.attrs && Object.keys(product.attrs).length ? (
-          <dl className="shop-product-attrs">
-            {Object.entries(product.attrs).map(([k, v]) => (
-              <div key={k}>
-                <dt>{k}</dt>
-                <dd>{String(v)}</dd>
-              </div>
-            ))}
-          </dl>
-        ) : (
-          <p className="muted small">Характеристики не указаны.</p>
-        )}
         <button
           type="button"
-          className="shop-detail-expand"
-          aria-label={detailExpanded ? "Свернуть" : "Развернуть"}
-          onClick={() => setDetailExpanded((v) => !v)}
+          className={detailTab === "reviews" ? "is-active" : ""}
+          onClick={() => {
+            setDetailTab("reviews");
+            setDetailExpanded(true);
+          }}
         >
-          {detailExpanded ? "▴" : "▾"}
+          Отзывы
+          {product.provider_reviews_count ? ` (${product.provider_reviews_count})` : ""}
         </button>
+      </div>
+
+      <div className={`shop-detail-body${detailExpanded || detailTab === "reviews" ? " is-expanded" : ""}`}>
+        {detailTab === "description" ? (
+          <p className="shop-product-desc">{product.description || "Описание пока не добавлено."}</p>
+        ) : detailTab === "attrs" ? (
+          product.attrs && Object.keys(product.attrs).length ? (
+            <dl className="shop-product-attrs">
+              {Object.entries(product.attrs).map(([k, v]) => (
+                <div key={k}>
+                  <dt>{k}</dt>
+                  <dd>{String(v)}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="muted small">Характеристики не указаны.</p>
+          )
+        ) : (
+          <div className="vmag-product-reviews">
+            {!reviews.length ? <p className="muted small">Пока нет отзывов о магазине.</p> : null}
+            <ul className="reviews-list">
+              {reviews.map((r) => (
+                <ReviewListItem key={r.id} review={r} showClientName />
+              ))}
+            </ul>
+          </div>
+        )}
+        {detailTab !== "reviews" ? (
+          <button
+            type="button"
+            className="shop-detail-expand"
+            aria-label={detailExpanded ? "Свернуть" : "Развернуть"}
+            onClick={() => setDetailExpanded((v) => !v)}
+          >
+            {detailExpanded ? "▴" : "▾"}
+          </button>
+        ) : null}
       </div>
 
       {qty > 0 ? (

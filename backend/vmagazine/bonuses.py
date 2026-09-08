@@ -130,3 +130,80 @@ def refund_order_bonuses(order: ShopOrder) -> None:
         )
         order.bonus_spent = Decimal("0")
         order.save(update_fields=["bonus_spent", "updated_at"])
+
+
+def reverse_bonuses_for_return(return_request) -> dict:
+    """
+    При одобрении возврата:
+    - вернуть долю списанных бонусов за позицию;
+    - списать долю уже начисленных бонусов (если заказ завершён).
+    """
+    order = return_request.order
+    item = return_request.order_item
+    if not order or not item or not order.client_id:
+        return {"restored": "0", "clawback": "0"}
+
+    note_key = f"возврат #{return_request.id}"
+    if BonusLedgerEntry.objects.filter(order=order, note__icontains=note_key).exists():
+        return {"restored": "0", "clawback": "0", "already": True}
+
+    items_total = Decimal(order.items_total or 0)
+    line_total = Decimal(item.unit_price or 0) * Decimal(item.quantity or 0)
+    if items_total <= 0 or line_total <= 0:
+        return {"restored": "0", "clawback": "0"}
+    share = (line_total / items_total).quantize(Decimal("0.0001"))
+
+    restored = Decimal("0")
+    clawback = Decimal("0")
+    with transaction.atomic():
+        bal, _ = ShopBonusBalance.objects.select_for_update().get_or_create(
+            user_id=order.client_id,
+            provider_id=order.provider_id,
+            defaults={"balance": Decimal("0")},
+        )
+        spent = (
+            BonusLedgerEntry.objects.filter(order=order, kind=BonusLedgerEntry.Kind.SPEND)
+            .order_by("id")
+            .first()
+        )
+        if spent:
+            restored = (Decimal(spent.amount or 0) * share).quantize(Decimal("0.01"))
+            if restored > 0:
+                bal.balance = Decimal(bal.balance or 0) + restored
+                BonusLedgerEntry.objects.create(
+                    user_id=order.client_id,
+                    provider_id=order.provider_id,
+                    kind=BonusLedgerEntry.Kind.ADJUST,
+                    amount=restored,
+                    order=order,
+                    note=f"Возврат бонусов ({note_key})",
+                )
+                order.bonus_spent = max(Decimal("0"), Decimal(order.bonus_spent or 0) - restored).quantize(
+                    Decimal("0.01")
+                )
+                order.save(update_fields=["bonus_spent", "updated_at"])
+
+        earned = (
+            BonusLedgerEntry.objects.filter(order=order, kind=BonusLedgerEntry.Kind.EARN)
+            .order_by("id")
+            .first()
+        )
+        if earned:
+            clawback = (Decimal(earned.amount or 0) * share).quantize(Decimal("0.01"))
+            if clawback > 0:
+                available = Decimal(bal.balance or 0)
+                clawback = min(clawback, available).quantize(Decimal("0.01"))
+                if clawback > 0:
+                    bal.balance = available - clawback
+                    BonusLedgerEntry.objects.create(
+                        user_id=order.client_id,
+                        provider_id=order.provider_id,
+                        kind=BonusLedgerEntry.Kind.ADJUST,
+                        amount=-clawback,
+                        order=order,
+                        note=f"Списание начисленных бонусов ({note_key})",
+                    )
+
+        bal.save(update_fields=["balance", "updated_at"])
+
+    return {"restored": str(restored), "clawback": str(clawback)}

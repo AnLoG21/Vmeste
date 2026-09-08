@@ -50,6 +50,7 @@ class ReviewSerializer(serializers.ModelSerializer):
             "client",
             "booking",
             "cafe_order",
+            "shop_order",
             "staff",
             "rating",
             "staff_rating",
@@ -120,6 +121,7 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
             "provider",
             "booking",
             "cafe_order",
+            "shop_order",
             "staff",
             "staff_user",
             "rating",
@@ -131,6 +133,7 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
             "staff": {"required": False, "allow_null": True},
             "booking": {"required": False, "allow_null": True},
             "cafe_order": {"required": False, "allow_null": True},
+            "shop_order": {"required": False, "allow_null": True},
             "staff_rating": {"required": False, "allow_null": True},
             "staff_text": {"required": False, "allow_blank": True},
         }
@@ -149,9 +152,11 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         from cafe.models import CafeOrder
+        from shop.models import ShopOrder
 
         booking = attrs.get("booking")
         cafe_order = attrs.get("cafe_order")
+        shop_order = attrs.get("shop_order")
         user = self.context["request"].user
 
         if booking and booking.status != Booking.Status.DONE:
@@ -181,6 +186,17 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
                 cafe_order.client = user
                 cafe_order.save(update_fields=["client", "updated_at"])
 
+        if shop_order:
+            if shop_order.status != ShopOrder.Status.DONE:
+                raise serializers.ValidationError(
+                    {"shop_order": "Отзыв можно оставить только после завершения заказа."}
+                )
+            if shop_order.client_id != user.id:
+                raise serializers.ValidationError({"shop_order": "Это не ваш заказ."})
+            if Review.objects.filter(shop_order=shop_order, client=user).exists():
+                raise serializers.ValidationError({"shop_order": "Вы уже оставили отзыв на этот заказ."})
+            attrs["provider"] = shop_order.provider
+
         staff_user_id = attrs.pop("staff_user", None)
         provider = attrs["provider"]
         provider_id = provider.id if hasattr(provider, "id") else provider
@@ -203,7 +219,7 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
             if link:
                 attrs["staff"] = link
 
-        if attrs.get("staff") and attrs.get("staff_rating") is None and not booking and not cafe_order:
+        if attrs.get("staff") and attrs.get("staff_rating") is None and not booking and not cafe_order and not shop_order:
             attrs["staff_rating"] = attrs.get("rating")
 
         return attrs

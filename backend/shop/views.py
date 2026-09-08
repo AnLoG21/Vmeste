@@ -963,9 +963,10 @@ class ShopReturnRequestsView(APIView):
         previous = row.status
         row.seller_note = str(request.data.get("seller_note") or row.seller_note or "").strip()[:500]
         row.status = new_status
+        refund_error = ""
+        bonus_info = {"restored": "0", "clawback": "0"}
 
         if new_status == ReturnRequest.Status.APPROVED and previous != ReturnRequest.Status.APPROVED:
-            # Попытка вернуть деньги по онлайн-заказу
             order = row.order
             if order.yookassa_payment_id and not row.refund_id:
                 try:
@@ -988,8 +989,18 @@ class ShopReturnRequestsView(APIView):
                             row.refund_id = str(refund.get("id"))
                             if refund.get("status") in ("succeeded", "pending"):
                                 row.status = ReturnRequest.Status.DONE
-                except Exception:
-                    pass
+                        else:
+                            refund_error = "ЮKassa не вернула id возврата"
+                    elif order.yookassa_payment_id:
+                        refund_error = "Онлайн-возврат доступен только через ЮKassa"
+                except Exception as e:
+                    refund_error = str(e)[:200] or "Ошибка возврата в ЮKassa"
+            try:
+                from vmagazine.bonuses import reverse_bonuses_for_return
+
+                bonus_info = reverse_bonuses_for_return(row) or bonus_info
+            except Exception:
+                pass
 
         row.save(update_fields=["status", "seller_note", "refund_id", "updated_at"])
         try:
@@ -997,19 +1008,39 @@ class ShopReturnRequestsView(APIView):
 
             label = dict(ReturnRequest.Status.choices).get(row.status, row.status)
             if row.user_id:
+                money_hint = ""
+                if row.refund_id:
+                    money_hint = " · деньги возвращены"
+                elif (
+                    new_status == ReturnRequest.Status.APPROVED
+                    and not (row.order.yookassa_payment_id or "")
+                ):
+                    money_hint = " · возврат без онлайн-оплаты (вручную)"
+                bonus_hint = ""
+                restored = str(bonus_info.get("restored") or "0")
+                clawback = str(bonus_info.get("clawback") or "0")
+                if restored not in ("0", "0.00") or clawback not in ("0", "0.00"):
+                    bonus_hint = " · бонусы скорректированы"
                 notify_shop_users(
                     [row.user_id],
                     title=f"Возврат по заказу #{row.order_id}",
-                    body=f"{row.order_item.name}: {label}",
+                    body=f"{row.order_item.name}: {label}{money_hint}{bonus_hint}",
                     payload={"order_id": row.order_id, "return_id": row.id, "status": row.status},
                 )
         except Exception:
             pass
-        return Response(
-            {
-                "id": row.id,
-                "status": row.status,
-                "seller_note": row.seller_note,
-                "refund_id": row.refund_id,
-            }
-        )
+        payload = {
+            "id": row.id,
+            "status": row.status,
+            "seller_note": row.seller_note,
+            "refund_id": row.refund_id,
+            "bonus_restored": bonus_info.get("restored"),
+            "bonus_clawback": bonus_info.get("clawback"),
+        }
+        if refund_error:
+            payload["refund_error"] = refund_error
+            payload["detail"] = (
+                f"Заявка обновлена, но возврат денег не прошёл: {refund_error}. "
+                "Бонусы могли быть скорректированы."
+            )
+        return Response(payload)

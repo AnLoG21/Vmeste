@@ -30,6 +30,13 @@ class Review(models.Model):
         blank=True,
         related_name="reviews",
     )
+    shop_order = models.ForeignKey(
+        "shop.ShopOrder",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviews",
+    )
     staff = models.ForeignKey(
         ProviderStaff,
         on_delete=models.SET_NULL,
