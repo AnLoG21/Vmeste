@@ -729,6 +729,18 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
     onInitialTabConsumed?.();
   }, [initialTab, onInitialTabConsumed]);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    function onDoc(e) {
+      const t = e.target;
+      if (t?.closest?.(".mp-menu")) return;
+      setMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", onDoc);
+    return () => document.removeEventListener("pointerdown", onDoc);
+  }, [menuOpen]);
+
   const [mp, setMp] = useState("ozon");
   const [settings, setSettings] = useState(null);
   const [keysForm, setKeysForm] = useState({
