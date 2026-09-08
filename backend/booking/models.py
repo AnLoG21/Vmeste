@@ -430,6 +430,8 @@ class LoyaltySettings(models.Model):
         help_text="Сколько рублей скидки даёт 1 балл при списании.",
     )
     welcome_bonus = models.PositiveIntegerField(default=0)
+    # Какие поля показывать в CRM «Помнить всё» (галочки мастера)
+    client_memory_fields = models.JSONField(default=dict, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
 

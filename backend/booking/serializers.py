@@ -550,6 +550,7 @@ class LoyaltySettingsSerializer(serializers.ModelSerializer):
             "points_per_100_rub",
             "rub_per_point",
             "welcome_bonus",
+            "client_memory_fields",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]
