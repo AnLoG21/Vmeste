@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CafeGuestDeliveryMap from "../CafeGuestDeliveryMap.jsx";
+import CafeOrderMapPin from "../CafeOrderMapPin.jsx";
 import { fetchAddressSuggestions } from "../addressSuggest.js";
 import { showToast } from "../toast.js";
 import { HorizontalRail, ProductCard, OrderStatusTrack, orderStatusLabel } from "./VmagazineComponents.jsx";
@@ -696,6 +697,9 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
     email: "",
   });
   const [agree, setAgree] = useState(true);
+  const [deliveryBySlug, setDeliveryBySlug] = useState({});
+  const [quotesBySlug, setQuotesBySlug] = useState({});
+  const [quotesLoading, setQuotesLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -805,6 +809,58 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
     return [...map.values()];
   }, [selectedRows]);
 
+  const selectedSlugsKey = selectedShopGroups.map((g) => g.slug).filter(Boolean).join("|");
+  const currentAddress = addresses.find((a) => a.id === addressId) || addresses[0];
+
+  useEffect(() => {
+    if (!checkoutOpen || mode !== "delivery") return undefined;
+    const lat = currentAddress?.lat;
+    const lon = currentAddress?.lon;
+    const slugs = selectedSlugsKey ? selectedSlugsKey.split("|") : [];
+    if (lat == null || lon == null || !slugs.length) {
+      setQuotesBySlug({});
+      setQuotesLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setQuotesLoading(true);
+    (async () => {
+      const next = {};
+      const methods = {};
+      await Promise.all(
+        slugs.map(async (slug) => {
+          try {
+            const res = await authFetch(
+              `${API_URL}/shop/public/${encodeURIComponent(slug)}/delivery-quote/?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`,
+            );
+            const data = await res.json().catch(() => ({}));
+            const options = Array.isArray(data.delivery_options) ? data.delivery_options : [];
+            next[slug] = options;
+            methods[slug] = options[0]?.id || "own";
+          } catch {
+            next[slug] = [];
+            methods[slug] = "own";
+          }
+        }),
+      );
+      if (cancelled) return;
+      setQuotesBySlug(next);
+      setDeliveryBySlug((prev) => {
+        const merged = { ...methods };
+        for (const slug of slugs) {
+          if (prev[slug] && (next[slug] || []).some((o) => o.id === prev[slug])) {
+            merged[slug] = prev[slug];
+          }
+        }
+        return merged;
+      });
+      setQuotesLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [checkoutOpen, mode, currentAddress?.lat, currentAddress?.lon, selectedSlugsKey, API_URL, authFetch]);
+
   const selectedSum = useMemo(
     () => selectedRows.reduce((s, row) => s + Number(row.product?.price || 0) * Number(row.quantity || 0), 0),
     [selectedRows],
@@ -819,11 +875,32 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
     return Math.round(total * 100) / 100;
   }, [selectedShopGroups, useBonusesBySlug]);
 
-  const feeBase = Math.max(0, selectedSum - bonusesEstimate);
+  const deliveryFeeTotal = useMemo(() => {
+    if (mode !== "delivery") return 0;
+    let sum = 0;
+    for (const g of selectedShopGroups) {
+      if (!g.slug) continue;
+      const opts = quotesBySlug[g.slug] || [];
+      const id = deliveryBySlug[g.slug];
+      const opt = opts.find((o) => o.id === id) || opts[0];
+      sum += Number(opt?.fee || 0);
+    }
+    return Math.round(sum * 100) / 100;
+  }, [mode, selectedShopGroups, quotesBySlug, deliveryBySlug]);
+
+  const feeBase = Math.max(0, selectedSum - bonusesEstimate + deliveryFeeTotal);
   const feeAmount = serviceFee ? Math.round(feeBase * 0.015 * 100) / 100 : 0;
-  const payTotal = Math.max(0, Math.round((selectedSum - bonusesEstimate + feeAmount) * 100) / 100);
+  const payTotal = Math.max(
+    0,
+    Math.round((selectedSum - bonusesEstimate + deliveryFeeTotal + feeAmount) * 100) / 100,
+  );
   const allSelected = items.length > 0 && selected.size === items.length;
-  const currentAddress = addresses.find((a) => a.id === addressId) || addresses[0];
+  const hasMapPin =
+    currentAddress &&
+    currentAddress.lat != null &&
+    currentAddress.lon != null &&
+    !Number.isNaN(Number(currentAddress.lat)) &&
+    !Number.isNaN(Number(currentAddress.lon));
 
   function shopWord(n) {
     const abs = Math.abs(n) % 100;
@@ -875,6 +952,7 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
       let lastUrl = "";
       let orderCount = 0;
       let first = true;
+      let lastOrderId = null;
       for (const slug of processSlugs) {
         const rows = bySlug.get(slug);
         const shopSum = rows.reduce(
@@ -903,7 +981,8 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
           body.bonus_amount = bonusAmount;
         }
         if (paymentMethod === "online" && cardId) {
-          body.payment_card_id = cardId;
+          const card = cards.find((c) => Number(c.id) === Number(cardId));
+          if (card?.has_token) body.payment_card_id = cardId;
         }
         if (mode === "delivery" && currentAddress) {
           body.delivery_address = currentAddress.address;
@@ -912,7 +991,7 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
           body.intercom = currentAddress.intercom || "";
           body.delivery_lat = currentAddress.lat;
           body.delivery_lon = currentAddress.lon;
-          body.delivery_method = "own";
+          body.delivery_method = deliveryBySlug[slug] || quotesBySlug[slug]?.[0]?.id || "own";
         }
         const res = await authFetch(`${API_URL}/shop/public/${encodeURIComponent(slug)}/order/`, {
           method: "POST",
@@ -922,11 +1001,21 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.detail || `Ошибка заказа (${slug})`);
         orderCount += 1;
+        if (data.order_id) lastOrderId = data.order_id;
         if (data.confirmation_url) lastUrl = data.confirmation_url;
         for (const r of rows) {
           await removeCartItem(authFetch, API_URL, r.product.id);
         }
         first = false;
+      }
+      if (lastOrderId) {
+        try {
+          sessionStorage.setItem("vmag_last_paid_order", String(lastOrderId));
+          if (onlineQueue) sessionStorage.setItem("vmag_cart_remaining", "1");
+          else sessionStorage.removeItem("vmag_cart_remaining");
+        } catch {
+          /* ignore */
+        }
       }
       if (paymentMethod === "online") {
         showToast(
@@ -940,6 +1029,10 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
       setCheckoutOpen(false);
       await load();
       if (lastUrl) window.location.href = lastUrl;
+      else if (lastOrderId) {
+        window.history.replaceState({}, "", `/vmagazine?paid_order=${lastOrderId}`);
+        window.location.reload();
+      }
     } catch (e) {
       showToast(e.message || "Не удалось оформить");
     } finally {
@@ -1128,7 +1221,36 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
                     onPick={() => {}}
                   />
                 </div>
-              ) : null}
+              ) : (
+                <p className="muted small">Для расчёта доставки укажите адрес с точкой на карте.</p>
+              )}
+              {quotesLoading ? <p className="muted small">Считаем доставку…</p> : null}
+              {selectedShopGroups.map((g) => {
+                if (!g.slug) return null;
+                const opts = quotesBySlug[g.slug] || [];
+                if (!opts.length) return null;
+                return (
+                  <div key={g.slug} className="shop-delivery-option-list" style={{ marginTop: "0.65rem" }}>
+                    <p className="shop-field-label">{g.provider_name}</p>
+                    {opts.map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className={`shop-delivery-option${deliveryBySlug[g.slug] === opt.id ? " is-active" : ""}`}
+                        onClick={() => setDeliveryBySlug((prev) => ({ ...prev, [g.slug]: opt.id }))}
+                      >
+                        <strong>{opt.label}</strong>
+                        <span className="muted small">≈ {opt.eta || "срок уточнит продавец"}</span>
+                        <span className="shop-delivery-option-fee">
+                          {Number(opt.fee || 0) > 0
+                            ? `${Number(opt.fee).toLocaleString("ru-RU")} ₽`
+                            : "по тарифу"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
             </>
           ) : (
             <p className="muted small">Заберёте заказ в магазине продавца.</p>
@@ -1284,6 +1406,12 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
                 <span>−{bonusesEstimate.toLocaleString("ru-RU")} ₽</span>
               </li>
             ) : null}
+            {mode === "delivery" && deliveryFeeTotal > 0 ? (
+              <li>
+                <span>Доставка</span>
+                <span>{deliveryFeeTotal.toLocaleString("ru-RU")} ₽</span>
+              </li>
+            ) : null}
             {serviceFee ? (
               <li>
                 <span>Сервисный сбор</span>
@@ -1398,7 +1526,7 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
   );
 }
 
-export function ProfileTab({ authFetch, API_URL, onOpenProduct }) {
+export function ProfileTab({ authFetch, API_URL, onOpenProduct, highlightOrderId }) {
   const [hub, setHub] = useState(null);
   const [bonuses, setBonuses] = useState([]);
   const [cards, setCards] = useState([]);
@@ -1418,7 +1546,8 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct }) {
   }
 
   useEffect(() => {
-    (async () => {
+    let cancelled = false;
+    async function loadAll() {
       try {
         const [p, b, c, r, ret] = await Promise.all([
           loadProfileHub(authFetch, API_URL),
@@ -1427,16 +1556,38 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct }) {
           loadRecentlyViewed(authFetch, API_URL, { all: false }),
           loadReturns(authFetch, API_URL).catch(() => []),
         ]);
+        if (cancelled) return;
         setHub(p);
         setBonuses(b || []);
         setCards(c || []);
         setRecent(r || []);
         setReturns(ret || []);
       } catch (e) {
-        showToast(e.message || "Не удалось загрузить профиль");
+        if (!cancelled) showToast(e.message || "Не удалось загрузить профиль");
       }
-    })();
+    }
+    void loadAll();
+    return () => {
+      cancelled = true;
+    };
   }, [API_URL, authFetch]);
+
+  useEffect(() => {
+    const active = hub?.active_orders || [];
+    const needTrack = active.some(
+      (o) =>
+        o.mode === "delivery" &&
+        ["to_courier", "delivering"].includes(String(o.status)) &&
+        o.delivery_lat != null,
+    );
+    if (!needTrack) return undefined;
+    const timer = window.setInterval(() => {
+      loadProfileHub(authFetch, API_URL)
+        .then((p) => setHub(p))
+        .catch(() => {});
+    }, 20000);
+    return () => window.clearInterval(timer);
+  }, [hub?.active_orders, API_URL, authFetch]);
 
   async function openAllRecent() {
     setRecentAll(true);
@@ -1481,18 +1632,45 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct }) {
         <h3>Заказы</h3>
         <div className="vmagazine-list">
           {(hub?.active_orders || []).map((o) => (
-            <article key={o.id} className="vmagazine-card">
+            <article
+              key={o.id}
+              className={`vmagazine-card${String(highlightOrderId) === String(o.id) ? " is-highlight" : ""}`}
+            >
               <div className="vmagazine-card-head">
                 <div>
                   <strong>{o.provider_name || `Заказ #${o.id}`}</strong>
                   <p className="muted small">
                     {orderStatusLabel(o.status)}
                     {o.eta_text ? ` · ≈ ${o.eta_text}` : ""}
+                    {o.chosen_delivery_provider ? ` · ${o.chosen_delivery_provider}` : ""}
                   </p>
                 </div>
                 <strong>{Number(o.total).toLocaleString("ru-RU")} ₽</strong>
               </div>
               <OrderStatusTrack status={o.status} mode={o.mode || "delivery"} />
+              {o.external_tracking_id ? (
+                <p className="muted small">
+                  Трек: <code>{o.external_tracking_id}</code>
+                  {o.external_delivery_provider ? ` (${o.external_delivery_provider})` : ""}
+                </p>
+              ) : null}
+              {o.mode === "delivery" && o.delivery_lat != null && o.delivery_lon != null ? (
+                <div className="vmag-order-map">
+                  <CafeOrderMapPin
+                    lat={o.delivery_lat}
+                    lon={o.delivery_lon}
+                    courierLat={o.courier_lat}
+                    courierLon={o.courier_lon}
+                    height={180}
+                    mapKey={`order-${o.id}-${o.courier_updated_at || ""}`}
+                  />
+                  {o.courier_lat != null ? (
+                    <p className="muted small">Курьер на карте</p>
+                  ) : (
+                    <p className="muted small">Ожидаем позицию курьера</p>
+                  )}
+                </div>
+              ) : null}
             </article>
           ))}
           {!hub?.active_orders?.length ? <p className="muted">Нет активных заказов.</p> : null}

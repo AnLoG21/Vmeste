@@ -272,8 +272,16 @@ export default function App() {
         stepOrgPhotoLightbox(1);
       }
     }
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+    };
   }, [orgPhotoLightbox?.items?.length, orgPhotoLightbox?.index]);
 
   const [clientNotifyForm, setClientNotifyForm] = useState({

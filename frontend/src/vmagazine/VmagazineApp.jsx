@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import PublicShopPage from "../PublicShopPage.jsx";
+import { showToast } from "../toast.js";
 import { CartTab, FavoritesTab, HomeTab, ProfileTab } from "./VmagazinePanels.jsx";
 import VmagazineLogo from "./VmagazineLogo.jsx";
 import VmagazineProductSheet from "./VmagazineProductSheet.jsx";
@@ -31,7 +32,30 @@ export default function VmagazineApp({
 }) {
   const [tab, setTab] = useState("home");
   const [stack, setStack] = useState(null);
+  const [paidOrderId, setPaidOrderId] = useState(null);
+  const [cartRemainingHint, setCartRemainingHint] = useState(false);
   const shopBackRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const fromQuery = params.get("paid_order") || params.get("order");
+      const fromStore = sessionStorage.getItem("vmag_last_paid_order");
+      const remaining = sessionStorage.getItem("vmag_cart_remaining") === "1";
+      const oid = fromQuery && fromQuery !== "PENDING" ? fromQuery : fromStore;
+      if (oid) {
+        setPaidOrderId(String(oid));
+        setTab("profile");
+        setCartRemainingHint(remaining);
+        showToast(remaining ? "Оплата принята. В корзине ещё есть товары других магазинов." : "Оплата принята — заказ в профиле");
+        sessionStorage.removeItem("vmag_last_paid_order");
+        sessionStorage.removeItem("vmag_cart_remaining");
+        window.history.replaceState({}, "", "/vmagazine");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const popStack = useCallback(() => {
     setStack((cur) => {
@@ -94,6 +118,26 @@ export default function VmagazineApp({
       }`}
     >
       <div className="vmagazine-app-body">
+        {paidOrderId && !stack ? (
+          <div className="vmag-paid-banner">
+            <strong>Заказ #{paidOrderId}</strong>
+            <span className="muted small">
+              {cartRemainingHint
+                ? "Оплата прошла. Оформите остальные магазины из корзины."
+                : "Статус обновится после подтверждения оплаты."}
+            </span>
+            <div className="vmag-paid-banner-actions">
+              {cartRemainingHint ? (
+                <button type="button" className="primary-btn" onClick={() => switchTab("cart")}>
+                  В корзину
+                </button>
+              ) : null}
+              <button type="button" className="ghost-btn" onClick={() => setPaidOrderId(null)}>
+                Закрыть
+              </button>
+            </div>
+          </div>
+        ) : null}
         {stack?.kind === "product" ? (
           <VmagazineProductSheet
             productId={stack.productId}
@@ -159,7 +203,12 @@ export default function VmagazineApp({
               />
             ) : null}
             {tab === "profile" ? (
-              <ProfileTab authFetch={authFetch} API_URL={API_URL} onOpenProduct={openProduct} />
+              <ProfileTab
+                authFetch={authFetch}
+                API_URL={API_URL}
+                onOpenProduct={openProduct}
+                highlightOrderId={paidOrderId}
+              />
             ) : null}
           </>
         ) : null}

@@ -108,13 +108,22 @@ export default function PublicShopPage({
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const oid = params.get("order");
+    const oid = params.get("order") || params.get("paid_order");
     if (!oid || !slug) return undefined;
     let cancelled = false;
     (async () => {
       const res = await fetch(`${API_URL}/shop/public/${encodeURIComponent(slug)}/order/${oid}/`);
       if (!res.ok || cancelled) return;
       setOrderInfo(await res.json());
+      setCartOpen(false);
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("order");
+        url.searchParams.delete("paid_order");
+        window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+      } catch {
+        /* ignore */
+      }
     })();
     return () => {
       cancelled = true;
@@ -257,7 +266,9 @@ export default function PublicShopPage({
         delivery_address: guest.address,
         delivery_lat: pin?.lat,
         delivery_lon: pin?.lon,
-        return_url: `${window.location.origin}/s/${slug}`,
+        return_url: embedded
+          ? `${window.location.origin}/vmagazine`
+          : `${window.location.origin}/s/${slug}`,
       };
       const res = await fetch(`${API_URL}/shop/public/${encodeURIComponent(slug)}/order/`, {
         method: "POST",

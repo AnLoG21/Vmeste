@@ -46,15 +46,21 @@
 }
 
 .vmagazine-bottom-nav.vmenu-bottom-nav {
-  position: static;
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
   flex-shrink: 0;
   width: 100%;
-  z-index: 30;
+  z-index: 40;
   margin-top: auto;
   background: rgba(255, 255, 255, 0.98);
   border-top: 1px solid #ebe4f4;
   box-shadow: 0 -6px 18px rgba(40, 24, 60, 0.06);
+  padding-top: 6px;
   padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 .page-logged:has(.vmagazine-app),
@@ -1293,4 +1299,80 @@ body:has(.page-logged:has(.vmenu-app)) {
   justify-content: space-between;
   gap: 0.75rem;
   font-size: 0.9rem;
+}
+
+.vmag-paid-banner {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  border: 1px solid #d9cce8;
+  background: linear-gradient(135deg, #f7f2fc, #fff);
+}
+
+.vmag-paid-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.vmagazine-card.is-highlight {
+  border-color: #6a4c93;
+  box-shadow: 0 0 0 2px rgba(106, 76, 147, 0.18);
+}
+
+.vmag-order-map {
+  margin-top: 0.65rem;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.shop-delivery-option-list {
+  display: grid;
+  gap: 8px;
+}
+
+.shop-delivery-option {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 2px 10px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e2d8ef;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.shop-delivery-option strong {
+  grid-column: 1;
+}
+
+.shop-delivery-option .muted {
+  grid-column: 1;
+}
+
+.shop-delivery-option-fee {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-weight: 700;
+  color: #5b3d82;
+}
+
+.shop-delivery-option.is-active {
+  border-color: #6a4c93;
+  background: #f5effb;
+  box-shadow: 0 0 0 2px rgba(106, 76, 147, 0.16);
+}
+
+.shop-field-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #5b3d82;
 }

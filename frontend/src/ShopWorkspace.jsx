@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_URL } from "./config.js";
+import { getDevicePosition } from "./geoPosition.js";
 import { showToast } from "./toast.js";
 import CafeDeliveryZonesEditor from "./CafeDeliveryZonesEditor.jsx";
 import {
@@ -604,18 +605,33 @@ export default function ShopWorkspace({ authFetch, me }) {
     }
   }
 
-  async function updateOrderStatus(orderId, statusValue) {
+  async function updateOrderStatus(orderId, statusValue, extra = {}) {
     const res = await authFetch(`${API_URL}/shop/orders/${orderId}/`, {
       method: "PATCH",
-      body: JSON.stringify({ status: statusValue }),
+      body: JSON.stringify({ status: statusValue, ...extra }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       showToast(data.detail || "Не удалось обновить заказ", { tone: "error" });
-      return;
+      return null;
     }
-    showToast("Статус обновлён");
+    if (!extra.courier_lat) showToast("Статус обновлён");
     await loadOrders();
+    return data;
+  }
+
+  async function updateCourierLocation(order) {
+    try {
+      showToast("Определяем геолокацию…");
+      const { lat, lon } = await getDevicePosition();
+      const ok = await updateOrderStatus(order.id, order.status, {
+        courier_lat: Number(lat),
+        courier_lon: Number(lon),
+      });
+      if (ok) showToast("Позиция курьера обновлена");
+    } catch (e) {
+      showToast(e?.message || "Не удалось получить геолокацию", { tone: "error" });
+    }
   }
 
   async function updateReturnStatus(returnId, statusValue) {
@@ -1153,6 +1169,16 @@ export default function ShopWorkspace({ authFetch, me }) {
                         onClick={() => void updateOrderStatus(o.id, next)}
                       >
                         → {nextLabel}
+                      </button>
+                    ) : null}
+                    {o.mode === "delivery" &&
+                    ["to_courier", "delivering"].includes(String(o.status)) ? (
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={() => void updateCourierLocation(o)}
+                      >
+                        📍 Курьер на карте
                       </button>
                     ) : null}
                     <select value={o.status} onChange={(e) => void updateOrderStatus(o.id, e.target.value)}>

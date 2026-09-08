@@ -815,13 +815,18 @@ class PublicShopOrderCreateView(APIView):
 
         try:
             provider_code, creds = resolve_org_payment_setup(provider)
+            base_return = str(request.data.get("return_url") or "").strip()
+            if not base_return:
+                base_return = f"{request.build_absolute_uri('/').rstrip('/')}/s/{slug}?order={order.id}"
+            elif "paid_order=" not in base_return and "order=" not in base_return:
+                sep = "&" if "?" in base_return else "?"
+                base_return = f"{base_return}{sep}paid_order={order.id}"
             pay = create_org_payment(
                 provider_code=provider_code,
                 creds=creds,
                 amount=Decimal(order.total),
                 description=f"Заказ магазина #{order.id} — {provider.organization_name or provider.username}",
-                return_url=str(request.data.get("return_url") or "").strip()
-                or f"{request.build_absolute_uri('/').rstrip('/')}/s/{slug}?order={order.id}",
+                return_url=base_return,
                 metadata={
                     "type": "shop_order",
                     "order_id": str(order.id),
