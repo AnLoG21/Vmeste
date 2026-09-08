@@ -304,6 +304,7 @@ class ShopOrder(models.Model):
     delivery_lon = models.FloatField(null=True, blank=True)
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     items_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    bonus_spent = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     courier_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -337,6 +338,7 @@ class ShopOrderItem(models.Model):
     name = models.CharField(max_length=180)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1)])
+    selected_size = models.CharField(max_length=32, blank=True, default="")
 
     @property
     def line_total(self):

@@ -11,6 +11,7 @@ class InAppNotification(models.Model):
         SUBSCRIPTION = "subscription", "Подписка"
         INSPECTION = "inspection", "Приёмка / согласование"
         VMENU = "vmenu", "Вменю"
+        SHOP_ORDER = "shop_order", "Заказ магазина"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

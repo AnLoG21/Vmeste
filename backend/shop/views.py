@@ -479,6 +479,7 @@ class ShopOrderViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Нет доступа"}, status=403)
         allowed_status = {c.value for c in ShopOrder.Status}
         new_status = request.data.get("status")
+        previous_status = order.status
         if new_status and new_status in allowed_status:
             order.status = new_status
             if new_status == ShopOrder.Status.TO_COURIER and order.mode == ShopOrder.Mode.DELIVERY:
@@ -502,6 +503,12 @@ class ShopOrderViewSet(viewsets.ModelViewSet):
                     accrue_order_bonuses(order)
                 except Exception:
                     pass
+            try:
+                from .notify import notify_shop_order_status
+
+                notify_shop_order_status(order, previous_status=previous_status)
+            except Exception:
+                pass
         if "courier_user" in request.data:
             order.courier_user_id = request.data.get("courier_user") or None
             order.save(update_fields=["courier_user", "updated_at"])
@@ -643,7 +650,8 @@ class PublicShopOrderCreateView(APIView):
                 return Response({"detail": f"Недостаточно «{product.name}» на складе"}, status=400)
             line_sum = Decimal(product.price) * qty
             items_total += line_sum
-            lines.append((product, qty, Decimal(product.price)))
+            selected_size = str(row.get("selected_size") or row.get("size") or "").strip()[:32]
+            lines.append((product, qty, Decimal(product.price), selected_size))
 
         if not lines:
             return Response({"detail": "Добавьте товары"}, status=400)
@@ -705,6 +713,12 @@ class PublicShopOrderCreateView(APIView):
             fee_note = f"Сервисный сбор 1,5%: {service_fee} ₽"
             comment = f"{comment}\n{fee_note}".strip()[:500]
 
+        use_bonuses = str(request.data.get("use_bonuses") or "").lower() in ("1", "true", "yes")
+        try:
+            bonus_requested = Decimal(str(request.data.get("bonus_amount") or "0"))
+        except Exception:
+            bonus_requested = Decimal("0")
+
         with transaction.atomic():
             order = ShopOrder.objects.create(
                 provider=provider,
@@ -728,18 +742,42 @@ class PublicShopOrderCreateView(APIView):
                 total=total,
                 comment=comment,
             )
-            for product, qty, price in lines:
+            for product, qty, price, selected_size in lines:
                 ShopOrderItem.objects.create(
                     order=order,
                     product=product,
                     name=product.name,
                     unit_price=price,
                     quantity=qty,
+                    selected_size=selected_size,
                 )
+            if use_bonuses and client:
+                try:
+                    from vmagazine.bonuses import spend_order_bonuses
+
+                    spend_order_bonuses(order, bonus_requested if bonus_requested > 0 else None)
+                    order.refresh_from_db()
+                    total = Decimal(order.total)
+                except Exception:
+                    pass
+
+        try:
+            from .notify import notify_new_shop_order
+
+            notify_new_shop_order(order)
+        except Exception:
+            pass
 
         if payment_method in ("cash", "on_receipt"):
+            previous = order.status
             order.status = ShopOrder.Status.PAID
             order.save(update_fields=["status", "updated_at"])
+            try:
+                from .notify import notify_shop_order_status
+
+                notify_shop_order_status(order, previous_status=previous)
+            except Exception:
+                pass
             return Response(
                 {
                     "order_id": order.id,
@@ -747,6 +785,7 @@ class PublicShopOrderCreateView(APIView):
                     "status": order.status,
                     "payment_method": payment_method,
                     "service_fee": str(service_fee),
+                    "bonus_spent": str(order.bonus_spent or 0),
                     "confirmation_url": "",
                 },
                 status=201,
@@ -763,7 +802,7 @@ class PublicShopOrderCreateView(APIView):
             pay = create_org_payment(
                 provider_code=provider_code,
                 creds=creds,
-                amount=total,
+                amount=Decimal(order.total),
                 description=f"Заказ магазина #{order.id} — {provider.organization_name or provider.username}",
                 return_url=str(request.data.get("return_url") or "").strip()
                 or f"{request.build_absolute_uri('/').rstrip('/')}/s/{slug}?order={order.id}",
@@ -776,6 +815,12 @@ class PublicShopOrderCreateView(APIView):
             order.confirmation_url = pay.get("confirmation_url") or ""
             order.save(update_fields=["yookassa_payment_id", "confirmation_url", "updated_at"])
         except Exception as e:
+            try:
+                from vmagazine.bonuses import refund_order_bonuses
+
+                refund_order_bonuses(order)
+            except Exception:
+                pass
             order.status = ShopOrder.Status.CANCELLED
             order.save(update_fields=["status", "updated_at"])
             return Response({"detail": f"Не удалось создать оплату: {e}"}, status=400)
@@ -788,6 +833,7 @@ class PublicShopOrderCreateView(APIView):
                 "status": order.status,
                 "payment_method": "online",
                 "service_fee": str(service_fee),
+                "bonus_spent": str(order.bonus_spent or 0),
             },
             status=201,
         )

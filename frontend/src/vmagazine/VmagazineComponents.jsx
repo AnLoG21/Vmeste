@@ -160,3 +160,57 @@ const ORDER_STATUS_LABELS = {
 export function orderStatusLabel(status) {
   return ORDER_STATUS_LABELS[status] || status;
 }
+
+const TRACK_STEPS_DELIVERY = [
+  { id: "paid", label: "Оплачен" },
+  { id: "assembling", label: "Сборка" },
+  { id: "ready", label: "Готов" },
+  { id: "delivering", label: "В пути" },
+  { id: "done", label: "Получен" },
+];
+
+const TRACK_STEPS_PICKUP = [
+  { id: "paid", label: "Оплачен" },
+  { id: "assembling", label: "Сборка" },
+  { id: "ready", label: "Готов" },
+  { id: "done", label: "Получен" },
+];
+
+function trackStepIndex(status, steps) {
+  const map = {
+    awaiting_payment: -1,
+    paid: 0,
+    assembling: 1,
+    ready: 2,
+    to_courier: 3,
+    delivering: 3,
+    done: steps.length - 1,
+    cancelled: -1,
+  };
+  if (status === "to_courier" && steps.length === 4) return 2;
+  if (status === "delivering" && steps.length === 4) return 2;
+  const idx = map[status];
+  return typeof idx === "number" ? idx : 0;
+}
+
+export function OrderStatusTrack({ status, mode = "delivery" }) {
+  if (status === "cancelled") {
+    return <p className="muted small vmag-track-cancelled">Заказ отменён</p>;
+  }
+  const steps = mode === "pickup" ? TRACK_STEPS_PICKUP : TRACK_STEPS_DELIVERY;
+  let active = trackStepIndex(status, steps);
+  if (status === "awaiting_payment") active = -1;
+  return (
+    <ol className="vmag-status-track" aria-label="Статус заказа">
+      {steps.map((step, i) => {
+        const state = i < active ? "done" : i === active ? "current" : "todo";
+        return (
+          <li key={step.id} className={`vmag-status-step is-${state}`}>
+            <span className="vmag-status-dot" aria-hidden />
+            <span className="vmag-status-label">{step.label}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}

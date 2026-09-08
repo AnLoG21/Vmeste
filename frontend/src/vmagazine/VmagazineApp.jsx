@@ -142,7 +142,12 @@ export default function VmagazineApp({
               />
             ) : null}
             {tab === "favorites" ? (
-              <FavoritesTab authFetch={authFetch} API_URL={API_URL} onOpenProduct={openProduct} />
+              <FavoritesTab
+                authFetch={authFetch}
+                API_URL={API_URL}
+                onOpenProduct={openProduct}
+                onGoHome={() => switchTab("home")}
+              />
             ) : null}
             {tab === "cart" ? (
               <CartTab
@@ -150,6 +155,7 @@ export default function VmagazineApp({
                 API_URL={API_URL}
                 me={me}
                 onOpenProduct={openProduct}
+                onGoHome={() => switchTab("home")}
               />
             ) : null}
             {tab === "profile" ? (

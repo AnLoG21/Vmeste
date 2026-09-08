@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CafeGuestDeliveryMap from "../CafeGuestDeliveryMap.jsx";
 import { fetchAddressSuggestions } from "../addressSuggest.js";
 import { showToast } from "../toast.js";
-import { HorizontalRail, ProductCard, orderStatusLabel } from "./VmagazineComponents.jsx";
+import { HorizontalRail, ProductCard, OrderStatusTrack, orderStatusLabel } from "./VmagazineComponents.jsx";
 import {
   createReturn,
   deletePaymentCard,
@@ -21,6 +21,26 @@ import {
   searchSuggest,
   setCartItem,
 } from "./vmagazineApi.js";
+
+function EmptyState({ text, onGoHome }) {
+  return (
+    <div className="vmagazine-empty-block">
+      <p className="muted vmagazine-empty">{text}</p>
+      {onGoHome ? (
+        <button type="button" className="ghost-btn" onClick={onGoHome}>
+          На главную
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function estimateBonusSpend(balance, itemsSum) {
+  const bal = Math.max(0, Number(balance) || 0);
+  const sum = Math.max(0, Number(itemsSum) || 0);
+  const cap = Math.round(sum * 0.5 * 100) / 100;
+  return Math.min(bal, cap, sum);
+}
 
 function TrashIcon() {
   return (
@@ -572,10 +592,9 @@ export function HomeTab({ authFetch, API_URL, onOpenProduct }) {
               />
             ))}
           </div>
-          {!displayProducts.length ? <p className="muted vmagazine-empty">Ничего не найдено.</p> : null}
-          <button type="button" className="ghost-btn" onClick={() => setMode("home")}>
-            На главную
-          </button>
+          {!displayProducts.length ? (
+            <EmptyState text="Ничего не найдено." onGoHome={() => setMode("home")} />
+          ) : null}
         </div>
       ) : (
         <>
@@ -593,7 +612,7 @@ export function HomeTab({ authFetch, API_URL, onOpenProduct }) {
             ))}
           </div>
           {!loading && !recommended.length ? (
-            <p className="muted vmagazine-empty">Пока нет товаров в витринах.</p>
+            <EmptyState text="Пока нет товаров в витринах." />
           ) : null}
         </>
       )}
@@ -610,7 +629,7 @@ export function HomeTab({ authFetch, API_URL, onOpenProduct }) {
   );
 }
 
-export function FavoritesTab({ authFetch, API_URL, onOpenProduct }) {
+export function FavoritesTab({ authFetch, API_URL, onOpenProduct, onGoHome }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -648,23 +667,29 @@ export function FavoritesTab({ authFetch, API_URL, onOpenProduct }) {
           />
         ))}
       </div>
-      {!loading && !items.length ? <p className="muted vmagazine-empty">Пока пусто — лайкайте товары в карточке.</p> : null}
+      {!loading && !items.length ? (
+        <EmptyState text="Пока пусто — лайкайте товары в карточке." onGoHome={onGoHome} />
+      ) : null}
     </div>
   );
 }
 
-export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
+export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
   const [items, setItems] = useState([]);
   const [addresses, setAddresses] = useState([]);
+  const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(() => new Set());
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [totalOpen, setTotalOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState("delivery");
   const [addressId, setAddressId] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState("online");
+  const [cardId, setCardId] = useState(null);
   const [serviceFee, setServiceFee] = useState(true);
+  const [useBonusesBySlug, setUseBonusesBySlug] = useState({});
   const [guest, setGuest] = useState({
     name: "",
     phone: "",
@@ -691,6 +716,17 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
     }
   }, [API_URL, authFetch]);
 
+  const reloadAddresses = useCallback(async () => {
+    try {
+      const addrs = await loadAddresses(authFetch, API_URL);
+      setAddresses(addrs || []);
+      const def = (addrs || []).find((a) => a.is_default) || (addrs || [])[0];
+      if (def) setAddressId((prev) => prev || def.id);
+    } catch {
+      /* ignore */
+    }
+  }, [API_URL, authFetch]);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -703,18 +739,100 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
     });
   }, [me]);
 
+  useEffect(() => {
+    if (!checkoutOpen) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await loadPaymentCards(authFetch, API_URL);
+        if (cancelled) return;
+        setCards(list || []);
+        const def = (list || []).find((c) => c.is_default) || (list || [])[0];
+        setCardId(def?.id ?? null);
+      } catch {
+        if (!cancelled) setCards([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [checkoutOpen, API_URL, authFetch]);
+
   const selectedRows = useMemo(
     () => items.filter((r) => selected.has(r.id)),
     [items, selected],
   );
+
+  const shopGroups = useMemo(() => {
+    const map = new Map();
+    for (const row of items) {
+      const slug = row.product?.shop_slug || `_noid_${row.product?.provider_name || row.id}`;
+      if (!map.has(slug)) {
+        map.set(slug, {
+          slug: row.product?.shop_slug || "",
+          provider_name: row.product?.provider_name || "Магазин",
+          bonus_balance: Number(row.bonus_balance || 0),
+          rows: [],
+        });
+      }
+      const g = map.get(slug);
+      g.rows.push(row);
+      const bal = Number(row.bonus_balance || 0);
+      if (bal > g.bonus_balance) g.bonus_balance = bal;
+    }
+    return [...map.values()];
+  }, [items]);
+
+  const selectedShopGroups = useMemo(() => {
+    const map = new Map();
+    for (const row of selectedRows) {
+      const slug = row.product?.shop_slug || `_noid_${row.product?.provider_name || row.id}`;
+      if (!map.has(slug)) {
+        map.set(slug, {
+          slug: row.product?.shop_slug || "",
+          provider_name: row.product?.provider_name || "Магазин",
+          bonus_balance: Number(row.bonus_balance || 0),
+          rows: [],
+          sum: 0,
+        });
+      }
+      const g = map.get(slug);
+      g.rows.push(row);
+      g.sum += Number(row.product?.price || 0) * Number(row.quantity || 0);
+      const bal = Number(row.bonus_balance || 0);
+      if (bal > g.bonus_balance) g.bonus_balance = bal;
+    }
+    return [...map.values()];
+  }, [selectedRows]);
+
   const selectedSum = useMemo(
     () => selectedRows.reduce((s, row) => s + Number(row.product?.price || 0) * Number(row.quantity || 0), 0),
     [selectedRows],
   );
-  const feeAmount = serviceFee ? Math.round(selectedSum * 0.015 * 100) / 100 : 0;
-  const payTotal = selectedSum + feeAmount;
+
+  const bonusesEstimate = useMemo(() => {
+    let total = 0;
+    for (const g of selectedShopGroups) {
+      if (!g.slug || !useBonusesBySlug[g.slug] || !(g.bonus_balance > 0)) continue;
+      total += estimateBonusSpend(g.bonus_balance, g.sum);
+    }
+    return Math.round(total * 100) / 100;
+  }, [selectedShopGroups, useBonusesBySlug]);
+
+  const feeBase = Math.max(0, selectedSum - bonusesEstimate);
+  const feeAmount = serviceFee ? Math.round(feeBase * 0.015 * 100) / 100 : 0;
+  const payTotal = Math.max(0, Math.round((selectedSum - bonusesEstimate + feeAmount) * 100) / 100);
   const allSelected = items.length > 0 && selected.size === items.length;
   const currentAddress = addresses.find((a) => a.id === addressId) || addresses[0];
+
+  function shopWord(n) {
+    const abs = Math.abs(n) % 100;
+    const last = abs % 10;
+    if (abs > 10 && abs < 20) return "магазинов";
+    if (last === 1) return "магазин";
+    if (last >= 2 && last <= 4) return "магазина";
+    return "магазинов";
+  }
 
   function toggleOne(id) {
     setSelected((prev) => {
@@ -751,18 +869,40 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
         if (!bySlug.has(slug)) bySlug.set(slug, []);
         bySlug.get(slug).push(row);
       }
+      const slugList = [...bySlug.keys()];
       let lastUrl = "";
-      for (const [slug, rows] of bySlug.entries()) {
+      let orderCount = 0;
+      let first = true;
+      for (const slug of slugList) {
+        const rows = bySlug.get(slug);
+        const shopSum = rows.reduce(
+          (s, r) => s + Number(r.product?.price || 0) * Number(r.quantity || 0),
+          0,
+        );
+        const bal = Number(rows[0]?.bonus_balance || 0);
+        const wantBonuses = Boolean(useBonusesBySlug[slug]) && bal > 0;
+        const bonusAmount = wantBonuses ? estimateBonusSpend(bal, shopSum) : 0;
         const body = {
           mode,
           payment_method: paymentMethod,
-          service_fee: serviceFee,
+          service_fee: first && serviceFee,
           guest_name: guest.name.trim(),
           guest_phone: guest.phone.trim(),
           guest_email: guest.email.trim(),
-          items: rows.map((r) => ({ product_id: r.product.id, quantity: r.quantity })),
+          items: rows.map((r) => ({
+            product_id: r.product.id,
+            quantity: r.quantity,
+            selected_size: r.selected_size || "",
+          })),
           return_url: `${window.location.origin}/vmagazine`,
         };
+        if (wantBonuses) {
+          body.use_bonuses = true;
+          body.bonus_amount = bonusAmount;
+        }
+        if (paymentMethod === "online" && cardId) {
+          body.payment_card_id = cardId;
+        }
         if (mode === "delivery" && currentAddress) {
           body.delivery_address = currentAddress.address;
           body.apartment = currentAddress.apartment || "";
@@ -779,12 +919,23 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.detail || `Ошибка заказа (${slug})`);
+        orderCount += 1;
         if (data.confirmation_url) lastUrl = data.confirmation_url;
         for (const r of rows) {
           await removeCartItem(authFetch, API_URL, r.product.id);
         }
+        first = false;
       }
-      showToast(paymentMethod === "online" ? "Заказ создан" : "Заказ оформлен");
+      const multi = orderCount > 1;
+      if (paymentMethod === "online") {
+        showToast(
+          multi
+            ? `Создано ${orderCount} заказа — переходим к оплате`
+            : "Заказ создан",
+        );
+      } else {
+        showToast(multi ? `Оформлено ${orderCount} заказа` : "Заказ оформлен");
+      }
       setCheckoutOpen(false);
       await load();
       if (lastUrl) window.location.href = lastUrl;
@@ -795,7 +946,87 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
     }
   }
 
+  function renderCartItem(row) {
+    const cover = row.product?.cover_url || row.product?.photos?.[0]?.thumb_url;
+    const line = Number(row.product?.price || 0) * Number(row.quantity || 0);
+    return (
+      <article key={row.id} className="vmag-cart-item">
+        <label className="vmag-cart-check">
+          <input
+            type="checkbox"
+            checked={selected.has(row.id)}
+            onChange={() => toggleOne(row.id)}
+          />
+        </label>
+        <button
+          type="button"
+          className="vmag-cart-item-main"
+          onClick={() => onOpenProduct?.(row.product)}
+        >
+          {cover ? <img src={cover} alt="" /> : <div className="vmag-cart-ph" />}
+          <div className="vmag-cart-item-body">
+            <strong>{line.toLocaleString("ru-RU")} ₽</strong>
+            <span>{row.product?.name}</span>
+            {row.selected_size ? <em>Размер: {row.selected_size}</em> : null}
+          </div>
+        </button>
+        <div className="vmag-cart-item-actions">
+          <div className="shop-cart-stepper">
+            <button
+              type="button"
+              onClick={() => {
+                const q = Math.max(0, Number(row.quantity) - 1);
+                if (q <= 0) void removeCartItem(authFetch, API_URL, row.product.id).then(load);
+                else
+                  void setCartItem(
+                    authFetch,
+                    API_URL,
+                    row.product.id,
+                    q,
+                    row.use_bonuses,
+                    row.selected_size,
+                  ).then(load);
+              }}
+            >
+              −
+            </button>
+            <span>{row.quantity}</span>
+            <button
+              type="button"
+              onClick={() =>
+                void setCartItem(
+                  authFetch,
+                  API_URL,
+                  row.product.id,
+                  Number(row.quantity) + 1,
+                  row.use_bonuses,
+                  row.selected_size,
+                ).then(load)
+              }
+            >
+              +
+            </button>
+          </div>
+          <button
+            type="button"
+            className="vmag-cart-trash"
+            aria-label="Удалить"
+            onClick={() => void removeCartItem(authFetch, API_URL, row.product.id).then(load)}
+          >
+            <TrashIcon />
+          </button>
+        </div>
+      </article>
+    );
+  }
+
   if (checkoutOpen) {
+    const hasMapPin =
+      currentAddress?.lat != null &&
+      currentAddress?.lon != null &&
+      Number.isFinite(Number(currentAddress.lat)) &&
+      Number.isFinite(Number(currentAddress.lon));
+
     return (
       <div className="vmag-checkout">
         <header className="vmag-checkout-head">
@@ -819,6 +1050,20 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
         </header>
 
         <section className="vmag-widget">
+          <h3>
+            Заказы: {selectedShopGroups.length} {shopWord(selectedShopGroups.length)}
+          </h3>
+          <ul className="vmag-total-breakdown muted small">
+            {selectedShopGroups.map((g) => (
+              <li key={g.slug || g.provider_name}>
+                <span>{g.provider_name}</span>
+                <span>{g.sum.toLocaleString("ru-RU")} ₽</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="vmag-widget">
           <h3>Способ получения</h3>
           <div className="vmag-seg" role="group" aria-label="Способ получения">
             <button
@@ -837,21 +1082,53 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
             </button>
           </div>
           {mode === "delivery" ? (
-            addresses.length ? (
-              <label className="vmag-field">
-                <span>Адрес</span>
-                <select value={addressId || ""} onChange={(e) => setAddressId(Number(e.target.value))}>
-                  {addresses.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.label ? `${a.label}: ` : ""}
-                      {a.address}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <p className="muted small">Добавьте адрес на главной Вмагазине.</p>
-            )
+            <>
+              {addresses.length ? (
+                <>
+                  <div className="vmag-cart-address-chips" style={{ marginTop: "0.55rem" }}>
+                    {addresses.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        className={`shop-size-chip${Number(addressId) === Number(a.id) ? " is-on" : ""}`}
+                        onClick={() => setAddressId(a.id)}
+                      >
+                        {a.label || a.address}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="vmag-field">
+                    <span>Адрес</span>
+                    <select value={addressId || ""} onChange={(e) => setAddressId(Number(e.target.value))}>
+                      {addresses.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.label ? `${a.label}: ` : ""}
+                          {a.address}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              ) : (
+                <p className="muted small">Добавьте адрес доставки.</p>
+              )}
+              <button type="button" className="ghost-btn" onClick={() => setAddressModalOpen(true)}>
+                + Адрес
+              </button>
+              {hasMapPin ? (
+                <div className="vmag-checkout-map" style={{ marginTop: "0.5rem", minHeight: 160 }}>
+                  <CafeGuestDeliveryMap
+                    zones={[]}
+                    pin={{
+                      lat: Number(currentAddress.lat),
+                      lon: Number(currentAddress.lon),
+                      address: currentAddress.address || "",
+                    }}
+                    onPick={() => {}}
+                  />
+                </div>
+              ) : null}
+            </>
           ) : (
             <p className="muted small">Заберёте заказ в магазине продавца.</p>
           )}
@@ -905,7 +1182,69 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
               При получении
             </button>
           </div>
+          {paymentMethod === "online" ? (
+            <div style={{ marginTop: "0.65rem" }}>
+              {cards.length ? (
+                <div className="vmag-cards-grid">
+                  {cards.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className={`vmag-pay-card${Number(cardId) === Number(c.id) ? " is-on" : ""}`}
+                      onClick={() => setCardId(c.id)}
+                      style={{
+                        textAlign: "left",
+                        cursor: "pointer",
+                        outline: Number(cardId) === Number(c.id) ? "2px solid #6a4c93" : undefined,
+                      }}
+                    >
+                      <div className="vmag-pay-card-top">
+                        <CardBrandMark brand={c.brand} />
+                      </div>
+                      <p className="vmag-pay-masked">
+                        •••• •••• •••• <span>{c.last4}</span>
+                      </p>
+                      <p className="muted small">
+                        {String(c.exp_month).padStart(2, "0")}/{String(c.exp_year).slice(-2)}
+                        {c.is_default ? " · основная" : ""}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted small">Можно добавить карту в профиле</p>
+              )}
+              <p className="muted small" style={{ marginTop: "0.45rem" }}>
+                Оплата пройдёт на защищённой странице ЮKassa
+              </p>
+            </div>
+          ) : null}
         </section>
+
+        {selectedShopGroups.some((g) => g.slug && g.bonus_balance > 0) ? (
+          <section className="vmag-widget">
+            <h3>Вбонусы</h3>
+            {selectedShopGroups.map((g) => {
+              if (!g.slug || !(g.bonus_balance > 0)) return null;
+              const maxSpend = estimateBonusSpend(g.bonus_balance, g.sum);
+              return (
+                <label key={g.slug} className="vmag-check-row">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(useBonusesBySlug[g.slug])}
+                    onChange={(e) =>
+                      setUseBonusesBySlug((prev) => ({ ...prev, [g.slug]: e.target.checked }))
+                    }
+                  />
+                  <span>
+                    Списать Вбонусы (до {maxSpend.toLocaleString("ru-RU")} ₽)
+                    <em className="muted"> · {g.provider_name}</em>
+                  </span>
+                </label>
+              );
+            })}
+          </section>
+        ) : null}
 
         <label className="vmag-check-row">
           <input type="checkbox" checked={serviceFee} onChange={(e) => setServiceFee(e.target.checked)} />
@@ -914,6 +1253,9 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
             <em>{feeAmount.toLocaleString("ru-RU")} ₽</em>
           </span>
         </label>
+        {selectedShopGroups.length > 1 ? (
+          <p className="muted small">Сервисный сбор начисляется один раз на все заказы.</p>
+        ) : null}
 
         <button type="button" className="vmag-total-toggle" onClick={() => setTotalOpen((v) => !v)}>
           <span className="vmag-total-toggle-label">
@@ -928,12 +1270,22 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
               <span>Товары</span>
               <span>{selectedSum.toLocaleString("ru-RU")} ₽</span>
             </li>
+            {bonusesEstimate > 0 ? (
+              <li>
+                <span>Вбонусы</span>
+                <span>−{bonusesEstimate.toLocaleString("ru-RU")} ₽</span>
+              </li>
+            ) : null}
             {serviceFee ? (
               <li>
                 <span>Сервисный сбор</span>
                 <span>{feeAmount.toLocaleString("ru-RU")} ₽</span>
               </li>
             ) : null}
+            <li>
+              <span>К оплате</span>
+              <span>{payTotal.toLocaleString("ru-RU")} ₽</span>
+            </li>
           </ul>
         ) : null}
 
@@ -954,6 +1306,15 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
             </a>
           </span>
         </label>
+
+        <AddressPickerModal
+          open={addressModalOpen}
+          onClose={() => setAddressModalOpen(false)}
+          onSaved={() => void reloadAddresses()}
+          authFetch={authFetch}
+          API_URL={API_URL}
+          existingCount={addresses.length}
+        />
       </div>
     );
   }
@@ -1002,73 +1363,16 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
 
       {loading ? <p className="muted">Загрузка…</p> : null}
       <div className="vmag-cart-list">
-        {items.map((row) => {
-          const cover = row.product?.cover_url || row.product?.photos?.[0]?.thumb_url;
-          const line = Number(row.product?.price || 0) * Number(row.quantity || 0);
-          return (
-            <article key={row.id} className="vmag-cart-item">
-              <label className="vmag-cart-check">
-                <input
-                  type="checkbox"
-                  checked={selected.has(row.id)}
-                  onChange={() => toggleOne(row.id)}
-                />
-              </label>
-              <button
-                type="button"
-                className="vmag-cart-item-main"
-                onClick={() => onOpenProduct?.(row.product)}
-              >
-                {cover ? <img src={cover} alt="" /> : <div className="vmag-cart-ph" />}
-                <div className="vmag-cart-item-body">
-                  <strong>{line.toLocaleString("ru-RU")} ₽</strong>
-                  <span>{row.product?.name}</span>
-                  {row.selected_size ? <em>Размер: {row.selected_size}</em> : null}
-                  <em className="muted">{row.product?.provider_name}</em>
-                </div>
-              </button>
-              <div className="vmag-cart-item-actions">
-                <div className="shop-cart-stepper">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const q = Math.max(0, Number(row.quantity) - 1);
-                      if (q <= 0) void removeCartItem(authFetch, API_URL, row.product.id).then(load);
-                      else void setCartItem(authFetch, API_URL, row.product.id, q, row.use_bonuses).then(load);
-                    }}
-                  >
-                    −
-                  </button>
-                  <span>{row.quantity}</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void setCartItem(
-                        authFetch,
-                        API_URL,
-                        row.product.id,
-                        Number(row.quantity) + 1,
-                        row.use_bonuses,
-                      ).then(load)
-                    }
-                  >
-                    +
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="vmag-cart-trash"
-                  aria-label="Удалить"
-                  onClick={() => void removeCartItem(authFetch, API_URL, row.product.id).then(load)}
-                >
-                  <TrashIcon />
-                </button>
-              </div>
-            </article>
-          );
-        })}
+        {shopGroups.map((g) => (
+          <div key={g.slug || g.provider_name} className="vmag-cart-shop-group">
+            <h3 className="vmag-cart-shop-title" style={{ margin: "0.35rem 0 0.45rem", fontSize: "1rem" }}>
+              {g.provider_name}
+            </h3>
+            {g.rows.map((row) => renderCartItem(row))}
+          </div>
+        ))}
       </div>
-      {!loading && !items.length ? <p className="muted vmagazine-empty">Корзина пуста.</p> : null}
+      {!loading && !items.length ? <EmptyState text="Корзина пуста." onGoHome={onGoHome} /> : null}
 
       {items.length ? (
         <div className="vmag-cart-footer">
@@ -1180,6 +1484,7 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct }) {
                 </div>
                 <strong>{Number(o.total).toLocaleString("ru-RU")} ₽</strong>
               </div>
+              <OrderStatusTrack status={o.status} mode={o.mode || "delivery"} />
             </article>
           ))}
           {!hub?.active_orders?.length ? <p className="muted">Нет активных заказов.</p> : null}
@@ -1326,10 +1631,13 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct }) {
                 </div>
                 <strong>{Number(o.total).toLocaleString("ru-RU")} ₽</strong>
               </div>
+              <OrderStatusTrack status={o.status} mode={o.mode || "delivery"} />
               <ul className="muted small">
                 {(o.items || []).map((it) => (
                   <li key={it.id}>
-                    {it.name} × {it.quantity} — {Number(it.unit_price).toLocaleString("ru-RU")} ₽
+                    {it.name}
+                    {it.selected_size ? ` · ${it.selected_size}` : ""} × {it.quantity} —{" "}
+                    {Number(it.unit_price).toLocaleString("ru-RU")} ₽
                   </li>
                 ))}
               </ul>

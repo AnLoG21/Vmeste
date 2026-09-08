@@ -297,7 +297,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
 class ShopOrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShopOrderItem
-        fields = ["id", "product", "name", "unit_price", "quantity"]
+        fields = ["id", "product", "name", "unit_price", "quantity", "selected_size"]
 
 
 class ShopOrderSerializer(serializers.ModelSerializer):
@@ -325,6 +325,7 @@ class ShopOrderSerializer(serializers.ModelSerializer):
             "delivery_lon",
             "delivery_fee",
             "items_total",
+            "bonus_spent",
             "total",
             "courier_user",
             "courier_lat",
@@ -343,6 +344,7 @@ class ShopOrderSerializer(serializers.ModelSerializer):
             "provider",
             "client",
             "items_total",
+            "bonus_spent",
             "total",
             "confirmation_url",
             "paid_at",
