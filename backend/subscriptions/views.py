@@ -530,9 +530,9 @@ class YooKassaWebhookView(APIView):
                     send_order_receipt_after_payment(cafe_order)
                 return Response({"detail": "ok"})
         if meta.get("type") == "shop_order":
-            if _mark_shop_paid_by_payment_id(yk_id, meta):
+            if _mark_shop_paid_by_payment_id(yk_id, meta, payment_obj=obj):
                 return Response({"detail": "ok"})
-        if _mark_shop_paid_by_payment_id(yk_id, meta):
+        if _mark_shop_paid_by_payment_id(yk_id, meta, payment_obj=obj):
             return Response({"detail": "ok"})
 
         payment = Payment.objects.filter(yookassa_payment_id=yk_id).select_related("subscription").first()
@@ -568,7 +568,7 @@ def _mark_cafe_paid_by_payment_id(payment_id: str, meta: dict | None = None) -> 
     return True
 
 
-def _mark_shop_paid_by_payment_id(payment_id: str, meta: dict | None = None) -> bool:
+def _mark_shop_paid_by_payment_id(payment_id: str, meta: dict | None = None, payment_obj: dict | None = None) -> bool:
     from shop.models import ShopOrder
     from shop.payments import mark_shop_order_paid
 
@@ -578,6 +578,29 @@ def _mark_shop_paid_by_payment_id(payment_id: str, meta: dict | None = None) -> 
     if not shop_order:
         return False
     mark_shop_order_paid(shop_order)
+    try:
+        from vmagazine.cards import upsert_saved_card_from_yookassa_payment
+
+        obj = payment_obj
+        if not obj or not (obj.get("payment_method") or {}).get("id"):
+            from payments.resolve import resolve_org_payment_setup
+            from subscriptions.yookassa_client import get_payment
+
+            code, creds = resolve_org_payment_setup(shop_order.provider)
+            if code == "yookassa":
+                obj = get_payment(
+                    payment_id,
+                    shop_id=(creds.get("shop_id") or "").strip() or None,
+                    secret_key=(creds.get("secret_key") or "").strip() or None,
+                )
+        if shop_order.client_id and obj:
+            upsert_saved_card_from_yookassa_payment(
+                user=shop_order.client,
+                provider=shop_order.provider,
+                payment_obj=obj,
+            )
+    except Exception:
+        pass
     return True
 
 

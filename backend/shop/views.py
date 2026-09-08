@@ -797,6 +797,22 @@ class PublicShopOrderCreateView(APIView):
                 status=400,
             )
 
+        payment_method_id = ""
+        try:
+            card_id = int(request.data.get("payment_card_id") or 0)
+        except (TypeError, ValueError):
+            card_id = 0
+        if client and card_id:
+            from vmagazine.models import SavedPaymentCard
+
+            card = (
+                SavedPaymentCard.objects.filter(pk=card_id, user=client)
+                .exclude(yookassa_payment_method_id="")
+                .first()
+            )
+            if card and (not card.provider_id or card.provider_id == provider.id):
+                payment_method_id = card.yookassa_payment_method_id
+
         try:
             provider_code, creds = resolve_org_payment_setup(provider)
             pay = create_org_payment(
@@ -806,14 +822,30 @@ class PublicShopOrderCreateView(APIView):
                 description=f"Заказ магазина #{order.id} — {provider.organization_name or provider.username}",
                 return_url=str(request.data.get("return_url") or "").strip()
                 or f"{request.build_absolute_uri('/').rstrip('/')}/s/{slug}?order={order.id}",
-                metadata={"type": "shop_order", "order_id": str(order.id)},
+                metadata={
+                    "type": "shop_order",
+                    "order_id": str(order.id),
+                    "client_id": str(client.id) if client else "",
+                },
                 order_id=f"s{order.id}",
+                save_payment_method=bool(client) and not payment_method_id,
+                payment_method_id=payment_method_id or None,
             )
             if not pay or not pay.get("id"):
                 raise RuntimeError("Платёжный провайдер не вернул id")
             order.yookassa_payment_id = pay.get("id") or ""
             order.confirmation_url = pay.get("confirmation_url") or ""
             order.save(update_fields=["yookassa_payment_id", "confirmation_url", "updated_at"])
+            # Сохранённая карта без 3DS — оплата могла пройти сразу
+            if not order.confirmation_url and str(pay.get("status") or "") == "succeeded":
+                from shop.payments import mark_shop_order_paid
+                from vmagazine.cards import upsert_saved_card_from_yookassa_payment
+
+                mark_shop_order_paid(order)
+                if client and pay.get("raw"):
+                    upsert_saved_card_from_yookassa_payment(
+                        user=client, provider=provider, payment_obj=pay.get("raw")
+                    )
         except Exception as e:
             try:
                 from vmagazine.bonuses import refund_order_bonuses
@@ -834,6 +866,7 @@ class PublicShopOrderCreateView(APIView):
                 "payment_method": "online",
                 "service_fee": str(service_fee),
                 "bonus_spent": str(order.bonus_spent or 0),
+                "saved_card_used": bool(payment_method_id),
             },
             status=201,
         )
@@ -852,3 +885,126 @@ def mark_shop_order_paid(order: ShopOrder) -> None:
     from .payments import mark_shop_order_paid as _mark
 
     _mark(order)
+
+
+class ShopReturnRequestsView(APIView):
+    """Возвраты для кабинета продавца: список и решение (approve/reject/done)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if not can_manage_shop(request.user):
+            return Response({"detail": "Нет доступа"}, status=403)
+        provider = resolve_shop_provider(request.user)
+        if not provider:
+            return Response({"detail": "Нет доступа"}, status=403)
+        from vmagazine.models import ReturnRequest
+
+        rows = (
+            ReturnRequest.objects.filter(order__provider=provider)
+            .select_related("order", "order_item", "user")
+            .order_by("-created_at")[:80]
+        )
+        return Response(
+            [
+                {
+                    "id": r.id,
+                    "status": r.status,
+                    "reason": r.reason,
+                    "seller_note": r.seller_note,
+                    "refund_id": r.refund_id,
+                    "created_at": r.created_at,
+                    "order_id": r.order_id,
+                    "order_item_id": r.order_item_id,
+                    "product_name": r.order_item.name,
+                    "quantity": r.order_item.quantity,
+                    "unit_price": str(r.order_item.unit_price),
+                    "line_total": str(r.order_item.line_total),
+                    "selected_size": getattr(r.order_item, "selected_size", "") or "",
+                    "client_name": (
+                        r.order.guest_name
+                        or (r.user.get_full_name() if r.user_id else "")
+                        or (r.user.username if r.user_id else "")
+                    ),
+                    "client_phone": r.order.guest_phone or getattr(r.user, "phone", "") or "",
+                }
+                for r in rows
+            ]
+        )
+
+    def patch(self, request):
+        if not can_manage_shop(request.user):
+            return Response({"detail": "Нет доступа"}, status=403)
+        provider = resolve_shop_provider(request.user)
+        if not provider:
+            return Response({"detail": "Нет доступа"}, status=403)
+        from vmagazine.models import ReturnRequest
+
+        try:
+            rid = int(request.data.get("id") or request.data.get("return_id"))
+        except (TypeError, ValueError):
+            return Response({"detail": "Укажите id заявки"}, status=400)
+        row = (
+            ReturnRequest.objects.filter(pk=rid, order__provider=provider)
+            .select_related("order", "order_item", "user")
+            .first()
+        )
+        if not row:
+            return Response({"detail": "Заявка не найдена"}, status=404)
+        new_status = str(request.data.get("status") or "").strip()
+        allowed = {c.value for c in ReturnRequest.Status}
+        if new_status not in allowed:
+            return Response({"detail": "status: pending|approved|rejected|done"}, status=400)
+        previous = row.status
+        row.seller_note = str(request.data.get("seller_note") or row.seller_note or "").strip()[:500]
+        row.status = new_status
+
+        if new_status == ReturnRequest.Status.APPROVED and previous != ReturnRequest.Status.APPROVED:
+            # Попытка вернуть деньги по онлайн-заказу
+            order = row.order
+            if order.yookassa_payment_id and not row.refund_id:
+                try:
+                    from decimal import Decimal
+
+                    from payments.resolve import resolve_org_payment_setup
+                    from subscriptions.yookassa_client import create_refund
+
+                    amount = Decimal(row.order_item.unit_price) * Decimal(row.order_item.quantity)
+                    code, creds = resolve_org_payment_setup(provider)
+                    if code == "yookassa" and amount > 0:
+                        refund = create_refund(
+                            payment_id=order.yookassa_payment_id,
+                            amount=str(amount),
+                            description=f"Возврат по заявке #{row.id} заказ #{order.id}",
+                            shop_id=(creds.get("shop_id") or "").strip() or None,
+                            secret_key=(creds.get("secret_key") or "").strip() or None,
+                        )
+                        if refund and refund.get("id"):
+                            row.refund_id = str(refund.get("id"))
+                            if refund.get("status") in ("succeeded", "pending"):
+                                row.status = ReturnRequest.Status.DONE
+                except Exception:
+                    pass
+
+        row.save(update_fields=["status", "seller_note", "refund_id", "updated_at"])
+        try:
+            from .notify import notify_shop_users
+
+            label = dict(ReturnRequest.Status.choices).get(row.status, row.status)
+            if row.user_id:
+                notify_shop_users(
+                    [row.user_id],
+                    title=f"Возврат по заказу #{row.order_id}",
+                    body=f"{row.order_item.name}: {label}",
+                    payload={"order_id": row.order_id, "return_id": row.id, "status": row.status},
+                )
+        except Exception:
+            pass
+        return Response(
+            {
+                "id": row.id,
+                "status": row.status,
+                "seller_note": row.seller_note,
+                "refund_id": row.refund_id,
+            }
+        )

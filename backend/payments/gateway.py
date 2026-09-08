@@ -62,9 +62,11 @@ def create_org_payment(
     fail_url: str | None = None,
     metadata: dict | None = None,
     order_id: str | None = None,
+    save_payment_method: bool = False,
+    payment_method_id: str | None = None,
 ) -> dict | None:
     """
-    Returns {id, confirmation_url, provider} or None.
+    Returns {id, confirmation_url, provider, status} or None.
     """
     code = (provider_code or "yookassa").strip() or "yookassa"
     meta = metadata or {}
@@ -78,6 +80,8 @@ def create_org_payment(
             metadata=meta,
             shop_id=(creds.get("shop_id") or "").strip(),
             secret_key=(creds.get("secret_key") or "").strip(),
+            save_payment_method=bool(save_payment_method),
+            payment_method_id=(payment_method_id or "").strip() or None,
         )
         if not yk or not yk.get("id"):
             return None
@@ -85,6 +89,8 @@ def create_org_payment(
             "id": yk.get("id"),
             "confirmation_url": ((yk.get("confirmation") or {}).get("confirmation_url")) or "",
             "provider": "yookassa",
+            "status": yk.get("status") or "",
+            "raw": yk,
         }
     if code == "tbank":
         return _tbank_init(

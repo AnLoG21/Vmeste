@@ -507,7 +507,13 @@ class PaymentCardsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        rows = SavedPaymentCard.objects.filter(user=request.user)
+        rows = SavedPaymentCard.objects.filter(user=request.user).select_related("provider")
+        provider_id = request.query_params.get("provider_id")
+        if provider_id:
+            try:
+                rows = rows.filter(provider_id=int(provider_id))
+            except (TypeError, ValueError):
+                pass
         return Response(
             [
                 {
@@ -517,6 +523,11 @@ class PaymentCardsView(APIView):
                     "exp_month": c.exp_month,
                     "exp_year": c.exp_year,
                     "is_default": c.is_default,
+                    "provider_id": c.provider_id,
+                    "provider_name": (
+                        (c.provider.organization_name or c.provider.username) if c.provider_id else ""
+                    ),
+                    "has_token": bool(c.yookassa_payment_method_id),
                 }
                 for c in rows
             ]
@@ -705,6 +716,8 @@ class ReturnRequestsView(APIView):
                         if r.order.provider.organization_slug
                         else ""
                     ),
+                    "seller_note": r.seller_note or "",
+                    "refund_id": r.refund_id or "",
                 }
                 for r in rows
             ]

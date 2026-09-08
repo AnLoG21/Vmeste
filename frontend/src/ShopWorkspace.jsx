@@ -20,6 +20,27 @@ const ORDER_STATUSES = [
   ["cancelled", "Отменён"],
 ];
 
+const RETURN_STATUSES = [
+  ["pending", "На рассмотрении"],
+  ["approved", "Одобрен"],
+  ["rejected", "Отклонён"],
+  ["done", "Выполнен"],
+];
+
+function nextOrderStatus(status, mode) {
+  if (status === "paid") return "assembling";
+  if (status === "assembling") return "ready";
+  if (status === "ready") return mode === "pickup" ? "done" : "to_courier";
+  if (status === "to_courier") return "delivering";
+  if (status === "delivering") return "done";
+  return "";
+}
+
+function nextOrderStatusLabel(status, mode) {
+  const n = nextOrderStatus(status, mode);
+  return ORDER_STATUSES.find(([v]) => v === n)?.[1] || "";
+}
+
 const STOCK_ACTIONS = [
   {
     kind: "in",
@@ -252,6 +273,7 @@ export default function ShopWorkspace({ authFetch, me }) {
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [returnsList, setReturnsList] = useState([]);
   const [settings, setSettings] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [form, setForm] = useState(emptyProductForm());
@@ -291,6 +313,14 @@ export default function ShopWorkspace({ authFetch, me }) {
     }
   }, [authFetch]);
 
+  const loadReturns = useCallback(async () => {
+    const res = await authFetch(`${API_URL}/shop/returns/`);
+    if (res.ok) {
+      const list = await res.json();
+      setReturnsList(Array.isArray(list) ? list : []);
+    }
+  }, [authFetch]);
+
   const loadSettings = useCallback(async () => {
     const res = await authFetch(`${API_URL}/shop/settings/`);
     if (res.ok) setSettings(await res.json());
@@ -302,8 +332,9 @@ export default function ShopWorkspace({ authFetch, me }) {
 
   useEffect(() => {
     if (tab === "orders") void loadOrders();
+    if (tab === "returns") void loadReturns();
     if (tab === "settings") void loadSettings();
-  }, [tab, loadOrders, loadSettings]);
+  }, [tab, loadOrders, loadReturns, loadSettings]);
 
   const rootCats = useMemo(() => categories.filter((c) => !c.parent), [categories]);
   const looseProducts = useMemo(
@@ -583,7 +614,24 @@ export default function ShopWorkspace({ authFetch, me }) {
       showToast(data.detail || "Не удалось обновить заказ", { tone: "error" });
       return;
     }
+    showToast("Статус обновлён");
     await loadOrders();
+  }
+
+  async function updateReturnStatus(returnId, statusValue) {
+    const res = await authFetch(`${API_URL}/shop/returns/`, {
+      method: "PATCH",
+      body: JSON.stringify({ id: returnId, status: statusValue }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showToast(data.detail || "Не удалось обновить возврат", { tone: "error" });
+      return;
+    }
+    showToast(
+      data.refund_id ? "Возврат одобрен, деньги отправлены в ЮKassa" : "Заявка обновлена",
+    );
+    await loadReturns();
   }
 
   const featuredCount = products.filter((p) => p.is_featured).length;
@@ -596,7 +644,8 @@ export default function ShopWorkspace({ authFetch, me }) {
         {[
           ["catalog", "Каталог"],
           ["orders", "Заказы"],
-          ["settings", "Самовывоз и доставка"],
+          ["returns", "Возвраты"],
+          ["settings", "Настройки"],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -1047,53 +1096,134 @@ export default function ShopWorkspace({ authFetch, me }) {
       {tab === "orders" && (
         <section className="card">
           <h2>Заказы магазина</h2>
+          <p className="muted small">Меняйте статус по шагам сборки — покупатель получит пуш.</p>
           {!orders.length && <p className="muted">Пока нет заказов.</p>}
           <div className="stack" style={{ gap: 12 }}>
-            {orders.map((o) => (
-              <article key={o.id} className="loyalty-package-card" style={{ minWidth: 0 }}>
-                <strong>
-                  #{o.id} · {o.mode === "delivery" ? "Доставка" : "Самовывоз"} · {o.status}
-                </strong>
-                {o.mode === "delivery" && (o.chosen_delivery_provider || o.eta_text) ? (
+            {orders.map((o) => {
+              const next = nextOrderStatus(o.status, o.mode);
+              const nextLabel = nextOrderStatusLabel(o.status, o.mode);
+              return (
+                <article key={o.id} className="loyalty-package-card" style={{ minWidth: 0 }}>
+                  <strong>
+                    #{o.id} · {o.mode === "delivery" ? "Доставка" : "Самовывоз"} ·{" "}
+                    {ORDER_STATUSES.find(([v]) => v === o.status)?.[1] || o.status}
+                  </strong>
+                  {o.mode === "delivery" && (o.chosen_delivery_provider || o.eta_text) ? (
+                    <p className="muted small">
+                      {o.chosen_delivery_provider === "yandex"
+                        ? "Яндекс Доставка"
+                        : o.chosen_delivery_provider === "cdek"
+                          ? "СДЭК"
+                          : o.chosen_delivery_provider === "russian_post"
+                            ? "Почта России"
+                            : o.chosen_delivery_provider === "dostavista"
+                              ? "Dostavista"
+                              : o.chosen_delivery_provider === "own"
+                                ? "Курьер продавца"
+                                : o.chosen_delivery_provider || "Доставка"}
+                      {o.eta_text ? ` · ≈ ${o.eta_text}` : ""}
+                    </p>
+                  ) : null}
                   <p className="muted small">
-                    {o.chosen_delivery_provider === "yandex"
-                      ? "Яндекс Доставка"
-                      : o.chosen_delivery_provider === "cdek"
-                        ? "СДЭК"
-                        : o.chosen_delivery_provider === "russian_post"
-                          ? "Почта России"
-                          : o.chosen_delivery_provider === "dostavista"
-                            ? "Dostavista"
-                            : o.chosen_delivery_provider === "own"
-                              ? "Курьер продавца"
-                              : o.chosen_delivery_provider || "Доставка"}
-                    {o.eta_text ? ` · ≈ ${o.eta_text}` : ""}
+                    {o.guest_name || "Гость"} {o.guest_phone} · {Number(o.total).toLocaleString("ru-RU")} ₽
+                    {Number(o.bonus_spent) > 0
+                      ? ` · бонусы −${Number(o.bonus_spent).toLocaleString("ru-RU")} ₽`
+                      : ""}
                   </p>
-                ) : null}
-                <p className="muted small">
-                  {o.guest_name || "Гость"} {o.guest_phone} · {Number(o.total).toLocaleString("ru-RU")} ₽
+                  {o.external_tracking_id ? (
+                    <p className="small">
+                      Доставка ({o.external_delivery_provider || "—"}):{" "}
+                      <code>{o.external_tracking_id}</code>
+                    </p>
+                  ) : null}
+                  {o.delivery_address ? <p className="small">{o.delivery_address}</p> : null}
+                  <ul className="small">
+                    {(o.items || []).map((it) => (
+                      <li key={it.id}>
+                        {it.name}
+                        {it.selected_size ? ` · ${it.selected_size}` : ""} × {it.quantity}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="row-2" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    {next ? (
+                      <button
+                        type="button"
+                        className="primary-btn"
+                        onClick={() => void updateOrderStatus(o.id, next)}
+                      >
+                        → {nextLabel}
+                      </button>
+                    ) : null}
+                    <select value={o.status} onChange={(e) => void updateOrderStatus(o.id, e.target.value)}>
+                      {ORDER_STATUSES.map(([v, l]) => (
+                        <option key={v} value={v}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {tab === "returns" && (
+        <section className="card">
+          <h2>Возвраты</h2>
+          <p className="muted small">
+            Одобрение по онлайн-заказу попытается вернуть сумму позиции через ЮKassa.
+          </p>
+          {!returnsList.length ? <p className="muted">Заявок пока нет.</p> : null}
+          <div className="stack" style={{ gap: 12 }}>
+            {returnsList.map((r) => (
+              <article key={r.id} className="loyalty-package-card">
+                <strong>
+                  #{r.id} · заказ #{r.order_id} ·{" "}
+                  {RETURN_STATUSES.find(([v]) => v === r.status)?.[1] || r.status}
+                </strong>
+                <p className="small">
+                  {r.product_name}
+                  {r.selected_size ? ` · ${r.selected_size}` : ""} × {r.quantity} —{" "}
+                  {Number(r.line_total).toLocaleString("ru-RU")} ₽
                 </p>
-                {o.external_tracking_id ? (
-                  <p className="small">
-                    Доставка ({o.external_delivery_provider || "—"}):{" "}
-                    <code>{o.external_tracking_id}</code>
+                <p className="muted small">
+                  {r.client_name} {r.client_phone}
+                </p>
+                {r.reason ? <p className="small">{r.reason}</p> : null}
+                {r.refund_id ? (
+                  <p className="muted small">
+                    Refund: <code>{r.refund_id}</code>
                   </p>
                 ) : null}
-                {o.delivery_address ? <p className="small">{o.delivery_address}</p> : null}
-                <ul className="small">
-                  {(o.items || []).map((it) => (
-                    <li key={it.id}>
-                      {it.name} × {it.quantity}
-                    </li>
-                  ))}
-                </ul>
-                <select value={o.status} onChange={(e) => void updateOrderStatus(o.id, e.target.value)}>
-                  {ORDER_STATUSES.map(([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
+                {r.status === "pending" ? (
+                  <div className="row-2" style={{ gap: 8 }}>
+                    <button
+                      type="button"
+                      className="primary-btn"
+                      onClick={() => void updateReturnStatus(r.id, "approved")}
+                    >
+                      Одобрить
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      onClick={() => void updateReturnStatus(r.id, "rejected")}
+                    >
+                      Отклонить
+                    </button>
+                  </div>
+                ) : r.status === "approved" ? (
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    onClick={() => void updateReturnStatus(r.id, "done")}
+                  >
+                    Отметить выполненным
+                  </button>
+                ) : null}
               </article>
             ))}
           </div>
@@ -1127,6 +1257,29 @@ export default function ShopWorkspace({ authFetch, me }) {
             />
             <span>Онлайн-оплата</span>
           </label>
+
+          <h3 className="shop-section-title">Вбонусы</h3>
+          <p className="muted small">Начисление после статуса «Завершён». Списание — на оформлении у покупателя.</p>
+          <Field label="Начисление, % от суммы позиций">
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              defaultValue={settings.bonus_earn_percent ?? 0}
+              onBlur={(e) => void saveSettings({ bonus_earn_percent: e.target.value || 0 })}
+            />
+          </Field>
+          <Field label="Макс. оплата бонусами, % от товаров">
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              defaultValue={settings.bonus_max_spend_percent ?? 50}
+              onBlur={(e) => void saveSettings({ bonus_max_spend_percent: e.target.value || 50 })}
+            />
+          </Field>
 
           {settings.enable_delivery ? (
             <div className="shop-delivery-methods">

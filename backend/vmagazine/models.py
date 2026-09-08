@@ -170,17 +170,26 @@ class BonusLedgerEntry(models.Model):
 
 
 class SavedPaymentCard(models.Model):
-    """Сохранённые карты (токен/маски — без полного PAN)."""
+    """Сохранённые карты: маска + опционально payment_method_id ЮKassa (привязка к магазину)."""
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="saved_payment_cards",
     )
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="customer_saved_cards",
+        help_text="Магазин, у которого привязана карта (токен ЮKassa нельзя переиспользовать между магазинами)",
+    )
     brand = models.CharField(max_length=32, blank=True, default="card")
     last4 = models.CharField(max_length=4)
     exp_month = models.PositiveSmallIntegerField(default=1)
     exp_year = models.PositiveSmallIntegerField(default=2030)
+    yookassa_payment_method_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     is_default = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -223,6 +232,8 @@ class ReturnRequest(models.Model):
     )
     reason = models.TextField(blank=True, default="")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    seller_note = models.CharField(max_length=500, blank=True, default="")
+    refund_id = models.CharField(max_length=64, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

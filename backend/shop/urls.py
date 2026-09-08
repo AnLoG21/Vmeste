@@ -11,6 +11,7 @@ from .views import (
     PublicShopOrderStatusView,
     ServiceMaterialViewSet,
     ShopOrderViewSet,
+    ShopReturnRequestsView,
     ShopSettingsView,
     StockMovementViewSet,
 )
@@ -25,6 +26,7 @@ router.register(r"orders", ShopOrderViewSet, basename="shop-orders")
 
 urlpatterns = [
     path("settings/", ShopSettingsView.as_view(), name="shop-settings"),
+    path("returns/", ShopReturnRequestsView.as_view(), name="shop-returns"),
     path("public/<slug:slug>/", PublicShopCatalogView.as_view(), name="shop-public-catalog"),
     path(
         "public/<slug:slug>/delivery-quote/",

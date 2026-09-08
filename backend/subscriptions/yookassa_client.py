@@ -28,6 +28,8 @@ def create_payment(
     metadata: dict,
     shop_id: str | None = None,
     secret_key: str | None = None,
+    save_payment_method: bool = False,
+    payment_method_id: str | None = None,
 ) -> dict | None:
     sid = shop_id or settings.YOOKASSA_SHOP_ID
     secret = secret_key or settings.YOOKASSA_SECRET_KEY
@@ -35,11 +37,17 @@ def create_payment(
         return None
     payload = {
         "amount": {"value": f"{float(amount):.2f}", "currency": "RUB"},
-        "confirmation": {"type": "redirect", "return_url": return_url},
         "capture": True,
         "description": description[:128],
-        "metadata": metadata,
+        "metadata": metadata or {},
     }
+    # Redirect confirmation нужен и для сохранённых карт (3‑D Secure).
+    if return_url:
+        payload["confirmation"] = {"type": "redirect", "return_url": return_url}
+    if payment_method_id:
+        payload["payment_method_id"] = str(payment_method_id)
+    if save_payment_method and not payment_method_id:
+        payload["save_payment_method"] = True
     auth = base64.b64encode(f"{sid}:{secret}".encode()).decode()
     req = urllib.request.Request(
         "https://api.yookassa.ru/v3/payments",
@@ -82,9 +90,18 @@ def get_payment(payment_id: str, shop_id: str | None = None, secret_key: str | N
         return None
 
 
-def create_refund(*, payment_id: str, amount: str, description: str = "") -> dict | None:
+def create_refund(
+    *,
+    payment_id: str,
+    amount: str,
+    description: str = "",
+    shop_id: str | None = None,
+    secret_key: str | None = None,
+) -> dict | None:
     """Full or partial refund for a succeeded YooKassa payment."""
-    if not _configured() or not payment_id:
+    sid = shop_id or settings.YOOKASSA_SHOP_ID
+    secret = secret_key or settings.YOOKASSA_SECRET_KEY
+    if not sid or not secret or not payment_id:
         return None
     payload = {
         "payment_id": payment_id,
@@ -92,11 +109,12 @@ def create_refund(*, payment_id: str, amount: str, description: str = "") -> dic
     }
     if description:
         payload["description"] = description[:250]
+    auth = base64.b64encode(f"{sid}:{secret}".encode()).decode()
     req = urllib.request.Request(
         "https://api.yookassa.ru/v3/refunds",
         data=json.dumps(payload).encode("utf-8"),
         headers={
-            "Authorization": f"Basic {_auth_header()}",
+            "Authorization": f"Basic {auth}",
             "Content-Type": "application/json",
             "Idempotence-Key": str(uuid.uuid4()),
         },

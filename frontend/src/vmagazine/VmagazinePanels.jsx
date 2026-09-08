@@ -1185,9 +1185,11 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
           </div>
           {paymentMethod === "online" ? (
             <div style={{ marginTop: "0.65rem" }}>
-              {cards.length ? (
+              {cards.filter((c) => c.has_token).length ? (
                 <div className="vmag-cards-grid">
-                  {cards.map((c) => (
+                  {cards
+                    .filter((c) => c.has_token)
+                    .map((c) => (
                     <button
                       key={c.id}
                       type="button"
@@ -1207,16 +1209,21 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
                       </p>
                       <p className="muted small">
                         {String(c.exp_month).padStart(2, "0")}/{String(c.exp_year).slice(-2)}
+                        {c.provider_name ? ` · ${c.provider_name}` : ""}
                         {c.is_default ? " · основная" : ""}
                       </p>
                     </button>
                   ))}
                 </div>
               ) : (
-                <p className="muted small">Можно добавить карту в профиле</p>
+                <p className="muted small">
+                  Привязанных карт пока нет — после первой оплаты карта сохранится в ЮKassa автоматически.
+                </p>
               )}
               <p className="muted small" style={{ marginTop: "0.45rem" }}>
-                Оплата пройдёт на защищённой странице ЮKassa
+                {cardId
+                  ? "Спишем с выбранной карты; при 3‑D Secure откроется страница банка."
+                  : "Оплата на странице ЮKassa; карта сохранится для следующих заказов этого магазина."}
               </p>
             </div>
           ) : null}
