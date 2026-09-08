@@ -1667,6 +1667,9 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct }) {
             +
           </button>
         </div>
+        <p className="muted small">
+          Для оплаты в магазине нужна карта, привязанная через ЮKassa (сохраняется после успешной оплаты).
+        </p>
         <div className="vmag-cards-grid">
           {cards.map((c) => (
             <article key={c.id} className="vmag-pay-card">
@@ -1691,6 +1694,8 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct }) {
               <p className="vmag-pay-masked">•••• •••• •••• <span>{c.last4}</span></p>
               <p className="muted small">
                 {String(c.exp_month).padStart(2, "0")}/{String(c.exp_year).slice(-2)}
+                {c.provider_name ? ` · ${c.provider_name}` : ""}
+                {c.has_token ? " · ЮKassa" : " · только маска"}
                 {c.is_default ? " · основная" : ""}
               </p>
             </article>
@@ -1698,6 +1703,9 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct }) {
         </div>
         {cardFormOpen ? (
           <div className="vmag-card-form">
+            <p className="muted small">
+              Маска вручную не списывает деньги. Чтобы платить в один клик — оплатите заказ онлайн один раз.
+            </p>
             <div className="vmag-card-form-brand">
               <CardBrandMark brand={previewBrand} />
               <span className="muted small">Бренд определится автоматически</span>
