@@ -13,6 +13,7 @@ export default function BookingSlotActions({
   setPendingInspectionId,
   setCurrentView,
   openChatWithClient,
+  openClientMemoryCard,
   bookingHasStarted,
   resumeBookingPayment,
   openChatWithProvider,
@@ -118,6 +119,19 @@ export default function BookingSlotActions({
           {repairStatusClientCta(it.inspection)}
         </button>
       )}
+      {isOrg && !cancelled && it.client ? (
+        <button
+          type="button"
+          className="booking-action-btn booking-action-btn--memory"
+          title="Карточка клиента — помнить всё"
+          onClick={(e) => {
+            e.stopPropagation();
+            openClientMemoryCard?.(it.client, it.client_display_name || it.client_username || "");
+          }}
+        >
+          ♥
+        </button>
+      ) : null}
       {isOrg && !cancelled && (
         <button type="button" className="booking-action-btn booking-action-btn--chat" title="Чат с клиентом" onClick={(e) => { e.stopPropagation(); openChatWithClient(it.client); }}>
           💬

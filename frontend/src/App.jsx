@@ -30,6 +30,7 @@ import GeneralSettingsPanel from "./GeneralSettingsPanel.jsx";
 import OrganizationSettingsPanel from "./OrganizationSettingsPanel.jsx";
 import BookingCalendar from "./BookingCalendar.jsx";
 import BookingHistory from "./BookingHistory.jsx";
+import ClientMemoryCardModal from "./ClientMemoryCardModal.jsx";
 import BookingSlotActions from "./BookingSlotActions.jsx";
 import ProfileCabinetPanel from "./ProfileCabinetPanel.jsx";
 import AuthModal from "./AuthModal.jsx";
@@ -212,6 +213,7 @@ export default function App() {
   const [sellerStatus, setSellerStatus] = useState("");
   const [clientStatus, setClientStatus] = useState("");
   const [pendingInspectionId, setPendingInspectionId] = useState(null);
+  const [clientMemoryCard, setClientMemoryCard] = useState(null); // { clientId, clientName }
   const [verifyStatus, setVerifyStatus] = useState("");
   const [resendStatus, setResendStatus] = useState("");
   const [verifyEmailNotice, setVerifyEmailNotice] = useState(null);
@@ -2404,6 +2406,9 @@ export default function App() {
         setPendingInspectionId={setPendingInspectionId}
         setCurrentView={setCurrentView}
         openChatWithClient={openChatWithClient}
+        openClientMemoryCard={(clientId, clientName) =>
+          setClientMemoryCard({ clientId, clientName: clientName || "" })
+        }
         bookingHasStarted={bookingHasStarted}
         resumeBookingPayment={resumeBookingPayment}
         openChatWithProvider={openChatWithProvider}
@@ -2447,6 +2452,9 @@ export default function App() {
         bookingClientLabel={bookingClientLabel}
         openOrgCardFromHistory={openOrgCardFromHistory}
         openChatWithClient={openChatWithClient}
+        openClientMemoryCard={(clientId, clientName) =>
+          setClientMemoryCard({ clientId, clientName: clientName || "" })
+        }
         resumeBookingPayment={resumeBookingPayment}
         canManageBookings={canManageBookings}
         openInspectionFromBooking={openInspectionFromBooking}
@@ -3317,6 +3325,9 @@ export default function App() {
                 authFetch={authFetch}
                 API_URL={API_URL}
                 services={services.filter((s) => s.is_active !== false)}
+                openClientMemoryCard={(clientId, clientName) =>
+                  setClientMemoryCard({ clientId, clientName: clientName || "" })
+                }
               />
             )}
             {me?.provider_sphere === "service_center" ? (
@@ -3493,6 +3504,20 @@ export default function App() {
               renderBookingSlotActions={renderBookingSlotActions}
               deleteSlot={deleteSlot}
               releaseManualHold={releaseManualHold}
+            />,
+            document.body
+          )}
+
+        {clientMemoryCard?.clientId &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <ClientMemoryCardModal
+              clientId={clientMemoryCard.clientId}
+              clientName={clientMemoryCard.clientName}
+              authFetch={authFetch}
+              API_URL={API_URL}
+              onClose={() => setClientMemoryCard(null)}
+              onOpenChat={openChatWithClient}
             />,
             document.body
           )}

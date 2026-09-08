@@ -451,6 +451,35 @@ class LoyaltyAccount(models.Model):
         unique_together = [("provider", "client")]
 
 
+class ProviderClientCard(models.Model):
+    """CRM-память мастера о клиенте: техкарта + личные предпочтения."""
+
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="client_memory_cards",
+    )
+    client = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="provider_memory_cards",
+    )
+    # Структурированная техкарта (краска, ресницы, ногти, воск…)
+    tech = models.JSONField(default=dict, blank=True)
+    # Личные особенности (музыка, напиток, аллергии, темы разговора…)
+    personal = models.JSONField(default=dict, blank=True)
+    technical_notes = models.TextField(blank=True, default="")
+    preferences_notes = models.TextField(blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["provider", "client"], name="uniq_provider_client_memory"),
+        ]
+        ordering = ["-updated_at"]
+
+
 class LoyaltyLedger(models.Model):
     account = models.ForeignKey(
         LoyaltyAccount,

@@ -89,6 +89,7 @@ export default function BookingHistory({
   bookingClientLabel,
   openOrgCardFromHistory,
   openChatWithClient,
+  openClientMemoryCard,
   resumeBookingPayment,
   canManageBookings,
   openInspectionFromBooking,
@@ -196,13 +197,35 @@ export default function BookingHistory({
                             {counterpartyLabel}
                           </span>
                         ) : (
-                          <button
-                            type="button"
-                            className="booking-history-link"
-                            onClick={() => openChatWithClient(b.client)}
-                          >
-                            {counterpartyLabel}
-                          </button>
+                          <span className="booking-history-client-actions">
+                            <button
+                              type="button"
+                              className="booking-history-link"
+                              onClick={() =>
+                                openClientMemoryCard?.(b.client, bookingClientLabel?.(b) || "")
+                              }
+                            >
+                              {counterpartyLabel}
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost-btn small"
+                              title="Карточка клиента"
+                              onClick={() =>
+                                openClientMemoryCard?.(b.client, bookingClientLabel?.(b) || "")
+                              }
+                            >
+                              Память
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost-btn small"
+                              title="Чат"
+                              onClick={() => openChatWithClient(b.client)}
+                            >
+                              Чат
+                            </button>
+                          </span>
                         )
                       )}
                     </p>

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
  * Provider panel: visit packages + loyalty settings.
  * Expects authFetch and API_URL from parent.
  */
-export default function SalonLoyaltyPackagesPanel({ authFetch, API_URL, services = [] }) {
+export default function SalonLoyaltyPackagesPanel({ authFetch, API_URL, services = [], openClientMemoryCard }) {
   const [packages, setPackages] = useState([]);
   const [loyalty, setLoyalty] = useState({
     enabled: false,
@@ -291,6 +291,18 @@ export default function SalonLoyaltyPackagesPanel({ authFetch, API_URL, services
               <li key={p.id}>
                 {p.client_name || `клиент #${p.client}`}: {p.package_name} — осталось {p.visits_remaining}/
                 {p.visits_total} ({p.status})
+                {openClientMemoryCard && p.client ? (
+                  <>
+                    {" "}
+                    <button
+                      type="button"
+                      className="ghost-btn small"
+                      onClick={() => openClientMemoryCard(p.client, p.client_name || "")}
+                    >
+                      Память
+                    </button>
+                  </>
+                ) : null}
               </li>
             ))}
           </ul>
