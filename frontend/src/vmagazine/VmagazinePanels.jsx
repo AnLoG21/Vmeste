@@ -870,10 +870,12 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
         bySlug.get(slug).push(row);
       }
       const slugList = [...bySlug.keys()];
+      const onlineQueue = paymentMethod === "online" && slugList.length > 1;
+      const processSlugs = onlineQueue ? [slugList[0]] : slugList;
       let lastUrl = "";
       let orderCount = 0;
       let first = true;
-      for (const slug of slugList) {
+      for (const slug of processSlugs) {
         const rows = bySlug.get(slug);
         const shopSum = rows.reduce(
           (s, r) => s + Number(r.product?.price || 0) * Number(r.quantity || 0),
@@ -926,15 +928,14 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
         }
         first = false;
       }
-      const multi = orderCount > 1;
       if (paymentMethod === "online") {
         showToast(
-          multi
-            ? `Создано ${orderCount} заказа — переходим к оплате`
+          onlineQueue
+            ? "Оплатите заказ первого магазина — остальные останутся в корзине"
             : "Заказ создан",
         );
       } else {
-        showToast(multi ? `Оформлено ${orderCount} заказа` : "Заказ оформлен");
+        showToast(orderCount > 1 ? `Оформлено ${orderCount} заказа` : "Заказ оформлен");
       }
       setCheckoutOpen(false);
       await load();
