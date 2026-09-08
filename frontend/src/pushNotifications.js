@@ -115,6 +115,13 @@ export async function initPushNotifications(authFetch, accessToken = "") {
           /* ignore */
         }
       }
+      if (data.view === "loyalty" || data.kind === "loyalty_package") {
+        try {
+          window.dispatchEvent(new CustomEvent("vmeste:open-loyalty", { detail: {} }));
+        } catch {
+          /* ignore */
+        }
+      }
       if (data.view === "inspections" || data.inspection_id) {
         try {
           window.dispatchEvent(

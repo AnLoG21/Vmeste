@@ -5463,6 +5463,30 @@ body.theme-dark .booking-messages-hint code {
   margin: 4px 0 10px;
 }
 
+.service-option-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid #e0c2a8;
+  border-radius: 12px;
+  background: #fffaf5;
+  font: inherit;
+  cursor: pointer;
+}
+
+.service-option-check input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.service-option-check.is-on {
+  border-color: #c45c00;
+  background: #fff3e8;
+  box-shadow: 0 0 0 1px rgba(196, 92, 0, 0.25);
+}
+
 .service-option-chip {
   display: flex;
   align-items: flex-start;
@@ -5516,6 +5540,24 @@ body.theme-dark .booking-messages-hint code {
   gap: 8px;
   align-items: center;
   font-size: 0.9rem;
+}
+
+.service-editor-option-form {
+  display: grid;
+  grid-template-columns: 1fr 72px 64px auto;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+@media (max-width: 720px) {
+  .service-editor-option-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .service-editor-option-form button {
+    grid-column: 1 / -1;
+  }
 }
 
 .client-book-overlay .form {
@@ -9518,6 +9560,67 @@ body.theme-dark .password-eye-btn:hover {
 .salon-package-list {
   margin: 0 0 12px;
   padding-left: 1.1rem;
+}
+
+.client-loyalty-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.client-loyalty-head h2 {
+  margin: 0;
+}
+
+.client-loyalty-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: #fff4ea;
+  color: #8d3e00;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.client-loyalty-packages {
+  list-style: none;
+  padding-left: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.client-loyalty-packages > li {
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #ffd9bd;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.client-loyalty-pkg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.client-loyalty-status {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #6b6280;
+}
+
+.client-loyalty-status.is-active {
+  color: #1b7a3a;
+}
+
+.client-loyalty-status.is-ended {
+  color: #9a3412;
 }
 
 .form-row-2 {

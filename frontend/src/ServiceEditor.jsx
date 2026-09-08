@@ -1,5 +1,8 @@
+import { useState } from "react";
+import { API_URL } from "./config.js";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import ServiceMaterialsBlock from "./ServiceMaterialsBlock.jsx";
+import { showToast } from "./toast.js";
 
 export function buildServiceDraftFromService(service) {
   return {
@@ -25,11 +28,84 @@ export default function ServiceEditor({
   onDraftChange,
   onUploadPhotos,
   onDeletePhoto,
+  onOptionsChange,
   authFetch,
 }) {
   const local = draft ?? buildServiceDraftFromService(service);
   const photos = service.photos || [];
   const gallery = service.gallery || [];
+  const options = service.options || [];
+  const [optForm, setOptForm] = useState({ name: "", price: "0", extra_minutes: "0" });
+  const [optBusy, setOptBusy] = useState(false);
+
+  async function refreshOptions() {
+    const res = await authFetch(`${API_URL}/catalog/services/${service.id}/options/`);
+    if (!res.ok) return;
+    const list = await res.json();
+    onOptionsChange?.(service.id, Array.isArray(list) ? list : []);
+  }
+
+  async function addOption(e) {
+    e?.preventDefault?.();
+    const name = optForm.name.trim();
+    if (!name) {
+      showToast("Укажите название доп. услуги");
+      return;
+    }
+    setOptBusy(true);
+    try {
+      const res = await authFetch(`${API_URL}/catalog/services/${service.id}/options/`, {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          price: optForm.price || 0,
+          extra_minutes: Number(optForm.extra_minutes) || 0,
+          is_active: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Не удалось добавить");
+      setOptForm({ name: "", price: "0", extra_minutes: "0" });
+      await refreshOptions();
+      showToast("Доп. услуга добавлена");
+    } catch (err) {
+      showToast(err.message || "Ошибка", { tone: "error" });
+    } finally {
+      setOptBusy(false);
+    }
+  }
+
+  async function toggleOption(opt) {
+    setOptBusy(true);
+    try {
+      const res = await authFetch(`${API_URL}/catalog/services/${service.id}/options/${opt.id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_active: !opt.is_active }),
+      });
+      if (!res.ok) throw new Error("Не удалось обновить");
+      await refreshOptions();
+    } catch (err) {
+      showToast(err.message || "Ошибка", { tone: "error" });
+    } finally {
+      setOptBusy(false);
+    }
+  }
+
+  async function removeOption(opt) {
+    if (!window.confirm(`Удалить «${opt.name}»?`)) return;
+    setOptBusy(true);
+    try {
+      const res = await authFetch(`${API_URL}/catalog/services/${service.id}/options/${opt.id}/`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Не удалось удалить");
+      await refreshOptions();
+    } catch (err) {
+      showToast(err.message || "Ошибка", { tone: "error" });
+    } finally {
+      setOptBusy(false);
+    }
+  }
 
   return (
     <div
@@ -99,22 +175,58 @@ export default function ServiceEditor({
         />
         Оказываем
       </label>
-      {(service.options || []).length > 0 ? (
-        <div className="service-editor-options">
-          <span className="small-label">Дополнительно к услуге</span>
-          {(service.options || []).map((o) => (
-            <div key={o.id} className="service-editor-option-row">
+
+      <div className="service-editor-options">
+        <span className="small-label">Доп. услуги (с ценой)</span>
+        {options.map((o) => (
+          <div key={o.id} className="service-editor-option-row">
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={o.is_active !== false}
+                disabled={optBusy}
+                onChange={() => void toggleOption(o)}
+              />
               <span>
-                + {o.name}
+                {o.name}
                 {Number(o.price) > 0 ? ` · ${Number(o.price).toLocaleString("ru-RU")} ₽` : ""}
                 {Number(o.extra_minutes) > 0 ? ` · +${o.extra_minutes} мин` : ""}
-                {!o.is_active ? " (выкл.)" : ""}
               </span>
-            </div>
-          ))}
-          <p className="muted small">Допы появляются после «Загрузить каталог». Гость отмечает их плюсиком при записи.</p>
-        </div>
-      ) : null}
+            </label>
+            <button type="button" className="ghost-btn" disabled={optBusy} onClick={() => void removeOption(o)}>
+              Удалить
+            </button>
+          </div>
+        ))}
+        <form className="service-editor-option-form" onSubmit={(e) => void addOption(e)}>
+          <input
+            placeholder="Название допа"
+            value={optForm.name}
+            onChange={(e) => setOptForm((f) => ({ ...f, name: e.target.value }))}
+          />
+          <input
+            type="number"
+            min="0"
+            step="1"
+            placeholder="Цена"
+            value={optForm.price}
+            onChange={(e) => setOptForm((f) => ({ ...f, price: e.target.value }))}
+          />
+          <input
+            type="number"
+            min="0"
+            step="5"
+            placeholder="Мин +"
+            value={optForm.extra_minutes}
+            onChange={(e) => setOptForm((f) => ({ ...f, extra_minutes: e.target.value }))}
+          />
+          <button type="submit" className="primary-btn" disabled={optBusy}>
+            + Доп
+          </button>
+        </form>
+        <p className="muted small">Клиент отметит галочкой при записи.</p>
+      </div>
+
       <ServiceMaterialsBlock serviceId={service.id} authFetch={authFetch} />
       {(gallery.length > 0 || photos.length > 0) && (
         <div className="service-editor-photos">

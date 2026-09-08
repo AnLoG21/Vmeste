@@ -282,27 +282,29 @@ export default function BookingWidgetPage({ slug }) {
           </select>
 
           {selectedService?.options?.filter((o) => o.is_active !== false).length > 0 ? (
-            <div className="bw-options">
+            <div className="bw-options service-options-pick">
               {(selectedService.options || [])
                 .filter((o) => o.is_active !== false)
                 .map((o) => {
                   const on = optionIds.map(Number).includes(Number(o.id));
                   return (
-                    <button
-                      key={o.id}
-                      type="button"
-                      className={`bw-opt${on ? " is-on" : ""}`}
-                      onClick={() =>
-                        setOptionIds((cur) => {
-                          const id = Number(o.id);
-                          const nums = cur.map(Number);
-                          return on ? nums.filter((x) => x !== id) : [...nums, id];
-                        })
-                      }
-                    >
-                      {o.name}
-                      {Number(o.price) > 0 ? ` · +${Number(o.price).toLocaleString("ru-RU")} ₽` : ""}
-                    </button>
+                    <label key={o.id} className={`service-option-check${on ? " is-on" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() =>
+                          setOptionIds((cur) => {
+                            const id = Number(o.id);
+                            const nums = cur.map(Number);
+                            return on ? nums.filter((x) => x !== id) : [...nums, id];
+                          })
+                        }
+                      />
+                      <span>
+                        {o.name}
+                        {Number(o.price) > 0 ? ` · +${Number(o.price).toLocaleString("ru-RU")} ₽` : ""}
+                      </span>
+                    </label>
                   );
                 })}
             </div>

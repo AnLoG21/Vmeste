@@ -555,5 +555,58 @@ html.native-app .interval-calendar .calendar-slot-compact-end {
   .booking-history-pay {
     margin-top: 12px;
   }
+
+  .menu-dropdown {
+    right: 0;
+    left: auto;
+    min-width: min(220px, calc(100vw - 24px));
+    max-width: calc(100vw - 16px);
+    max-height: min(70vh, 480px);
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+
+  .menu-wrap {
+    position: relative;
+  }
+
+  .client-loyalty-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .client-loyalty-head h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    line-height: 1.25;
+  }
+
+  .client-loyalty-back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: none;
+    border-radius: 12px;
+    background: #fff4ea;
+    color: #8d3e00;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .shop-workspace,
+  .mp-workspace,
+  .cafe-provider-workspace {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .form-row-2 {
+    grid-template-columns: 1fr;
+  }
 }
 

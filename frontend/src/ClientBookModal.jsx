@@ -151,26 +151,25 @@ export default function ClientBookModal({
               {serviceOptions.map((o) => {
                 const on = (clientBookingForm.optionIds || []).map(Number).includes(Number(o.id));
                 return (
-                  <button
-                    key={o.id}
-                    type="button"
-                    className={`service-option-chip${on ? " is-on" : ""}`}
-                    onClick={() =>
-                      setClientBookingForm((p) => {
-                        const cur = (p.optionIds || []).map(Number);
-                        const id = Number(o.id);
-                        const next = on ? cur.filter((x) => x !== id) : [...cur, id];
-                        return { ...p, optionIds: next, windowKey: "" };
-                      })
-                    }
-                  >
-                    <span className="service-option-plus">{on ? "✓" : "+"}</span>
+                  <label key={o.id} className={`service-option-check${on ? " is-on" : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() =>
+                        setClientBookingForm((p) => {
+                          const cur = (p.optionIds || []).map(Number);
+                          const id = Number(o.id);
+                          const next = on ? cur.filter((x) => x !== id) : [...cur, id];
+                          return { ...p, optionIds: next, windowKey: "" };
+                        })
+                      }
+                    />
                     <span>
                       {o.name}
                       {Number(o.price) > 0 ? ` · +${Number(o.price).toLocaleString("ru-RU")} ₽` : ""}
                       {Number(o.extra_minutes) > 0 ? ` · +${o.extra_minutes} мин` : ""}
                     </span>
-                  </button>
+                  </label>
                 );
               })}
             </div>

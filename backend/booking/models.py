@@ -402,6 +402,7 @@ class ClientPackage(models.Model):
     expires_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
     note = models.CharField(max_length=250, blank=True, default="")
+    reminder_1d_sent = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-purchased_at"]

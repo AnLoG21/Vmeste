@@ -30,6 +30,7 @@ export default function ServiceCatalogTree({
   updateServiceDraft,
   uploadServicePhotos,
   deleteServicePhoto,
+  onServiceOptionsChange,
   authFetch,
 }) {
   const activeCount = services.filter((s) => s.is_active).length;
@@ -112,6 +113,7 @@ export default function ServiceCatalogTree({
                                 onDraftChange={updateServiceDraft}
                                 onUploadPhotos={uploadServicePhotos}
                                 onDeletePhoto={deleteServicePhoto}
+                                onOptionsChange={onServiceOptionsChange}
                                 authFetch={authFetch}
                               />
                             ))}
@@ -133,6 +135,7 @@ export default function ServiceCatalogTree({
                             onDraftChange={updateServiceDraft}
                             onUploadPhotos={uploadServicePhotos}
                             onDeletePhoto={deleteServicePhoto}
+                            onOptionsChange={onServiceOptionsChange}
                             authFetch={authFetch}
                           />
                         ))}

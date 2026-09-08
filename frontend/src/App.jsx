@@ -947,6 +947,9 @@ export default function App() {
       if (me?.role === "client") setCurrentView("vmagazine");
       else if (me?.role === "provider" || me?.role === "staff") setCurrentView("shop");
     };
+    const onLoyalty = () => {
+      if (me?.role === "client") setCurrentView("loyalty");
+    };
     const onInspections = () => {
       if (me?.role === "provider" || me?.role === "staff" || me?.role === "client") {
         setCurrentView("inspections");
@@ -972,6 +975,7 @@ export default function App() {
     };
     window.addEventListener("vmeste:open-cafe-orders", onCafe);
     window.addEventListener("vmeste:open-vmagazine", onVmagazine);
+    window.addEventListener("vmeste:open-loyalty", onLoyalty);
     window.addEventListener("vmeste:open-inspections", onInspections);
     window.addEventListener("vmeste:open-bookings", onBookings);
     window.addEventListener("vmeste:open-map", onMap);
@@ -979,6 +983,7 @@ export default function App() {
     return () => {
       window.removeEventListener("vmeste:open-cafe-orders", onCafe);
       window.removeEventListener("vmeste:open-vmagazine", onVmagazine);
+      window.removeEventListener("vmeste:open-loyalty", onLoyalty);
       window.removeEventListener("vmeste:open-inspections", onInspections);
       window.removeEventListener("vmeste:open-bookings", onBookings);
       window.removeEventListener("vmeste:open-map", onMap);
@@ -2517,6 +2522,11 @@ export default function App() {
         updateServiceDraft={updateServiceDraft}
         uploadServicePhotos={uploadServicePhotos}
         deleteServicePhoto={deleteServicePhoto}
+        onServiceOptionsChange={(serviceId, options) => {
+          setServices((prev) =>
+            prev.map((s) => (Number(s.id) === Number(serviceId) ? { ...s, options } : s)),
+          );
+        }}
         authFetch={authFetch}
       />
     );

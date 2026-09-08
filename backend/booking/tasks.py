@@ -13,3 +13,10 @@ def send_winback_reminders_task():
     from booking.reminders import send_winback_reminders
 
     return send_winback_reminders()
+
+
+@shared_task(name="booking.send_package_expiry_reminders")
+def send_package_expiry_reminders_task():
+    from booking.reminders import send_package_expiry_reminders
+
+    return send_package_expiry_reminders()

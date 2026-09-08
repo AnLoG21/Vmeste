@@ -494,6 +494,8 @@ class ClientPackageSerializer(serializers.ModelSerializer):
     package_name = serializers.CharField(source="package.name", read_only=True)
     client_name = serializers.SerializerMethodField()
     provider_name = serializers.SerializerMethodField()
+    status_label = serializers.SerializerMethodField()
+    days_remaining = serializers.SerializerMethodField()
 
     class Meta:
         model = ClientPackage
@@ -510,6 +512,8 @@ class ClientPackageSerializer(serializers.ModelSerializer):
             "purchased_at",
             "expires_at",
             "status",
+            "status_label",
+            "days_remaining",
             "note",
         ]
         read_only_fields = fields
@@ -522,6 +526,19 @@ class ClientPackageSerializer(serializers.ModelSerializer):
         if not prov:
             return ""
         return (getattr(prov, "organization_name", None) or "").strip() or (prov.username or "")
+
+    def get_status_label(self, obj):
+        return dict(ClientPackage.Status.choices).get(obj.status, obj.status)
+
+    def get_days_remaining(self, obj):
+        if not obj.expires_at:
+            return None
+        from django.utils import timezone
+
+        now = timezone.now()
+        if obj.expires_at <= now:
+            return 0
+        return max(0, (obj.expires_at.date() - now.date()).days)
 
 
 class LoyaltySettingsSerializer(serializers.ModelSerializer):

@@ -107,13 +107,19 @@ export default function ProfileCabinetPanel({
                     setCurrentView(me?.role === "client" ? "vmagazine" : "shop");
                     return;
                   }
+                  if (n.kind === "loyalty_package" || n.payload?.view === "loyalty") {
+                    markInAppNotificationsRead([n.id]);
+                    if (me?.role === "client") setCurrentView("loyalty");
+                    return;
+                  }
                   markInAppNotificationsRead([n.id]);
                 }}
               >
                 {n.kind === "inspection" ||
                 n.kind === "cafe_new_order" ||
                 n.kind === "cafe_waiter_call" ||
-                n.kind === "shop_order"
+                n.kind === "shop_order" ||
+                n.kind === "loyalty_package"
                   ? "Открыть"
                   : "Понятно"}
               </button>

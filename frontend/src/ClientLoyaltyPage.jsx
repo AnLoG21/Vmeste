@@ -1,5 +1,31 @@
 import { useCallback, useEffect, useState } from "react";
 
+function packageStatusClass(status) {
+  if (status === "active") return "is-active";
+  if (status === "expired" || status === "exhausted") return "is-ended";
+  return "";
+}
+
+function packageStatusText(p) {
+  return p.status_label || ({ active: "Активен", exhausted: "Израсходован", expired: "Истёк", cancelled: "Отменён" }[p.status] || p.status);
+}
+
+function daysLeftText(p) {
+  if (p.days_remaining == null && !p.expires_at) return null;
+  const days =
+    p.days_remaining != null
+      ? Number(p.days_remaining)
+      : Math.max(0, Math.ceil((new Date(p.expires_at) - Date.now()) / 86400000));
+  if (Number.isNaN(days)) return null;
+  if (days <= 0) return "срок истёк";
+  if (days === 1) return "остался 1 день";
+  const mod10 = days % 10;
+  const mod100 = days % 100;
+  if (mod10 === 1 && mod100 !== 11) return `остался ${days} день`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `осталось ${days} дня`;
+  return `осталось ${days} дней`;
+}
+
 /**
  * Клиент: баллы лояльности и абонементы по организациям.
  */
@@ -75,24 +101,21 @@ export default function ClientLoyaltyPage({ authFetch, API_URL }) {
   if (selectedProvider) {
     return (
       <section className="card full-width client-loyalty-page">
-        <button type="button" className="ghost-btn" onClick={() => setSelectedProvider(null)}>
-          ← Все программы
-        </button>
-        <h2>{selectedProvider.name || "Организация"}</h2>
+        <header className="client-loyalty-head">
+          <button
+            type="button"
+            className="client-loyalty-back"
+            aria-label="Назад ко всем программам"
+            onClick={() => setSelectedProvider(null)}
+          >
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden fill="currentColor">
+              <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+            </svg>
+          </button>
+          <h2>{selectedProvider.name || "Организация"}</h2>
+        </header>
         <p>
           Баллы: <strong>{Number(balance?.balance || 0).toLocaleString("ru-RU")}</strong>
-          {" · "}
-          уровень:{" "}
-          <strong>
-            {balance?.level_label ||
-              (Number(balance?.balance || 0) >= 500
-                ? "Платина"
-                : Number(balance?.balance || 0) >= 200
-                  ? "Золото"
-                  : Number(balance?.balance || 0) >= 50
-                    ? "Серебро"
-                    : "Старт")}
-          </strong>
           {balance?.enabled === false ? <span className="muted"> (программа выключена)</span> : null}
         </p>
         {balance?.rub_per_point ? (
@@ -101,12 +124,27 @@ export default function ClientLoyaltyPage({ authFetch, API_URL }) {
 
         <h3>Мои абонементы</h3>
         {myPkgs.length === 0 ? <p className="muted">Пока нет активных абонементов.</p> : null}
-        <ul className="salon-package-list">
-          {myPkgs.map((p) => (
-            <li key={p.id}>
-              <strong>{p.package_name}</strong> — осталось {p.visits_remaining}/{p.visits_total} ({p.status})
-            </li>
-          ))}
+        <ul className="salon-package-list client-loyalty-packages">
+          {myPkgs.map((p) => {
+            const left = daysLeftText(p);
+            return (
+              <li key={p.id}>
+                <div className="client-loyalty-pkg-row">
+                  <strong>{p.package_name}</strong>
+                  <span className={`client-loyalty-status ${packageStatusClass(p.status)}`}>
+                    {packageStatusText(p)}
+                  </span>
+                </div>
+                <p className="muted small">
+                  Осталось визитов: {p.visits_remaining}/{p.visits_total}
+                  {left ? ` · ${left}` : ""}
+                  {p.expires_at
+                    ? ` · до ${new Date(p.expires_at).toLocaleDateString("ru-RU")}`
+                    : ""}
+                </p>
+              </li>
+            );
+          })}
         </ul>
 
         <h3>Купить абонемент</h3>

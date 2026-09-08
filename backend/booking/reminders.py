@@ -148,3 +148,53 @@ def send_winback_reminders(*, limit: int = 80) -> dict:
                 return {"winback": sent}
 
     return {"winback": sent}
+
+
+def send_package_expiry_reminders() -> dict:
+    """Пуш клиенту за ~1 день до окончания абонемента; помечает истёкшие."""
+    from notifications.push import notify_users
+
+    from .models import ClientPackage
+
+    now = timezone.now()
+    expired_ids = list(
+        ClientPackage.objects.filter(
+            status=ClientPackage.Status.ACTIVE,
+            expires_at__isnull=False,
+            expires_at__lt=now,
+        ).values_list("id", flat=True)[:500]
+    )
+    if expired_ids:
+        ClientPackage.objects.filter(pk__in=expired_ids).update(status=ClientPackage.Status.EXPIRED)
+
+    window_start = now + timedelta(hours=12)
+    window_end = now + timedelta(hours=36)
+    qs = (
+        ClientPackage.objects.filter(
+            status=ClientPackage.Status.ACTIVE,
+            reminder_1d_sent=False,
+            expires_at__isnull=False,
+            expires_at__gte=window_start,
+            expires_at__lt=window_end,
+            visits_remaining__gt=0,
+        )
+        .select_related("client", "package", "provider")[:200]
+    )
+    sent = 0
+    for pkg in qs:
+        if not pkg.client_id:
+            continue
+        org = (pkg.provider.organization_name or pkg.provider.username) if pkg.provider_id else "Организация"
+        name = pkg.package.name if pkg.package_id else "Абонемент"
+        until = pkg.expires_at.strftime("%d.%m.%Y") if pkg.expires_at else ""
+        notify_users(
+            [pkg.client_id],
+            kind="loyalty_package",
+            title="Абонемент заканчивается завтра",
+            body=f"«{name}» в {org} действует до {until}. Осталось визитов: {pkg.visits_remaining}.",
+            payload={"view": "loyalty", "package_id": pkg.id, "provider_id": pkg.provider_id},
+        )
+        pkg.reminder_1d_sent = True
+        pkg.save(update_fields=["reminder_1d_sent"])
+        sent += 1
+    return {"package_expired": len(expired_ids), "package_reminders_1d": sent}

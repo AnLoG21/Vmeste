@@ -159,6 +159,9 @@ def award_loyalty_for_visit(booking) -> int:
     """Award points after mark-done. Returns points awarded."""
     if not booking or not booking.client_id or not booking.provider_id:
         return 0
+    # Посещение по абонементу — баллы не начисляем
+    if getattr(booking, "client_package_id", None):
+        return 0
     if LoyaltyLedger.objects.filter(booking_id=booking.id, reason="visit", delta__gt=0).exists():
         return 0
     settings_obj = LoyaltySettings.objects.filter(provider_id=booking.provider_id, enabled=True).first()

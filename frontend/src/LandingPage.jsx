@@ -13,6 +13,7 @@ import {
 import { setPageMeta } from "./seo/setPageMeta.js";
 import LandingDemo from "./LandingDemo.jsx";
 import LandingAutomationRequest, { scrollLandingHash } from "./LandingAutomationRequest.jsx";
+import { SERVICE_UPDATES, formatUpdateDate } from "./serviceUpdates.js";
 
 function formatPlanPrice(plan) {
   if (plan?.plan_type === "free" || plan?.slug === "starter") return "Бесплатно";
@@ -732,6 +733,30 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           <LandingAutomationRequest />
         </div>
 
+        <section className="landing-section landing-updates" id="updates">
+          <h2>Обновления сервиса</h2>
+          <p className="landing-section-lead">
+            Что добавили и что поправили — кратко, по датам.
+          </p>
+          <div className="landing-updates-list">
+            {SERVICE_UPDATES.map((block) => (
+              <article key={block.date} className="landing-updates-card">
+                <h3>{formatUpdateDate(block.date)}</h3>
+                <ul>
+                  {block.items.map((item) => (
+                    <li key={item.text} className={`landing-update-item landing-update-item--${item.kind}`}>
+                      <span className="landing-update-badge">
+                        {item.kind === "added" ? "Добавлено" : "Исправлено"}
+                      </span>
+                      <span>{item.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="landing-section landing-roadmap">
           <h2>Функционал платформы</h2>
           <p className="landing-section-lead">
@@ -835,6 +860,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           <a href="/city/moscow">Москва</a>
           <a href="/city/spb">Санкт-Петербург</a>
           <a href="/#pricing">Тарифы</a>
+          <a href="/#updates">Обновления</a>
           <a href="/#faq">Вопросы</a>
           <a href="/#automation-request">Заявка на автоматизацию</a>
           <a href="/contacts">Контакты и реквизиты</a>

@@ -221,6 +221,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "booking.send_winback_reminders",
         "schedule": 3600.0 * 6,
     },
+    "booking-package-expiry-hourly": {
+        "task": "booking.send_package_expiry_reminders",
+        "schedule": 3600.0,
+    },
     "telegram-poll-every-8-sec": {
         "task": "notifications.poll_telegram",
         "schedule": 8.0,

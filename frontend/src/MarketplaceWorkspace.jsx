@@ -2794,15 +2794,25 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
           </button>
         </div>
         <div className="mp-menu">
-          <button type="button" className="mp-menu-btn" onClick={() => setMenuOpen((v) => !v)} aria-expanded={menuOpen}>
-            Меню
+          <button
+            type="button"
+            className="mp-menu-btn"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-expanded={menuOpen}
+            aria-label="Меню разделов"
+            title="Меню"
+          >
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden fill="currentColor">
+              <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z" />
+            </svg>
           </button>
           {menuOpen ? (
-            <div className="mp-menu-drop">
+            <div className="mp-menu-drop" role="menu">
               {visibleTabs.map(([id, label]) => (
                 <button
                   key={id}
                   type="button"
+                  role="menuitem"
                   className={tab === id ? "is-active" : ""}
                   onClick={() => {
                     setTab(id);
