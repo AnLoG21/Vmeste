@@ -30,6 +30,37 @@ function TrashIcon() {
   );
 }
 
+function BackArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden fill="currentColor">
+      <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="currentColor">
+      <path d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 0 0 5.7 7.11L10.59 12l-4.89 4.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4z" />
+    </svg>
+  );
+}
+
+function ChevronIcon({ open }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      aria-hidden
+      fill="currentColor"
+      style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s ease" }}
+    >
+      <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+    </svg>
+  );
+}
+
 function MagnifierIcon() {
   return (
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2">
@@ -767,33 +798,57 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
   if (checkoutOpen) {
     return (
       <div className="vmag-checkout">
-        <button type="button" className="ghost-btn" onClick={() => setCheckoutOpen(false)}>
-          ← К корзине
-        </button>
-        <h2>Оформление</h2>
+        <header className="vmag-checkout-head">
+          <button
+            type="button"
+            className="vmag-icon-btn"
+            aria-label="Назад в корзину"
+            onClick={() => setCheckoutOpen(false)}
+          >
+            <BackArrowIcon />
+          </button>
+          <h2>Оформление</h2>
+          <button
+            type="button"
+            className="vmag-icon-btn"
+            aria-label="Закрыть"
+            onClick={() => setCheckoutOpen(false)}
+          >
+            <CloseIcon />
+          </button>
+        </header>
 
         <section className="vmag-widget">
           <h3>Способ получения</h3>
-          <div className="vmag-checkout-modes">
-            <label className="checkbox">
-              <input type="radio" checked={mode === "delivery"} onChange={() => setMode("delivery")} />
+          <div className="vmag-seg" role="group" aria-label="Способ получения">
+            <button
+              type="button"
+              className={mode === "delivery" ? "is-on" : ""}
+              onClick={() => setMode("delivery")}
+            >
               Доставка
-            </label>
-            <label className="checkbox">
-              <input type="radio" checked={mode === "pickup"} onChange={() => setMode("pickup")} />
+            </button>
+            <button
+              type="button"
+              className={mode === "pickup" ? "is-on" : ""}
+              onClick={() => setMode("pickup")}
+            >
               Самовывоз
-            </label>
+            </button>
           </div>
           {mode === "delivery" ? (
             addresses.length ? (
-              <select value={addressId || ""} onChange={(e) => setAddressId(Number(e.target.value))}>
-                {addresses.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.label ? `${a.label}: ` : ""}
-                    {a.address}
-                  </option>
-                ))}
-              </select>
+              <label className="vmag-field">
+                <span>Адрес</span>
+                <select value={addressId || ""} onChange={(e) => setAddressId(Number(e.target.value))}>
+                  {addresses.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.label ? `${a.label}: ` : ""}
+                      {a.address}
+                    </option>
+                  ))}
+                </select>
+              </label>
             ) : (
               <p className="muted small">Добавьте адрес на главной Вмагазине.</p>
             )
@@ -804,55 +859,81 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
 
         <section className="vmag-widget">
           <h3>Получатель</h3>
-          <input
-            placeholder="Имя"
-            value={guest.name}
-            onChange={(e) => setGuest((g) => ({ ...g, name: e.target.value }))}
-          />
-          <input
-            placeholder="Телефон"
-            value={guest.phone}
-            onChange={(e) => setGuest((g) => ({ ...g, phone: e.target.value }))}
-          />
-          <input
-            placeholder="Email"
-            value={guest.email}
-            onChange={(e) => setGuest((g) => ({ ...g, email: e.target.value }))}
-          />
+          <label className="vmag-field">
+            <span>Имя</span>
+            <input
+              value={guest.name}
+              onChange={(e) => setGuest((g) => ({ ...g, name: e.target.value }))}
+              autoComplete="name"
+            />
+          </label>
+          <label className="vmag-field">
+            <span>Телефон</span>
+            <input
+              value={guest.phone}
+              onChange={(e) => setGuest((g) => ({ ...g, phone: e.target.value }))}
+              autoComplete="tel"
+              inputMode="tel"
+            />
+          </label>
+          <label className="vmag-field">
+            <span>Email</span>
+            <input
+              value={guest.email}
+              onChange={(e) => setGuest((g) => ({ ...g, email: e.target.value }))}
+              autoComplete="email"
+              inputMode="email"
+            />
+          </label>
         </section>
 
         <section className="vmag-widget">
           <h3>Оплата</h3>
-          <label className="checkbox">
-            <input
-              type="radio"
-              checked={paymentMethod === "online"}
-              onChange={() => setPaymentMethod("online")}
-            />
-            Онлайн
-          </label>
-          <label className="checkbox">
-            <input
-              type="radio"
-              checked={paymentMethod === "on_receipt"}
-              onChange={() => setPaymentMethod("on_receipt")}
-            />
-            При получении
-          </label>
+          <div className="vmag-seg" role="group" aria-label="Способ оплаты">
+            <button
+              type="button"
+              className={paymentMethod === "online" ? "is-on" : ""}
+              onClick={() => setPaymentMethod("online")}
+            >
+              Онлайн
+            </button>
+            <button
+              type="button"
+              className={paymentMethod === "on_receipt" ? "is-on" : ""}
+              onClick={() => setPaymentMethod("on_receipt")}
+            >
+              При получении
+            </button>
+          </div>
         </section>
 
-        <label className="checkbox vmag-service-fee">
+        <label className="vmag-check-row">
           <input type="checkbox" checked={serviceFee} onChange={(e) => setServiceFee(e.target.checked)} />
-          Сервисный сбор 1,5% ({feeAmount.toLocaleString("ru-RU")} ₽)
+          <span>
+            Сервисный сбор 1,5%
+            <em>{feeAmount.toLocaleString("ru-RU")} ₽</em>
+          </span>
         </label>
 
         <button type="button" className="vmag-total-toggle" onClick={() => setTotalOpen((v) => !v)}>
-          Итого {totalOpen ? "▴" : "▾"} <strong>{payTotal.toLocaleString("ru-RU")} ₽</strong>
+          <span className="vmag-total-toggle-label">
+            Итого
+            <ChevronIcon open={totalOpen} />
+          </span>
+          <strong>{payTotal.toLocaleString("ru-RU")} ₽</strong>
         </button>
         {totalOpen ? (
           <ul className="vmag-total-breakdown muted small">
-            <li>Товары: {selectedSum.toLocaleString("ru-RU")} ₽</li>
-            {serviceFee ? <li>Сервисный сбор: {feeAmount.toLocaleString("ru-RU")} ₽</li> : null}
+            <li>
+              <span>Товары</span>
+              <span>{selectedSum.toLocaleString("ru-RU")} ₽</span>
+            </li>
+            {serviceFee ? (
+              <li>
+                <span>Сервисный сбор</span>
+                <span>{feeAmount.toLocaleString("ru-RU")} ₽</span>
+              </li>
+            ) : null}
           </ul>
         ) : null}
 
@@ -860,7 +941,7 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
           {paymentMethod === "online" ? "Оплатить онлайн" : "Заказать"} · {payTotal.toLocaleString("ru-RU")} ₽
         </button>
 
-        <label className="checkbox vmag-checkout-agree">
+        <label className="vmag-check-row vmag-checkout-agree">
           <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
           <span>
             Нажимая кнопку, вы соглашаетесь с{" "}
@@ -906,7 +987,7 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
       )}
 
       {items.length ? (
-        <label className="checkbox vmag-cart-select-all">
+        <label className="vmag-check-row vmag-cart-select-all">
           <input
             type="checkbox"
             checked={allSelected}
@@ -915,7 +996,7 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct }) {
               else setSelected(new Set(items.map((r) => r.id)));
             }}
           />
-          Выбрать все
+          <span>Выбрать все</span>
         </label>
       ) : null}
 
@@ -1182,9 +1263,14 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct }) {
               value={returnForm.reason}
               onChange={(e) => setReturnForm((f) => ({ ...f, reason: e.target.value }))}
             />
-            <div className="vmag-addr-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
-              <button type="button" className="ghost-btn" onClick={() => setReturnForm(null)}>
-                Отмена
+            <div className="vmag-return-actions">
+              <button
+                type="button"
+                className="vmag-icon-btn"
+                aria-label="Закрыть"
+                onClick={() => setReturnForm(null)}
+              >
+                <CloseIcon />
               </button>
               <button
                 type="button"

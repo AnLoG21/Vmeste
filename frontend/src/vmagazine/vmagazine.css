@@ -981,23 +981,131 @@ body:has(.page-logged:has(.vmenu-app)) {
   width: 100%;
 }
 
-.vmag-checkout-modes {
+.vmag-checkout-head {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.15rem;
+}
+
+.vmag-checkout-head h2 {
+  margin: 0;
+  text-align: center;
+  font-size: 1.15rem;
+}
+
+.vmag-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: #f3eef9;
+  color: #5b3d82;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.vmag-icon-btn:hover {
+  background: #ebe3f5;
+}
+
+.vmag-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0.55rem;
+}
+
+.vmag-seg button {
+  margin: 0;
+  border: 1px solid #d9d0e6;
+  border-radius: 12px;
+  background: #fff;
+  color: #4a4060;
+  font-weight: 600;
+  padding: 0.65rem 0.75rem;
+  text-align: center;
+}
+
+.vmag-seg button:hover {
+  background: #faf8fc;
+}
+
+.vmag-seg button.is-on {
+  border-color: #6a4c93;
+  background: #f3eef9;
+  color: #3d2f57;
+}
+
+.vmag-field {
   display: flex;
-  gap: 1rem;
-  margin-bottom: 0.5rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+  margin-top: 0.55rem;
+  text-align: left;
 }
 
+.vmag-field > span {
+  font-size: 0.82rem;
+  color: #6b6280;
+  font-weight: 600;
+}
+
+.vmag-field input,
+.vmag-field select,
 .vmag-checkout select,
-.vmag-checkout input {
+.vmag-checkout input[type="text"],
+.vmag-checkout input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
-  margin-top: 0.4rem;
+  margin: 0;
+  box-sizing: border-box;
+  text-align: left;
 }
 
-.vmag-service-fee,
-.vmag-checkout-agree {
+.vmag-check-row {
+  display: flex;
   align-items: flex-start;
-  gap: 0.55rem;
-  line-height: 1.35;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  width: 100%;
+  margin: 0;
+  text-align: left;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  color: #3d2f57;
+  cursor: pointer;
+}
+
+.vmag-check-row input {
+  width: 18px;
+  height: 18px;
+  margin: 0.15rem 0 0;
+  flex-shrink: 0;
+  accent-color: #6a4c93;
+}
+
+.vmag-check-row > span {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.vmag-check-row em {
+  display: block;
+  margin-top: 0.15rem;
+  font-style: normal;
+  color: #6b6280;
+  font-size: 0.85rem;
+}
+
+.vmag-cart-select-all {
+  margin: 0.15rem 0 0.35rem;
 }
 
 .vmag-total-toggle {
@@ -1008,9 +1116,21 @@ body:has(.page-logged:has(.vmenu-app)) {
   border: 1px solid #ebe4f4;
   border-radius: 12px;
   background: #faf8fc;
+  color: #3d2f57;
   padding: 0.7rem 0.85rem;
   cursor: pointer;
   font: inherit;
+  font-weight: 600;
+}
+
+.vmag-total-toggle:hover {
+  background: #f3eef9;
+}
+
+.vmag-total-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .vmag-total-breakdown {
@@ -1018,7 +1138,23 @@ body:has(.page-logged:has(.vmenu-app)) {
   margin: 0;
   padding: 0 0.25rem;
   display: grid;
-  gap: 0.25rem;
+  gap: 0.35rem;
+}
+
+.vmag-total-breakdown li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.vmag-return-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.vmag-return-actions .primary-btn {
+  flex: 1;
 }
 
 .shop-write-seller-bar {
@@ -1033,10 +1169,6 @@ body:has(.page-logged:has(.vmenu-app)) {
 .vmag-product-sheet-toolbar {
   display: flex;
   align-items: center;
-}
-
-.vmag-product-back {
-  padding-left: 0.25rem;
 }
 
 .vmag-product-sheet-cover-btn {
