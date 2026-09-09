@@ -64,6 +64,7 @@ export default function SlotIntervalCalendar({
   createManualHold,
   manualHoldBusy,
   manualHoldStatus,
+  pendingBookClient,
   intervalForm,
   setIntervalForm,
   createSlotsByInterval,
@@ -146,6 +147,12 @@ export default function SlotIntervalCalendar({
   return (
     <section className="card full-width interval-calendar">
       <h2>Календарь интервалов</h2>
+      {pendingBookClient?.phone ? (
+        <p className="status interval-pending-book">
+          Запись из чата: {pendingBookClient.name || pendingBookClient.phone}. Откройте день со свободным временем →
+          «Записать клиента».
+        </p>
+      ) : null}
       {showCreateControls && (
         <>
           <form onSubmit={createManualHold} className="form interval-manual-hold">

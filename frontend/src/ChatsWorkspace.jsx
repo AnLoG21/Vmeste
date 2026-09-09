@@ -97,6 +97,7 @@ export default function ChatsWorkspace({
   me,
   memberDisplayName,
   memberInitial,
+  onBookClientFromChat,
   onChatFilePicked,
   onComposeActionPointerDown,
   onComposeActionPointerMove,
@@ -1300,6 +1301,25 @@ export default function ChatsWorkspace({
                       )}
                       {chatInfoPeer.organization_name ? <p>Организация: {chatInfoPeer.organization_name}</p> : null}
                       {chatInfoPeer.username ? <p className="muted">@{chatInfoPeer.username}</p> : null}
+                      {chatInfoPeer.phone ? <p className="muted">{chatInfoPeer.phone}</p> : null}
+                      {onBookClientFromChat &&
+                      (me?.role === "provider" || me?.role === "staff") &&
+                      chatInfoPeer.role === "client" ? (
+                        <button
+                          type="button"
+                          className="tg-chat-book-client-btn"
+                          onClick={() => {
+                            const name = [chatInfoPeer.first_name, chatInfoPeer.last_name].filter(Boolean).join(" ");
+                            onBookClientFromChat({
+                              phone: chatInfoPeer.phone || "",
+                              name,
+                              clientId: chatInfoPeer.user || chatInfoPeer.user_id,
+                            });
+                          }}
+                        >
+                          Записать на время
+                        </button>
+                      ) : null}
                     </div>
                   ) : null}
                   {selectedConv?.is_group ? (

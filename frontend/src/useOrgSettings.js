@@ -85,6 +85,8 @@ export function useOrgSettings({
     remind_clients: true,
     remind_org: true,
     notify_org_on_new: true,
+    notify_client_on_new: true,
+    send_client_confirm_link: true,
     winback_enabled: false,
     winback_weeks: 4,
     winback_template: "",
@@ -107,6 +109,7 @@ export function useOrgSettings({
     sms_api_id: "",
     has_sms_org: false,
     new_booking_template: "",
+    client_new_booking_template: "",
   });
   const [orgMessagingSaveStatus, setOrgMessagingSaveStatus] = useState("");
   const [orgTelegramLinkInfo, setOrgTelegramLinkInfo] = useState(null);
@@ -669,6 +672,8 @@ export function useOrgSettings({
       remind_clients: Boolean(orgMessagingForm.remind_clients),
       remind_org: Boolean(orgMessagingForm.remind_org),
       notify_org_on_new: Boolean(orgMessagingForm.notify_org_on_new),
+      notify_client_on_new: Boolean(orgMessagingForm.notify_client_on_new),
+      send_client_confirm_link: Boolean(orgMessagingForm.send_client_confirm_link),
       winback_enabled: Boolean(orgMessagingForm.winback_enabled),
       winback_weeks: Number(orgMessagingForm.winback_weeks) || 4,
       winback_template: orgMessagingForm.winback_template || "",
@@ -681,6 +686,7 @@ export function useOrgSettings({
       wa_api_url: orgMessagingForm.wa_api_url || "https://api.green-api.com",
       wa_id_instance: orgMessagingForm.wa_id_instance || "",
       new_booking_template: orgMessagingForm.new_booking_template || "",
+      client_new_booking_template: orgMessagingForm.client_new_booking_template || "",
     };
     for (const key of ["telegram_bot_token", "max_bot_token", "wa_api_token", "sms_api_id"]) {
       if ((orgMessagingForm[key] || "").trim()) payload[key] = orgMessagingForm[key].trim();

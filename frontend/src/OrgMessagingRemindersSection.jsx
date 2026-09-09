@@ -16,7 +16,8 @@ export default function OrgMessagingRemindersSection({
     <>
       <h3>Напоминания и мессенджеры</h3>
       <p className="muted small">
-        Напоминания за 24 ч и 2 ч до записи: клиентам и организации. Каналы — Telegram, MAX, WhatsApp (Green-API), SMS.
+        Напоминания за 24 ч и 2 ч до записи: клиентам и организации. При новой записи можно сразу отправить клиенту
+        детали и ссылку на подтверждение визита. Каналы — Telegram, MAX, WhatsApp (Green-API), SMS.
         SMS: ключ платформы или свой SMS.ru api_id. Клиент может отключить напоминания в своих настройках. Для салона —
         отдельно «давно не был».
       </p>
@@ -45,6 +46,34 @@ export default function OrgMessagingRemindersSection({
           />
           Уведомлять о новой записи
         </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={Boolean(form.notify_client_on_new)}
+            onChange={(e) => onChange((p) => ({ ...p, notify_client_on_new: e.target.checked }))}
+          />
+          Сообщать клиенту о новой записи
+        </label>
+        {form.notify_client_on_new ? (
+          <>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={Boolean(form.send_client_confirm_link)}
+                onChange={(e) => onChange((p) => ({ ...p, send_client_confirm_link: e.target.checked }))}
+              />
+              Ссылка на подтверждение визита
+            </label>
+            <BookingMessageField
+              id="org-msg-client-new-booking"
+              label="Текст клиенту о новой записи"
+              value={form.client_new_booking_template || ""}
+              onChange={(v) => onChange((p) => ({ ...p, client_new_booking_template: v }))}
+              placeholder="Вы записаны в {org} на {service} — {date}. Подтвердите визит: {confirm_url}"
+              tokens={["org", "service", "date", "confirm_url", "client"]}
+            />
+          </>
+        ) : null}
         <label className="checkbox">
           <input
             type="checkbox"

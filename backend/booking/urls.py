@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .analytics import AnalyticsSummaryView
 from .calendar_feed import CalendarFeedView, CalendarSettingsView
+from .client_booking_views import BookForClientView, ClientPhoneLookupView, PublicVisitConfirmView
 from .client_card_views import ProviderClientCardView
 from .loyalty_views import (
     ClientPackageViewSet,
@@ -46,6 +47,9 @@ urlpatterns = [
     path("loyalty/me/", MyLoyaltyView.as_view(), name="booking-loyalty-me"),
     path("loyalty/accounts/", MyLoyaltyAccountsView.as_view(), name="booking-loyalty-accounts"),
     path("client-cards/", ProviderClientCardView.as_view(), name="booking-client-cards"),
+    path("clients/lookup/", ClientPhoneLookupView.as_view(), name="booking-clients-lookup"),
+    path("book-for-client/", BookForClientView.as_view(), name="booking-book-for-client"),
+    path("public/visit-confirm/<str:token>/", PublicVisitConfirmView.as_view(), name="booking-visit-confirm"),
     path("public/<slug:slug>/", PublicWidgetCatalogView.as_view(), name="booking-widget-catalog"),
     path("public/<slug:slug>/windows/", PublicWidgetWindowsView.as_view(), name="booking-widget-windows"),
     path("public/<slug:slug>/dates/", PublicWidgetDatesView.as_view(), name="booking-widget-dates"),

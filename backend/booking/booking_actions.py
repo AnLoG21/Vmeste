@@ -79,9 +79,14 @@ def booking_notification_payload(booking, *, extra=None) -> dict:
 
 
 def notify_new_booking(booking):
-    """Push + channels to provider and assigned staff."""
+    """Push + channels to provider/staff and (опционально) клиенту с ссылкой подтверждения."""
     try:
-        from notifications.delivery import build_new_booking_text, deliver_booking_event
+        from notifications.delivery import (
+            build_client_new_booking_text,
+            build_new_booking_text,
+            deliver_booking_event,
+            get_or_create_messaging,
+        )
 
         body = build_new_booking_text(booking)
         deliver_booking_event(
@@ -91,6 +96,18 @@ def notify_new_booking(booking):
             audience="org",
             title_org="Новая запись",
         )
+
+        msg = get_or_create_messaging(booking.provider)
+        if getattr(msg, "notify_client_on_new", True):
+            client_body = build_client_new_booking_text(booking)
+            if client_body:
+                deliver_booking_event(
+                    booking,
+                    "new_client",
+                    client_body,
+                    audience="client",
+                    title_client="Вы записаны",
+                )
     except Exception:
         pass
 

@@ -154,13 +154,15 @@ def deliver_booking_event(
     payload = booking_notification_payload(booking)
 
     is_reminder = event in ("remind_24h", "remind_2h")
-    is_status = event in ("confirm", "cancel", "done")
+    is_status = event in ("confirm", "cancel", "done", "new_client", "client_confirm")
 
     # ——— Client ———
     if audience in ("client", "both") and client and client.pk:
         allow = True
         if is_reminder:
             allow = bool(msg.remind_clients and getattr(client, "notify_booking_reminders", True))
+        elif event == "new_client":
+            allow = bool(getattr(msg, "notify_client_on_new", True) and getattr(client, "notify_booking_status", True))
         elif is_status:
             allow = bool(getattr(client, "notify_booking_status", True))
         if allow:
@@ -218,6 +220,8 @@ def deliver_booking_event(
         allow_org = bool(msg.notify_org_on_new)
     elif event == "cancel_by_client":
         allow_org = True
+    elif event == "client_confirm":
+        allow_org = True
     elif is_reminder:
         allow_org = bool(msg.remind_org)
     # confirm/cancel/done by org: do not re-ping org
@@ -253,7 +257,22 @@ def _booking_template_vars(booking) -> dict:
     service = getattr(getattr(booking, "service", None), "name", None) or "услуга"
     date = format_booking_when(booking)
     client = client_display_name(getattr(booking, "client", None))
-    return {"org": org, "service": service, "date": date, "client": client}
+    confirm_url = ""
+    try:
+        from booking.client_booking_views import build_client_confirm_url
+
+        msg = get_or_create_messaging(booking.provider)
+        if getattr(msg, "send_client_confirm_link", True):
+            confirm_url = build_client_confirm_url(booking)
+    except Exception:
+        confirm_url = ""
+    return {
+        "org": org,
+        "service": service,
+        "date": date,
+        "client": client,
+        "confirm_url": confirm_url,
+    }
 
 
 def build_reminder_text(booking) -> str:
@@ -264,6 +283,23 @@ def build_reminder_text(booking) -> str:
 def build_new_booking_text(booking) -> str:
     msg = get_or_create_messaging(booking.provider)
     return render_reminder_template(msg.new_booking_text(), **_booking_template_vars(booking))
+
+
+def build_client_new_booking_text(booking) -> str:
+    msg = get_or_create_messaging(booking.provider)
+    vars_ = _booking_template_vars(booking)
+    tpl = msg.client_new_booking_text()
+    # Если ссылку отключили — убираем хвост про подтверждение
+    if not vars_.get("confirm_url"):
+        tpl = (
+            tpl.replace(" Подтвердите визит: {confirm_url}", "")
+            .replace("Подтвердите визит: {confirm_url}", "")
+            .replace("{confirm_url}", "")
+            .strip()
+        )
+        if not tpl:
+            tpl = "Вы записаны в {org} на {service} — {date}."
+    return render_reminder_template(tpl, **vars_)
 
 
 def deliver_winback_message(provider, client, text: str, *, title: str = "Мы скучаем") -> None:

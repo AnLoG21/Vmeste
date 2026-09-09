@@ -126,6 +126,18 @@ class Booking(models.Model):
         related_name="bookings_used",
         help_text="Абонемент, списанный при оплате/записи.",
     )
+    client_confirm_token = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Токен публичной ссылки «подтвердить визит».",
+    )
+    client_confirmed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Когда клиент подтвердил визит по ссылке.",
+    )
 
 
 class ProviderAcquiring(models.Model):
@@ -196,6 +208,10 @@ DEFAULT_REMINDER_TEMPLATE = (
     "Напоминание: запись в {org} на {service} — {date}. Ждём вас! Вместе"
 )
 DEFAULT_NEW_BOOKING_TEMPLATE = "Новая запись в {org}: {service} — {date}."
+DEFAULT_CLIENT_NEW_BOOKING_TEMPLATE = (
+    "Вы записаны в {org} на {service} — {date}. "
+    "Подтвердите визит: {confirm_url}"
+)
 DEFAULT_WINBACK_TEMPLATE = (
     "Давно не виделись в {org}! Последний визит был {weeks} нед. назад. "
     "Запишитесь снова — мы будем рады. Вместе"
@@ -211,6 +227,15 @@ class ProviderMessagingSettings(models.Model):
     remind_clients = models.BooleanField(default=True)
     remind_org = models.BooleanField(default=True)
     notify_org_on_new = models.BooleanField(default=True)
+    notify_client_on_new = models.BooleanField(
+        default=True,
+        help_text="Автоматически сообщать клиенту о новой записи (подтверждение / детали).",
+    )
+    send_client_confirm_link = models.BooleanField(
+        default=True,
+        help_text="Вкладывать в сообщение клиенту ссылку на подтверждение визита.",
+    )
+    client_new_booking_template = models.TextField(blank=True, default="")
     winback_enabled = models.BooleanField(
         default=False,
         help_text="Напоминать клиентам, которые давно не были.",
@@ -242,6 +267,9 @@ class ProviderMessagingSettings(models.Model):
 
     def new_booking_text(self) -> str:
         return (self.new_booking_template or "").strip() or DEFAULT_NEW_BOOKING_TEMPLATE
+
+    def client_new_booking_text(self) -> str:
+        return (self.client_new_booking_template or "").strip() or DEFAULT_CLIENT_NEW_BOOKING_TEMPLATE
 
     def winback_text(self) -> str:
         return (self.winback_template or "").strip() or DEFAULT_WINBACK_TEMPLATE

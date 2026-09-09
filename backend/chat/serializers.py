@@ -19,6 +19,8 @@ class ConversationMemberSerializer(serializers.ModelSerializer):
     last_seen_at = serializers.DateTimeField(source="user.last_seen_at", read_only=True)
     is_online = serializers.SerializerMethodField()
 
+    phone = serializers.CharField(source="user.phone", read_only=True)
+
     class Meta:
         model = ConversationMember
         fields = [
@@ -30,6 +32,7 @@ class ConversationMemberSerializer(serializers.ModelSerializer):
             "patronymic",
             "organization_name",
             "role",
+            "phone",
             "last_read_message_id",
             "last_seen_at",
             "is_online",
@@ -98,12 +101,14 @@ class ConversationSerializer(serializers.ModelSerializer):
             "is_online": online,
             "last_seen_at": ts.isoformat() if ts else None,
             "user_id": u.id,
-            "username": u.username,
-            "first_name": u.first_name,
-            "last_name": u.last_name,
-            "patronymic": getattr(u, "patronymic", "") or "",
-            "organization_name": getattr(u, "organization_name", "") or "",
-            "role": u.role,
+            "user": u.id,
+            "first_name": u.first_name or "",
+            "last_name": u.last_name or "",
+            "patronymic": getattr(u, "patronymic", None) or "",
+            "username": u.username or "",
+            "organization_name": getattr(u, "organization_name", None) or "",
+            "role": u.role or "",
+            "phone": getattr(u, "phone", None) or "",
         }
 
     def get_last_message(self, obj):

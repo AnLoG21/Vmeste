@@ -350,6 +350,9 @@ export function useChatExtras({
       username: p.username,
       organization_name: p.organization_name,
       role: p.role,
+      phone: p.phone || "",
+      user: p.user,
+      user_id: p.user,
     };
   }, [selectedConv, me?.id]);
 

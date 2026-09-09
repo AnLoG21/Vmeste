@@ -8410,6 +8410,86 @@ html.native-app .page-logged .hero.top-row {
   background: #c62828 !important;
 }
 
+.calendar-day-sheet-book-btn {
+  margin-top: 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.45rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent, #2f6f5e) 35%, transparent);
+  background: color-mix(in srgb, var(--accent, #2f6f5e) 12%, transparent);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.calendar-day-sheet-book-btn:hover {
+  background: color-mix(in srgb, var(--accent, #2f6f5e) 22%, transparent);
+}
+
+.provider-book-client-modal,
+.visit-confirm-modal {
+  width: min(420px, 94vw);
+  max-height: min(90vh, 720px);
+  overflow: auto;
+}
+
+.provider-book-client-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.provider-book-client-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.provider-book-client-phone-row {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.provider-book-client-phone-row input {
+  flex: 1;
+}
+
+.provider-book-client-match {
+  margin: -0.25rem 0 0.5rem;
+}
+
+.provider-book-client-actions {
+  margin-top: 0.75rem;
+}
+
+.provider-book-client-actions button,
+.visit-confirm-modal button[type="button"] {
+  width: 100%;
+}
+
+.visit-confirm-ok {
+  margin-top: 0.75rem;
+  color: #1f6b4a;
+  font-weight: 600;
+}
+
+.tg-chat-book-client-btn {
+  margin-top: 0.65rem;
+  display: inline-flex;
+  padding: 0.4rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(47, 111, 94, 0.35);
+  background: rgba(47, 111, 94, 0.1);
+  cursor: pointer;
+  font: inherit;
+}
+  background: #c62828 !important;
+}
+
 @media (max-width: 768px) {
   .calendar-mobile-hint {
     display: block;

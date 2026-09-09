@@ -1025,6 +1025,8 @@ class MessagingSettingsView(APIView):
             "remind_clients": msg.remind_clients,
             "remind_org": msg.remind_org,
             "notify_org_on_new": msg.notify_org_on_new,
+            "notify_client_on_new": msg.notify_client_on_new,
+            "send_client_confirm_link": msg.send_client_confirm_link,
             "winback_enabled": msg.winback_enabled,
             "winback_weeks": msg.winback_weeks,
             "winback_template": msg.winback_template or "",
@@ -1044,6 +1046,7 @@ class MessagingSettingsView(APIView):
             "has_sms_org": msg.has_sms_org(),
             "reminder_template": msg.reminder_template or "",
             "new_booking_template": msg.new_booking_template or "",
+            "client_new_booking_template": msg.client_new_booking_template or "",
         }
 
     def get(self, request):
@@ -1065,6 +1068,8 @@ class MessagingSettingsView(APIView):
             "remind_clients",
             "remind_org",
             "notify_org_on_new",
+            "notify_client_on_new",
+            "send_client_confirm_link",
             "winback_enabled",
             "enable_telegram",
             "enable_max",
@@ -1086,6 +1091,7 @@ class MessagingSettingsView(APIView):
             "wa_id_instance",
             "reminder_template",
             "new_booking_template",
+            "client_new_booking_template",
             "winback_template",
         ]
         for f in str_fields:

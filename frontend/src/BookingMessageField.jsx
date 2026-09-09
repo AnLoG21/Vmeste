@@ -24,8 +24,9 @@ const BOOKING_TOKEN_DEFS = {
   date: { token: "{date}", label: "Дата и время записи", title: "Дата и время записи клиента" },
   weeks: { token: "{weeks}", label: "Недель", title: "Сколько недель без визита" },
   client: { token: "{client}", label: "Клиент", title: "Имя клиента" },
+  confirm_url: { token: "{confirm_url}", label: "Ссылка подтверждения", title: "Ссылка для клиента подтвердить визит" },
 };
-const BOOKING_TOKEN_SPLIT_RE = /(\{org\}|\{service\}|\{date\}|\{weeks\}|\{client\})/g;
+const BOOKING_TOKEN_SPLIT_RE = /(\{org\}|\{service\}|\{date\}|\{weeks\}|\{client\}|\{confirm_url\})/g;
 const BOOKING_MESSAGE_DATE_TOKEN = "{date}";
 const bookingTokenDragRef = { el: null };
 const bookingTokenPointerRef = { active: false, token: null, editorRoot: null, onComplete: null };

@@ -8,6 +8,7 @@ export default function CalendarDayDetailModal({
   renderBookingSlotActions,
   deleteSlot,
   releaseManualHold,
+  onBookClient,
 }) {
   return (
     <div
@@ -111,6 +112,18 @@ export default function CalendarDayDetailModal({
                         ? `Ручная бронь${it.booking_client_name || it.hold_label ? ` · ${it.booking_client_name || it.hold_label}` : ""}`
                         : "Свободно"}
                     </div>
+                    {!it.is_booked && onBookClient ? (
+                      <button
+                        type="button"
+                        className="calendar-day-sheet-book-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onBookClient(it);
+                        }}
+                      >
+                        Записать клиента
+                      </button>
+                    ) : null}
                   </>
                 )}
               </li>

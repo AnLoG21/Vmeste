@@ -31,6 +31,8 @@ import OrganizationSettingsPanel from "./OrganizationSettingsPanel.jsx";
 import BookingCalendar from "./BookingCalendar.jsx";
 import BookingHistory from "./BookingHistory.jsx";
 import ClientMemoryCardModal from "./ClientMemoryCardModal.jsx";
+import ProviderBookClientModal from "./ProviderBookClientModal.jsx";
+import VisitConfirmModal from "./VisitConfirmModal.jsx";
 import BookingSlotActions from "./BookingSlotActions.jsx";
 import ProfileCabinetPanel from "./ProfileCabinetPanel.jsx";
 import AuthModal from "./AuthModal.jsx";
@@ -214,6 +216,9 @@ export default function App() {
   const [clientStatus, setClientStatus] = useState("");
   const [pendingInspectionId, setPendingInspectionId] = useState(null);
   const [clientMemoryCard, setClientMemoryCard] = useState(null); // { clientId, clientName }
+  const [bookClientModal, setBookClientModal] = useState(null); // { slot, phone?, name? }
+  const [visitConfirmToken, setVisitConfirmToken] = useState(null);
+  const [pendingBookClient, setPendingBookClient] = useState(null); // { phone, name } from chat
   const [verifyStatus, setVerifyStatus] = useState("");
   const [resendStatus, setResendStatus] = useState("");
   const [verifyEmailNotice, setVerifyEmailNotice] = useState(null);
@@ -781,6 +786,13 @@ export default function App() {
       });
     window.history.replaceState({}, document.title, window.location.pathname);
   }, [accessToken]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = (params.get("visit_confirm") || "").trim();
+    if (!token) return;
+    setVisitConfirmToken(token);
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -2499,6 +2511,7 @@ export default function App() {
         createManualHold={createManualHold}
         manualHoldBusy={manualHoldBusy}
         manualHoldStatus={manualHoldStatus}
+        pendingBookClient={pendingBookClient}
         intervalForm={intervalForm}
         setIntervalForm={setIntervalForm}
         createSlotsByInterval={createSlotsByInterval}
@@ -3210,6 +3223,15 @@ export default function App() {
             me={me}
             memberDisplayName={memberDisplayName}
             memberInitial={memberInitial}
+            onBookClientFromChat={(client) => {
+              setPendingBookClient({
+                phone: client?.phone || "",
+                name: client?.name || "",
+              });
+              setChatInfoOpen(false);
+              setCurrentView("intervals");
+              showToast("Выберите свободный интервал и нажмите «Записать клиента».", { tone: "info" });
+            }}
             onChatFilePicked={onChatFilePicked}
             onComposeActionPointerDown={onComposeActionPointerDown}
             onComposeActionPointerMove={onComposeActionPointerMove}
@@ -3504,6 +3526,52 @@ export default function App() {
               renderBookingSlotActions={renderBookingSlotActions}
               deleteSlot={deleteSlot}
               releaseManualHold={releaseManualHold}
+              onBookClient={(slot) => {
+                setCalendarDayDetail(null);
+                setBookClientModal({
+                  slot,
+                  phone: pendingBookClient?.phone || "",
+                  name: pendingBookClient?.name || "",
+                });
+                setPendingBookClient(null);
+              }}
+            />,
+            document.body
+          )}
+
+        {bookClientModal?.slot &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <ProviderBookClientModal
+              slot={bookClientModal.slot}
+              services={services}
+              authFetch={authFetch}
+              API_URL={API_URL}
+              initialPhone={bookClientModal.phone || ""}
+              initialName={bookClientModal.name || ""}
+              onClose={() => setBookClientModal(null)}
+              onBooked={() => {
+                setPendingBookClient(null);
+                if (me?.role === "provider") loadSellerData();
+                else if (typeof reloadProviderSlots === "function") reloadProviderSlots();
+                if (typeof reloadBookingsList === "function") reloadBookingsList();
+              }}
+            />,
+            document.body
+          )}
+
+        {visitConfirmToken &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <VisitConfirmModal
+              token={visitConfirmToken}
+              onClose={() => {
+                setVisitConfirmToken(null);
+                const params = new URLSearchParams(window.location.search);
+                params.delete("visit_confirm");
+                const q = params.toString();
+                window.history.replaceState({}, document.title, `${window.location.pathname}${q ? `?${q}` : ""}`);
+              }}
             />,
             document.body
           )}

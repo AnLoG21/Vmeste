@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import re
-import secrets
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -19,8 +17,12 @@ from users.slug_utils import ensure_organization_slug
 
 from .booking_windows import book_time_window, list_available_dates, list_available_windows, resolve_selected_options
 from .models import ProviderStaff
+from .phone_clients import get_or_create_client_by_phone, normalize_phone
 
 User = get_user_model()
+
+# Re-export for voice adapter and other callers
+_normalize_phone = normalize_phone
 
 
 def _provider_by_slug(slug: str):
@@ -34,47 +36,8 @@ def _provider_by_slug(slug: str):
     )
 
 
-def _normalize_phone(raw: str) -> str:
-    digits = re.sub(r"\D+", "", raw or "")
-    if len(digits) == 11 and digits.startswith("8"):
-        digits = "7" + digits[1:]
-    if len(digits) == 10:
-        digits = "7" + digits
-    if len(digits) == 11 and digits.startswith("7"):
-        return "+" + digits
-    return (raw or "").strip()[:30]
-
-
 def _get_or_create_guest_client(*, phone: str, name: str = ""):
-    phone_n = _normalize_phone(phone)
-    if len(re.sub(r"\D+", "", phone_n)) < 10:
-        raise ValueError("Укажите корректный телефон.")
-    existing = User.objects.filter(phone=phone_n, role=User.Role.CLIENT).first()
-    if existing:
-        if name and not (existing.first_name or "").strip():
-            parts = name.strip().split(None, 1)
-            existing.first_name = parts[0][:30]
-            if len(parts) > 1:
-                existing.last_name = parts[1][:30]
-            existing.save(update_fields=["first_name", "last_name"])
-        return existing
-    base = f"guest_{re.sub(r'\D+', '', phone_n)[-10:]}"
-    username = base
-    for _ in range(8):
-        if not User.objects.filter(username=username).exists():
-            break
-        username = f"{base}_{secrets.token_hex(2)}"
-    parts = (name or "").strip().split(None, 1)
-    user = User(
-        username=username,
-        role=User.Role.CLIENT,
-        phone=phone_n,
-        first_name=(parts[0] if parts else "")[:30],
-        last_name=(parts[1] if len(parts) > 1 else "")[:30],
-    )
-    user.set_unusable_password()
-    user.save()
-    return user
+    return get_or_create_client_by_phone(phone=phone, name=name)
 
 
 class PublicWidgetCatalogView(APIView):
