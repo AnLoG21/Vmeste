@@ -99,16 +99,130 @@ def get_or_create_client_by_phone(*, phone: str, name: str = ""):
     return user
 
 
-def client_brief(user) -> dict:
+def client_brief(user, *, request=None, provider_id=None) -> dict:
     if not user:
         return {}
     parts = [user.first_name or "", user.last_name or ""]
     name = " ".join(p for p in parts if p).strip() or user.username
-    return {
+    initial = (name[:1] or "?").upper()
+    brief = {
         "id": user.id,
         "username": user.username,
         "phone": user.phone or "",
+        "email": (getattr(user, "email", None) or "").strip(),
         "name": name,
         "first_name": user.first_name or "",
         "last_name": user.last_name or "",
+        "patronymic": getattr(user, "patronymic", None) or "",
+        "avatar_url": "",
+        "avatar_initial": initial,
+        "visits_done": 0,
+        "last_visit": "",
     }
+    if provider_id:
+        from .models import Booking
+
+        done_qs = Booking.objects.filter(
+            provider_id=provider_id,
+            client_id=user.id,
+            status=Booking.Status.DONE,
+        )
+        brief["visits_done"] = done_qs.count()
+        last = (
+            done_qs.select_related("slot")
+            .order_by("-slot__starts_at", "-id")
+            .first()
+        )
+        if last and getattr(last, "slot", None) and last.slot.starts_at:
+            from django.utils import timezone as dj_tz
+
+            brief["last_visit"] = dj_tz.localtime(last.slot.starts_at).strftime("%d.%m.%Y")
+    return brief
+
+
+def search_clients_for_provider(provider_id: int, q: str, *, limit: int = 12) -> list:
+    """Подсказки по телефону или имени среди клиентов (с приоритетом уже ходивших к организации)."""
+    from django.db.models import Q
+
+    from .models import Booking
+
+    raw = (q or "").strip()
+    if len(raw) < 2:
+        return []
+
+    digits = phone_digits(raw)
+    if len(digits) >= 7:
+        # Поиск по телефону
+        found = find_client_by_phone(raw)
+        if found:
+            return [found]
+        # Частичное совпадение по цифрам
+        qs = User.objects.filter(role=User.Role.CLIENT).exclude(phone="").filter(phone__icontains=digits[-7:])[:40]
+        out = []
+        for u in qs:
+            if digits in phone_digits(u.phone) or phone_digits(u.phone).endswith(digits):
+                out.append(u)
+            if len(out) >= limit:
+                break
+        return out
+
+    # Поиск по имени / username
+    terms = [t for t in re.split(r"\s+", raw) if t]
+    name_q = Q()
+    for t in terms:
+        name_q &= (
+            Q(first_name__icontains=t)
+            | Q(last_name__icontains=t)
+            | Q(patronymic__icontains=t)
+            | Q(username__icontains=t)
+        )
+
+    # Сначала клиенты этой организации
+    client_ids = (
+        Booking.objects.filter(provider_id=provider_id)
+        .values_list("client_id", flat=True)
+        .distinct()
+    )
+    known = list(
+        User.objects.filter(role=User.Role.CLIENT, id__in=client_ids)
+        .filter(name_q)
+        .order_by("last_name", "first_name", "id")[:limit]
+    )
+    if len(known) >= limit:
+        return known
+    known_ids = {u.id for u in known}
+    extra = list(
+        User.objects.filter(role=User.Role.CLIENT)
+        .filter(name_q)
+        .exclude(id__in=known_ids)
+        .order_by("last_name", "first_name", "id")[: limit - len(known)]
+    )
+    return known + extra
+
+
+def get_or_create_client_by_name(*, name: str, phone: str = ""):
+    """Создать guest-клиента по имени (телефон опционален)."""
+    name = (name or "").strip()
+    phone = (phone or "").strip()
+    if phone and len(phone_digits(phone)) >= 10:
+        return get_or_create_client_by_phone(phone=phone, name=name)
+    if not name:
+        raise ValueError("Укажите имя или выберите клиента из базы.")
+    parts = name.split(None, 1)
+    slug = re.sub(r"[^\w]+", "_", name.lower(), flags=re.UNICODE).strip("_")[:18] or "guest"
+    base = f"guest_{slug}"
+    username = base
+    for _ in range(8):
+        if not User.objects.filter(username=username).exists():
+            break
+        username = f"{base}_{secrets.token_hex(2)}"
+    user = User(
+        username=username[:30],
+        role=User.Role.CLIENT,
+        phone="",
+        first_name=(parts[0] if parts else "")[:30],
+        last_name=(parts[1] if len(parts) > 1 else "")[:30],
+    )
+    user.set_unusable_password()
+    user.save()
+    return user

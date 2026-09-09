@@ -19,7 +19,14 @@ from catalog.models import Service
 from .booking_actions import client_display_name, format_booking_when
 from .booking_windows import book_time_window, resolve_selected_options
 from .models import Booking, ProviderStaff
-from .phone_clients import client_brief, find_client_by_phone, get_or_create_client_by_phone, normalize_phone, phone_digits
+from .phone_clients import (
+    client_brief,
+    find_client_by_phone,
+    get_or_create_client_by_name,
+    get_or_create_client_by_phone,
+    normalize_phone,
+    phone_digits,
+)
 from .serializers import BookingSerializer
 
 User = get_user_model()
@@ -67,36 +74,57 @@ def build_client_confirm_url(booking: Booking) -> str:
 
 
 class ClientPhoneLookupView(APIView):
-    """GET /api/booking/clients/lookup/?phone=… — найти клиента по телефону."""
+    """GET /api/booking/clients/lookup/?q=…|phone=…|name=… — поиск клиентов (подсказки)."""
 
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        from .phone_clients import search_clients_for_provider
+
         provider_id, ok = _provider_context(request.user)
         if not ok:
             return Response(status=status.HTTP_403_FORBIDDEN)
-        phone = (request.query_params.get("phone") or "").strip()
-        if len(phone_digits(phone)) < 10:
-            return Response({"detail": "Укажите телефон."}, status=status.HTTP_400_BAD_REQUEST)
-        client = find_client_by_phone(phone)
-        if not client:
+        q = (
+            (request.query_params.get("q") or "").strip()
+            or (request.query_params.get("phone") or "").strip()
+            or (request.query_params.get("name") or "").strip()
+        )
+        if len(q) < 2:
+            return Response({"results": [], "found": False, "client": None, "normalized_phone": ""})
+
+        # Обратная совместимость: один клиент по точному телефону
+        phone_only = (request.query_params.get("phone") or "").strip()
+        if phone_only and len(phone_digits(phone_only)) >= 10 and not (request.query_params.get("q") or "").strip():
+            client = find_client_by_phone(phone_only)
+            if not client:
+                return Response(
+                    {
+                        "found": False,
+                        "normalized_phone": normalize_phone(phone_only),
+                        "client": None,
+                        "results": [],
+                    }
+                )
+            brief = client_brief(client, provider_id=provider_id)
             return Response(
                 {
-                    "found": False,
-                    "normalized_phone": normalize_phone(phone),
-                    "client": None,
+                    "found": True,
+                    "normalized_phone": normalize_phone(phone_only),
+                    "client": brief,
+                    "results": [brief],
                 }
             )
-        # Сколько визитов у этой организации
-        visits = Booking.objects.filter(
-            provider_id=provider_id,
-            client_id=client.id,
-            status=Booking.Status.DONE,
-        ).count()
-        brief = client_brief(client)
-        brief["visits_done"] = visits
-        return Response({"found": True, "normalized_phone": normalize_phone(phone), "client": brief})
 
+        users = search_clients_for_provider(provider_id, q, limit=12)
+        results = [client_brief(u, provider_id=provider_id) for u in users]
+        return Response(
+            {
+                "found": bool(results),
+                "results": results,
+                "client": results[0] if len(results) == 1 else None,
+                "normalized_phone": normalize_phone(q) if len(phone_digits(q)) >= 10 else "",
+            }
+        )
 
 class BookForClientView(APIView):
     """POST /api/booking/book-for-client/ — мастер записывает клиента на свободное окно."""
@@ -126,14 +154,19 @@ class BookForClientView(APIView):
                 client = User.objects.filter(pk=int(client_id), role=User.Role.CLIENT).first()
             except (TypeError, ValueError):
                 client = None
-        if not client and phone:
+        if not client and phone and len(phone_digits(phone)) >= 10:
             try:
                 client = get_or_create_client_by_phone(phone=phone, name=name)
             except ValueError as e:
                 return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        if not client and name:
+            try:
+                client = get_or_create_client_by_name(name=name, phone=phone)
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         if not client:
             return Response(
-                {"detail": "Укажите телефон или клиента."},
+                {"detail": "Выберите клиента из базы или укажите имя."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if name:

@@ -65,6 +65,7 @@ export default function SlotIntervalCalendar({
   manualHoldBusy,
   manualHoldStatus,
   pendingBookClient,
+  onOpenBookClient,
   intervalForm,
   setIntervalForm,
   createSlotsByInterval,
@@ -155,9 +156,27 @@ export default function SlotIntervalCalendar({
       ) : null}
       {showCreateControls && (
         <>
-          <form onSubmit={createManualHold} className="form interval-manual-hold">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (onOpenBookClient) {
+                onOpenBookClient({
+                  date: manualHoldForm.date,
+                  start_time: manualHoldForm.start_time,
+                  end_time: manualHoldForm.end_time,
+                  guest_name: manualHoldForm.guest_name,
+                });
+                return;
+              }
+              void createManualHold(e);
+            }}
+            className="form interval-manual-hold"
+          >
             <h3 className="interval-manual-hold-title">Забронировать</h3>
-            <p className="muted small">Отметьте занятое время внутри свободного интервала (например, запись по телефону).</p>
+            <p className="muted small">
+              Найдите клиента в базе по имени или телефону и запишите на свободное время. Телефон нужен только для
+              поиска.
+            </p>
             <div className="row-2">
               <label className="field-label">
                 Дата
@@ -169,10 +188,10 @@ export default function SlotIntervalCalendar({
                 />
               </label>
               <label className="field-label">
-                ФИО (необязательно)
+                Подсказка имени
                 <input
                   type="text"
-                  placeholder="На кого бронь"
+                  placeholder="Для поиска в базе"
                   value={manualHoldForm.guest_name}
                   onChange={(e) => setManualHoldForm((p) => ({ ...p, guest_name: e.target.value }))}
                 />
@@ -199,8 +218,18 @@ export default function SlotIntervalCalendar({
               </label>
             </div>
             <button type="submit" disabled={manualHoldBusy}>
-              {manualHoldBusy ? "Бронирование…" : "Забронировать интервал"}
+              Записать клиента
             </button>
+            {onOpenBookClient ? (
+              <button
+                type="button"
+                className="ghost-btn"
+                disabled={manualHoldBusy}
+                onClick={() => void createManualHold()}
+              >
+                Только занять время (без клиента)
+              </button>
+            ) : null}
             {manualHoldStatus ? <p className="status">{manualHoldStatus}</p> : null}
           </form>
           <form onSubmit={createSlotsByInterval} className="form interval-free-form">

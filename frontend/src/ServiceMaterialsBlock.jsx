@@ -76,18 +76,36 @@ export default function ServiceMaterialsBlock({ serviceId, authFetch }) {
       {materials.length === 0 ? (
         <p className="muted small">Пока не привязаны. Добавьте товары из магазина.</p>
       ) : (
-        <ul className="small" style={{ margin: "6px 0", paddingLeft: 18 }}>
+        <ul className="service-editor-materials-list">
           {materials.map((m) => (
-            <li key={m.id}>
-              {m.product_name} · {m.qty_per_service} {m.product_unit || "шт"}{" "}
-              <button type="button" className="ghost-btn" disabled={busy} onClick={() => void removeMaterial(m.id)}>
-                ×
+            <li key={m.id} className="service-editor-materials-item">
+              <span className="service-editor-materials-name">
+                {m.product_name}
+                <span className="muted">
+                  {" "}
+                  · {m.qty_per_service} {m.product_unit || "шт"}
+                </span>
+              </span>
+              <button
+                type="button"
+                className="service-editor-icon-delete"
+                disabled={busy}
+                title="Удалить"
+                aria-label="Удалить"
+                onClick={() => void removeMaterial(m.id)}
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                  />
+                </svg>
               </button>
             </li>
           ))}
         </ul>
       )}
-      <div className="row-2" style={{ gap: 6, marginTop: 6 }}>
+      <div className="service-editor-materials-add">
         <select value={productId} onChange={(e) => setProductId(e.target.value)}>
           <option value="">Товар…</option>
           {products.map((p) => (
@@ -103,9 +121,16 @@ export default function ServiceMaterialsBlock({ serviceId, authFetch }) {
           value={qty}
           onChange={(e) => setQty(e.target.value)}
           placeholder="Кол-во"
-          style={{ maxWidth: 88 }}
+          aria-label="Количество"
         />
-        <button type="button" disabled={busy || !productId} onClick={() => void addMaterial()}>
+        <button
+          type="button"
+          className="service-editor-icon-add"
+          disabled={busy || !productId}
+          title="Добавить"
+          aria-label="Добавить"
+          onClick={() => void addMaterial()}
+        >
           +
         </button>
       </div>

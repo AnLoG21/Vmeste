@@ -3,7 +3,7 @@ from rest_framework import serializers
 from common.media_urls import photo_urls
 from reviews.models import ReviewPhoto
 
-from .models import Service, ServiceCategory, ServiceOption, ServicePhoto, ServiceSubcategory
+from .models import Service, ServiceCategory, ServiceOption, ServiceOptionPhoto, ServicePhoto, ServiceSubcategory
 
 
 class ServicePhotoSerializer(serializers.ModelSerializer):
@@ -25,11 +25,42 @@ class ServicePhotoSerializer(serializers.ModelSerializer):
         return self._urls(obj)["thumb_url"]
 
 
+class ServiceOptionPhotoSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+    thumb_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ServiceOptionPhoto
+        fields = ["id", "image", "thumb_url", "sort_order"]
+
+    def _urls(self, obj):
+        request = self.context.get("request")
+        return photo_urls(request, obj.image)
+
+    def get_image(self, obj):
+        return self._urls(obj)["url"]
+
+    def get_thumb_url(self, obj):
+        return self._urls(obj)["thumb_url"]
+
+
 class ServiceOptionSerializer(serializers.ModelSerializer):
+    photos = ServiceOptionPhotoSerializer(many=True, read_only=True)
+
     class Meta:
         model = ServiceOption
-        fields = ["id", "service", "name", "price", "extra_minutes", "is_active", "sort_order", "template_slug"]
-        read_only_fields = ["template_slug"]
+        fields = [
+            "id",
+            "service",
+            "name",
+            "price",
+            "extra_minutes",
+            "is_active",
+            "sort_order",
+            "template_slug",
+            "photos",
+        ]
+        read_only_fields = ["template_slug", "photos"]
 
 
 class ServiceSubcategorySerializer(serializers.ModelSerializer):

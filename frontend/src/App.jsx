@@ -2512,6 +2512,17 @@ export default function App() {
         manualHoldBusy={manualHoldBusy}
         manualHoldStatus={manualHoldStatus}
         pendingBookClient={pendingBookClient}
+        onOpenBookClient={(vals) => {
+          setBookClientModal({
+            dayDate: vals?.date || "",
+            initialDate: vals?.date || "",
+            initialStart: vals?.start_time || "",
+            initialEnd: vals?.end_time || "",
+            name: vals?.guest_name || pendingBookClient?.name || "",
+            phone: pendingBookClient?.phone || "",
+          });
+          setPendingBookClient(null);
+        }}
         intervalForm={intervalForm}
         setIntervalForm={setIntervalForm}
         createSlotsByInterval={createSlotsByInterval}
@@ -3526,29 +3537,47 @@ export default function App() {
               renderBookingSlotActions={renderBookingSlotActions}
               deleteSlot={deleteSlot}
               releaseManualHold={releaseManualHold}
-              onBookClient={(slot) => {
-                setCalendarDayDetail(null);
-                setBookClientModal({
-                  slot,
-                  phone: pendingBookClient?.phone || "",
-                  name: pendingBookClient?.name || "",
-                });
-                setPendingBookClient(null);
-              }}
+              onBookClient={
+                me?.role === "provider" || (me?.role === "staff" && canManageBookings)
+                  ? (target) => {
+                      setCalendarDayDetail(null);
+                      if (target?.dayDate) {
+                        setBookClientModal({
+                          dayDate: target.dayDate,
+                          initialDate: target.dayDate,
+                          phone: pendingBookClient?.phone || "",
+                          name: pendingBookClient?.name || "",
+                        });
+                      } else if (target?.starts_at) {
+                        setBookClientModal({
+                          slot: target,
+                          phone: pendingBookClient?.phone || "",
+                          name: pendingBookClient?.name || "",
+                        });
+                      }
+                      setPendingBookClient(null);
+                    }
+                  : null
+              }
             />,
             document.body
           )}
 
-        {bookClientModal?.slot &&
+        {(bookClientModal?.slot || bookClientModal?.dayDate || bookClientModal?.initialDate) &&
           typeof document !== "undefined" &&
           createPortal(
             <ProviderBookClientModal
-              slot={bookClientModal.slot}
+              slot={bookClientModal.slot || null}
+              dayDate={bookClientModal.dayDate || bookClientModal.initialDate || ""}
               services={services}
               authFetch={authFetch}
               API_URL={API_URL}
+              providerId={me?.role === "provider" ? me.id : services.find((s) => s.provider)?.provider}
               initialPhone={bookClientModal.phone || ""}
               initialName={bookClientModal.name || ""}
+              initialDate={bookClientModal.initialDate || bookClientModal.dayDate || ""}
+              initialStart={bookClientModal.initialStart || ""}
+              initialEnd={bookClientModal.initialEnd || ""}
               onClose={() => setBookClientModal(null)}
               onBooked={() => {
                 setPendingBookClient(null);

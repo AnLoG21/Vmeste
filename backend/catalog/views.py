@@ -11,7 +11,7 @@ from booking.booking_windows import filter_services_bookable_by_staff
 from booking.models import ProviderStaff
 
 from .catalog_seed import provider_catalog_status, seed_provider_catalog
-from .models import Service, ServiceCategory, ServiceOption, ServicePhoto
+from .models import Service, ServiceCategory, ServiceOption, ServiceOptionPhoto, ServicePhoto
 from .serializers import ServiceCategorySerializer, ServiceOptionSerializer, ServicePhotoSerializer, ServiceSerializer
 from .sphere_templates import get_sphere_catalog, list_sphere_catalogs
 
@@ -121,7 +121,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
         qs = (
             Service.objects.all()
             .select_related("provider", "category", "subcategory")
-            .prefetch_related("photos", "options")
+            .prefetch_related("photos", "options", "options__photos")
         )
         provider = self.request.query_params.get("provider")
         if self.request.user.role == "provider":
@@ -191,7 +191,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
             qs = service.options.all()
             if request.user.role != "provider" or service.provider_id != request.user.id:
                 qs = qs.filter(is_active=True)
-            return Response(ServiceOptionSerializer(qs, many=True).data)
+            return Response(ServiceOptionSerializer(qs, many=True, context={"request": request}).data)
         if not _can_write_service(request.user, service):
             return Response(status=status.HTTP_403_FORBIDDEN)
         ser = ServiceOptionSerializer(data={**request.data, "service": service.id})
@@ -204,7 +204,10 @@ class ServiceViewSet(viewsets.ModelViewSet):
             is_active=ser.validated_data.get("is_active", True),
             sort_order=ser.validated_data.get("sort_order") or 0,
         )
-        return Response(ServiceOptionSerializer(opt).data, status=status.HTTP_201_CREATED)
+        return Response(
+            ServiceOptionSerializer(opt, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=["patch", "delete"], url_path=r"options/(?P<option_id>[^/.]+)")
     def option_detail(self, request, pk=None, option_id=None):
@@ -223,7 +226,56 @@ class ServiceViewSet(viewsets.ModelViewSet):
             if field in ser.validated_data:
                 setattr(opt, field, ser.validated_data[field])
         opt.save()
-        return Response(ServiceOptionSerializer(opt).data)
+        return Response(ServiceOptionSerializer(opt, context={"request": request}).data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"options/(?P<option_id>[^/.]+)/photos",
+        parser_classes=[MultiPartParser, FormParser, JSONParser],
+    )
+    def option_upload_photos(self, request, pk=None, option_id=None):
+        service = self.get_object()
+        if not _can_write_service(request.user, service):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        opt = service.options.filter(pk=option_id).first()
+        if not opt:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        files = request.FILES.getlist("photos") or request.FILES.getlist("photo")
+        if not files and request.FILES.get("image"):
+            files = [request.FILES["image"]]
+        if not files:
+            return Response({"detail": "Добавьте файлы photos."}, status=status.HTTP_400_BAD_REQUEST)
+        existing = opt.photos.count()
+        created = []
+        for i, f in enumerate(files):
+            if existing + len(created) >= 8:
+                break
+            ph = ServiceOptionPhoto.objects.create(option=opt, image=f, sort_order=existing + i)
+            created.append(ph)
+        opt = service.options.prefetch_related("photos").filter(pk=option_id).first()
+        return Response(
+            ServiceOptionSerializer(opt, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=["delete"],
+        url_path=r"options/(?P<option_id>[^/.]+)/photos/(?P<photo_id>[^/.]+)",
+    )
+    def option_delete_photo(self, request, pk=None, option_id=None, photo_id=None):
+        service = self.get_object()
+        if not _can_write_service(request.user, service):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        opt = service.options.filter(pk=option_id).first()
+        if not opt:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        ph = opt.photos.filter(pk=photo_id).first()
+        if not ph:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        ph.delete()
+        return Response({"ok": True})
 
     @action(detail=True, methods=["post"], url_path="photos")
     def upload_photos(self, request, pk=None):

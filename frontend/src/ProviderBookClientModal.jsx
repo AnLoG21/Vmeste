@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import ClientPickerSearch from "./ClientPickerSearch.jsx";
 import { showToast } from "./toast.js";
 
 function toLocalTimeValue(iso) {
@@ -21,75 +22,89 @@ function combineLocalDateTime(dateStr, timeStr) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function formatHm(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
+
 /**
- * Быстрая запись клиента по телефону на свободный интервал (2 клика после поиска).
+ * Запись клиента из базы на свободное время.
+ * props.slot — свободный интервал; props.dayDate — день YYYY-MM-DD (календарь записей);
+ * props.initialDate/Start/End — из формы «Забронировать».
  */
 export default function ProviderBookClientModal({
-  slot,
+  slot = null,
+  dayDate = "",
   services = [],
   authFetch,
   API_URL,
+  providerId = null,
   initialPhone = "",
   initialName = "",
+  initialDate = "",
+  initialStart = "",
+  initialEnd = "",
   onClose,
   onBooked,
 }) {
-  const [phone, setPhone] = useState(initialPhone || "");
-  const [name, setName] = useState(initialName || "");
-  const [lookup, setLookup] = useState(null);
-  const [lookupBusy, setLookupBusy] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [guestName, setGuestName] = useState(initialName || "");
   const [serviceId, setServiceId] = useState("");
-  const [startTime, setStartTime] = useState(() => toLocalTimeValue(slot?.starts_at));
+  const [dateStr, setDateStr] = useState(
+    () => initialDate || toLocalDateValue(slot?.starts_at) || dayDate || ""
+  );
+  const [startTime, setStartTime] = useState(
+    () => initialStart || toLocalTimeValue(slot?.starts_at) || ""
+  );
+  const [endTime, setEndTime] = useState(
+    () => initialEnd || (slot ? toLocalTimeValue(slot?.ends_at) : "") || ""
+  );
+  const [windows, setWindows] = useState([]);
+  const [windowKey, setWindowKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
 
-  const dateStr = useMemo(() => toLocalDateValue(slot?.starts_at), [slot?.starts_at]);
-  const slotEndTime = useMemo(() => toLocalTimeValue(slot?.ends_at), [slot?.ends_at]);
   const activeServices = useMemo(
     () => (services || []).filter((s) => s.is_active !== false),
     [services]
   );
+  const dayMode = Boolean(dayDate || (!slot && dateStr));
+  const slotEndTime = useMemo(() => toLocalTimeValue(slot?.ends_at), [slot?.ends_at]);
 
   useEffect(() => {
-    if (!serviceId && activeServices[0]) {
-      setServiceId(String(activeServices[0].id));
-    }
+    if (!serviceId && activeServices[0]) setServiceId(String(activeServices[0].id));
   }, [activeServices, serviceId]);
 
   useEffect(() => {
-    if (!(initialPhone || "").trim()) return;
-    void runLookup(initialPhone);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function runLookup(rawPhone) {
-    const p = (rawPhone || phone || "").trim();
-    if (p.replace(/\D/g, "").length < 10) {
-      setLookup(null);
-      setStatus("Введите телефон клиента.");
-      return;
+    if (!dayMode || !serviceId || !dateStr || !authFetch) {
+      setWindows([]);
+      return undefined;
     }
-    setLookupBusy(true);
-    setStatus("");
-    try {
-      const res = await authFetch(
-        `${API_URL}/booking/clients/lookup/?phone=${encodeURIComponent(p)}`
-      );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setStatus(data.detail || "Не удалось найти клиента.");
-        setLookup(null);
+    let cancelled = false;
+    (async () => {
+      const svc = activeServices.find((s) => String(s.id) === String(serviceId));
+      const pid = providerId || svc?.provider;
+      if (!pid) {
+        setWindows([]);
         return;
       }
-      setLookup(data);
-      if (data.found && data.client?.name) {
-        setName(data.client.name);
+      const res = await authFetch(
+        `${API_URL}/booking/slots/available-windows/?provider=${encodeURIComponent(pid)}&service=${encodeURIComponent(serviceId)}&date=${encodeURIComponent(dateStr)}`
+      );
+      if (cancelled) return;
+      if (!res.ok) {
+        setWindows([]);
+        return;
       }
-      if (data.normalized_phone) setPhone(data.normalized_phone);
-    } finally {
-      setLookupBusy(false);
-    }
-  }
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : [];
+      setWindows(list);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dayMode, serviceId, dateStr, authFetch, API_URL, activeServices, providerId]);
 
   async function submit(e) {
     e?.preventDefault?.();
@@ -98,34 +113,60 @@ export default function ProviderBookClientModal({
       setStatus("Выберите услугу.");
       return;
     }
-    const start = combineLocalDateTime(dateStr, startTime);
-    if (!start) {
-      setStatus("Укажите время начала.");
-      return;
-    }
-    const slotStart = slot?.starts_at ? new Date(slot.starts_at) : null;
-    const slotEnd = slot?.ends_at ? new Date(slot.ends_at) : null;
-    if (slotStart && start < slotStart) {
-      setStatus("Время раньше начала свободного интервала.");
-      return;
-    }
-    if (slotEnd && start >= slotEnd) {
-      setStatus("Время выходит за свободный интервал.");
+    if (!selectedClient && !(guestName || "").trim()) {
+      setStatus("Выберите клиента из базы или укажите имя.");
       return;
     }
 
+    let start = combineLocalDateTime(dateStr, startTime);
+    let endsAtIso = null;
+    if (windowKey) {
+      const w = windows.find((x) => `${x.starts_at}|${x.ends_at}|${x.staff_id ?? ""}` === windowKey);
+      if (w) {
+        start = new Date(w.starts_at);
+        endsAtIso = w.ends_at;
+      }
+    }
+    if (!start || Number.isNaN(start.getTime())) {
+      setStatus("Укажите время начала.");
+      return;
+    }
+
+    if (slot?.starts_at) {
+      const slotStart = new Date(slot.starts_at);
+      const slotEnd = slot.ends_at ? new Date(slot.ends_at) : null;
+      if (start < slotStart) {
+        setStatus("Время раньше начала свободного интервала.");
+        return;
+      }
+      if (slotEnd && start >= slotEnd) {
+        setStatus("Время выходит за свободный интервал.");
+        return;
+      }
+    }
+
     const payload = {
-      phone: (phone || "").trim(),
-      name: (name || "").trim(),
       service: Number(serviceId),
       starts_at: start.toISOString(),
       comment: "",
     };
-    if (lookup?.found && lookup.client?.id) {
-      payload.client = lookup.client.id;
+    if (endsAtIso) payload.ends_at = endsAtIso;
+    else if (endTime && dateStr) {
+      const end = combineLocalDateTime(dateStr, endTime);
+      if (end && end > start) payload.ends_at = end.toISOString();
+    }
+    if (selectedClient?.id) {
+      payload.client = selectedClient.id;
+      payload.name = selectedClient.name || guestName;
+      if (selectedClient.phone) payload.phone = selectedClient.phone;
+    } else {
+      payload.name = (guestName || "").trim();
     }
     if (slot?.staff != null && slot.staff !== "") {
       payload.staff = slot.staff;
+    } else if (windowKey) {
+      const w = windows.find((x) => `${x.starts_at}|${x.ends_at}|${x.staff_id ?? ""}` === windowKey);
+      if (w?.staff_id) payload.staff = w.staff_id;
     }
 
     setBusy(true);
@@ -139,7 +180,7 @@ export default function ProviderBookClientModal({
         setStatus(data.detail || "Не удалось записать.");
         return;
       }
-      showToast("Клиент записан. Уведомление отправлено.", { tone: "success" });
+      showToast("Клиент записан.", { tone: "success" });
       onBooked?.(data);
       onClose?.();
     } finally {
@@ -149,8 +190,18 @@ export default function ProviderBookClientModal({
 
   const selected = activeServices.find((s) => String(s.id) === String(serviceId));
   const durationHint = selected
-    ? `${selected.duration_minutes || 30} мин${selected.name ? ` · ${selected.name}` : ""}`
+    ? `${selected.duration_minutes || 30} мин · ${selected.name || ""}`
     : "";
+
+  const subtitle = slot
+    ? `${new Date(slot.starts_at).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })} · свободно до ${slotEndTime}`
+    : dateStr
+      ? new Date(`${dateStr}T12:00:00`).toLocaleDateString("ru-RU", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      : "Запись клиента";
 
   return (
     <div className="modal-backdrop modal-backdrop--app-overlay" onClick={() => onClose?.()}>
@@ -163,14 +214,7 @@ export default function ProviderBookClientModal({
         <div className="provider-book-client-head">
           <div>
             <h2 id="provider-book-client-title">Записать клиента</h2>
-            <p className="muted small">
-              {dateStr
-                ? `${new Date(slot.starts_at).toLocaleDateString("ru-RU", {
-                    day: "numeric",
-                    month: "long",
-                  })} · свободно до ${slotEndTime}`
-                : "Свободный интервал"}
-            </p>
+            <p className="muted small">{subtitle}</p>
           </div>
           <button type="button" className="client-memory-close" aria-label="Закрыть" onClick={() => onClose?.()}>
             ×
@@ -178,45 +222,29 @@ export default function ProviderBookClientModal({
         </div>
 
         <form className="form provider-book-client-form" onSubmit={submit}>
-          <label className="field-label">
-            Телефон
-            <div className="provider-book-client-phone-row">
+          <ClientPickerSearch
+            authFetch={authFetch}
+            API_URL={API_URL}
+            initialQuery={initialPhone || initialName || ""}
+            selectedClient={selectedClient}
+            onSelect={(c) => {
+              setSelectedClient(c);
+              if (c.name) setGuestName(c.name);
+            }}
+            onClear={() => setSelectedClient(null)}
+          />
+
+          {!selectedClient ? (
+            <label className="field-label">
+              Имя (если нового клиента)
               <input
-                type="tel"
-                inputMode="tel"
-                placeholder="+7 …"
-                value={phone}
-                onChange={(e) => {
-                  setPhone(e.target.value);
-                  setLookup(null);
-                }}
-                onBlur={() => void runLookup()}
-                required
+                type="text"
+                placeholder="Как обращаться"
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
               />
-              <button type="button" disabled={lookupBusy} onClick={() => void runLookup()}>
-                {lookupBusy ? "…" : "Найти"}
-              </button>
-            </div>
-          </label>
-
-          {lookup?.found ? (
-            <p className="provider-book-client-match muted small">
-              В базе: <strong>{lookup.client.name}</strong>
-              {lookup.client.visits_done != null ? ` · визитов: ${lookup.client.visits_done}` : ""}
-            </p>
-          ) : lookup && !lookup.found ? (
-            <p className="provider-book-client-match muted small">Новый клиент — создадим карточку по телефону.</p>
+            </label>
           ) : null}
-
-          <label className="field-label">
-            Имя
-            <input
-              type="text"
-              placeholder="Как обращаться"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </label>
 
           <label className="field-label">
             Услуга
@@ -233,11 +261,55 @@ export default function ProviderBookClientModal({
             </select>
           </label>
 
-          <label className="field-label">
-            Начало
-            <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
-          </label>
-          {durationHint ? <p className="muted small">Длительность: {durationHint}</p> : null}
+          {!slot ? (
+            <label className="field-label">
+              Дата
+              <input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} required />
+            </label>
+          ) : null}
+
+          {dayMode && windows.length > 0 ? (
+            <label className="field-label">
+              Свободное время
+              <select
+                value={windowKey}
+                onChange={(e) => {
+                  const key = e.target.value;
+                  setWindowKey(key);
+                  const w = windows.find((x) => `${x.starts_at}|${x.ends_at}|${x.staff_id ?? ""}` === key);
+                  if (w) setStartTime(toLocalTimeValue(w.starts_at));
+                }}
+              >
+                <option value="">Выберите окно…</option>
+                {windows.map((w) => {
+                  const key = `${w.starts_at}|${w.ends_at}|${w.staff_id ?? ""}`;
+                  return (
+                    <option key={key} value={key}>
+                      {formatHm(w.starts_at)} – {formatHm(w.ends_at)}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+          ) : (
+            <div className="row-2">
+              <label className="field-label">
+                Начало
+                <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
+              </label>
+              {!slot ? (
+                <label className="field-label">
+                  До (необяз.)
+                  <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+                </label>
+              ) : (
+                <p className="muted small" style={{ alignSelf: "end", margin: 0 }}>
+                  {durationHint}
+                </p>
+              )}
+            </div>
+          )}
+          {slot && durationHint ? <p className="muted small">Длительность: {durationHint}</p> : null}
 
           <div className="provider-book-client-actions">
             <button type="submit" disabled={busy}>

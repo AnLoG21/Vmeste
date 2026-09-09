@@ -10,6 +10,15 @@ export default function CalendarDayDetailModal({
   releaseManualHold,
   onBookClient,
 }) {
+  const isBookings = calendarDayDetail.mode === "bookings";
+  const dayIso = (() => {
+    const ym = String(calendarDayDetail.month || "");
+    const [y, m] = ym.split("-").map(Number);
+    const day = Number(calendarDayDetail.day);
+    if (!y || !m || !day) return "";
+    return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  })();
+
   return (
     <div
       className="modal-backdrop modal-backdrop--app-overlay"
@@ -44,13 +53,33 @@ export default function CalendarDayDetailModal({
             ×
           </button>
         </div>
+
+        {onBookClient && (isBookings || calendarDayDetail.mode === "intervals") ? (
+          <button
+            type="button"
+            className="calendar-day-sheet-book-btn calendar-day-sheet-book-btn--day"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isBookings) {
+                onBookClient({ dayDate: dayIso });
+              } else {
+                const free = (calendarDayDetail.items || []).find((it) => !it.is_booked);
+                if (free) onBookClient(free);
+                else onBookClient({ dayDate: dayIso });
+              }
+            }}
+          >
+            Записать клиента
+          </button>
+        ) : null}
+
         {!calendarDayDetail.items?.length ? (
           <p className="muted calendar-day-sheet-empty">На этот день записей нет</p>
         ) : (
           <ul className="calendar-day-sheet-list">
             {calendarDayDetail.items.map((it) => (
               <li key={it.id} className="calendar-day-sheet-item">
-                {calendarDayDetail.mode === "bookings" ? (
+                {isBookings ? (
                   <>
                     <strong>
                       {new Date(it.slot_starts_at).toLocaleTimeString([], {
@@ -121,7 +150,7 @@ export default function CalendarDayDetailModal({
                           onBookClient(it);
                         }}
                       >
-                        Записать клиента
+                        Записать на это время
                       </button>
                     ) : null}
                   </>

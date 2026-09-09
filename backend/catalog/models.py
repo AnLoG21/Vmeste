@@ -96,6 +96,16 @@ class ServiceOption(models.Model):
         return f"{self.name} (+{self.extra_minutes} мин)"
 
 
+class ServiceOptionPhoto(models.Model):
+    option = models.ForeignKey(ServiceOption, on_delete=models.CASCADE, related_name="photos")
+    image = models.ImageField(upload_to="service_option_photos/%Y/%m/")
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+
+
 class ServicePhoto(models.Model):
     service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name="photos")
     image = models.ImageField(upload_to="service_photos/%Y/%m/")
