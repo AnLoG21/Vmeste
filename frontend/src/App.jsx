@@ -3464,16 +3464,6 @@ export default function App() {
         document.body,
       )}
 
-      {orgPhotoLightbox?.items?.length > 0 && typeof document !== "undefined" && createPortal(
-        <OrgPhotoLightbox
-          orgPhotoLightbox={orgPhotoLightbox}
-          setOrgPhotoLightbox={setOrgPhotoLightbox}
-          stepOrgPhotoLightbox={stepOrgPhotoLightbox}
-          orgPhotoLightboxTouchX={orgPhotoLightboxTouchX}
-        />,
-        document.body,
-      )}
-
       {reviewModalBooking && typeof document !== "undefined" && createPortal(
         <ReviewModal
           reviewModalBooking={reviewModalBooking}
@@ -3631,6 +3621,17 @@ export default function App() {
           onPrepareStep={preparePlatformTourStep}
         />
       </div>
+
+      {orgPhotoLightbox?.items?.length > 0 && typeof document !== "undefined" && createPortal(
+        <OrgPhotoLightbox
+          orgPhotoLightbox={orgPhotoLightbox}
+          setOrgPhotoLightbox={setOrgPhotoLightbox}
+          stepOrgPhotoLightbox={stepOrgPhotoLightbox}
+          orgPhotoLightboxTouchX={orgPhotoLightboxTouchX}
+        />,
+        document.body,
+      )}
+
       </CabinetChrome>
       </CabinetErrorBoundary>
     </div>

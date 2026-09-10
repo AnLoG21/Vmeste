@@ -459,7 +459,7 @@ export default function SlotIntervalCalendar({
                   )}
                 </div>
                 <div className="calendar-slots calendar-slots--mobile">
-                  {(byDay[day] || []).map((s) => (
+                  {(byDay[day] || []).slice(0, 2).map((s) => (
                     <div
                       key={s.id}
                       className={[
@@ -485,6 +485,9 @@ export default function SlotIntervalCalendar({
                       </span>
                     </div>
                   ))}
+                  {(byDay[day] || []).length > 2 ? (
+                    <div className="calendar-slot-more">+{(byDay[day] || []).length - 2}</div>
+                  ) : null}
                 </div>
               </>
             )}

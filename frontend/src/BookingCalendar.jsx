@@ -91,7 +91,7 @@ export default function BookingCalendar({
                   ))}
                 </div>
                 <div className="calendar-slots calendar-slots--mobile">
-                  {dayItems.slice(0, 4).map((it) => {
+                  {dayItems.slice(0, 3).map((it) => {
                     const mod = bookingSlotStatusModifier(it);
                     const time = new Date(it.slot_starts_at).toLocaleTimeString([], {
                       hour: "2-digit",
@@ -104,13 +104,14 @@ export default function BookingCalendar({
                         title={`${time} · ${bookingSlotSecondaryLabel(it)} · ${bookingStatusLabel(it)}`}
                         aria-label={`${time} ${bookingStatusLabel(it)}`}
                       >
+                        <span className="calendar-slot-compact-time">{time}</span>
                         <span className="calendar-slot-compact-icon" aria-hidden>
                           {bookingSlotCompactIcon(mod)}
                         </span>
                       </div>
                     );
                   })}
-                  {dayItems.length > 4 ? <div className="calendar-slot-more">+{dayItems.length - 4}</div> : null}
+                  {dayItems.length > 3 ? <div className="calendar-slot-more">+{dayItems.length - 3}</div> : null}
                 </div>
               </>
             )}

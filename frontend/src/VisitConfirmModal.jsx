@@ -61,8 +61,12 @@ export default function VisitConfirmModal({ token, onClose }) {
   }
 
   return (
-    <div className="modal-backdrop modal-backdrop--app-overlay" onClick={() => onClose?.()}>
+    <div
+      className="modal-backdrop modal-backdrop--app-overlay modal-backdrop--bottom-sheet"
+      onClick={() => onClose?.()}
+    >
       <div className="modal-card visit-confirm-modal" onClick={(e) => e.stopPropagation()} role="dialog">
+        <div className="sheet-grab" aria-hidden />
         <div className="provider-book-client-head">
           <h2>Подтверждение визита</h2>
           <button type="button" className="client-memory-close" aria-label="Закрыть" onClick={() => onClose?.()}>

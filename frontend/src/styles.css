@@ -7088,7 +7088,7 @@ body.theme-dark .client-org-search-meta {
 .photo-lightbox-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 10050;
+  z-index: 35000;
   background: rgba(0, 0, 0, 0.82);
   display: flex;
   align-items: center;
@@ -7239,7 +7239,7 @@ body.booking-token-pointer-dragging .booking-msg-editor {
   font-size: 1.75rem;
   line-height: 1;
   cursor: pointer;
-  z-index: 10052;
+  z-index: 35002;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7263,7 +7263,7 @@ body.booking-token-pointer-dragging .booking-msg-editor {
   margin: 0;
   color: rgba(255, 255, 255, 0.92);
   font-size: 0.95rem;
-  z-index: 10052;
+  z-index: 35002;
   pointer-events: none;
 }
 
@@ -8480,6 +8480,8 @@ html.native-app .page-logged .hero.top-row {
   width: min(480px, 96vw);
   max-height: 85vh;
   overflow: auto;
+  border-radius: 16px;
+  padding: 14px 16px;
 }
 
 .calendar-day-sheet-head {
@@ -8535,10 +8537,10 @@ html.native-app .page-logged .hero.top-row {
 
 .calendar-day-sheet-item {
   position: relative;
-  border: 1px solid #ffd9bd;
-  border-radius: 10px;
-  padding: 10px 36px 10px 12px;
-  background: #fffdfb;
+  border: 1px solid #ffe0c2;
+  border-radius: 14px;
+  padding: 12px 36px 12px 14px;
+  background: #fffaf5;
 }
 
 .calendar-day-sheet-item-delete {
@@ -8789,18 +8791,48 @@ html.native-app .page-logged .hero.top-row {
   cursor: pointer;
   font: inherit;
 }
-  background: #c62828 !important;
+
+.sheet-grab {
+  display: none;
 }
 
 @media (max-width: 768px) {
   .calendar-mobile-hint {
     display: block;
+    margin: 0.35rem 0 0.75rem;
+    padding: 0.55rem 0.7rem;
+    border-radius: 10px;
+    background: #fff6ee;
+    border: 1px solid #ffe0c2;
+    color: #8d3e00;
+  }
+
+  .booking-calendar .calendar-grid,
+  .interval-calendar .calendar-grid {
+    gap: 3px;
   }
 
   .booking-calendar .calendar-cell,
   .interval-calendar .calendar-cell {
-    min-height: 84px;
-    padding: 3px 2px;
+    min-height: 72px;
+    max-height: 92px;
+    padding: 4px 3px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border-radius: 10px;
+  }
+
+  .booking-calendar .calendar-cell--bookings {
+    min-height: 68px;
+  }
+
+  .booking-calendar .calendar-day,
+  .interval-calendar .calendar-day {
+    font-size: 11px;
+    margin-bottom: 2px;
+    flex: 0 0 auto;
+    line-height: 1.2;
   }
 
   .calendar-slots--desktop {
@@ -8808,8 +8840,43 @@ html.native-app .page-logged .hero.top-row {
   }
 
   .calendar-slots--mobile {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 2px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .booking-calendar .calendar-slot-compact {
+    min-height: 16px;
+    padding: 2px 3px;
+    border-radius: 5px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    justify-content: center;
+  }
+
+  .booking-calendar .calendar-slot-compact-time {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  .booking-calendar .calendar-slot-compact-icon {
+    display: none;
+  }
+
+  .booking-calendar .calendar-slot-more {
+    font-size: 9px;
+    font-weight: 700;
+    text-align: center;
+    color: #8d3e00;
+    line-height: 1.2;
+    padding: 1px 0;
   }
 
   .interval-calendar .calendar-slot-compact--interval,
@@ -8860,12 +8927,132 @@ html.native-app .page-logged .hero.top-row {
   }
 
   .calendar-grid {
-    gap: 4px;
+    gap: 3px;
   }
 
-  .calendar-day {
-    font-size: 12px;
-    margin-bottom: 2px;
+  .calendar-head {
+    font-size: 11px;
+    padding: 4px 0;
+  }
+
+  /* Нижние sheet-модалки (запись / день / записать клиента) */
+  .modal-backdrop--bottom-sheet {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .sheet-grab {
+    display: block;
+    width: 40px;
+    height: 4px;
+    margin: 2px auto 10px;
+    border-radius: 999px;
+    background: #e0c2a8;
+  }
+
+  .calendar-day-sheet {
+    width: 100%;
+    max-width: 100%;
+    max-height: min(88vh, 720px);
+    margin: 0;
+    border-radius: 18px 18px 0 0;
+    padding: 8px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 32px rgba(80, 40, 0, 0.16);
+  }
+
+  .calendar-day-sheet-head h3 {
+    font-size: 1.05rem;
+  }
+
+  .calendar-day-sheet-list {
+    gap: 8px;
+  }
+
+  .calendar-day-sheet-item {
+    padding: 12px;
+    border-radius: 14px;
+    border: 1px solid #ffe0c2;
+    background: #fffaf5;
+  }
+
+  .calendar-day-sheet-book-btn--day {
+    margin-bottom: 0.85rem;
+    min-height: 44px;
+    border-radius: 12px;
+    font-weight: 650;
+  }
+
+  .client-book-overlay {
+    width: 100%;
+    max-width: 100%;
+    min-height: 0;
+    max-height: min(94vh, 900px);
+    margin: 0;
+    border-radius: 18px 18px 0 0;
+    padding: 8px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 32px rgba(80, 40, 0, 0.16);
+  }
+
+  .client-book-overlay-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: linear-gradient(180deg, #fffaf5 70%, rgba(255, 250, 245, 0));
+    padding-bottom: 6px;
+  }
+
+  .client-book-overlay-head h3 {
+    font-size: 1.1rem;
+  }
+
+  .client-book-staff-pick {
+    gap: 8px;
+  }
+
+  .client-book-staff-chip {
+    min-height: 42px;
+    padding: 8px 12px;
+    border-radius: 12px;
+  }
+
+  .client-slot-chip {
+    min-height: 44px;
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  .provider-book-client-modal,
+  .visit-confirm-modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: min(92vh, 800px);
+    margin: 0;
+    border-radius: 18px 18px 0 0;
+    padding: 8px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 32px rgba(80, 40, 0, 0.16);
+  }
+
+  .client-memory-modal {
+    width: min(100vw - 16px, 440px);
+    max-height: min(92vh, 760px);
+    border-radius: 16px;
+  }
+
+  .provider-book-client-actions button,
+  .visit-confirm-modal button[type="button"],
+  .client-book-overlay .form > button[type="submit"] {
+    min-height: 46px;
+    border-radius: 12px;
+    font-weight: 650;
+  }
+
+  .interval-calendar .calendar-slot-more {
+    font-size: 9px;
+    font-weight: 700;
+    text-align: center;
+    color: #8d3e00;
+    line-height: 1.2;
+    padding: 1px 0;
   }
 }
 
@@ -9682,27 +9869,66 @@ body.theme-dark .password-eye-btn:hover {
 
 .client-book-staff-chip {
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 8px 12px;
-  border: 1px solid #d6d3d1;
-  border-radius: 999px;
-  background: #fff;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid #e0c2a8;
+  border-radius: 14px;
+  background: #fffaf5;
   font: inherit;
   cursor: pointer;
   color: inherit;
+  max-width: 100%;
 }
 
 .client-book-staff-chip.is-on {
-  border-color: #9a3412;
-  background: #fff7ed;
+  border-color: #c45c00;
+  background: #fff3e8;
   color: #7c2d12;
+  box-shadow: 0 0 0 1px rgba(196, 92, 0, 0.2);
+}
+
+.client-book-staff-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+  background: #ffe4cf;
+}
+
+.client-book-staff-avatar--ph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #c45c26;
+  font-size: 0.85rem;
+}
+
+.client-book-staff-chip-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  align-items: flex-start;
 }
 
 .client-book-staff-job {
   font-size: 0.72rem;
-  color: #78716c;
+  color: #8d6a4a;
+}
+
+.client-book-staff-portfolio {
+  margin: 2px 0 10px;
+}
+
+.client-book-staff-carousel .service-photo-carousel-main {
+  max-height: 168px;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .org-widget-embed {

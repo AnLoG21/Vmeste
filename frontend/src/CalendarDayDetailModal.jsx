@@ -21,10 +21,11 @@ export default function CalendarDayDetailModal({
 
   return (
     <div
-      className="modal-backdrop modal-backdrop--app-overlay"
+      className="modal-backdrop modal-backdrop--app-overlay modal-backdrop--bottom-sheet"
       onClick={() => setCalendarDayDetail(null)}
     >
       <div className="modal-card calendar-day-sheet" onClick={(e) => e.stopPropagation()} role="dialog">
+        <div className="sheet-grab" aria-hidden />
         <div className="calendar-day-sheet-head">
           <h3>
             {(() => {

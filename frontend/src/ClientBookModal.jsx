@@ -50,10 +50,23 @@ export default function ClientBookModal({
   );
   const serviceOptions = (selectedService?.options || []).filter((o) => o.is_active !== false);
   const gallery = selectedService?.gallery || [];
+  const selectedStaffLink =
+    clientBookingForm.staffId && clientBookingForm.staffId !== "any"
+      ? staffOptions.find((l) => String(l.staff) === String(clientBookingForm.staffId))
+      : null;
+  const staffPortfolio = (selectedStaffLink?.portfolio_photos || []).map((p) => ({
+    id: p.id,
+    image: p.image || p.url,
+    thumb_url: p.thumb_url,
+  }));
 
   return (
-    <div className="modal-backdrop modal-backdrop--app-overlay" onClick={() => setClientBookModalOpen(false)}>
+    <div
+      className="modal-backdrop modal-backdrop--app-overlay modal-backdrop--bottom-sheet"
+      onClick={() => setClientBookModalOpen(false)}
+    >
       <div className="modal-card client-book-overlay" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-grab" aria-hidden />
         <div className="client-book-overlay-head">
           <h3>Запись{mapOrgPopup?.organization_name ? ` · ${mapOrgPopup.organization_name}` : ""}</h3>
           <button
@@ -102,6 +115,7 @@ export default function ClientBookModal({
                 link.staff_username ||
                 "Мастер";
               const on = String(clientBookingForm.staffId) === String(link.staff);
+              const avatar = link.avatar_thumb_url || link.avatar_image || "";
               return (
                 <button
                   key={link.id}
@@ -117,14 +131,38 @@ export default function ClientBookModal({
                     }))
                   }
                 >
-                  {label}
-                  {link.job_title ? (
-                    <span className="client-book-staff-job">{link.job_title}</span>
-                  ) : null}
+                  {avatar ? (
+                    <img src={avatar} alt="" className="client-book-staff-avatar" />
+                  ) : (
+                    <span className="client-book-staff-avatar client-book-staff-avatar--ph" aria-hidden>
+                      {String(label || "?").slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                  <span className="client-book-staff-chip-text">
+                    {label}
+                    {link.job_title ? (
+                      <span className="client-book-staff-job">{link.job_title}</span>
+                    ) : null}
+                  </span>
                 </button>
               );
             })}
           </div>
+          {staffPortfolio.length > 0 ? (
+            <div className="client-book-staff-portfolio">
+              <p className="field-label">Работы мастера</p>
+              <ServicePhotoCarousel
+                items={staffPortfolio}
+                className="client-book-staff-carousel"
+                onOpen={(items, idx) =>
+                  openOrgPhotoLightbox(
+                    items.map((it) => ({ id: it.id, url: it.url || it.image })),
+                    idx,
+                  )
+                }
+              />
+            </div>
+          ) : null}
           <select
             value={clientBookingForm.serviceId}
             onChange={(e) =>

@@ -204,13 +204,17 @@ export default function ProviderBookClientModal({
       : "Запись клиента";
 
   return (
-    <div className="modal-backdrop modal-backdrop--app-overlay" onClick={() => onClose?.()}>
+    <div
+      className="modal-backdrop modal-backdrop--app-overlay modal-backdrop--bottom-sheet"
+      onClick={() => onClose?.()}
+    >
       <div
         className="modal-card provider-book-client-modal"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-labelledby="provider-book-client-title"
       >
+        <div className="sheet-grab" aria-hidden />
         <div className="provider-book-client-head">
           <div>
             <h2 id="provider-book-client-title">Записать клиента</h2>
