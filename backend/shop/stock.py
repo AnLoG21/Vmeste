@@ -141,3 +141,25 @@ def writeoff_shop_order(order, *, actor=None) -> list[StockMovement]:
     order.stock_written_off = True
     order.save(update_fields=["stock_written_off"])
     return out
+
+
+@transaction.atomic
+def restock_return(return_request, *, actor=None) -> list[StockMovement]:
+    """Вернуть на склад товар из одобренной заявки на возврат."""
+    item = getattr(return_request, "order_item", None)
+    order = getattr(return_request, "order", None)
+    if not item or not order or not item.product_id:
+        return []
+    key = f"return:{return_request.id}:product:{item.product_id}:line:{item.id}"
+    mv = apply_stock_change(
+        product=item.product,
+        kind=StockMovement.Kind.IN,
+        qty=Decimal(item.quantity),
+        provider=order.provider,
+        reason=f"Возврат #{return_request.id} по заказу #{order.id}",
+        shop_order=order,
+        created_by=actor,
+        idempotency_key=key,
+        allow_negative=True,
+    )
+    return [mv] if mv else []

@@ -76,6 +76,10 @@ function emptyProductForm(category = "") {
     is_featured: false,
     featured_order: "0",
     bonus_points: "0",
+    weight_grams: "",
+    length_mm: "",
+    width_mm: "",
+    height_mm: "",
   };
 }
 
@@ -377,6 +381,10 @@ export default function ShopWorkspace({ authFetch, me }) {
       is_featured: Boolean(selected.is_featured),
       featured_order: String(selected.featured_order ?? 0),
       bonus_points: String(selected.bonus_points ?? 0),
+      weight_grams: selected.weight_grams != null ? String(selected.weight_grams) : "",
+      length_mm: selected.length_mm != null ? String(selected.length_mm) : "",
+      width_mm: selected.width_mm != null ? String(selected.width_mm) : "",
+      height_mm: selected.height_mm != null ? String(selected.height_mm) : "",
       attrsExtra: extraLines.join("\n"),
     });
   }, [selected, categoryById]);
@@ -468,6 +476,10 @@ export default function ShopWorkspace({ authFetch, me }) {
         is_featured: form.is_featured,
         featured_order: Number(form.featured_order) || 0,
         bonus_points: Number(form.bonus_points) || 0,
+        weight_grams: form.weight_grams === "" ? null : Math.max(0, parseInt(form.weight_grams, 10) || 0) || null,
+        length_mm: form.length_mm === "" ? null : Math.max(0, parseInt(form.length_mm, 10) || 0) || null,
+        width_mm: form.width_mm === "" ? null : Math.max(0, parseInt(form.width_mm, 10) || 0) || null,
+        height_mm: form.height_mm === "" ? null : Math.max(0, parseInt(form.height_mm, 10) || 0) || null,
       };
       if (!payload.name) throw new Error("Укажите название");
       const url = selected ? `${API_URL}/shop/products/${selected.id}/` : `${API_URL}/shop/products/`;
@@ -866,6 +878,45 @@ export default function ShopWorkspace({ authFetch, me }) {
                 onChange={(e) => setForm((f) => ({ ...f, bonus_points: e.target.value }))}
               />
             </Field>
+            <div className="row-2">
+              <Field label="Вес, г (доставка)">
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="300"
+                  value={form.weight_grams}
+                  onChange={(e) => setForm((f) => ({ ...f, weight_grams: e.target.value }))}
+                />
+              </Field>
+              <Field label="Д×Ш×В, мм">
+                <div className="row-3" style={{ display: "flex", gap: 6 }}>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Д"
+                    value={form.length_mm}
+                    onChange={(e) => setForm((f) => ({ ...f, length_mm: e.target.value }))}
+                    aria-label="Длина мм"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Ш"
+                    value={form.width_mm}
+                    onChange={(e) => setForm((f) => ({ ...f, width_mm: e.target.value }))}
+                    aria-label="Ширина мм"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="В"
+                    value={form.height_mm}
+                    onChange={(e) => setForm((f) => ({ ...f, height_mm: e.target.value }))}
+                    aria-label="Высота мм"
+                  />
+                </div>
+              </Field>
+            </div>
 
             <div className="shop-adaptive-attrs">
               <p className="shop-field-label">Характеристики {selectedPoolKey ? "(по категории)" : ""}</p>

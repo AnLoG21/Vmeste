@@ -41,6 +41,8 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
   const [selectedZoneId, setSelectedZoneId] = useState(null);
   const [tool, setTool] = useState("move");
   const [zoom, setZoom] = useState(1);
+  const [editingFloorId, setEditingFloorId] = useState(null);
+  const [editingFloorName, setEditingFloorName] = useState("");
   const [catFormOpen, setCatFormOpen] = useState(false);
   const [catForm, setCatForm] = useState(emptyCatForm);
   const [editingCatId, setEditingCatId] = useState(null);
@@ -205,6 +207,17 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
         prev.map((f) => (f.id === id ? { ...f, ...updated, tables: updated.tables || f.tables } : f)),
       );
     }
+  }
+
+  async function commitFloorRename() {
+    if (editingFloorId == null) return;
+    const id = editingFloorId;
+    const name = editingFloorName.trim() || "Зал";
+    setEditingFloorId(null);
+    setEditingFloorName("");
+    const current = floors.find((f) => f.id === id);
+    if (current && current.name === name) return;
+    await patchFloor(id, { name });
   }
 
   async function addTable(shape = "round") {
@@ -782,18 +795,49 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
           <div className="cafe-floor-tabs">
             {floors.map((f) => (
               <div key={f.id} className={`cafe-floor-tab${f.id === floor?.id ? " is-active" : ""}`}>
-                <button
-                  type="button"
-                  className="cafe-floor-tab-name"
-                  onClick={() => {
-                    setSelectedFloorId(f.id);
-                    setSelectedTableId(null);
-                    setSelectedWallId(null);
-                    setSelectedZoneId(null);
-                  }}
-                >
-                  {f.name}
-                </button>
+                {editingFloorId === f.id ? (
+                  <input
+                    className="cafe-floor-tab-rename"
+                    value={editingFloorName}
+                    autoFocus
+                    aria-label="Название зала"
+                    onChange={(e) => setEditingFloorName(e.target.value)}
+                    onBlur={() => commitFloorRename()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitFloorRename();
+                      }
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        setEditingFloorId(null);
+                        setEditingFloorName("");
+                      }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="cafe-floor-tab-name"
+                    title="Двойной клик — переименовать"
+                    onClick={() => {
+                      setSelectedFloorId(f.id);
+                      setSelectedTableId(null);
+                      setSelectedWallId(null);
+                      setSelectedZoneId(null);
+                    }}
+                    onDoubleClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSelectedFloorId(f.id);
+                      setEditingFloorId(f.id);
+                      setEditingFloorName(f.name || "");
+                    }}
+                  >
+                    {f.name}
+                  </button>
+                )}
                 {floors.length > 1 ? (
                   <button
                     type="button"
@@ -811,7 +855,8 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
             ))}
           </div>
           <p className="muted small">
-            Сетка {GRID}px · тяните правый нижний угол плана · комнату — за уголок · ластик удаляет объекты под курсором
+            Сетка {GRID}px · двойной клик по названию зала — переименовать · тяните правый нижний угол плана · ластик
+            удаляет объекты (столы — с подтверждением)
           </p>
 
           {floor ? (
@@ -828,7 +873,7 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
               onSelectZone={setSelectedZoneId}
               onPatchFloor={patchFloor}
               onPatchTable={patchTable}
-              onDeleteTable={(id) => deleteTable(id, { quiet: true })}
+              onDeleteTable={(id) => deleteTable(id)}
               onResizeFloor={({ width, height }, { commit } = {}) => {
                 setFloors((prev) => prev.map((f) => (f.id === floor.id ? { ...f, width, height } : f)));
                 if (commit) patchFloor(floor.id, { width, height });

@@ -164,6 +164,7 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
   const [draftLines, setDraftLines] = useState([]);
   const [orderOpen, setOrderOpen] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(false);
+  const [seatingZoom, setSeatingZoom] = useState(1);
   const [soundOn, setSoundOn] = useState(true);
   const [kitchenBannerOpen, setKitchenBannerOpen] = useState(() => {
     try {
@@ -745,6 +746,7 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
             {label}
             {id === "kitchen" && kitchenOrders.length ? ` (${kitchenOrders.length})` : ""}
             {id === "delivery" && deliveryOrders.length ? ` (${deliveryOrders.length})` : ""}
+            {id === "seating" && waiterCalls.length ? ` (${waiterCalls.length})` : ""}
           </button>
         ))}
       </div>
@@ -844,6 +846,22 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
               </div>
             ))}
           </div>
+          <div className="cafe-toolbar cafe-seating-toolbar">
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={() => setSeatingZoom((z) => Math.min(1.6, +(z + 0.1).toFixed(1)))}
+            >
+              Масштаб +
+            </button>
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={() => setSeatingZoom((z) => Math.max(0.6, +(z - 0.1).toFixed(1)))}
+            >
+              Масштаб −
+            </button>
+          </div>
           {!floor ? <p className="muted">Сначала создайте зал во вкладке «Зал и меню».</p> : null}
           {waiterCalls.length ? (
             <div className="cafe-waiter-alerts">
@@ -869,7 +887,7 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
                 <span>
                   <i className="cafe-seat-dot is-busy" aria-hidden /> Занят
                 </span>
-                <span className="muted small">Красный «!» — вызов официанта</span>
+                <span className="muted small">Занят = отмечен вручную или есть открытый заказ · «!» — вызов</span>
               </div>
               <CafeFloorCanvas
                 floor={floor}
@@ -877,7 +895,7 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
                 selectedWallId={null}
                 selectedZoneId={null}
                 tool="move"
-                zoom={1}
+                zoom={seatingZoom}
                 selectOnly
                 showOccupancyColors
                 tablesWithOrders={tablesWithOrders}
@@ -905,7 +923,9 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
                 <label className="checkbox cafe-seat-occupied">
                   <input
                     type="checkbox"
-                    checked={Boolean(selectedTable.is_occupied)}
+                    checked={
+                      Boolean(selectedTable.is_occupied) || tablesWithOrders.has(selectedTable.id)
+                    }
                     onChange={(e) =>
                       patchTable(selectedTable.id, {
                         is_occupied: e.target.checked,
@@ -913,7 +933,12 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
                       })
                     }
                   />
-                  <span>Стол занят</span>
+                  <span>
+                    Стол занят
+                    {tablesWithOrders.has(selectedTable.id) && !selectedTable.is_occupied
+                      ? " (есть заказ)"
+                      : ""}
+                  </span>
                 </label>
                 <label className="cafe-seat-guests">
                   Гостей
@@ -931,6 +956,17 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
                   />
                 </label>
               </div>
+              {selectedTable.is_occupied && !tablesWithOrders.has(selectedTable.id) ? (
+                <div className="cafe-toolbar">
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    onClick={() => patchTable(selectedTable.id, { is_occupied: false, guest_count: 0 })}
+                  >
+                    Освободить стол
+                  </button>
+                </div>
+              ) : null}
               <div className="cafe-toolbar">
                 {selectedTable.waiter_called_at ? (
                   <button type="button" className="landing-btn landing-btn--primary" onClick={() => ackWaiterCall(selectedTable.id)}>

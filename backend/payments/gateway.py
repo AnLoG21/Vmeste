@@ -154,6 +154,150 @@ def sync_payment_status(*, provider_code: str, payment_id: str, creds: dict) -> 
     return False
 
 
+def create_org_refund(
+    *,
+    provider_code: str,
+    creds: dict,
+    payment_id: str,
+    amount,
+    description: str = "",
+) -> dict | None:
+    """
+    Partial/full refund. Returns {id, status, provider} or None.
+    Robokassa: online refund not supported via API here.
+    """
+    code = (provider_code or "yookassa").strip() or "yookassa"
+    payment_id = (payment_id or "").strip()
+    if not payment_id:
+        return None
+    amt = _amount_str(amount)
+    if Decimal(amt) <= 0:
+        return None
+
+    if code == "yookassa":
+        from subscriptions.yookassa_client import create_refund as yookassa_refund
+
+        raw = yookassa_refund(
+            payment_id=payment_id,
+            amount=amt,
+            description=description,
+            shop_id=(creds.get("shop_id") or "").strip() or None,
+            secret_key=(creds.get("secret_key") or "").strip() or None,
+        )
+        if not raw or not raw.get("id"):
+            return None
+        return {
+            "id": str(raw.get("id")),
+            "status": str(raw.get("status") or ""),
+            "provider": "yookassa",
+            "raw": raw,
+        }
+
+    if code == "tbank":
+        return _tbank_cancel(
+            terminal_key=(creds.get("terminal_key") or "").strip(),
+            password=(creds.get("password") or "").strip(),
+            payment_id=payment_id,
+            amount=amount,
+        )
+
+    if code == "cloudpayments":
+        return _cloudpayments_refund(
+            public_id=(creds.get("public_id") or "").strip(),
+            api_secret=(creds.get("api_secret") or "").strip(),
+            payment_id=payment_id,
+            amount=amount,
+        )
+
+    if code == "robokassa":
+        logger.warning("Robokassa online refund is not supported; payment_id=%s", payment_id)
+        return None
+
+    return None
+
+
+def _tbank_cancel(*, terminal_key, password, payment_id, amount) -> dict | None:
+    if not terminal_key or not password or not payment_id:
+        return None
+    payload = {
+        "TerminalKey": terminal_key,
+        "PaymentId": str(payment_id),
+        "Amount": _kopecks(amount),
+    }
+    payload["Token"] = _tbank_token(payload, password)
+    req = urllib.request.Request(
+        "https://securepay.tinkoff.ru/v2/Cancel",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        logger.error("T-Bank cancel error %s: %s", e.code, body)
+        return None
+    except Exception as e:
+        logger.exception("T-Bank cancel failed: %s", e)
+        return None
+    if not data.get("Success"):
+        logger.error("T-Bank cancel rejected: %s", data)
+        return None
+    return {
+        "id": str(data.get("PaymentId") or payment_id),
+        "status": str(data.get("Status") or "REFUNDING"),
+        "provider": "tbank",
+        "raw": data,
+    }
+
+
+def _cloudpayments_refund(*, public_id, api_secret, payment_id, amount) -> dict | None:
+    if not public_id or not api_secret or not payment_id:
+        return None
+    import base64
+
+    token = base64.b64encode(f"{public_id}:{api_secret}".encode()).decode()
+    payload = {
+        "TransactionId": payment_id,
+        "Amount": float(_amount_str(amount)),
+    }
+    # InvoiceId fallback if payment_id looks non-numeric
+    try:
+        int(str(payment_id))
+    except (TypeError, ValueError):
+        payload = {"InvoiceId": str(payment_id), "Amount": float(_amount_str(amount))}
+    req = urllib.request.Request(
+        "https://api.cloudpayments.ru/payments/refund",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Basic {token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        logger.error("CloudPayments refund error %s: %s", e.code, body)
+        return None
+    except Exception as e:
+        logger.exception("CloudPayments refund failed: %s", e)
+        return None
+    if not data.get("Success"):
+        logger.error("CloudPayments refund rejected: %s", data)
+        return None
+    model = data.get("Model") or {}
+    return {
+        "id": str(model.get("TransactionId") or model.get("Id") or payment_id),
+        "status": str(model.get("Status") or "Completed"),
+        "provider": "cloudpayments",
+        "raw": data,
+    }
+
+
 def _tbank_token(payload: dict, password: str) -> str:
     data = {k: v for k, v in payload.items() if k != "Token" and v is not None and not isinstance(v, (dict, list))}
     data["Password"] = password

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const GRID = 20;
 
@@ -129,8 +129,16 @@ export default function CafeFloorCanvas({
   const innerRef = useRef(null);
   const [wallDraft, setWallDraft] = useState(null);
   const [guide, setGuide] = useState(null);
+  const [draftDrawings, setDraftDrawings] = useState(null);
   const dragActiveRef = useRef(false);
-  const drawings = useMemo(() => ensureDrawingIds(floor?.drawings), [floor?.drawings]);
+  const drawings = useMemo(
+    () => draftDrawings ?? ensureDrawingIds(floor?.drawings),
+    [draftDrawings, floor?.drawings],
+  );
+
+  useEffect(() => {
+    setDraftDrawings(null);
+  }, [floor?.id]);
 
   function floorPoint(e) {
     const inner = innerRef.current;
@@ -233,6 +241,7 @@ export default function CafeFloorCanvas({
   }
 
   function saveDrawings(next) {
+    setDraftDrawings(null);
     onPatchFloor(floor.id, { drawings: next });
   }
 
@@ -344,12 +353,14 @@ export default function CafeFloorCanvas({
     const oy1 = wall.y1;
     const ox2 = wall.x2;
     const oy2 = wall.y2;
+    const base = drawings;
+    let last = base;
     bindPointerDrag(e, {
       onMove(ev) {
         const p = floorPoint(ev);
         const dx = snap(p.x - start.x);
         const dy = snap(p.y - start.y);
-        const next = drawings.map((d) => {
+        last = base.map((d) => {
           if (d.id !== wall.id) return d;
           return {
             ...d,
@@ -359,7 +370,10 @@ export default function CafeFloorCanvas({
             y2: Math.max(0, Math.min(floor.height, oy2 + dy)),
           };
         });
-        onPatchFloor(floor.id, { drawings: next });
+        setDraftDrawings(last);
+      },
+      onUp() {
+        saveDrawings(last);
       },
     });
   }
@@ -369,12 +383,14 @@ export default function CafeFloorCanvas({
     const start = floorPoint(e);
     const ox = zone.x;
     const oy = zone.y;
+    const base = drawings;
+    let last = base;
     bindPointerDrag(e, {
       onMove(ev) {
         const p = floorPoint(ev);
         const dx = snap(p.x - start.x);
         const dy = snap(p.y - start.y);
-        const next = drawings.map((d) => {
+        last = base.map((d) => {
           if (d.id !== zone.id) return d;
           return {
             ...d,
@@ -382,7 +398,10 @@ export default function CafeFloorCanvas({
             y: Math.max(0, Math.min(floor.height - (d.h || 40), oy + dy)),
           };
         });
-        onPatchFloor(floor.id, { drawings: next });
+        setDraftDrawings(last);
+      },
+      onUp() {
+        saveDrawings(last);
       },
     });
   }
@@ -395,13 +414,18 @@ export default function CafeFloorCanvas({
     if (!zone) return;
     const ox = zone.x;
     const oy = zone.y;
+    const base = drawings;
+    let last = base;
     bindPointerDrag(e, {
       onMove(ev) {
         const p = floorPoint(ev);
         const w = Math.max(GRID * 2, snap(p.x - ox));
         const h = Math.max(GRID * 2, snap(p.y - oy));
-        const next = drawings.map((d) => (d.id !== zoneId ? d : { ...d, w, h }));
-        onPatchFloor(floor.id, { drawings: next });
+        last = base.map((d) => (d.id !== zoneId ? d : { ...d, w, h }));
+        setDraftDrawings(last);
+      },
+      onUp() {
+        saveDrawings(last);
       },
     });
   }
@@ -434,15 +458,17 @@ export default function CafeFloorCanvas({
     e.preventDefault();
     e.stopPropagation();
     onSelectWall(wallId);
+    const base = drawings;
+    let last = base;
     bindPointerDrag(e, {
       onMove(ev) {
         const raw = floorPoint(ev);
         let x = snap(raw.x);
         let y = snap(raw.y);
-        const wall = drawings.find((d) => d.id === wallId);
-        if (!wall) return;
-        const fixed = which === "a" ? { x: wall.x2, y: wall.y2 } : { x: wall.x1, y: wall.y1 };
-        const ortho = orthoSnap(fixed.x, fixed.y, x, y);
+        const orig = base.find((d) => d.id === wallId);
+        if (!orig) return;
+        const fixedPt = which === "a" ? { x: orig.x2, y: orig.y2 } : { x: orig.x1, y: orig.y1 };
+        const ortho = orthoSnap(fixedPt.x, fixedPt.y, x, y);
         x = snap(ortho.x2);
         y = snap(ortho.y2);
         const join = nearestEndpoint({ x, y }, wallId);
@@ -450,12 +476,15 @@ export default function CafeFloorCanvas({
           x = join.x;
           y = join.y;
         }
-        const next = drawings.map((d) => {
+        last = base.map((d) => {
           if (d.id !== wallId) return d;
           if (which === "a") return { ...d, x1: x, y1: y };
           return { ...d, x2: x, y2: y };
         });
-        onPatchFloor(floor.id, { drawings: next });
+        setDraftDrawings(last);
+      },
+      onUp() {
+        saveDrawings(last);
       },
     });
   }
@@ -633,13 +662,16 @@ export default function CafeFloorCanvas({
               />
             ))}
 
-        {(floor.tables || []).map((t) => (
+        {(floor.tables || []).map((t) => {
+          const isBusy =
+            Boolean(t.is_occupied) || Boolean(tablesWithOrders && tablesWithOrders.has(t.id));
+          return (
           <div
             key={t.id}
             className={[
               "cafe-table-node",
               selectedTableId === t.id ? "is-selected" : "",
-              showOccupancyColors ? (t.is_occupied ? "is-occupied" : "is-free") : t.is_occupied ? "is-occupied" : "",
+              showOccupancyColors ? (isBusy ? "is-occupied" : "is-free") : t.is_occupied ? "is-occupied" : "",
               t.waiter_called_at ? "is-waiter-call" : "",
             ]
               .filter(Boolean)
@@ -663,7 +695,7 @@ export default function CafeFloorCanvas({
                 !
               </span>
             ) : null}
-            {selectOnly && onOpenTableTicket && (t.is_occupied || (tablesWithOrders && tablesWithOrders.has(t.id))) ? (
+            {selectOnly && onOpenTableTicket && isBusy ? (
               <button
                 type="button"
                 className="cafe-table-ticket-btn"
@@ -683,7 +715,8 @@ export default function CafeFloorCanvas({
               </button>
             ) : null}
           </div>
-        ))}
+          );
+        })}
       </div>
       {showFloorResize && !selectOnly && onResizeFloor ? (
         <button

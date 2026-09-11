@@ -58,10 +58,79 @@ def _normalize_phone(raw: str) -> str:
     return digits
 
 
+DEFAULT_ITEM_WEIGHT_GRAMS = 300
+DEFAULT_PACKAGE_DIMS_MM = (100, 100, 100)  # L×W×H
+
+
+def _line_product(line):
+    product_id = getattr(line, "product_id", None)
+    if not product_id:
+        return None
+    try:
+        return line.product
+    except Exception:
+        try:
+            from .models import Product
+
+            return Product.objects.filter(pk=product_id).only(
+                "weight_grams", "length_mm", "width_mm", "height_mm"
+            ).first()
+        except Exception:
+            return None
+
+
+def _line_weight_grams(line) -> int:
+    product = _line_product(line)
+    qty = max(1, int(getattr(line, "quantity", None) or 1))
+    unit = DEFAULT_ITEM_WEIGHT_GRAMS
+    if product and getattr(product, "weight_grams", None):
+        try:
+            unit = max(1, int(product.weight_grams))
+        except (TypeError, ValueError):
+            unit = DEFAULT_ITEM_WEIGHT_GRAMS
+    return unit * qty
+
+
 def _order_items_weight_grams(order) -> int:
-    """Оценка веса: ~300 г на позицию, минимум 500 г."""
-    qty = sum(int(i.quantity or 1) for i in order.items.all())
-    return max(500, qty * 300)
+    """Суммарный вес позиций (г). Пустой вес товара → 300 г/шт. Минимум 500 г."""
+    items = list(order.items.select_related("product").all())
+    if not items:
+        return 500
+    total = sum(_line_weight_grams(line) for line in items)
+    return max(500, total)
+
+
+def _order_package_dims_cm(order) -> tuple[int, int, int]:
+    """Габариты посылки в см для СДЭК: max по осям среди товаров, иначе 10×10×10."""
+    length = width = height = 0
+    for line in order.items.select_related("product").all():
+        product = _line_product(line)
+        if not product:
+            continue
+        for attr, cur in (
+            ("length_mm", length),
+            ("width_mm", width),
+            ("height_mm", height),
+        ):
+            try:
+                val = int(getattr(product, attr, None) or 0)
+            except (TypeError, ValueError):
+                val = 0
+            if attr == "length_mm":
+                length = max(length, val)
+            elif attr == "width_mm":
+                width = max(width, val)
+            else:
+                height = max(height, val)
+    dl, dw, dh = DEFAULT_PACKAGE_DIMS_MM
+    length = length or dl
+    width = width or dw
+    height = height or dh
+    return (
+        max(1, (length + 9) // 10),
+        max(1, (width + 9) // 10),
+        max(1, (height + 9) // 10),
+    )
 
 
 def _float_or_none(value):
@@ -125,16 +194,18 @@ class YandexDeliveryProvider(DeliveryProvider):
         guest_name = (order.guest_name or "Получатель").strip()
 
         items = []
-        for line in order.items.all():
+        for line in order.items.select_related("product").all():
             qty = int(line.quantity or 1)
             price = float(Decimal(line.unit_price or 0))
+            line_grams = _line_weight_grams(line)
+            unit_kg = max(0.1, round((line_grams / max(1, qty)) / 1000, 3))
             items.append(
                 {
                     "title": (line.name or "Товар")[:128],
                     "quantity": qty,
                     "cost_value": f"{price:.2f}",
                     "cost_currency": "RUB",
-                    "weight": 0.3,
+                    "weight": unit_kg,
                 }
             )
         if not items:
@@ -310,18 +381,20 @@ class CdekProvider(DeliveryProvider):
         guest_name = (order.guest_name or "Получатель").strip()
         org_name = (getattr(provider, "organization_name", None) or provider.username or "Отправитель").strip()
         weight = _order_items_weight_grams(order)
+        length_cm, width_cm, height_cm = _order_package_dims_cm(order)
 
         package_items = []
-        for line in order.items.all():
+        for line in order.items.select_related("product").all():
             qty = int(line.quantity or 1)
             price = float(Decimal(line.unit_price or 0))
+            line_w = max(100, _line_weight_grams(line) // max(1, qty))
             package_items.append(
                 {
                     "name": (line.name or "Товар")[:255],
                     "ware_key": str(line.product_id or line.id),
                     "payment": {"value": 0},
                     "cost": price,
-                    "weight": max(100, weight // max(1, sum(int(i.quantity or 1) for i in order.items.all()))),
+                    "weight": line_w,
                     "amount": qty,
                 }
             )
@@ -356,6 +429,9 @@ class CdekProvider(DeliveryProvider):
                 {
                     "number": "1",
                     "weight": weight,
+                    "length": length_cm,
+                    "width": width_cm,
+                    "height": height_cm,
                     "items": package_items,
                 }
             ],

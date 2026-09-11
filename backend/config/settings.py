@@ -237,6 +237,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "marketplaces.poll_new_orders",
         "schedule": 600.0,
     },
+    "shop-sync-delivery-every-10-min": {
+        "task": "shop.sync_delivery_statuses",
+        "schedule": 600.0,
+    },
     "voice-outbound-confirm-daily-10am": {
         "task": "voice.run_all_outbound_confirmations",
         "schedule": crontab(hour=10, minute=0),

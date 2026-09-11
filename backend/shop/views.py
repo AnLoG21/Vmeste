@@ -973,7 +973,7 @@ class ShopReturnRequestsView(APIView):
             return Response({"detail": "Укажите id заявки"}, status=400)
         row = (
             ReturnRequest.objects.filter(pk=rid, order__provider=provider)
-            .select_related("order", "order_item", "user")
+            .select_related("order", "order_item", "order_item__product", "user")
             .first()
         )
         if not row:
@@ -990,39 +990,76 @@ class ShopReturnRequestsView(APIView):
 
         if new_status == ReturnRequest.Status.APPROVED and previous != ReturnRequest.Status.APPROVED:
             order = row.order
+            stock_info = {"restocked": 0}
             if order.yookassa_payment_id and not row.refund_id:
                 try:
                     from decimal import Decimal
 
+                    from payments.gateway import create_org_refund
                     from payments.resolve import resolve_org_payment_setup
-                    from subscriptions.yookassa_client import create_refund
 
-                    amount = Decimal(row.order_item.unit_price) * Decimal(row.order_item.quantity)
+                    items_total = Decimal(order.items_total or 0)
+                    line_total = (
+                        Decimal(row.order_item.unit_price or 0) * Decimal(row.order_item.quantity or 0)
+                    ).quantize(Decimal("0.01"))
+                    bonus = Decimal(order.bonus_spent or 0)
+                    if items_total > 0 and line_total > 0:
+                        bonus_share = (line_total / items_total * bonus).quantize(Decimal("0.01"))
+                    else:
+                        bonus_share = Decimal("0")
+                    amount = max(Decimal("0"), (line_total - bonus_share).quantize(Decimal("0.01")))
+                    items_cash_cap = max(Decimal("0"), (items_total - bonus).quantize(Decimal("0.01")))
+                    if amount > items_cash_cap:
+                        amount = items_cash_cap
+
                     code, creds = resolve_org_payment_setup(provider)
-                    if code == "yookassa" and amount > 0:
-                        refund = create_refund(
+                    if amount > 0:
+                        refund = create_org_refund(
+                            provider_code=code,
+                            creds=creds or {},
                             payment_id=order.yookassa_payment_id,
-                            amount=str(amount),
+                            amount=amount,
                             description=f"Возврат по заявке #{row.id} заказ #{order.id}",
-                            shop_id=(creds.get("shop_id") or "").strip() or None,
-                            secret_key=(creds.get("secret_key") or "").strip() or None,
                         )
                         if refund and refund.get("id"):
                             row.refund_id = str(refund.get("id"))
-                            if refund.get("status") in ("succeeded", "pending"):
+                            status_l = str(refund.get("status") or "").lower()
+                            if status_l in (
+                                "succeeded",
+                                "pending",
+                                "completed",
+                                "refunding",
+                                "refunded",
+                                "partial_refunded",
+                                "confirmed",
+                            ):
                                 row.status = ReturnRequest.Status.DONE
+                        elif code == "robokassa":
+                            refund_error = (
+                                "Онлайн-возврат через Robokassa недоступен — верните деньги вручную в кабинете"
+                            )
                         else:
-                            refund_error = "ЮKassa не вернула id возврата"
-                    elif order.yookassa_payment_id:
-                        refund_error = "Онлайн-возврат доступен только через ЮKassa"
+                            refund_error = "Эквайринг не вернул id возврата"
+                    elif line_total > 0 and amount <= 0:
+                        # Полностью покрыто бонусами — денег возвращать нечего
+                        row.status = ReturnRequest.Status.DONE
                 except Exception as e:
-                    refund_error = str(e)[:200] or "Ошибка возврата в ЮKassa"
+                    refund_error = str(e)[:200] or "Ошибка возврата в эквайринге"
             try:
                 from vmagazine.bonuses import reverse_bonuses_for_return
 
                 bonus_info = reverse_bonuses_for_return(row) or bonus_info
             except Exception:
                 pass
+            try:
+                from .stock import restock_return
+
+                moved = restock_return(row, actor=request.user)
+                stock_info = {"restocked": len(moved)}
+            except Exception:
+                pass
+        else:
+            stock_info = {"restocked": 0}
 
         row.save(update_fields=["status", "seller_note", "refund_id", "updated_at"])
         try:
@@ -1058,11 +1095,12 @@ class ShopReturnRequestsView(APIView):
             "refund_id": row.refund_id,
             "bonus_restored": bonus_info.get("restored"),
             "bonus_clawback": bonus_info.get("clawback"),
+            "stock_restocked": stock_info.get("restocked"),
         }
         if refund_error:
             payload["refund_error"] = refund_error
             payload["detail"] = (
                 f"Заявка обновлена, но возврат денег не прошёл: {refund_error}. "
-                "Бонусы могли быть скорректированы."
+                "Бонусы и склад могли быть скорректированы."
             )
         return Response(payload)

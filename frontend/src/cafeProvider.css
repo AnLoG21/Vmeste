@@ -340,6 +340,16 @@
   cursor: pointer;
 }
 
+.cafe-floor-tab-rename {
+  border: 0;
+  background: transparent;
+  padding: 8px 12px;
+  font: inherit;
+  min-width: 72px;
+  max-width: 180px;
+  outline: none;
+}
+
 .cafe-floor-tab-close {
   display: none;
   border: 0;

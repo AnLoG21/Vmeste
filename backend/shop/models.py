@@ -107,6 +107,14 @@ class Product(models.Model):
         default=0,
         help_text="Бонусы за покупку 1 шт (0 = по правилам магазина)",
     )
+    weight_grams = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Вес единицы товара в граммах (для доставки). Пусто = 300 г.",
+    )
+    length_mm = models.PositiveIntegerField(null=True, blank=True, help_text="Длина, мм")
+    width_mm = models.PositiveIntegerField(null=True, blank=True, help_text="Ширина, мм")
+    height_mm = models.PositiveIntegerField(null=True, blank=True, help_text="Высота, мм")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
