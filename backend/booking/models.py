@@ -500,6 +500,25 @@ class ProviderClientCard(models.Model):
     personal = models.JSONField(default=dict, blank=True)
     technical_notes = models.TextField(blank=True, default="")
     preferences_notes = models.TextField(blank=True, default="")
+    # Надёжность / чёрный список / источник привлечения
+    is_blocked = models.BooleanField(
+        default=False,
+        help_text="Блокировка онлайн-записи (чёрный список).",
+    )
+    no_show_count = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Сколько раз клиент не пришёл без предупреждения.",
+    )
+    acquisition_source = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Откуда пришёл: соцсети, рекомендация, реклама…",
+    )
+    hidden = models.BooleanField(
+        default=False,
+        help_text="Скрыть из базы клиентов организации.",
+    )
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

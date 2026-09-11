@@ -528,28 +528,10 @@ export default function CabinetChrome({
                     <span className="menu-item-label">Заказы</span>
                   </button>
                 )}
-                {canManageOrgSettings && me?.provider_sphere === "marketplaces" && !subnavBookmarks.includes("marketplaces") && (
-                  <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("marketplaces"); setMenuOpen(false); }}>
-                    <span className="menu-item-icon" aria-hidden="true">{bookmarkMenuIcon("marketplaces")}</span>
-                    <span className="menu-item-label">Маркетплейсы</span>
-                  </button>
-                )}
                 {isBookmarkAvailable("inspections") && !subnavBookmarks.includes("inspections") && (
                   <button type="button" className="menu-dropdown-item" onClick={() => { setCurrentView("inspections"); setMenuOpen(false); }}>
                     <span className="menu-item-icon" aria-hidden="true">{bookmarkMenuIcon("inspections")}</span>
                     <span className="menu-item-label">Приёмка</span>
-                  </button>
-                )}
-                {isBookmarkAvailable("shop") && !subnavBookmarks.includes("shop") && (
-                  <button type="button" className="menu-dropdown-item" onClick={() => navigateBookmark("shop")}>
-                    <span className="menu-item-icon" aria-hidden="true">{bookmarkMenuIcon("shop")}</span>
-                    <span className="menu-item-label">Магазин / склад</span>
-                  </button>
-                )}
-                {isBookmarkAvailable("service_apps") && !subnavBookmarks.includes("service_apps") && (
-                  <button type="button" className="menu-dropdown-item" onClick={() => navigateBookmark("service_apps")}>
-                    <span className="menu-item-icon" aria-hidden="true">{bookmarkMenuIcon("service_apps")}</span>
-                    <span className="menu-item-label">Сервисы</span>
                   </button>
                 )}
                 <button type="button" className="menu-dropdown-item" onClick={exitDemoSession}>

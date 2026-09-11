@@ -127,7 +127,7 @@ class ClientPhoneLookupView(APIView):
 
 
 class ProviderClientListView(APIView):
-    """GET /api/booking/clients/?page=1&page_size=20&q= — база клиентов организации."""
+    """База клиентов: список, создание вручную, импорт Excel, удаление из базы."""
 
     permission_classes = [permissions.IsAuthenticated]
 
@@ -150,6 +150,181 @@ class ProviderClientListView(APIView):
             provider_id, q=q, page=page, page_size=page_size, request=request
         )
         return Response(data)
+
+    def post(self, request):
+        from .models import ProviderClientCard
+        from .phone_clients import client_brief, get_or_create_client_by_name, get_or_create_client_by_phone
+
+        provider_id, ok = _provider_context(request.user)
+        if not ok:
+            return Response({"detail": "Нет доступа"}, status=status.HTTP_403_FORBIDDEN)
+
+        # Импорт Excel/CSV
+        upload = request.FILES.get("file") or request.FILES.get("excel")
+        if upload:
+            return self._import_file(request, provider_id, upload)
+
+        data = request.data if hasattr(request.data, "get") else {}
+        name = (data.get("name") or data.get("guest_name") or "").strip()
+        phone = (data.get("phone") or "").strip()
+        source = (data.get("acquisition_source") or data.get("source") or "").strip()[:120]
+        if not name and not phone:
+            return Response(
+                {"detail": "Укажите имя или телефон."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            if phone and len(phone_digits(phone)) >= 10:
+                client = get_or_create_client_by_phone(phone=phone, name=name)
+            else:
+                client = get_or_create_client_by_name(name=name or "Клиент", phone=phone)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        card, _ = ProviderClientCard.objects.get_or_create(provider_id=provider_id, client=client)
+        if card.hidden:
+            card.hidden = False
+        if source:
+            card.acquisition_source = source
+        card.save()
+        brief = client_brief(client, request=request, provider_id=provider_id)
+        brief["has_memory"] = True
+        brief["is_blocked"] = bool(card.is_blocked)
+        brief["no_show_count"] = int(card.no_show_count or 0)
+        brief["acquisition_source"] = card.acquisition_source or ""
+        return Response(brief, status=status.HTTP_201_CREATED)
+
+    def delete(self, request):
+        from .models import ProviderClientCard
+
+        provider_id, ok = _provider_context(request.user)
+        if not ok:
+            return Response({"detail": "Нет доступа"}, status=status.HTTP_403_FORBIDDEN)
+        raw = request.query_params.get("client") or request.data.get("client")
+        try:
+            client_id = int(raw)
+        except (TypeError, ValueError):
+            return Response({"detail": "Укажите client."}, status=status.HTTP_400_BAD_REQUEST)
+        card, _ = ProviderClientCard.objects.get_or_create(
+            provider_id=provider_id, client_id=client_id
+        )
+        card.hidden = True
+        card.save(update_fields=["hidden", "updated_at"])
+        return Response({"ok": True, "hidden": True})
+
+    def _import_file(self, request, provider_id, upload):
+        from .models import ProviderClientCard
+        from .phone_clients import client_brief, get_or_create_client_by_name, get_or_create_client_by_phone
+
+        name = (upload.name or "").lower()
+        rows = []
+        try:
+            if name.endswith(".csv") or name.endswith(".txt"):
+                import csv
+                import io
+
+                text = upload.read().decode("utf-8-sig", errors="replace")
+                reader = csv.DictReader(io.StringIO(text))
+                rows = list(reader)
+            else:
+                from openpyxl import load_workbook
+                import io
+
+                wb = load_workbook(io.BytesIO(upload.read()), read_only=True, data_only=True)
+                ws = wb.active
+                cells = list(ws.iter_rows(values_only=True))
+                if not cells:
+                    return Response({"detail": "Пустой файл."}, status=status.HTTP_400_BAD_REQUEST)
+                headers = [str(h or "").strip().lower() for h in cells[0]]
+                for row in cells[1:]:
+                    item = {}
+                    for i, h in enumerate(headers):
+                        if i < len(row):
+                            item[h] = row[i]
+                    rows.append(item)
+        except Exception as e:
+            return Response(
+                {"detail": f"Не удалось прочитать файл: {e}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        created = 0
+        updated = 0
+        errors = []
+        for idx, row in enumerate(rows, start=2):
+            # Normalize keys
+            mapped = {}
+            for k, v in (row or {}).items():
+                key = str(k or "").strip().lower()
+                mapped[key] = "" if v is None else str(v).strip()
+            name_v = (
+                mapped.get("name")
+                or mapped.get("имя")
+                or mapped.get("фио")
+                or " ".join(
+                    p
+                    for p in (
+                        mapped.get("фамилия") or mapped.get("last_name"),
+                        mapped.get("имя") or mapped.get("first_name"),
+                        mapped.get("отчество") or mapped.get("patronymic"),
+                    )
+                    if p
+                ).strip()
+            )
+            # if имя used as first name only
+            if not name_v or name_v == (mapped.get("имя") or ""):
+                fn = mapped.get("first_name") or mapped.get("имя") or ""
+                ln = mapped.get("last_name") or mapped.get("фамилия") or ""
+                pn = mapped.get("patronymic") or mapped.get("отчество") or ""
+                name_v = " ".join(p for p in (ln, fn, pn) if p).strip() or name_v
+            phone_v = mapped.get("phone") or mapped.get("телефон") or mapped.get("тел") or ""
+            source_v = (
+                mapped.get("source")
+                or mapped.get("acquisition_source")
+                or mapped.get("источник")
+                or ""
+            )[:120]
+            if not name_v and not phone_v:
+                continue
+            try:
+                if phone_v and len(phone_digits(phone_v)) >= 10:
+                    client = get_or_create_client_by_phone(phone=phone_v, name=name_v)
+                else:
+                    client = get_or_create_client_by_name(name=name_v or "Клиент", phone=phone_v)
+                card, was_created = ProviderClientCard.objects.get_or_create(
+                    provider_id=provider_id, client=client
+                )
+                changed = False
+                if card.hidden:
+                    card.hidden = False
+                    changed = True
+                if source_v and not card.acquisition_source:
+                    card.acquisition_source = source_v
+                    changed = True
+                if changed:
+                    card.save()
+                if was_created:
+                    created += 1
+                else:
+                    updated += 1
+            except Exception as e:
+                errors.append({"row": idx, "detail": str(e)})
+
+        return Response(
+            {
+                "ok": True,
+                "created": created,
+                "updated": updated,
+                "errors": errors[:20],
+                "detail": f"Импортировано: новых {created}, обновлено {updated}.",
+            }
+        )
+
+
+def client_is_blocked_for_provider(provider_id: int, client_id: int) -> bool:
+    from .phone_clients import client_is_blocked_for_provider as _fn
+
+    return _fn(provider_id, client_id)
 
 
 class BookForClientView(APIView):
@@ -193,6 +368,13 @@ class BookForClientView(APIView):
         if not client:
             return Response(
                 {"detail": "Выберите клиента из базы или укажите имя."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if client_is_blocked_for_provider(provider_id, client.id):
+            return Response(
+                {
+                    "detail": "Клиент в чёрном списке. Снимите блокировку в базе клиентов или запишите только с предоплатой вне онлайн-записи.",
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if name:

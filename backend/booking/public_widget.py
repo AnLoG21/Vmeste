@@ -165,6 +165,14 @@ class PublicWidgetBookView(APIView):
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+        from .phone_clients import client_is_blocked_for_provider
+
+        if client_is_blocked_for_provider(provider.id, client.id):
+            return Response(
+                {"detail": "Онлайн-запись для этого клиента недоступна. Свяжитесь с организацией."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         service_id = data.get("service")
         starts_raw = data.get("starts_at")
         ends_raw = data.get("ends_at")

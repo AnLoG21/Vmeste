@@ -139,14 +139,12 @@ export function loadSubnavBookmarks(role, sphere) {
           id !== "cafe" &&
           id !== "cafe_orders",
       );
-      if (!next.includes("shop")) next = ["shop", ...next];
-      else next = ["shop", ...next.filter((id) => id !== "shop")];
+      if (next.includes("shop")) next = ["shop", ...next.filter((id) => id !== "shop")];
       if (!next.includes("client_map")) next = [...next, "client_map"];
     }
     if (role === "staff" && sphere === "shops") {
       next = next.filter((id) => id !== "bookings" && id !== "intervals" && id !== "services");
-      if (!next.includes("shop")) next = ["shop", ...next];
-      else next = ["shop", ...next.filter((id) => id !== "shop")];
+      if (next.includes("shop")) next = ["shop", ...next.filter((id) => id !== "shop")];
     }
     next = ensureServiceAppsBookmark(next, allowed);
     return next.length ? next : [...fallback];

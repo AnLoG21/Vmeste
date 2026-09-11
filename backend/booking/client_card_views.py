@@ -74,6 +74,10 @@ class ProviderClientCardView(APIView):
             "client_name": client_display_name(card.client),
             "client_phone": getattr(card.client, "phone", "") or "",
             "client_avatar_url": av.get("thumb_url") or av.get("url") or "",
+            "is_blocked": bool(card.is_blocked),
+            "no_show_count": int(card.no_show_count or 0),
+            "acquisition_source": card.acquisition_source or "",
+            "hidden": bool(card.hidden),
             "tech": {
                 "hair_color": tech.get("hair_color") or "",
                 "lash_length": tech.get("lash_length") or "",
@@ -125,6 +129,17 @@ class ProviderClientCardView(APIView):
             card.technical_notes = str(data.get("technical_notes") or "")[:8000]
         if "preferences_notes" in data:
             card.preferences_notes = str(data.get("preferences_notes") or "")[:8000]
+        if "is_blocked" in data:
+            card.is_blocked = bool(data.get("is_blocked"))
+        if "no_show_count" in data:
+            try:
+                card.no_show_count = max(0, min(999, int(data.get("no_show_count"))))
+            except (TypeError, ValueError):
+                pass
+        if "acquisition_source" in data:
+            card.acquisition_source = str(data.get("acquisition_source") or "")[:120]
+        if "hidden" in data:
+            card.hidden = bool(data.get("hidden"))
         if "tech" in data and isinstance(data.get("tech"), dict):
             cur = dict(card.tech) if isinstance(card.tech, dict) else {}
             for key in ("hair_color", "lash_length", "lash_curl", "nail_shape", "wax_brand", "materials"):

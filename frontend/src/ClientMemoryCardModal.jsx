@@ -81,6 +81,9 @@ export default function ClientMemoryCardModal({
   const [technicalNotes, setTechnicalNotes] = useState("");
   const [preferencesNotes, setPreferencesNotes] = useState("");
   const [fieldPrefs, setFieldPrefs] = useState(DEFAULT_FIELD_PREFS);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [noShowCount, setNoShowCount] = useState(0);
+  const [acquisitionSource, setAcquisitionSource] = useState("");
 
   useEffect(() => {
     if (!clientId) return undefined;
@@ -100,6 +103,9 @@ export default function ClientMemoryCardModal({
         setTechnicalNotes(data.technical_notes || "");
         setPreferencesNotes(data.preferences_notes || "");
         setFieldPrefs({ ...DEFAULT_FIELD_PREFS, ...(data.field_prefs || {}) });
+        setIsBlocked(Boolean(data.is_blocked));
+        setNoShowCount(Number(data.no_show_count) || 0);
+        setAcquisitionSource(data.acquisition_source || "");
       } catch (e) {
         if (!cancelled) showToast(e.message || "Ошибка загрузки", { tone: "error" });
       } finally {
@@ -124,6 +130,9 @@ export default function ClientMemoryCardModal({
             technical_notes: technicalNotes,
             preferences_notes: preferencesNotes,
             field_prefs: fieldPrefs,
+            is_blocked: isBlocked,
+            no_show_count: noShowCount,
+            acquisition_source: acquisitionSource,
             ...extra,
           }),
         },
@@ -273,6 +282,14 @@ export default function ClientMemoryCardModal({
             onClick={() => setTab("visits")}
           >
             Визиты
+          </button>
+          <button
+            type="button"
+            role="tab"
+            className={tab === "trust" ? "is-active" : ""}
+            onClick={() => setTab("trust")}
+          >
+            Надёжность
           </button>
         </div>
 
@@ -434,6 +451,43 @@ export default function ClientMemoryCardModal({
                 ))}
                 {!card?.recent_visits?.length ? <li className="muted">Пока нет визитов.</li> : null}
               </ul>
+            ) : null}
+
+            {tab === "trust" ? (
+              <>
+                <p className="muted small">
+                  Защита от убытков: неявки и чёрный список блокируют онлайн-запись.
+                </p>
+                <MemoryField label="Откуда пришёл клиент">
+                  <input
+                    value={acquisitionSource}
+                    onChange={(e) => setAcquisitionSource(e.target.value)}
+                    placeholder="Рекомендация / Instagram / Реклама…"
+                  />
+                </MemoryField>
+                <MemoryField label="Неявок без предупреждения">
+                  <input
+                    type="number"
+                    min={0}
+                    max={999}
+                    value={noShowCount}
+                    onChange={(e) => setNoShowCount(Number(e.target.value) || 0)}
+                  />
+                </MemoryField>
+                <label className="client-memory-check">
+                  <input
+                    type="checkbox"
+                    checked={isBlocked}
+                    onChange={(e) => setIsBlocked(e.target.checked)}
+                  />
+                  <span>Чёрный список — запретить онлайн-запись</span>
+                </label>
+                {noShowCount >= 2 && !isBlocked ? (
+                  <p className="muted small">
+                    Рекомендация: после 2 неявок требуйте предоплату или добавьте в чёрный список.
+                  </p>
+                ) : null}
+              </>
             ) : null}
           </div>
         )}

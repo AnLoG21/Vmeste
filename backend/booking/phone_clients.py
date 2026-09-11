@@ -149,7 +149,7 @@ def client_brief(user, *, request=None, provider_id=None) -> dict:
 
 
 def org_client_ids(provider_id: int) -> set[int]:
-    """Клиенты базы организации: были записи или есть CRM-карточка."""
+    """Клиенты базы организации: были записи или есть CRM-карточка (не скрытые)."""
     from .models import Booking, ProviderClientCard
 
     booking_ids = (
@@ -158,10 +158,23 @@ def org_client_ids(provider_id: int) -> set[int]:
         .values_list("client_id", flat=True)
         .distinct()
     )
-    card_ids = ProviderClientCard.objects.filter(provider_id=provider_id).values_list(
+    card_ids = ProviderClientCard.objects.filter(provider_id=provider_id, hidden=False).values_list(
         "client_id", flat=True
     )
-    return set(booking_ids) | set(card_ids)
+    hidden_ids = set(
+        ProviderClientCard.objects.filter(provider_id=provider_id, hidden=True).values_list(
+            "client_id", flat=True
+        )
+    )
+    return (set(booking_ids) | set(card_ids)) - hidden_ids
+
+
+def client_is_blocked_for_provider(provider_id: int, client_id: int) -> bool:
+    from .models import ProviderClientCard
+
+    return ProviderClientCard.objects.filter(
+        provider_id=provider_id, client_id=client_id, is_blocked=True
+    ).exists()
 
 
 def search_clients_for_provider(provider_id: int, q: str, *, limit: int = 12) -> list:
@@ -249,7 +262,7 @@ def list_clients_for_provider(
     """
     from django.db.models import F, Max, OrderBy, Q
 
-    from .models import ProviderClientCard
+    from .models import Booking, ProviderClientCard
 
     page = max(1, int(page or 1))
     page_size = min(50, max(1, int(page_size or 20)))
@@ -303,6 +316,20 @@ def list_clients_for_provider(
         )
     }
 
+    from django.db.models import Sum
+    from decimal import Decimal
+
+    spent_map = {
+        row["client_id"]: row["total"] or Decimal("0")
+        for row in Booking.objects.filter(
+            provider_id=provider_id,
+            client_id__in=[u.id for u in users],
+            status=Booking.Status.DONE,
+        )
+        .values("client_id")
+        .annotate(total=Sum("service__price"))
+    }
+
     results = []
     for u in users:
         brief = client_brief(u, request=request, provider_id=provider_id)
@@ -312,7 +339,19 @@ def list_clients_for_provider(
         brief["has_memory"] = bool(card)
         brief["hair_color"] = (tech.get("hair_color") or "")[:80]
         brief["allergies"] = (personal.get("allergies") or "")[:80]
+        brief["is_blocked"] = bool(card.is_blocked) if card else False
+        brief["no_show_count"] = int(card.no_show_count or 0) if card else 0
+        brief["acquisition_source"] = (card.acquisition_source or "") if card else ""
+        spent = spent_map.get(u.id) or Decimal("0")
+        brief["total_spent"] = float(spent)
         results.append(brief)
+
+    # VIP: топ 20% по выручке среди текущей страницы + глобально по org — mark top spenders in page relative to org median
+    if results:
+        all_spent = sorted((r["total_spent"] for r in results), reverse=True)
+        vip_threshold = all_spent[max(0, min(len(all_spent) - 1, len(all_spent) // 5))] if all_spent else 0
+        for r in results:
+            r["is_vip"] = bool(r["total_spent"] > 0 and r["total_spent"] >= vip_threshold and vip_threshold > 0)
 
     return {
         "count": total,

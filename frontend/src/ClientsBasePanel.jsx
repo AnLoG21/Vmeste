@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { showToast } from "./toast.js";
 
 /**
- * База клиентов организации: список с пагинацией, поиск с подсказками, открытие CRM-карточки.
+ * База клиентов организации: список, поиск, создание, импорт Excel, CRM-карточки.
  */
 export default function ClientsBasePanel({
   authFetch,
@@ -16,9 +17,16 @@ export default function ClientsBasePanel({
   const [suggestions, setSuggestions] = useState([]);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestBusy, setSuggestBusy] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({ name: "", phone: "", source: "" });
+  const [createBusy, setCreateBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
   const wrapRef = useRef(null);
   const suggestTimer = useRef(null);
   const listTimer = useRef(null);
+  const fileRef = useRef(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     function onDoc(e) {
@@ -59,7 +67,7 @@ export default function ClientsBasePanel({
     return () => {
       cancelled = true;
     };
-  }, [API_URL, authFetch, page, listQuery]);
+  }, [API_URL, authFetch, page, listQuery, reloadKey]);
 
   useEffect(() => {
     const q = query.trim();
@@ -100,6 +108,68 @@ export default function ClientsBasePanel({
     onOpenClient?.(c.id, c.name || "");
   }
 
+  async function createClient(e) {
+    e.preventDefault();
+    setCreateBusy(true);
+    try {
+      const res = await authFetch(`${API_URL}/booking/clients/`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: createForm.name,
+          phone: createForm.phone,
+          acquisition_source: createForm.source,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(json.detail || "Не удалось добавить", { tone: "error" });
+        return;
+      }
+      showToast("Клиент добавлен в базу");
+      setCreateOpen(false);
+      setCreateForm({ name: "", phone: "", source: "" });
+      setReloadKey((k) => k + 1);
+      if (json.id) onOpenClient?.(json.id, json.name || createForm.name);
+    } finally {
+      setCreateBusy(false);
+    }
+  }
+
+  async function importFile(file) {
+    if (!file) return;
+    setImportBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await authFetch(`${API_URL}/booking/clients/`, { method: "POST", body: fd });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(json.detail || "Ошибка импорта", { tone: "error" });
+        return;
+      }
+      showToast(json.detail || "Импорт завершён");
+      setImportOpen(false);
+      setReloadKey((k) => k + 1);
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  async function deleteClient(c, e) {
+    e?.stopPropagation?.();
+    if (!c?.id) return;
+    if (!window.confirm(`Удалить «${c.name}» из базы клиентов? История записей сохранится.`)) return;
+    const res = await authFetch(`${API_URL}/booking/clients/?client=${encodeURIComponent(c.id)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      showToast("Не удалось удалить", { tone: "error" });
+      return;
+    }
+    showToast("Удалено из базы");
+    setReloadKey((k) => k + 1);
+  }
+
   const results = data.results || [];
   const totalPages = data.total_pages || 1;
 
@@ -113,6 +183,31 @@ export default function ClientsBasePanel({
             {data.count ? ` · ${data.count}` : ""}
           </p>
         </div>
+        <div className="clients-base-head-actions">
+          <button
+            type="button"
+            className="clients-base-icon-btn"
+            title="Добавить клиента"
+            aria-label="Добавить клиента"
+            onClick={() => setCreateOpen(true)}
+          >
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden fill="currentColor">
+              <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V8H4v2H2v2h2v2h2v-2h2v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+              <path d="M19 10h-2v2h-2v2h2v2h2v-2h2v-2h-2z" />
+            </svg>
+          </button>
+          <button type="button" className="ghost-btn" onClick={() => setImportOpen(true)}>
+            Перенести базу из Excel
+          </button>
+        </div>
+      </div>
+
+      <div className="clients-base-migrate-banner">
+        <strong>Поможем перенести базу клиентов бесплатно за 5 минут</strong>
+        <p className="muted small">
+          Напишите в поддержку — перенесём из Excel, блокнота или другой CRM. Или загрузите файл сами
+          кнопкой выше.
+        </p>
       </div>
 
       <div className="clients-base-search" ref={wrapRef}>
@@ -162,7 +257,7 @@ export default function ClientsBasePanel({
       {loading ? (
         <p className="muted">Загрузка…</p>
       ) : results.length === 0 ? (
-        <p className="muted">Пока нет клиентов — они появятся после первых записей.</p>
+        <p className="muted">Пока нет клиентов — добавьте вручную, импортируйте Excel или дождитесь первых записей.</p>
       ) : (
         <ul className="clients-base-grid">
           {results.map((c) => (
@@ -181,10 +276,25 @@ export default function ClientsBasePanel({
                   <span className="muted small clients-base-meta">
                     {[
                       c.visits_done != null ? `Визитов: ${c.visits_done}` : null,
+                      c.total_spent > 0 ? `${Math.round(c.total_spent)} ₽` : null,
                       c.last_visit ? `Последний: ${c.last_visit}` : null,
                     ]
                       .filter(Boolean)
                       .join(" · ")}
+                  </span>
+                  <span className="clients-base-badges">
+                    {c.is_vip ? <span className="clients-base-badge clients-base-badge--vip">VIP</span> : null}
+                    {c.is_blocked ? (
+                      <span className="clients-base-badge clients-base-badge--block">Чёрный список</span>
+                    ) : null}
+                    {c.no_show_count > 0 ? (
+                      <span className="clients-base-badge clients-base-badge--noshow">
+                        Не пришёл: {c.no_show_count}
+                      </span>
+                    ) : null}
+                    {c.acquisition_source ? (
+                      <span className="clients-base-badge">{c.acquisition_source}</span>
+                    ) : null}
                   </span>
                   {(c.hair_color || c.allergies) && (
                     <span className="clients-base-hints">
@@ -193,7 +303,18 @@ export default function ClientsBasePanel({
                     </span>
                   )}
                 </span>
-                <span className="clients-base-card-action muted small">Открыть</span>
+                <span className="clients-base-card-side">
+                  <span className="clients-base-card-action muted small">Открыть</span>
+                  <button
+                    type="button"
+                    className="clients-base-delete"
+                    title="Удалить из базы"
+                    aria-label="Удалить из базы"
+                    onClick={(e) => void deleteClient(c, e)}
+                  >
+                    ×
+                  </button>
+                </span>
               </button>
             </li>
           ))}
@@ -221,6 +342,111 @@ export default function ClientsBasePanel({
           >
             Далее
           </button>
+        </div>
+      ) : null}
+
+      {createOpen ? (
+        <div className="modal-backdrop modal-backdrop--app-overlay" onClick={() => setCreateOpen(false)}>
+          <div className="modal-card clients-base-modal" onClick={(e) => e.stopPropagation()} role="dialog">
+            <h3>Новый клиент в базе</h3>
+            <form className="form" onSubmit={createClient}>
+              <label className="field-label">
+                Имя
+                <input
+                  required
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="Анна Иванова"
+                />
+              </label>
+              <label className="field-label">
+                Телефон
+                <input
+                  value={createForm.phone}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, phone: e.target.value }))}
+                  placeholder="+7…"
+                />
+              </label>
+              <label className="field-label">
+                Откуда пришёл
+                <input
+                  value={createForm.source}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, source: e.target.value }))}
+                  placeholder="Рекомендация / Instagram / Реклама…"
+                />
+              </label>
+              <div className="clients-base-modal-actions">
+                <button type="button" className="ghost-btn" onClick={() => setCreateOpen(false)}>
+                  Отмена
+                </button>
+                <button type="submit" disabled={createBusy}>
+                  {createBusy ? "Сохранение…" : "Добавить"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {importOpen ? (
+        <div className="modal-backdrop modal-backdrop--app-overlay" onClick={() => setImportOpen(false)}>
+          <div className="modal-card clients-base-modal clients-base-modal--wide" onClick={(e) => e.stopPropagation()} role="dialog">
+            <h3>Перенести базу из Excel</h3>
+            <p className="muted small">
+              Загрузите <strong>.xlsx</strong> или <strong>.csv</strong>. Первая строка — заголовки. Нужные колонки:
+            </p>
+            <div className="clients-base-excel-preview" aria-hidden>
+              <table>
+                <thead>
+                  <tr>
+                    <th>имя</th>
+                    <th>телефон</th>
+                    <th>источник</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Анна Иванова</td>
+                    <td>+79001234567</td>
+                    <td>Рекомендация</td>
+                  </tr>
+                  <tr>
+                    <td>Пётр Сидоров</td>
+                    <td>89991112233</td>
+                    <td>Instagram</td>
+                  </tr>
+                  <tr>
+                    <td>Мария</td>
+                    <td>+79161234567</td>
+                    <td>Реклама</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="muted small">
+              Также подойдут колонки: <code>фамилия</code>, <code>имя</code>, <code>отчество</code>,{" "}
+              <code>phone</code>, <code>source</code>.
+            </p>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls,.csv,.txt"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) void importFile(f);
+              }}
+            />
+            <div className="clients-base-modal-actions">
+              <button type="button" className="ghost-btn" onClick={() => setImportOpen(false)}>
+                Закрыть
+              </button>
+              <button type="button" disabled={importBusy} onClick={() => fileRef.current?.click()}>
+                {importBusy ? "Импорт…" : "Выбрать файл"}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </section>

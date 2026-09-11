@@ -186,6 +186,17 @@ def mark_booking_no_show(booking, actor):
         notify_waitlist_after_slot_freed(provider_id, service_id)
     except Exception:
         pass
+    try:
+        from .models import ProviderClientCard
+
+        card, _ = ProviderClientCard.objects.get_or_create(
+            provider_id=provider_id,
+            client_id=booking.client_id,
+        )
+        card.no_show_count = int(card.no_show_count or 0) + 1
+        card.save(update_fields=["no_show_count", "updated_at"])
+    except Exception:
+        pass
     return True, None
 
 
