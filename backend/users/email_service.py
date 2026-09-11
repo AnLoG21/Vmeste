@@ -91,6 +91,8 @@ def send_booking_notification_email(*, to: str, subject: str, text_body: str) ->
     )
     return _send_branded(to=to, subject=f"{SITE_BRAND}: {subject}"[:180], text_body=text_body or subject, html_body=html)
 
+
+def send_verification_email(user) -> bool:
     if not user.email_verification_token:
         return False
     link = f"{settings.FRONTEND_URL}/verify-email?token={user.email_verification_token}"
