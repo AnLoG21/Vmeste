@@ -184,17 +184,11 @@ export default function ClientsBasePanel({
           </p>
         </div>
         <div className="clients-base-head-actions">
-          <button
-            type="button"
-            className="clients-base-icon-btn"
-            title="Добавить клиента"
-            aria-label="Добавить клиента"
-            onClick={() => setCreateOpen(true)}
-          >
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden fill="currentColor">
+          <button type="button" className="ghost-btn clients-base-add-btn" onClick={() => setCreateOpen(true)}>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="currentColor">
               <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V8H4v2H2v2h2v2h2v-2h2v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-              <path d="M19 10h-2v2h-2v2h2v2h2v-2h2v-2h-2z" />
             </svg>
+            Добавить клиента
           </button>
           <button type="button" className="ghost-btn" onClick={() => setImportOpen(true)}>
             Перенести базу из Excel
@@ -262,60 +256,61 @@ export default function ClientsBasePanel({
         <ul className="clients-base-grid">
           {results.map((c) => (
             <li key={c.id}>
-              <button type="button" className="clients-base-card" onClick={() => openClient(c)}>
-                <span className="clients-base-avatar clients-base-avatar--lg" aria-hidden>
-                  {c.avatar_url ? (
-                    <img src={c.avatar_url} alt="" />
-                  ) : (
-                    <span>{c.avatar_initial || c.name?.[0] || "?"}</span>
-                  )}
-                </span>
-                <span className="clients-base-card-body">
-                  <strong className="clients-base-name">{c.name}</strong>
-                  {c.phone ? <span className="clients-base-phone">{c.phone}</span> : null}
-                  <span className="muted small clients-base-meta">
-                    {[
-                      c.visits_done != null ? `Визитов: ${c.visits_done}` : null,
-                      c.total_spent > 0 ? `${Math.round(c.total_spent)} ₽` : null,
-                      c.last_visit ? `Последний: ${c.last_visit}` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
+              <div className="clients-base-card">
+                <button type="button" className="clients-base-card-main" onClick={() => openClient(c)}>
+                  <span className="clients-base-avatar clients-base-avatar--lg" aria-hidden>
+                    {c.avatar_url ? (
+                      <img src={c.avatar_url} alt="" />
+                    ) : (
+                      <span>{c.avatar_initial || c.name?.[0] || "?"}</span>
+                    )}
                   </span>
-                  <span className="clients-base-badges">
-                    {c.is_vip ? <span className="clients-base-badge clients-base-badge--vip">VIP</span> : null}
-                    {c.is_blocked ? (
-                      <span className="clients-base-badge clients-base-badge--block">Чёрный список</span>
-                    ) : null}
-                    {c.no_show_count > 0 ? (
-                      <span className="clients-base-badge clients-base-badge--noshow">
-                        Не пришёл: {c.no_show_count}
-                      </span>
-                    ) : null}
-                    {c.acquisition_source ? (
-                      <span className="clients-base-badge">{c.acquisition_source}</span>
-                    ) : null}
-                  </span>
-                  {(c.hair_color || c.allergies) && (
-                    <span className="clients-base-hints">
-                      {c.hair_color ? <span title="Краска">Краска: {c.hair_color}</span> : null}
-                      {c.allergies ? <span title="Аллергии">Аллергии: {c.allergies}</span> : null}
+                  <span className="clients-base-card-body">
+                    <strong className="clients-base-name">{c.name}</strong>
+                    {c.phone ? <span className="clients-base-phone">{c.phone}</span> : null}
+                    <span className="muted small clients-base-meta">
+                      {[
+                        c.visits_done != null ? `Визитов: ${c.visits_done}` : null,
+                        c.total_spent > 0 ? `${Math.round(c.total_spent)} ₽` : null,
+                        c.last_visit ? `Последний: ${c.last_visit}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </span>
-                  )}
-                </span>
-                <span className="clients-base-card-side">
-                  <span className="clients-base-card-action muted small">Открыть</span>
-                  <button
-                    type="button"
-                    className="clients-base-delete"
-                    title="Удалить из базы"
-                    aria-label="Удалить из базы"
-                    onClick={(e) => void deleteClient(c, e)}
-                  >
-                    ×
-                  </button>
-                </span>
-              </button>
+                    <span className="clients-base-badges">
+                      {c.is_vip ? <span className="clients-base-badge clients-base-badge--vip">VIP</span> : null}
+                      {c.is_blocked ? (
+                        <span className="clients-base-badge clients-base-badge--block">Чёрный список</span>
+                      ) : null}
+                      {c.no_show_count > 0 ? (
+                        <span className="clients-base-badge clients-base-badge--noshow">
+                          Не пришёл: {c.no_show_count}
+                        </span>
+                      ) : null}
+                      {c.acquisition_source ? (
+                        <span className="clients-base-badge">{c.acquisition_source}</span>
+                      ) : null}
+                    </span>
+                    {(c.hair_color || c.allergies) && (
+                      <span className="clients-base-hints">
+                        {c.hair_color ? <span title="Краска">Краска: {c.hair_color}</span> : null}
+                        {c.allergies ? <span title="Аллергии">Аллергии: {c.allergies}</span> : null}
+                      </span>
+                    )}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="clients-base-delete"
+                  title="Удалить из базы"
+                  aria-label="Удалить из базы"
+                  onClick={(e) => void deleteClient(c, e)}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="currentColor">
+                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                  </svg>
+                </button>
+              </div>
             </li>
           ))}
         </ul>

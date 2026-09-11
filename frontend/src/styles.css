@@ -11814,9 +11814,24 @@ body.theme-dark .password-eye-btn:hover {
 
 .clients-base-head-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.clients-base-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.clients-base-head-actions > .ghost-btn {
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .clients-base-icon-btn {
@@ -11956,27 +11971,40 @@ body.theme-dark .password-eye-btn:hover {
 }
 
 .clients-base-card {
+  position: relative;
   width: 100%;
   min-height: 118px;
   height: 100%;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 12px;
-  align-items: start;
-  padding: 12px 14px;
+  display: flex;
   border: 1px solid #ffe0c2;
   border-radius: 14px;
   background: #fffaf5;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .clients-base-card:hover {
   border-color: #ffb366;
   background: #fff6ee;
+}
+
+.clients-base-card-main {
+  width: 100%;
+  min-height: 118px;
+  height: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px 36px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
 }
 
 .clients-base-card-body {
@@ -12051,32 +12079,26 @@ body.theme-dark .password-eye-btn:hover {
   color: #a14a10;
 }
 
-.clients-base-card-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  align-self: stretch;
-}
-
-.clients-base-card-action {
-  white-space: nowrap;
-  align-self: center;
-}
-
 .clients-base-delete {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
+  border-radius: 10px;
   background: transparent;
-  color: #b45309;
-  font: inherit;
-  font-size: 0.78rem;
+  color: #a16207;
   cursor: pointer;
-  padding: 2px 0;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  padding: 0;
 }
 
 .clients-base-delete:hover {
+  background: #ffe4e4;
   color: #9b1c1c;
 }
 
