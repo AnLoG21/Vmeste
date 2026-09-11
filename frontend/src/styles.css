@@ -12144,8 +12144,4 @@ body.theme-dark .password-eye-btn:hover {
   .clients-base-search {
     max-width: none;
   }
-
-  .clients-base-head {
-    flex-direction: column;
-  }
 }
