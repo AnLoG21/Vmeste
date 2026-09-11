@@ -4,4 +4,11 @@
     <string name="title_activity_main">Вместе</string>
     <string name="package_name">space.vsevmeste.app</string>
     <string name="custom_url_scheme">space.vsevmeste.app</string>
+    <string name="widget_brand">Вместе</string>
+    <string name="widget_description">Ближайшая запись и клиенты на сегодня</string>
+    <string name="widget_next_label">Ближайшая</string>
+    <string name="widget_no_upcoming">Нет ближайших записей</string>
+    <string name="widget_login_hint">Войдите в приложение</string>
+    <string name="widget_open_app">Откройте Вместе</string>
+    <string name="widget_today_empty">Сегодня без записей</string>
 </resources>

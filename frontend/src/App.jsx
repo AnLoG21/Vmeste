@@ -116,6 +116,7 @@ import {
   resetPushRegistration,
   showLocalBrowserNotification,
 } from "./pushNotifications.js";
+import { clearBookingWidget, syncBookingWidget } from "./bookingWidget.js";
 import { showToast } from "./toast.js";
 import { navigateView, viewFromPath } from "./viewRoutes.js";
 import { setNoIndexAppMeta, setPageMeta } from "./seo/setPageMeta.js";
@@ -898,11 +899,21 @@ export default function App() {
   useEffect(() => {
     if (!accessToken) {
       resetPushRegistration();
+      clearBookingWidget();
       return;
     }
     initPushNotifications(authFetch, accessToken);
     maybeRequestWebNotificationPermission();
   }, [accessToken]);
+
+  useEffect(() => {
+    if (!accessToken || !me) {
+      clearBookingWidget();
+      return;
+    }
+    const asClient = me.role === "client" || currentView === "my_bookings";
+    void syncBookingWidget(bookings, { asClient });
+  }, [accessToken, me?.id, me?.role, currentView, bookings]);
 
   useEffect(() => {
     const notifications = chatActivity?.notifications || [];
@@ -2180,6 +2191,7 @@ export default function App() {
     setCurrentView("bookings");
     setAuthStatus("Вы вышли.");
     resetPushRegistration();
+    clearBookingWidget();
     onboardingPrefillIdRef.current = null;
     credentialsPrefillIdRef.current = null;
     setShowAuthModal(false);
