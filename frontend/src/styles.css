@@ -11801,11 +11801,7 @@ body.theme-dark .password-eye-btn:hover {
 }
 
 .clients-base-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  display: block;
 }
 
 .clients-base-head h2 {
@@ -11814,11 +11810,10 @@ body.theme-dark .password-eye-btn:hover {
 
 .clients-base-head-actions {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  overflow-x: auto;
-  max-width: 100%;
+  width: 100%;
 }
 
 .clients-base-add-btn {
@@ -11826,29 +11821,10 @@ body.theme-dark .password-eye-btn:hover {
   align-items: center;
   gap: 6px;
   white-space: nowrap;
-  flex: 0 0 auto;
 }
 
 .clients-base-head-actions > .ghost-btn {
   white-space: nowrap;
-  flex: 0 0 auto;
-}
-
-.clients-base-icon-btn {
-  width: 42px;
-  height: 42px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #ffc48a;
-  border-radius: 12px;
-  background: #fff6ee;
-  color: #c45c26;
-  cursor: pointer;
-}
-
-.clients-base-icon-btn:hover {
-  background: #ffe8d4;
 }
 
 .clients-base-migrate-banner {

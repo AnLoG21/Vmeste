@@ -183,17 +183,18 @@ export default function ClientsBasePanel({
             {data.count ? ` · ${data.count}` : ""}
           </p>
         </div>
-        <div className="clients-base-head-actions">
-          <button type="button" className="ghost-btn clients-base-add-btn" onClick={() => setCreateOpen(true)}>
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="currentColor">
-              <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V8H4v2H2v2h2v2h2v-2h2v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-            </svg>
-            Добавить клиента
-          </button>
-          <button type="button" className="ghost-btn" onClick={() => setImportOpen(true)}>
-            Перенести базу из Excel
-          </button>
-        </div>
+      </div>
+
+      <div className="clients-base-head-actions">
+        <button type="button" className="ghost-btn clients-base-add-btn" onClick={() => setCreateOpen(true)}>
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="currentColor">
+            <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V8H4v2H2v2h2v2h2v-2h2v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+          </svg>
+          Добавить клиента
+        </button>
+        <button type="button" className="ghost-btn" onClick={() => setImportOpen(true)}>
+          Перенести базу из Excel
+        </button>
       </div>
 
       <div className="clients-base-migrate-banner">
