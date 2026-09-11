@@ -422,7 +422,16 @@ def validate_product_for_import(product: dict, marketplace: str) -> list[str]:
                 label = names.get(key) or names.get(str(aid)) or key
                 errors.append(f"Заполните обязательную характеристику «{label}».")
     if not normalize_marketplace_images(product):
-        errors.append("Добавьте хотя бы одно фото с публичным URL.")
+        errors.append("Добавьте хотя бы одно фото с публичным HTTPS URL.")
+    else:
+        for u in normalize_marketplace_images(product):
+            low = u.lower()
+            if not low.startswith("https://"):
+                errors.append("Фото должны быть по HTTPS (не http и не локальные URL).")
+                break
+            if "localhost" in low or "127.0.0.1" in low or ".local/" in low:
+                errors.append("Фото с localhost не примет площадка — загрузите через Яндекс Диск или публичный URL.")
+                break
     return errors
 
 

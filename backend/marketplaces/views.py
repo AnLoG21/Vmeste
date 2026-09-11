@@ -461,6 +461,110 @@ class MarketplaceSettingsView(APIView):
         return self.get(request)
 
 
+class MarketplaceSettingsVerifyView(APIView):
+    """Проверка ключей Ozon/WB живым ping (независимо от sandbox/prod)."""
+
+    def post(self, request):
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        perms = getattr(request, "marketplace_perms", _full_marketplace_perms())
+        if not perms.get("marketplace_view_keys"):
+            return Response({"detail": "Нет права проверять ключи площадок."}, status=403)
+
+        s = _settings(provider)
+        data = request.data if isinstance(request.data, dict) else {}
+        # Optional one-shot overrides (before save) — use saved settings by default
+        client_id = str(data.get("ozon_client_id") or s.ozon_client_id or "").strip()
+        ozon_key = str(data.get("ozon_api_key") or "").strip()
+        if not ozon_key or ozon_key.startswith("•"):
+            ozon_key = (s.ozon_api_key or "").strip()
+        wb_key = str(data.get("wb_api_key") or "").strip()
+        if not wb_key or wb_key.startswith("•"):
+            wb_key = (s.wb_api_key or "").strip()
+
+        checked = {"ozon": None, "wildberries": None}
+        any_ok = False
+        any_attempt = False
+
+        class _KeyProbe:
+            def __init__(self, ozon_client_id="", ozon_api_key="", wb_api_key=""):
+                self.ozon_client_id = ozon_client_id or ""
+                self.ozon_api_key = ozon_api_key or ""
+                self.wb_api_key = wb_api_key or ""
+
+            def has_ozon(self) -> bool:
+                return bool(self.ozon_client_id.strip() and self.ozon_api_key.strip())
+
+            def has_wb(self) -> bool:
+                return bool(self.wb_api_key.strip())
+
+        if client_id and ozon_key:
+            any_attempt = True
+            try:
+                probe = _KeyProbe(ozon_client_id=client_id, ozon_api_key=ozon_key)
+                request_json(
+                    provider=provider,
+                    marketplace="ozon",
+                    method="POST",
+                    url=OZON_ACTIONS["products.list"][1],
+                    headers=ozon_headers(probe),
+                    json_body={"filter": {"visibility": "ALL"}, "last_id": "", "limit": 1},
+                )
+                checked["ozon"] = {"ok": True, "detail": "Ozon: ключ принят"}
+                any_ok = True
+            except MarketplaceError as exc:
+                checked["ozon"] = {"ok": False, "detail": str(exc)}
+            except Exception as exc:
+                checked["ozon"] = {"ok": False, "detail": str(exc)[:200]}
+
+        if wb_key:
+            any_attempt = True
+            try:
+                probe = _KeyProbe(wb_api_key=wb_key)
+                request_json(
+                    provider=provider,
+                    marketplace="wildberries",
+                    method="POST",
+                    url=WB_ACTIONS["products.list"][1],
+                    headers=wb_headers(probe),
+                    json_body={"settings": {"cursor": {"limit": 1}, "filter": {"withPhoto": -1}}},
+                )
+                checked["wildberries"] = {"ok": True, "detail": "Wildberries: ключ принят"}
+                any_ok = True
+            except MarketplaceError as exc:
+                checked["wildberries"] = {"ok": False, "detail": str(exc)}
+            except Exception as exc:
+                checked["wildberries"] = {"ok": False, "detail": str(exc)[:200]}
+
+        if not any_attempt:
+            return Response(
+                {
+                    "ok": False,
+                    "detail": "Укажите ключ Ozon (Client ID + API Key) и/или Wildberries.",
+                    "checked": checked,
+                },
+                status=400,
+            )
+
+        details = []
+        for key in ("ozon", "wildberries"):
+            item = checked.get(key)
+            if item and not item.get("ok"):
+                details.append(item.get("detail") or f"{key}: ошибка")
+        if not any_ok:
+            return Response(
+                {
+                    "ok": False,
+                    "detail": details[0] if details else "Ключи не прошли проверку.",
+                    "checked": checked,
+                },
+                status=400,
+            )
+
+        return Response({"ok": True, "checked": checked, "detail": "Ключи проверены."})
+
+
 class MarketplaceHistoryView(APIView):
     def get(self, request):
         provider, err = _require_provider(request)
@@ -1288,9 +1392,16 @@ class MarketplaceCatalogSyncView(APIView):
                 ).first()
                 if existing:
                     existing.product_data = {**(existing.product_data or {}), **product}
-                    existing.status = "synced"
-                    existing.response = {"source": "catalog_sync"}
-                    existing.save(update_fields=["product_data", "status", "response", "updated_at"])
+                    prev_resp = existing.response if isinstance(existing.response, dict) else {}
+                    merged_resp = dict(prev_resp)
+                    merged_resp["source"] = "catalog_sync"
+                    # Не затираем task_id / import_* — иначе теряется трекинг импорта
+                    existing.response = merged_resp
+                    if existing.status == "pending":
+                        existing.save(update_fields=["product_data", "response", "updated_at"])
+                    else:
+                        existing.status = "synced"
+                        existing.save(update_fields=["product_data", "status", "response", "updated_at"])
                     updated += 1
                 else:
                     MarketplaceProductHistory.objects.create(

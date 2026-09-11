@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path("settings/", views.MarketplaceSettingsView.as_view()),
+    path("settings/verify/", views.MarketplaceSettingsVerifyView.as_view()),
     path("history/", views.MarketplaceHistoryView.as_view()),
     path("templates/", views.MarketplaceTemplateView.as_view()),
     path("templates/<int:pk>/", views.MarketplaceTemplateView.as_view()),

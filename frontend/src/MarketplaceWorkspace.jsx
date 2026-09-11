@@ -78,6 +78,29 @@ function writeOnboardDone() {
   }
 }
 
+function isPublicHttpsUrl(raw) {
+  const u = String(raw || "").trim();
+  if (!u) return false;
+  try {
+    const url = new URL(u);
+    if (url.protocol !== "https:") return false;
+    const host = url.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".local")) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function historyHasSuccessfulImport(rows) {
+  return (rows || []).some((h) => {
+    const st = String(h?.status || "").toLowerCase();
+    const imp = String(h?.import_status || "").toLowerCase();
+    if (st === "sandbox" || st === "pending" || st === "failed") return false;
+    return st === "success" || imp === "success" || st === "synced";
+  });
+}
+
 function warehouseStorageKey(marketplace) {
   return `vmeste_mp_warehouse_${marketplace === "wildberries" ? "wb" : "ozon"}`;
 }
@@ -701,6 +724,8 @@ function validateProductForImport(row, marketplace, fields) {
     .filter(Boolean);
   if (!images.length) {
     errors.push("Добавьте хотя бы одно фото (публичный HTTPS URL — Яндекс Диск или загрузка в кабинете).");
+  } else if (!images.every(isPublicHttpsUrl)) {
+    errors.push("Фото должны быть публичными HTTPS-ссылками (не localhost). Подключите Яндекс Диск или загрузите файл заново.");
   }
   return errors;
 }
@@ -1035,8 +1060,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
     }
   }
 
-  async function saveKeys(e) {
+  async function saveKeys(e, { verify = false } = {}) {
     e?.preventDefault();
+    let ok = false;
     await withBusy("keys", async () => {
       const body = {
         environment: keysForm.environment,
@@ -1058,8 +1084,28 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       const res = await authFetch(`${base}/settings/`, { method: "PATCH", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await readError(res));
       await loadSettings({ syncForm: true });
-      setStatus("Ключи сохранены.");
+
+      if (verify) {
+        const vRes = await authFetch(`${base}/settings/verify/`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        const vData = await vRes.json().catch(() => ({}));
+        if (!vRes.ok || !vData.ok) {
+          throw new Error(
+            humanizeMarketplaceError(vData.detail || "Ключи не прошли проверку. Проверьте Client ID / API Key."),
+          );
+        }
+        const bits = [];
+        if (vData.checked?.ozon?.ok) bits.push("Ozon ✓");
+        if (vData.checked?.wildberries?.ok) bits.push("WB ✓");
+        setStatus(bits.length ? `Ключи сохранены и проверены: ${bits.join(", ")}.` : "Ключи сохранены и проверены.");
+      } else {
+        setStatus("Ключи сохранены.");
+      }
+      ok = true;
     });
+    return ok;
   }
 
   function productPayload(row) {
@@ -1131,6 +1177,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
         const status = data.import_status || "pending";
         if (status === "success") {
           setStatus(`Ozon: карточка импортирована (task ${taskId}).`);
+          if (!onboardDismissed) finishOnboard();
           return;
         }
         if (status === "failed") {
@@ -1142,7 +1189,24 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
         /* keep polling */
       }
     }
-    setStatus(`Ozon: импорт ещё обрабатывается (task ${taskId}). Нажмите «Статус импорта» позже.`);
+    try {
+      await authFetch(`${base}/sync/`, { method: "POST", body: "{}" });
+      await loadHistory();
+      const data = await refreshImportStatus({ id: historyId, import_task_id: taskId });
+      const status = data.import_status || "pending";
+      if (status === "success") {
+        setStatus(`Ozon: карточка импортирована (task ${taskId}).`);
+        if (!onboardDismissed) finishOnboard();
+        return;
+      }
+      if (status === "failed") {
+        setStatus("Ozon: ошибка импорта после синка.");
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+    setStatus(`Ozon: импорт ещё обрабатывается (task ${taskId}). Нажмите «Статус импорта» или «Синхронизировать» позже.`);
   }
 
   async function importProducts(products) {
@@ -1171,23 +1235,33 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   async function submitOne(e) {
     e.preventDefault();
     await withBusy("create", async () => {
+      if (settings?.environment !== "prod") {
+        throw new Error("Для выгрузки включите «Боевой» режим в шаге «Ключи» / Управление.");
+      }
       const validationErrors = validateProductForImport(product, mp, attributeFields);
       if (validationErrors.length) {
         throw new Error(validationErrors.slice(0, 4).join(" "));
       }
-      await importProducts([productPayload(product)]);
+      const data = await importProducts([productPayload(product)]);
       setProduct(emptyProduct());
       setEditingHistoryId(null);
       setAttributeFields([]);
       setAttributeMirrors([]);
       setAttributeDictOptions({});
       setAttributesHint("");
-      if (!onboardDismissed) finishOnboard();
+      const pendingOzon = (data.results || []).some((r) => r.ok && r.task_id);
+      const realOk = (data.results || []).some((r) => r.ok && !r.sandbox);
+      if (realOk && !pendingOzon && !onboardDismissed) {
+        finishOnboard();
+      }
     });
   }
 
   async function submitBatch() {
     await withBusy("batch", async () => {
+      if (settings?.environment !== "prod") {
+        throw new Error("Для выгрузки включите «Боевой» режим.");
+      }
       const products = batch.map(productPayload).filter((p) => p.offer_id && p.name);
       if (!products.length) throw new Error("Добавьте хотя бы один товар с артикулом и названием.");
       await importProducts(products);
@@ -1196,6 +1270,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
 
   async function submitCsv() {
     await withBusy("csv", async () => {
+      if (settings?.environment !== "prod") {
+        throw new Error("Для выгрузки включите «Боевой» режим.");
+      }
       const products = parseCsv(csvText).filter((p) => p.offer_id && p.name);
       if (!products.length) throw new Error("В CSV нет строк с артикулом и названием.");
       await importProducts(products);
@@ -2438,7 +2515,18 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       if (!res.ok) throw new Error(data.detail || "Синхронизация не запущена.");
       await loadSettings({ syncForm: false });
       await loadHistory();
-      setStatus(data.eager ? `Синк выполнен: ${JSON.stringify(data.result || {})}` : `Синк поставлен в очередь (${data.task_id || "ok"}).`);
+      if (data.dedup || data.result?.dedup) {
+        setStatus("Синк уже выполняется — подождите минуту и обновите историю.");
+        return;
+      }
+      if (data.eager) {
+        const r = data.result || {};
+        setStatus(
+          `Синк: ok=${r.ok || 0}, failed=${r.failed || 0}, pending=${r.pending_left ?? "—"}.`,
+        );
+      } else {
+        setStatus(`Синк поставлен в очередь (${data.task_id || "ok"}).`);
+      }
     });
   }
 
@@ -2774,12 +2862,13 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   );
   const tabLabel = TABS.find(([id]) => id === tab)?.[1] || "";
   const hasMpKeys = Boolean(settings?.has_ozon_api_key || settings?.has_wb_api_key);
+  const hasSuccessfulImport = historyHasSuccessfulImport(history);
   const showOnboard =
     isBeginner &&
     Boolean(settings) &&
     !onboardDismissed &&
     canViewKeys &&
-    (!hasMpKeys || (canManageCatalog && history.length === 0));
+    (!hasMpKeys || (canManageCatalog && !hasSuccessfulImport));
   const visibleTabs = useMemo(
     () =>
       TABS.filter(([id]) => {
@@ -2801,15 +2890,15 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
 
   useEffect(() => {
     if (!settings || onboardDismissed) return;
-    if (hasMpKeys && history.length > 0) {
+    if (hasMpKeys && hasSuccessfulImport) {
       writeOnboardDone();
       setOnboardDismissed(true);
     } else if (!hasMpKeys) {
       setOnboardStep(1);
-    } else if (history.length === 0) {
+    } else if (!hasSuccessfulImport) {
       setOnboardStep((s) => Math.max(s, 2));
     }
-  }, [settings, hasMpKeys, history.length, onboardDismissed]);
+  }, [settings, hasMpKeys, hasSuccessfulImport, onboardDismissed]);
 
   function switchUiMode(mode) {
     setUiMode(mode);
@@ -2941,12 +3030,14 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
               className="cafe-form-panel mp-onboard-panel"
               onSubmit={async (e) => {
                 e.preventDefault();
-                await saveKeys(e);
-                setOnboardStep(2);
+                if (await saveKeys(e, { verify: true })) setOnboardStep(2);
               }}
             >
               <h3>1. Ключи площадки</h3>
-              <p className="muted small">Вставьте ключ Ozon и/или WB. Для реальных выгрузок выберите «Боевой».</p>
+              <p className="muted small">
+                Вставьте ключ Ozon и/или WB. Перед продолжением ключи проверяются на площадке. Для выгрузки выберите
+                «Боевой».
+              </p>
               <div className="cafe-form-grid">
                 <label>
                   Режим
@@ -2970,7 +3061,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
               </div>
               <div className="mp-actions">
                 <button type="submit" disabled={busy === "keys"}>
-                  {busy === "keys" ? "Сохранение…" : "Сохранить и дальше"}
+                  {busy === "keys" ? "Проверка…" : "Проверить и дальше"}
                 </button>
               </div>
             </form>
@@ -3043,7 +3134,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
             <div className="cafe-form-panel mp-onboard-panel">
               <h3>3. Первая карточка</h3>
               <p className="muted small">
-                Ниже откройте форму: артикул, название, категория, цена, фото → «Выгрузить». После первой выгрузки онбординг закроется.
+                Откройте форму: артикул, название, категория, цена, фото с HTTPS → «Выгрузить» в боевом режиме. Онбординг
+                закроется после успешного импорта (не sandbox и не pending).
               </p>
               <div className="mp-actions">
                 <button type="button" className="ghost-btn" onClick={() => setOnboardStep(2)}>
@@ -3054,13 +3146,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                   className="mp-btn mp-btn-primary"
                   onClick={() => {
                     setTab("create");
-                    if ((product.images || []).length > 0 || history.length > 0) finishOnboard();
                   }}
                 >
                   Открыть форму создания
-                </button>
-                <button type="button" className="ghost-btn" onClick={finishOnboard}>
-                  Готово
                 </button>
               </div>
             </div>
