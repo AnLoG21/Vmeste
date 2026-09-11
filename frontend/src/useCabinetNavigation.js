@@ -52,6 +52,7 @@ export function useCabinetNavigation({
     }
     if (role === "staff") {
       if (id === "bookings" && !staffHasPerm("manage_bookings")) return false;
+      if (id === "clients" && !staffHasPerm("manage_bookings")) return false;
       if (id === "intervals" && !staffHasPerm("manage_intervals")) return false;
       if (id === "services" && !staffHasPerm("manage_services")) return false;
       if (id === "chats" && !staffHasPerm("manage_chats") && !staffHasPerm("manage_client_chats")) return false;
@@ -63,6 +64,7 @@ export function useCabinetNavigation({
       if (
         id === "intervals" ||
         id === "bookings" ||
+        id === "clients" ||
         id === "services" ||
         id === "my_bookings" ||
         id === "booking_history"
@@ -90,7 +92,7 @@ export function useCabinetNavigation({
       return role === "client";
     }
     if (me?.provider_sphere === "marketplaces" || me?.employer_sphere === "marketplaces") {
-      if (id === "intervals" || id === "bookings" || id === "services" || id === "my_bookings") return false;
+      if (id === "intervals" || id === "bookings" || id === "clients" || id === "services" || id === "my_bookings") return false;
       if (id === "analytics" || id === "reviews") {
         return role === "provider" || role === "staff";
       }
@@ -112,6 +114,7 @@ export function useCabinetNavigation({
       if (
         id === "intervals" ||
         id === "bookings" ||
+        id === "clients" ||
         id === "services" ||
         id === "my_bookings" ||
         id === "booking_history" ||

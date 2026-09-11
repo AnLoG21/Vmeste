@@ -6,6 +6,7 @@ export const SUBNAV_BOOKMARKS_KEY = "vmeste_subnav_bookmarks_v1";
 export const BOOKMARK_CATALOG = [
   { id: "client_map", label: "Карта", roles: ["client", "provider"] },
   { id: "bookings", label: "Записи", labelClient: "Мои записи", roles: ["client", "provider", "staff"] },
+  { id: "clients", label: "База клиентов", roles: ["provider", "staff"] },
   { id: "my_bookings", label: "Мои записи", roles: ["provider"] },
   { id: "reviews", label: "Отзывы", roles: ["provider", "staff"] },
   { id: "intervals", label: "Календарь интервалов", roles: ["provider", "staff"], menuIcon: "calendar" },
@@ -31,12 +32,12 @@ export const BOOKMARK_CATALOG = [
 
 export const DEFAULT_SUBNAV_BOOKMARKS = {
   client: ["client_map", "activity", "service_apps", "chats"],
-  provider: ["bookings", "client_map", "analytics", "my_bookings", "service_apps", "chats"],
-  staff: ["bookings", "reviews", "analytics", "service_apps", "chats"],
+  provider: ["bookings", "clients", "client_map", "analytics", "my_bookings", "service_apps", "chats"],
+  staff: ["bookings", "clients", "reviews", "analytics", "service_apps", "chats"],
   provider_cafe: ["cafe_orders", "cafe", "reviews", "analytics", "client_map", "service_apps", "chats"],
   staff_cafe: ["cafe_orders", "cafe", "analytics", "service_apps", "chats"],
-  provider_service: ["bookings", "client_map", "my_bookings", "analytics", "shop", "service_apps", "chats", "inspections"],
-  provider_salon: ["bookings", "client_map", "my_bookings", "analytics", "shop", "service_apps", "chats"],
+  provider_service: ["bookings", "clients", "client_map", "my_bookings", "analytics", "shop", "service_apps", "chats", "inspections"],
+  provider_salon: ["bookings", "clients", "client_map", "my_bookings", "analytics", "shop", "service_apps", "chats"],
   provider_marketplaces: ["marketplaces", "analytics", "reviews", "service_apps", "chats"],
   provider_shops: ["shop", "reviews", "analytics", "client_map", "service_apps", "chats"],
   staff_shops: ["shop", "analytics", "service_apps", "chats"],
@@ -47,6 +48,23 @@ function ensureServiceAppsBookmark(list, allowed) {
   const chatsIdx = list.indexOf("chats");
   if (chatsIdx >= 0) return [...list.slice(0, chatsIdx), "service_apps", ...list.slice(chatsIdx)];
   return [...list, "service_apps"];
+}
+
+function ensureClientsBookmark(list, allowed, role, sphere) {
+  if (!allowed.has("clients") || list.includes("clients")) return list;
+  if (role !== "provider" && role !== "staff") return list;
+  if (
+    sphere === "cafe_restaurant" ||
+    sphere === "marketplaces" ||
+    sphere === "shops"
+  ) {
+    return list;
+  }
+  const bookingsIdx = list.indexOf("bookings");
+  if (bookingsIdx >= 0) {
+    return [...list.slice(0, bookingsIdx + 1), "clients", ...list.slice(bookingsIdx + 1)];
+  }
+  return ["clients", ...list];
 }
 
 export function defaultSubnavBookmarks(role, sphere) {
@@ -119,6 +137,7 @@ export function loadSubnavBookmarks(role, sphere) {
       next = next.filter(
         (id) =>
           id !== "bookings" &&
+          id !== "clients" &&
           id !== "intervals" &&
           id !== "services" &&
           id !== "my_bookings",
@@ -130,6 +149,7 @@ export function loadSubnavBookmarks(role, sphere) {
       next = next.filter(
         (id) =>
           id !== "bookings" &&
+          id !== "clients" &&
           id !== "intervals" &&
           id !== "services" &&
           id !== "my_bookings" &&
@@ -145,6 +165,7 @@ export function loadSubnavBookmarks(role, sphere) {
       if (!next.includes("shop")) next = ["shop", ...next];
       else next = ["shop", ...next.filter((id) => id !== "shop")];
     }
+    next = ensureClientsBookmark(next, allowed, role, sphere);
     next = ensureServiceAppsBookmark(next, allowed);
     return next.length ? next : [...fallback];
   } catch {

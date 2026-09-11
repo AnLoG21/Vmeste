@@ -11,6 +11,7 @@ export const VIEW_PATHS = {
   staff: "/staff",
   reviews: "/reviews",
   bookings: "/bookings",
+  clients: "/clients",
   intervals: "/intervals",
   chats: "/chats",
   analytics: "/analytics",

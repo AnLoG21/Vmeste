@@ -31,6 +31,7 @@ import OrganizationSettingsPanel from "./OrganizationSettingsPanel.jsx";
 import BookingCalendar from "./BookingCalendar.jsx";
 import BookingHistory from "./BookingHistory.jsx";
 import ClientMemoryCardModal from "./ClientMemoryCardModal.jsx";
+import ClientsBasePanel from "./ClientsBasePanel.jsx";
 import ProviderBookClientModal from "./ProviderBookClientModal.jsx";
 import VisitConfirmModal from "./VisitConfirmModal.jsx";
 import BookingSlotActions from "./BookingSlotActions.jsx";
@@ -3160,6 +3161,28 @@ export default function App() {
             ) : null}
           </>
         )}
+        {accessToken &&
+          ((me?.role === "provider" &&
+            me?.provider_sphere !== "cafe_restaurant" &&
+            me?.provider_sphere !== "marketplaces" &&
+            me?.provider_sphere !== "shops") ||
+            (me?.role === "staff" &&
+              staffHasPerm("manage_bookings") &&
+              me?.employer_sphere !== "cafe_restaurant" &&
+              me?.provider_sphere !== "cafe_restaurant" &&
+              me?.employer_sphere !== "shops" &&
+              me?.provider_sphere !== "shops" &&
+              me?.employer_sphere !== "marketplaces" &&
+              me?.provider_sphere !== "marketplaces")) &&
+          currentView === "clients" && (
+            <ClientsBasePanel
+              authFetch={authFetch}
+              API_URL={API_URL}
+              onOpenClient={(clientId, clientName) =>
+                setClientMemoryCard({ clientId, clientName: clientName || "" })
+              }
+            />
+          )}
         {accessToken && currentView === "chats" && chatsRoleOk && (
           <div ref={setMainChatsHostEl} className="tg-chats-portal-host card full-width" />
         )}

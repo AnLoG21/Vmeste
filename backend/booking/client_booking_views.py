@@ -100,31 +100,56 @@ class ClientPhoneLookupView(APIView):
                 return Response(
                     {
                         "found": False,
-                        "normalized_phone": normalize_phone(phone_only),
                         "client": None,
                         "results": [],
+                        "normalized_phone": normalize_phone(phone_only),
                     }
                 )
-            brief = client_brief(client, provider_id=provider_id)
+            brief = client_brief(client, request=request, provider_id=provider_id)
             return Response(
                 {
                     "found": True,
-                    "normalized_phone": normalize_phone(phone_only),
                     "client": brief,
                     "results": [brief],
+                    "normalized_phone": normalize_phone(phone_only),
                 }
             )
 
         users = search_clients_for_provider(provider_id, q, limit=12)
-        results = [client_brief(u, provider_id=provider_id) for u in users]
+        results = [client_brief(u, request=request, provider_id=provider_id) for u in users]
         return Response(
             {
                 "found": bool(results),
+                "client": results[0] if results else None,
                 "results": results,
-                "client": results[0] if len(results) == 1 else None,
-                "normalized_phone": normalize_phone(q) if len(phone_digits(q)) >= 10 else "",
+                "normalized_phone": normalize_phone(q) if phone_digits(q) else "",
             }
         )
+
+
+class ProviderClientListView(APIView):
+    """GET /api/booking/clients/?page=1&page_size=20&q= — база клиентов организации."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from .phone_clients import list_clients_for_provider
+
+        provider_id, ok = _provider_context(request.user)
+        if not ok:
+            return Response({"detail": "Нет доступа"}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            page = int(request.query_params.get("page") or 1)
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = int(request.query_params.get("page_size") or 20)
+        except (TypeError, ValueError):
+            page_size = 20
+        q = (request.query_params.get("q") or "").strip()
+        data = list_clients_for_provider(provider_id, q=q, page=page, page_size=page_size)
+        return Response(data)
+
 
 class BookForClientView(APIView):
     """POST /api/booking/book-for-client/ — мастер записывает клиента на свободное окно."""

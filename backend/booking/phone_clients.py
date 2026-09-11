@@ -226,3 +226,100 @@ def get_or_create_client_by_name(*, name: str, phone: str = ""):
     user.set_unusable_password()
     user.save()
     return user
+
+
+def list_clients_for_provider(
+    provider_id: int,
+    *,
+    q: str = "",
+    page: int = 1,
+    page_size: int = 20,
+) -> dict:
+    """
+    База клиентов организации: все, у кого были записи или CRM-карточка.
+    Пагинация page/page_size (по умолчанию 20).
+    """
+    from django.db.models import F, Max, OrderBy, Q
+
+    from .models import Booking, ProviderClientCard
+
+    page = max(1, int(page or 1))
+    page_size = min(50, max(1, int(page_size or 20)))
+
+    booking_ids = (
+        Booking.objects.filter(provider_id=provider_id)
+        .exclude(client_id__isnull=True)
+        .values_list("client_id", flat=True)
+        .distinct()
+    )
+    card_ids = ProviderClientCard.objects.filter(provider_id=provider_id).values_list(
+        "client_id", flat=True
+    )
+    client_ids = set(booking_ids) | set(card_ids)
+
+    qs = User.objects.filter(role=User.Role.CLIENT, id__in=client_ids)
+
+    raw = (q or "").strip()
+    if len(raw) >= 2:
+        digits = phone_digits(raw)
+        if len(digits) >= 4:
+            qs = qs.filter(
+                Q(phone__icontains=digits[-7:] if len(digits) >= 7 else digits)
+                | Q(first_name__icontains=raw)
+                | Q(last_name__icontains=raw)
+                | Q(patronymic__icontains=raw)
+                | Q(username__icontains=raw)
+            )
+        else:
+            terms = [t for t in re.split(r"\s+", raw) if t]
+            name_q = Q()
+            for t in terms:
+                name_q &= (
+                    Q(first_name__icontains=t)
+                    | Q(last_name__icontains=t)
+                    | Q(patronymic__icontains=t)
+                    | Q(username__icontains=t)
+                )
+            qs = qs.filter(name_q)
+
+    qs = qs.annotate(
+        last_booking_at=Max(
+            "client_bookings__slot__starts_at",
+            filter=Q(client_bookings__provider_id=provider_id),
+        )
+    ).order_by(
+        OrderBy(F("last_booking_at"), descending=True, nulls_last=True),
+        "last_name",
+        "first_name",
+        "id",
+    )
+
+    total = qs.count()
+    start = (page - 1) * page_size
+    users = list(qs[start : start + page_size])
+
+    cards_by_client = {
+        c.client_id: c
+        for c in ProviderClientCard.objects.filter(
+            provider_id=provider_id, client_id__in=[u.id for u in users]
+        )
+    }
+
+    results = []
+    for u in users:
+        brief = client_brief(u, provider_id=provider_id)
+        card = cards_by_client.get(u.id)
+        tech = card.tech if card and isinstance(card.tech, dict) else {}
+        personal = card.personal if card and isinstance(card.personal, dict) else {}
+        brief["has_memory"] = bool(card)
+        brief["hair_color"] = (tech.get("hair_color") or "")[:80]
+        brief["allergies"] = (personal.get("allergies") or "")[:80]
+        results.append(brief)
+
+    return {
+        "count": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": max(1, (total + page_size - 1) // page_size) if total else 1,
+        "results": results,
+    }

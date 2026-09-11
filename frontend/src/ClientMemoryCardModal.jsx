@@ -189,6 +189,9 @@ export default function ClientMemoryCardModal({
         </button>
 
         <header className="client-memory-head">
+          <div className="client-memory-avatar" aria-hidden>
+            {(card?.client_name || clientName || "?").trim().slice(0, 1).toUpperCase()}
+          </div>
           <div className="client-memory-head-copy">
             <p className="muted small">Помнить всё</p>
             <h2>{title}</h2>
