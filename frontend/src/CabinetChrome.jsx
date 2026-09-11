@@ -196,6 +196,7 @@ function menuOverflowBookmarkIds(me, subnavBookmarks, isBookmarkAvailable) {
     "activity",
     "cafe_my_orders",
     "loyalty",
+    "clients",
     "client_map",
     "my_bookings",
     "intervals",
