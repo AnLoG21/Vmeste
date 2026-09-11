@@ -52,3 +52,5 @@ Thumbs.db
 *.log
 
 frontend/android/app/google-services.json
+frontend/ios/App/App/GoogleService-Info.plist
+!frontend/ios/App/App/GoogleService-Info.plist.example

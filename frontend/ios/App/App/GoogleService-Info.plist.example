@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Copy the real file from Firebase Console → Project settings → Your apps → iOS app
+  Save as: frontend/ios/App/App/GoogleService-Info.plist
+  Then add it to the App target in Xcode (Copy Bundle Resources).
+
+  Do NOT invent GOOGLE_APP_ID / GCM_SENDER_ID — download from Firebase.
+-->
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>REPLACE_ME.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.REPLACE_ME</string>
+	<key>API_KEY</key>
+	<string>REPLACE_ME</string>
+	<key>GCM_SENDER_ID</key>
+	<string>REPLACE_ME</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>space.vsevmeste.app</string>
+	<key>PROJECT_ID</key>
+	<string>vmeste-32513</string>
+	<key>STORAGE_BUCKET</key>
+	<string>vmeste-32513.appspot.com</string>
+	<key>IS_ADS_ENABLED</key>
+	<false/>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false/>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true/>
+	<key>IS_GCM_ENABLED</key>
+	<true/>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true/>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:REPLACE_ME:ios:REPLACE_ME</string>
+</dict>
+</plist>

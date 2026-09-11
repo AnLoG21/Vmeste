@@ -64,5 +64,9 @@
 	<string>Вместе использует микрофон для голосовых сообщений в чате.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Вместе использует камеру для фото и видео в чате.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

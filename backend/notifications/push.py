@@ -84,6 +84,16 @@ def send_fcm_to_tokens(tokens: list[str], *, title: str, body: str, data: dict |
                 "notification": {"title": title[:120], "body": body[:240]},
                 "data": payload_data,
                 "android": {"priority": "HIGH"},
+                # iOS / APNs via FCM (ignored by Android clients)
+                "apns": {
+                    "headers": {"apns-priority": "10"},
+                    "payload": {
+                        "aps": {
+                            "alert": {"title": title[:120], "body": body[:240]},
+                            "sound": "default",
+                        }
+                    },
+                },
             }
         }
         req = urllib.request.Request(
