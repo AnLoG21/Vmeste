@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const WIDGETS_KEY_BOOKING = "vmeste_analytics_widgets_v1";
 const WIDGETS_KEY_CAFE = "vmeste_analytics_widgets_cafe_v1";
+const WIDGETS_KEY_SHOP = "vmeste_analytics_widgets_shop_v1";
 
 const DEFAULT_WIDGETS_BOOKING = {
   kpis: true,
@@ -26,6 +27,19 @@ const DEFAULT_WIDGETS_CAFE = {
   table: true,
 };
 
+const DEFAULT_WIDGETS_SHOP = {
+  kpis: true,
+  statuses: true,
+  modes: true,
+  bookingsChart: true,
+  revenueChart: true,
+  servicesChart: true,
+  staffChart: false,
+  ratingsChart: false,
+  channels: true,
+  table: true,
+};
+
 const BOOKING_STATUS_LABELS = {
   new: "Новая",
   confirmed: "Подтверждена",
@@ -46,15 +60,60 @@ const CAFE_STATUS_LABELS = {
   cancelled: "Отменён",
 };
 
+const SHOP_STATUS_LABELS = {
+  awaiting_payment: "Ожидает оплаты",
+  paid: "Оплачен",
+  assembling: "Собирается",
+  ready: "Готов",
+  to_courier: "Передаём курьеру",
+  delivering: "В пути",
+  done: "Завершён",
+  cancelled: "Отменён",
+};
+
 const CAFE_MODE_LABELS = {
   dine_in: "За столом",
   takeaway: "Самовывоз",
   delivery: "Доставка",
 };
 
-function loadWidgets(isCafe) {
-  const key = isCafe ? WIDGETS_KEY_CAFE : WIDGETS_KEY_BOOKING;
-  const defaults = isCafe ? DEFAULT_WIDGETS_CAFE : DEFAULT_WIDGETS_BOOKING;
+const SHOP_MODE_LABELS = {
+  pickup: "Самовывоз",
+  delivery: "Доставка",
+};
+
+const SHOP_CHANNEL_LABELS = {
+  pickup: "Самовывоз",
+  delivery: "Доставка",
+  own: "Своя доставка",
+  yandex: "Яндекс",
+  cdek: "СДЭК",
+  russian_post: "Почта РФ",
+  dostavista: "Dostavista",
+  other: "Другое",
+};
+
+function analyticsKind(providerSphere) {
+  if (providerSphere === "cafe_restaurant") return "cafe";
+  if (providerSphere === "shops") return "shop";
+  return "booking";
+}
+
+function widgetsKey(kind) {
+  if (kind === "cafe") return WIDGETS_KEY_CAFE;
+  if (kind === "shop") return WIDGETS_KEY_SHOP;
+  return WIDGETS_KEY_BOOKING;
+}
+
+function widgetsDefaults(kind) {
+  if (kind === "cafe") return DEFAULT_WIDGETS_CAFE;
+  if (kind === "shop") return DEFAULT_WIDGETS_SHOP;
+  return DEFAULT_WIDGETS_BOOKING;
+}
+
+function loadWidgets(kind) {
+  const key = widgetsKey(kind);
+  const defaults = widgetsDefaults(kind);
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return { ...defaults };
@@ -130,8 +189,12 @@ function LineChart({ points, valueKey = "value", color = "#1f6feb" }) {
 }
 
 export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }) {
-  const isCafe = providerSphere === "cafe_restaurant";
-  const statusLabels = isCafe ? CAFE_STATUS_LABELS : BOOKING_STATUS_LABELS;
+  const kind = analyticsKind(providerSphere);
+  const isCafe = kind === "cafe";
+  const isShop = kind === "shop";
+  const isOrderLike = isCafe || isShop;
+  const statusLabels = isShop ? SHOP_STATUS_LABELS : isCafe ? CAFE_STATUS_LABELS : BOOKING_STATUS_LABELS;
+  const modeLabels = isShop ? SHOP_MODE_LABELS : isCafe ? CAFE_MODE_LABELS : null;
   const [appliedFrom, setAppliedFrom] = useState(() => daysAgoIso(30));
   const [appliedTo, setAppliedTo] = useState(() => todayIso());
   const [draftFrom, setDraftFrom] = useState(() => daysAgoIso(30));
@@ -141,7 +204,7 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [widgets, setWidgets] = useState(() => loadWidgets(isCafe));
+  const [widgets, setWidgets] = useState(() => loadWidgets(kind));
   const [widgetsOpen, setWidgetsOpen] = useState(false);
   const [tableFilter, setTableFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -149,14 +212,15 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
   const [sortDir, setSortDir] = useState("desc");
 
   useEffect(() => {
-    setWidgets(loadWidgets(isCafe));
-  }, [isCafe]);
+    setWidgets(loadWidgets(kind));
+  }, [kind]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     const qs = new URLSearchParams({ from: appliedFrom, to: appliedTo });
-    const url = isCafe ? `${apiUrl}/cafe/analytics/?${qs}` : `${apiUrl}/booking/analytics/?${qs}`;
+    const path = isCafe ? "/cafe/analytics/" : isShop ? "/shop/analytics/" : "/booking/analytics/";
+    const url = `${apiUrl}${path}?${qs}`;
     const res = await authFetch(url);
     if (!res.ok) {
       setError("Не удалось загрузить аналитику.");
@@ -166,7 +230,7 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
     }
     setData(await res.json());
     setLoading(false);
-  }, [apiUrl, authFetch, appliedFrom, appliedTo, isCafe]);
+  }, [apiUrl, authFetch, appliedFrom, appliedTo, isCafe, isShop]);
 
   useEffect(() => {
     load();
@@ -192,7 +256,7 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
     setWidgets((prev) => {
       const next = { ...prev, [key]: !prev[key] };
       try {
-        localStorage.setItem(isCafe ? WIDGETS_KEY_CAFE : WIDGETS_KEY_BOOKING, JSON.stringify(next));
+        localStorage.setItem(widgetsKey(kind), JSON.stringify(next));
       } catch {
         /* ignore */
       }
@@ -208,7 +272,7 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
     }
   }
 
-  const tableRows = isCafe ? data?.orders || [] : data?.bookings || [];
+  const tableRows = isOrderLike ? data?.orders || [] : data?.bookings || [];
 
   const filteredRows = useMemo(() => {
     const rows = tableRows;
@@ -224,7 +288,9 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
           r.guest,
           r.table_label,
           r.mode,
-          CAFE_MODE_LABELS[r.mode],
+          r.channel,
+          modeLabels?.[r.mode],
+          SHOP_CHANNEL_LABELS[r.channel],
           r.status,
           statusLabels[r.status],
         ]
@@ -241,11 +307,9 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
       if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
       return String(av ?? "").localeCompare(String(bv ?? ""), "ru") * dir;
     });
-  }, [tableRows, tableFilter, statusFilter, sortKey, sortDir, statusLabels]);
+  }, [tableRows, tableFilter, statusFilter, sortKey, sortDir, statusLabels, modeLabels]);
 
-  const serviceBars = (
-    isCafe ? data?.by_item || [] : data?.by_service || []
-  )
+  const serviceBars = (isOrderLike ? data?.by_item || [] : data?.by_service || [])
     .slice(0, 10)
     .map((s) => ({
       id: s.id ?? s.name,
@@ -261,8 +325,14 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
 
   const modeBars = (data?.by_mode_detail || []).map((m) => ({
     id: m.mode,
-    label: CAFE_MODE_LABELS[m.mode] || m.mode,
+    label: modeLabels?.[m.mode] || m.mode,
     value: m.count,
+  }));
+
+  const channelBars = (data?.by_channel || []).map((c) => ({
+    id: c.channel,
+    label: SHOP_CHANNEL_LABELS[c.channel] || c.channel,
+    value: c.count,
   }));
 
   const ratingBars = Object.entries(data?.rating_histogram || {})
@@ -271,27 +341,76 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
 
   const periodLabel = `${new Date(`${appliedFrom}T12:00:00`).toLocaleDateString("ru-RU")} – ${new Date(`${appliedTo}T12:00:00`).toLocaleDateString("ru-RU")}`;
 
-  const widgetOptions = isCafe
+  const widgetOptions = isShop
     ? [
         ["kpis", "Сводка"],
         ["statuses", "По статусам"],
         ["modes", "По режимам"],
         ["bookingsChart", "Заказы по дням"],
         ["revenueChart", "Выручка по дням"],
-        ["servicesChart", "Топ блюд"],
-        ["ratingsChart", "Оценки блюд"],
+        ["servicesChart", "Топ товаров"],
+        ["channels", "По каналам доставки"],
         ["table", "Таблица заказов"],
       ]
-    : [
-        ["kpis", "Сводка"],
-        ["statuses", "По статусам"],
-        ["bookingsChart", "Записи по дням"],
-        ["revenueChart", "Выручка по дням"],
-        ["servicesChart", "По услугам"],
-        ["staffChart", "По мастерам"],
-        ["ratingsChart", "Оценки"],
-        ["table", "Таблица записей"],
-      ];
+    : isCafe
+      ? [
+          ["kpis", "Сводка"],
+          ["statuses", "По статусам"],
+          ["modes", "По режимам"],
+          ["bookingsChart", "Заказы по дням"],
+          ["revenueChart", "Выручка по дням"],
+          ["servicesChart", "Топ блюд"],
+          ["ratingsChart", "Оценки блюд"],
+          ["table", "Таблица заказов"],
+        ]
+      : [
+          ["kpis", "Сводка"],
+          ["statuses", "По статусам"],
+          ["bookingsChart", "Записи по дням"],
+          ["revenueChart", "Выручка по дням"],
+          ["servicesChart", "По услугам"],
+          ["staffChart", "По мастерам"],
+          ["ratingsChart", "Оценки"],
+          ["table", "Таблица записей"],
+        ];
+
+  const tableColumns = isShop
+    ? [
+        ["created_at", "Создан"],
+        ["status", "Статус"],
+        ["mode", "Режим"],
+        ["channel", "Канал"],
+        ["guest", "Гость"],
+        ["total", "Сумма"],
+      ]
+    : isCafe
+      ? [
+          ["created_at", "Создан"],
+          ["status", "Статус"],
+          ["mode", "Режим"],
+          ["table_label", "Стол"],
+          ["guest", "Гость"],
+          ["total", "Сумма"],
+        ]
+      : [
+          ["created_at", "Создана"],
+          ["status", "Статус"],
+          ["service", "Услуга"],
+          ["staff", "Мастер"],
+          ["client", "Клиент"],
+          ["price", "Цена"],
+        ];
+
+  const pageSubtitle = isShop
+    ? "Заказы, выручка и возвраты"
+    : isCafe
+      ? "Заказы, выручка и оценки блюд"
+      : "Записи, выручка и отзывы";
+
+  const ordersChartTitle = isOrderLike ? "Заказы по дням" : "Записи по дням";
+  const servicesChartTitle = isShop ? "Топ товаров" : isCafe ? "Топ блюд" : "Топ услуг";
+  const tableTitle = isOrderLike ? "Заказы" : "Записи";
+  const emptyTableText = isOrderLike ? "Нет заказов" : "Нет записей";
 
   return (
     <section className="card full-width analytics-page">
@@ -299,7 +418,7 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
         <div>
           <h2>Аналитика</h2>
           <p className="muted small">
-            {isCafe ? "Заказы, выручка и оценки блюд" : "Записи, выручка и отзывы"} · {periodLabel}
+            {pageSubtitle} · {periodLabel}
           </p>
         </div>
         <div className="analytics-toolbar">
@@ -359,25 +478,34 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
       {widgets.kpis && data?.totals && (
         <div className="analytics-kpis">
           <div className="analytics-kpi">
-            <span className="analytics-kpi-label">{isCafe ? "Заказов" : "Записей"}</span>
-            <strong>{isCafe ? data.totals.orders : data.totals.bookings}</strong>
+            <span className="analytics-kpi-label">{isOrderLike ? "Заказов" : "Записей"}</span>
+            <strong>{isOrderLike ? data.totals.orders : data.totals.bookings}</strong>
           </div>
           <div className="analytics-kpi">
-            <span className="analytics-kpi-label">{isCafe ? "Выручка" : "Выручка (выполнено)"}</span>
+            <span className="analytics-kpi-label">{isOrderLike ? "Выручка" : "Выручка (выполнено)"}</span>
             <strong>{Math.round(data.totals.revenue_estimate).toLocaleString("ru-RU")} ₽</strong>
           </div>
           <div className="analytics-kpi">
-            <span className="analytics-kpi-label">{isCafe ? "Средний чек" : "Средняя оценка"}</span>
+            <span className="analytics-kpi-label">
+              {isOrderLike ? "Средний чек" : "Средняя оценка"}
+            </span>
             <strong>
-              {isCafe
+              {isOrderLike
                 ? `${Math.round(data.totals.average_check || 0).toLocaleString("ru-RU")} ₽`
                 : data.totals.average_rating || "—"}
             </strong>
           </div>
           <div className="analytics-kpi">
-            <span className="analytics-kpi-label">{isCafe ? "Оценок блюд" : "Отзывов"}</span>
+            <span className="analytics-kpi-label">
+              {isShop ? "Возвраты" : isCafe ? "Оценок блюд" : "Отзывов"}
+            </span>
             <strong>
-              {isCafe ? (
+              {isShop ? (
+                <>
+                  {data.totals.returns_count || 0}
+                  {data.totals.returns_approved ? ` · одобрено ${data.totals.returns_approved}` : ""}
+                </>
+              ) : isCafe ? (
                 <>
                   {data.totals.ratings_count || 0}
                   {data.totals.average_rating ? ` · ${data.totals.average_rating}` : ""}
@@ -404,7 +532,7 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
         </div>
       )}
 
-      {isCafe && widgets.modes && modeBars.length ? (
+      {isOrderLike && widgets.modes && modeBars.length ? (
         <div className="analytics-panel">
           <h3>По режимам</h3>
           <BarChart items={modeBars} color="#2f5d50" />
@@ -414,8 +542,8 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
       <div className="analytics-grid">
         {widgets.bookingsChart && (
           <div className="analytics-panel">
-            <h3>{isCafe ? "Заказы по дням" : "Записи по дням"}</h3>
-            <LineChart points={data?.by_day || []} valueKey={isCafe ? "orders" : "bookings"} color="#1f6feb" />
+            <h3>{ordersChartTitle}</h3>
+            <LineChart points={data?.by_day || []} valueKey={isOrderLike ? "orders" : "bookings"} color="#1f6feb" />
           </div>
         )}
         {widgets.revenueChart && (
@@ -426,17 +554,23 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
         )}
         {widgets.servicesChart && (
           <div className="analytics-panel">
-            <h3>{isCafe ? "Топ блюд" : "Топ услуг"}</h3>
+            <h3>{servicesChartTitle}</h3>
             <BarChart items={serviceBars} color="#1f6feb" />
           </div>
         )}
-        {!isCafe && widgets.staffChart && (
+        {!isOrderLike && widgets.staffChart && (
           <div className="analytics-panel">
             <h3>По мастерам</h3>
             <BarChart items={staffBars} color="#c45c26" />
           </div>
         )}
-        {widgets.ratingsChart && (
+        {isShop && widgets.channels && (
+          <div className="analytics-panel">
+            <h3>По каналам доставки</h3>
+            <BarChart items={channelBars} color="#6b4c9a" />
+          </div>
+        )}
+        {!isShop && widgets.ratingsChart && (
           <div className="analytics-panel">
             <h3>{isCafe ? "Оценки блюд" : "Распределение оценок"}</h3>
             <BarChart items={ratingBars} color="#d4a017" />
@@ -447,7 +581,7 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
       {widgets.table && (
         <div className="analytics-panel analytics-table-wrap">
           <div className="analytics-table-toolbar">
-            <h3>{isCafe ? "Заказы" : "Записи"}</h3>
+            <h3>{tableTitle}</h3>
             <input
               type="search"
               placeholder="Поиск…"
@@ -467,24 +601,7 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
             <table className="analytics-table">
               <thead>
                 <tr>
-                  {(isCafe
-                    ? [
-                        ["created_at", "Создан"],
-                        ["status", "Статус"],
-                        ["mode", "Режим"],
-                        ["table_label", "Стол"],
-                        ["guest", "Гость"],
-                        ["total", "Сумма"],
-                      ]
-                    : [
-                        ["created_at", "Создана"],
-                        ["status", "Статус"],
-                        ["service", "Услуга"],
-                        ["staff", "Мастер"],
-                        ["client", "Клиент"],
-                        ["price", "Цена"],
-                      ]
-                  ).map(([key, label]) => (
+                  {tableColumns.map(([key, label]) => (
                     <th key={key}>
                       <button type="button" className="analytics-sort-btn" onClick={() => toggleSort(key)}>
                         {label}
@@ -498,9 +615,20 @@ export default function AnalyticsPage({ apiUrl, authFetch, providerSphere = "" }
                 {filteredRows.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="muted">
-                      {isCafe ? "Нет заказов" : "Нет записей"}
+                      {emptyTableText}
                     </td>
                   </tr>
+                ) : isShop ? (
+                  filteredRows.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.created_at ? new Date(r.created_at).toLocaleString("ru-RU") : "—"}</td>
+                      <td>{statusLabels[r.status] || r.status}</td>
+                      <td>{SHOP_MODE_LABELS[r.mode] || r.mode}</td>
+                      <td>{SHOP_CHANNEL_LABELS[r.channel] || r.channel || "—"}</td>
+                      <td>{r.guest || "—"}</td>
+                      <td>{Math.round(r.total || 0).toLocaleString("ru-RU")} ₽</td>
+                    </tr>
+                  ))
                 ) : isCafe ? (
                   filteredRows.map((r) => (
                     <tr key={r.id}>

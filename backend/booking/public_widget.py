@@ -64,6 +64,25 @@ class PublicWidgetCatalogView(APIView):
         )
         from .serializers import ProviderStaffSerializer
         from catalog.serializers import ServiceSerializer
+        from locations.models import ProviderLocation
+
+        locations = []
+        if (provider.organization_address or "").strip():
+            locations.append(
+                {
+                    "id": "main",
+                    "title": "Основной офис",
+                    "address": provider.organization_address or "",
+                }
+            )
+        for loc in ProviderLocation.objects.filter(provider=provider).order_by("id"):
+            locations.append(
+                {
+                    "id": loc.id,
+                    "title": loc.title,
+                    "address": loc.address,
+                }
+            )
 
         return Response(
             {
@@ -73,6 +92,7 @@ class PublicWidgetCatalogView(APIView):
                 "sphere": provider.provider_sphere or "",
                 "phones": list(provider.organization_phones or [])[:5] if isinstance(provider.organization_phones, list) else [],
                 "address": provider.organization_address or "",
+                "locations": locations,
                 "widget_url": f"/w/{provider.organization_slug}",
                 "services": ServiceSerializer(services, many=True, context={"request": request}).data,
                 "staff": ProviderStaffSerializer(staff_links, many=True, context={"request": request}).data,
@@ -101,13 +121,27 @@ class PublicWidgetWindowsView(APIView):
                 staff_id = int(staff_raw)
             except ValueError:
                 staff_id = None
+        loc_raw = (request.query_params.get("location") or "").strip()
+        location_id = None
+        if loc_raw:
+            location_id = loc_raw if loc_raw in ("main", "0") else loc_raw
+            try:
+                if location_id not in ("main", "0"):
+                    location_id = int(location_id)
+            except ValueError:
+                location_id = "main"
         if not service or not book_date_raw:
             return Response({"detail": "Укажите service и date."}, status=status.HTTP_400_BAD_REQUEST)
         book_date = parse_date(book_date_raw)
         if not book_date:
             return Response({"detail": "Некорректная дата."}, status=status.HTTP_400_BAD_REQUEST)
         data = list_available_windows(
-            provider.id, int(service), book_date, extra_minutes=extra_minutes, staff_id=staff_id
+            provider.id,
+            int(service),
+            book_date,
+            extra_minutes=extra_minutes,
+            staff_id=staff_id,
+            location_id=location_id,
         )
         return Response(data)
 
@@ -132,6 +166,15 @@ class PublicWidgetDatesView(APIView):
                 staff_id = int(staff_raw)
             except ValueError:
                 staff_id = None
+        loc_raw = (request.query_params.get("location") or "").strip()
+        location_id = None
+        if loc_raw:
+            location_id = loc_raw if loc_raw in ("main", "0") else loc_raw
+            try:
+                if location_id not in ("main", "0"):
+                    location_id = int(location_id)
+            except ValueError:
+                location_id = "main"
         if not service:
             return Response({"detail": "Укажите service."}, status=status.HTTP_400_BAD_REQUEST)
         today = timezone.localdate()
@@ -144,6 +187,7 @@ class PublicWidgetDatesView(APIView):
             date_to,
             extra_minutes=extra_minutes,
             staff_id=staff_id,
+            location_id=location_id,
         )
         return Response({"dates": dates})
 

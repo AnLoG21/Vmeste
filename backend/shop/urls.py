@@ -1,6 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from .analytics import ShopAnalyticsSummaryView
 from .views import (
     ProductCategoryViewSet,
     ProductSubcategoryViewSet,
@@ -25,6 +26,7 @@ router.register(r"materials", ServiceMaterialViewSet, basename="shop-materials")
 router.register(r"orders", ShopOrderViewSet, basename="shop-orders")
 
 urlpatterns = [
+    path("analytics/", ShopAnalyticsSummaryView.as_view(), name="shop-analytics"),
     path("settings/", ShopSettingsView.as_view(), name="shop-settings"),
     path("returns/", ShopReturnRequestsView.as_view(), name="shop-returns"),
     path("public/<slug:slug>/", PublicShopCatalogView.as_view(), name="shop-public-catalog"),

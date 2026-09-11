@@ -66,7 +66,7 @@ function Stars({ value, onChange, readOnly = false }) {
   );
 }
 
-export default function CafeGuestPage({ mode = "table", keyId }) {
+export default function CafeGuestPage({ mode = "table", keyId, embed = false }) {
   const storageKey = `cafe_sess_${mode}_${keyId}`;
   const [info, setInfo] = useState(null);
   const [pin, setPin] = useState("");
@@ -736,17 +736,23 @@ export default function CafeGuestPage({ mode = "table", keyId }) {
     <div className="cafe-guest">
       {menuJsonLd ? <JsonLd id="vmeste-menu-jsonld" data={menuJsonLd} /> : null}
       <header className="cafe-guest-header">
-        <button
-          type="button"
-          className="cafe-guest-back"
-          aria-label="Назад на карту"
-          title="Назад на карту"
-          onClick={() => {
-            window.location.href = "/";
-          }}
-        >
-          ←
-        </button>
+        {embed ? (
+          <span className="cafe-guest-back" style={{ visibility: "hidden" }} aria-hidden>
+            ←
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="cafe-guest-back"
+            aria-label="Назад на карту"
+            title="Назад на карту"
+            onClick={() => {
+              window.location.href = "/";
+            }}
+          >
+            ←
+          </button>
+        )}
         <div className="cafe-guest-brand">
           <img
             src={info?.logo_url || unlock?.logo_url || logoMain}

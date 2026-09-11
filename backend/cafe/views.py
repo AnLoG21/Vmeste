@@ -1253,6 +1253,19 @@ class CafeGuestOrderCreateView(APIView):
                 twin = _find_client_by_phone(guest_phone) or _find_client_by_email(guest_email)
                 if twin:
                     order.client = twin
+            try:
+                from booking.phone_clients import ensure_org_client_from_order
+
+                linked = ensure_org_client_from_order(
+                    provider_id=provider.id,
+                    phone=guest_phone,
+                    name=guest_name,
+                    existing_client=order.client,
+                )
+                if linked:
+                    order.client = linked
+            except Exception:
+                pass
 
             if pay_method == CafeOrder.PayMethod.ONLINE:
                 from payments.gateway import create_org_payment, provider_ready

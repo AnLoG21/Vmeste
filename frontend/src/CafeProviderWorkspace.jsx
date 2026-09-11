@@ -440,6 +440,17 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
               Печать QR меню
             </button>
           </div>
+          <div className="org-widget-embed card-inset" style={{ marginTop: "0.85rem" }}>
+            <p className="field-label">Код для сайта (iframe меню)</p>
+            <p className="muted small">Встройте меню самовывоза/доставки на сайт ресторана.</p>
+            <textarea
+              readOnly
+              rows={3}
+              className="org-widget-code"
+              value={`<iframe src="${publicOrigin}/m/${meSlug}?embed=1" width="100%" height="800" style="border:0;border-radius:12px;max-width:480px" title="Меню"></iframe>`}
+              onFocus={(e) => e.target.select()}
+            />
+          </div>
         </div>
       ) : (
         <p className="muted">Сохраните профиль организации — появится ссылка и QR для меню без стола.</p>

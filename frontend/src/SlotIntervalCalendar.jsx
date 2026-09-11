@@ -74,6 +74,7 @@ export default function SlotIntervalCalendar({
   addAnonymousSeat,
   intervalEditModal,
   setIntervalEditModal,
+  locations = [],
 }) {
   const [year, month] = calendarMonth.split("-").map(Number);
   const firstDay = new Date(year, month - 1, 1);
@@ -238,6 +239,22 @@ export default function SlotIntervalCalendar({
               <input type="time" value={intervalForm.start_time} onChange={(e) => setIntervalForm({ ...intervalForm, start_time: e.target.value })} required />
               <input type="time" value={intervalForm.end_time} onChange={(e) => setIntervalForm({ ...intervalForm, end_time: e.target.value })} required />
             </div>
+            {locations.length > 0 ? (
+              <label className="field-label">
+                Филиал
+                <select
+                  value={intervalForm.location_id ?? ""}
+                  onChange={(e) => setIntervalForm({ ...intervalForm, location_id: e.target.value })}
+                >
+                  <option value="">Основной офис</option>
+                  {locations.map((loc) => (
+                    <option key={loc.id} value={String(loc.id)}>
+                      {loc.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <label className="field-label interval-free-staff-field">
               <span>Сотрудник</span>
               <div className="interval-free-staff-row">

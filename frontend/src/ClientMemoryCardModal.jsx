@@ -443,8 +443,10 @@ export default function ClientMemoryCardModal({
                   <li key={v.id}>
                     <strong>{v.service_name || `Запись #${v.id}`}</strong>
                     <span className="muted small">
+                      {v.kind === "cafe" ? "Кафе · " : v.kind === "shop" ? "Магазин · " : ""}
                       {v.created_at ? new Date(v.created_at).toLocaleString("ru-RU") : ""} ·{" "}
                       {v.status_label || bookingStatusLabel(v.status) || v.status}
+                      {v.total ? ` · ${Math.round(v.total).toLocaleString("ru-RU")} ₽` : ""}
                     </span>
                     {v.comment ? <p className="small">{v.comment}</p> : null}
                   </li>

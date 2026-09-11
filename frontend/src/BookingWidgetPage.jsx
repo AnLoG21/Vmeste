@@ -32,6 +32,7 @@ function windowKey(w) {
 export default function BookingWidgetPage({ slug }) {
   const [catalog, setCatalog] = useState(null);
   const [error, setError] = useState("");
+  const [locationId, setLocationId] = useState("");
   const [staffId, setStaffId] = useState("any");
   const [serviceId, setServiceId] = useState("");
   const [optionIds, setOptionIds] = useState([]);
@@ -66,6 +67,23 @@ export default function BookingWidgetPage({ slug }) {
     };
   }, [slug]);
 
+  const locations = catalog?.locations || [];
+  const selectedLocation = locations.find((loc) => String(loc.id) === String(locationId));
+
+  useEffect(() => {
+    if (!catalog?.locations) return;
+    const locs = catalog.locations;
+    if (!locs.length) {
+      setLocationId("");
+      return;
+    }
+    if (locs.length === 1) {
+      setLocationId(String(locs[0].id));
+      return;
+    }
+    setLocationId((cur) => cur || String(locs[0].id));
+  }, [catalog]);
+
   const services = useMemo(() => {
     const list = catalog?.services || [];
     if (staffId === "any") return list;
@@ -95,9 +113,10 @@ export default function BookingWidgetPage({ slug }) {
     toDate.setDate(toDate.getDate() + 60);
     const to = `${toDate.getFullYear()}-${String(toDate.getMonth() + 1).padStart(2, "0")}-${String(toDate.getDate()).padStart(2, "0")}`;
     const staffQ = staffId !== "any" ? `&staff=${encodeURIComponent(staffId)}` : "";
+    const locationQ = locationId ? `&location=${encodeURIComponent(locationId)}` : "";
     (async () => {
       const res = await fetch(
-        `${API_URL}/booking/public/${encodeURIComponent(slug)}/dates/?service=${encodeURIComponent(serviceId)}&from=${from}&to=${to}&extra_minutes=${extraMinutes}${staffQ}`,
+        `${API_URL}/booking/public/${encodeURIComponent(slug)}/dates/?service=${encodeURIComponent(serviceId)}&from=${from}&to=${to}&extra_minutes=${extraMinutes}${staffQ}${locationQ}`,
       );
       if (cancelled || !res.ok) return;
       const data = await res.json();
@@ -111,7 +130,7 @@ export default function BookingWidgetPage({ slug }) {
     return () => {
       cancelled = true;
     };
-  }, [slug, serviceId, staffId, extraMinutes]);
+  }, [slug, serviceId, staffId, extraMinutes, locationId]);
 
   useEffect(() => {
     if (!serviceId || !bookDate || !slug) {
@@ -120,9 +139,10 @@ export default function BookingWidgetPage({ slug }) {
     }
     let cancelled = false;
     const staffQ = staffId !== "any" ? `&staff=${encodeURIComponent(staffId)}` : "";
+    const locationQ = locationId ? `&location=${encodeURIComponent(locationId)}` : "";
     (async () => {
       const res = await fetch(
-        `${API_URL}/booking/public/${encodeURIComponent(slug)}/windows/?service=${encodeURIComponent(serviceId)}&date=${encodeURIComponent(bookDate)}&extra_minutes=${extraMinutes}${staffQ}`,
+        `${API_URL}/booking/public/${encodeURIComponent(slug)}/windows/?service=${encodeURIComponent(serviceId)}&date=${encodeURIComponent(bookDate)}&extra_minutes=${extraMinutes}${staffQ}${locationQ}`,
       );
       if (cancelled) return;
       if (!res.ok) {
@@ -141,7 +161,7 @@ export default function BookingWidgetPage({ slug }) {
     return () => {
       cancelled = true;
     };
-  }, [slug, serviceId, bookDate, staffId, extraMinutes]);
+  }, [slug, serviceId, bookDate, staffId, extraMinutes, locationId]);
 
   async function submit(e) {
     e.preventDefault();
@@ -225,10 +245,37 @@ export default function BookingWidgetPage({ slug }) {
         <header className="bw-head">
           <p className="bw-brand">Вместе</p>
           <h1>{catalog.organization_name}</h1>
-          {catalog.address ? <p className="bw-muted">{catalog.address}</p> : null}
+          {selectedLocation?.address ? (
+            <p className="bw-muted">{selectedLocation.address}</p>
+          ) : catalog.address ? (
+            <p className="bw-muted">{catalog.address}</p>
+          ) : null}
         </header>
 
         <form className="bw-form" onSubmit={submit}>
+          {locations.length > 1 ? (
+            <>
+              <p className="bw-label">Филиал</p>
+              <div className="bw-staff-row">
+                {locations.map((loc) => (
+                  <button
+                    key={loc.id}
+                    type="button"
+                    className={`bw-staff-chip${String(locationId) === String(loc.id) ? " is-on" : ""}`}
+                    onClick={() => {
+                      setLocationId(String(loc.id));
+                      setWindowSel("");
+                      setBookDate(todayIso());
+                    }}
+                  >
+                    {loc.title}
+                    {loc.address ? <span className="bw-staff-job">{loc.address}</span> : null}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
+
           <p className="bw-label">Мастер</p>
           <div className="bw-staff-row">
             <button

@@ -325,18 +325,24 @@ export default function PublicShopPage({
     <div className={`cafe-guest shop-public-page${product ? " is-product-open" : ""}${embedded ? " is-embedded" : ""}`}>
       {!product ? (
         <header className="cafe-guest-header">
-          <button
-            type="button"
-            className="cafe-guest-back"
-            aria-label={embedded ? "Назад" : "Назад на карту"}
-            title={embedded ? "Назад" : "Назад на карту"}
-            onClick={() => {
-              if (embedded && onBack) onBack();
-              else window.location.href = "/";
-            }}
-          >
-            ←
-          </button>
+          {!(embedded && !onBack) ? (
+            <button
+              type="button"
+              className="cafe-guest-back"
+              aria-label={embedded ? "Назад" : "Назад на карту"}
+              title={embedded ? "Назад" : "Назад на карту"}
+              onClick={() => {
+                if (embedded && onBack) onBack();
+                else window.location.href = "/";
+              }}
+            >
+              ←
+            </button>
+          ) : (
+            <span className="cafe-guest-back" style={{ visibility: "hidden" }} aria-hidden>
+              ←
+            </span>
+          )}
           <div className="cafe-guest-brand">
             <img
               src={logoUrl || logoMain}

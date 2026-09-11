@@ -709,6 +709,22 @@ export default function ShopWorkspace({ authFetch, me }) {
                   </>
                 ) : null}
               </p>
+              {shopSlug ? (
+                <div className="org-widget-embed card-inset" style={{ marginTop: "0.75rem" }}>
+                  <h3 className="shop-section-title">Виджет витрины на сайт</h3>
+                  <p className="muted small">
+                    Скопируйте код и вставьте на сайт магазина. Параметр embed=1 убирает лишний chrome.
+                  </p>
+                  <p className="field-label">Код для сайта</p>
+                  <textarea
+                    readOnly
+                    rows={3}
+                    className="org-widget-code"
+                    value={`<iframe src="${window.location.origin}/s/${shopSlug}?embed=1" width="100%" height="800" style="border:0;border-radius:12px;max-width:720px" title="Магазин"></iframe>`}
+                    onFocus={(e) => e.target.select()}
+                  />
+                </div>
+              ) : null}
             </div>
 
             <h3 className="shop-section-title">Добавить категорию из каталога</h3>

@@ -64,12 +64,14 @@ export function useCabinetNavigation({
       if (
         id === "intervals" ||
         id === "bookings" ||
-        id === "clients" ||
         id === "services" ||
         id === "my_bookings" ||
         id === "booking_history"
       ) {
         return false;
+      }
+      if (id === "clients") {
+        return role === "provider" || (role === "staff" && staffHasPerm("manage_bookings"));
       }
       if ((id === "cafe" || id === "cafe_orders") && !isCafeOrgUser) return false;
       if (id === "cafe" && role === "staff" && !staffHasPerm("cafe_menu") && !staffHasPerm("cafe_settings") && !staffHasPerm("cafe_seating")) {
@@ -114,7 +116,6 @@ export function useCabinetNavigation({
       if (
         id === "intervals" ||
         id === "bookings" ||
-        id === "clients" ||
         id === "services" ||
         id === "my_bookings" ||
         id === "booking_history" ||
@@ -122,6 +123,9 @@ export function useCabinetNavigation({
         id === "cafe_orders"
       ) {
         return false;
+      }
+      if (id === "clients") {
+        return role === "provider" || (role === "staff" && (staffHasPerm("manage_bookings") || staffHasPerm("manage_shop")));
       }
     }
     if (id === "inspections") {

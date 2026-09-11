@@ -137,12 +137,31 @@ def _anon_busy_indexes(start, end, booked) -> set:
     return indexes
 
 
+def _filter_slots_by_location(qs, location_id):
+    """
+    location_id:
+      None / missing — без фильтра (обратная совместимость)
+      0 / 'main' — только слоты без филиала (основной адрес)
+      int — только этот филиал
+    """
+    if location_id is None:
+        return qs
+    if location_id in (0, "0", "main", "null", ""):
+        return qs.filter(location_id__isnull=True)
+    try:
+        lid = int(location_id)
+    except (TypeError, ValueError):
+        return qs.filter(location_id__isnull=True)
+    return qs.filter(location_id=lid)
+
+
 def list_available_windows(
     provider_id: int,
     service_id: int,
     book_date,
     extra_minutes: int = 0,
     staff_id: int | None = None,
+    location_id=None,
 ) -> list[dict]:
     from .acquiring import expire_unpaid_bookings
 
@@ -155,12 +174,15 @@ def list_available_windows(
     total_minutes = max(1, int(service.duration_minutes or 30) + max(0, int(extra_minutes or 0)))
     duration = timedelta(minutes=total_minutes)
     slots = list(
-        AvailabilitySlot.objects.filter(
-            provider_id=provider_id,
-            is_booked=False,
-            starts_at__date=book_date,
+        _filter_slots_by_location(
+            AvailabilitySlot.objects.filter(
+                provider_id=provider_id,
+                is_booked=False,
+                starts_at__date=book_date,
+            ),
+            location_id,
         )
-        .select_related("staff")
+        .select_related("staff", "location")
         .order_by("starts_at")
     )
     staff_by_id = {
@@ -254,23 +276,31 @@ def list_available_dates(
     date_to,
     extra_minutes: int = 0,
     staff_id: int | None = None,
+    location_id=None,
 ) -> list[str]:
     """ISO dates in [date_from, date_to] that have at least one bookable window."""
     if date_from > date_to:
         date_from, date_to = date_to, date_from
     slot_days = (
-        AvailabilitySlot.objects.filter(
-            provider_id=provider_id,
-            is_booked=False,
-            starts_at__date__gte=date_from,
-            starts_at__date__lte=date_to,
-        )
-        .dates("starts_at", "day")
+        _filter_slots_by_location(
+            AvailabilitySlot.objects.filter(
+                provider_id=provider_id,
+                is_booked=False,
+                starts_at__date__gte=date_from,
+                starts_at__date__lte=date_to,
+            ),
+            location_id,
+        ).dates("starts_at", "day")
     )
     out = []
     for day in slot_days:
         if list_available_windows(
-            provider_id, service_id, day, extra_minutes=extra_minutes, staff_id=staff_id
+            provider_id,
+            service_id,
+            day,
+            extra_minutes=extra_minutes,
+            staff_id=staff_id,
+            location_id=location_id,
         ):
             out.append(day.isoformat())
     return out
@@ -370,6 +400,7 @@ def book_time_window(
         ends_at=ends_at,
         is_booked=True,
         anonymous_index=anon_index,
+        location_id=getattr(container, "location_id", None),
     )
 
     booking = Booking.objects.create(
@@ -378,6 +409,7 @@ def book_time_window(
         service=service,
         slot=booked_slot,
         staff_id=sid,
+        location_id=getattr(container, "location_id", None),
         comment=(comment or "")[:250],
         selected_options=snapshots,
     )

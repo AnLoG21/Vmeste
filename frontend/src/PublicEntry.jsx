@@ -109,16 +109,20 @@ export default function PublicEntry() {
   const inspectionMatch = path.match(/^\/i\/([^/]+)$/);
   const cityMatch = path.match(/^\/city\/([^/]+)$/);
   const appView = shouldLoadApp(path);
+  const embedMode = new URLSearchParams(window.location.search).get("embed") === "1";
 
   let content;
   if (appView) content = <LazyApp />;
   else if (LegalPage) content = <LegalPage />;
   else if (widgetMatch) content = <BookingWidgetPage slug={decodeURIComponent(widgetMatch[1])} />;
   else if (orgMatch) content = <PublicOrgPage slug={decodeURIComponent(orgMatch[1])} />;
-  else if (shopMatch) content = <PublicShopPage slug={decodeURIComponent(shopMatch[1])} />;
+  else if (shopMatch)
+    content = <PublicShopPage slug={decodeURIComponent(shopMatch[1])} embedded={embedMode} />;
   else if (inspectionMatch) content = <InspectionPublicPage token={decodeURIComponent(inspectionMatch[1])} />;
-  else if (tableMatch) content = <CafeGuestPage mode="table" keyId={decodeURIComponent(tableMatch[1])} />;
-  else if (menuMatch) content = <CafeGuestPage mode="org" keyId={decodeURIComponent(menuMatch[1])} />;
+  else if (tableMatch)
+    content = <CafeGuestPage mode="table" keyId={decodeURIComponent(tableMatch[1])} embed={embedMode} />;
+  else if (menuMatch)
+    content = <CafeGuestPage mode="org" keyId={decodeURIComponent(menuMatch[1])} embed={embedMode} />;
   else if (cityMatch) content = <CityPage cityKey={decodeURIComponent(cityMatch[1]).toLowerCase()} />;
   else content = <NotFoundPage />;
 

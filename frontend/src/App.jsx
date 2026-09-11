@@ -2535,6 +2535,7 @@ export default function App() {
         addAnonymousSeat={addAnonymousSeat}
         intervalEditModal={intervalEditModal}
         setIntervalEditModal={setIntervalEditModal}
+        locations={location}
       />
     );
   }
@@ -3167,16 +3168,9 @@ export default function App() {
           </>
         )}
         {accessToken &&
-          ((me?.role === "provider" &&
-            me?.provider_sphere !== "cafe_restaurant" &&
-            me?.provider_sphere !== "marketplaces" &&
-            me?.provider_sphere !== "shops") ||
+          ((me?.role === "provider" && me?.provider_sphere !== "marketplaces") ||
             (me?.role === "staff" &&
-              staffHasPerm("manage_bookings") &&
-              me?.employer_sphere !== "cafe_restaurant" &&
-              me?.provider_sphere !== "cafe_restaurant" &&
-              me?.employer_sphere !== "shops" &&
-              me?.provider_sphere !== "shops" &&
+              (staffHasPerm("manage_bookings") || staffHasPerm("manage_shop")) &&
               me?.employer_sphere !== "marketplaces" &&
               me?.provider_sphere !== "marketplaces")) &&
           currentView === "clients" && (

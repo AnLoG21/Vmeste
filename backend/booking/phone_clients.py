@@ -148,8 +148,46 @@ def client_brief(user, *, request=None, provider_id=None) -> dict:
     return brief
 
 
+def touch_provider_client_card(provider_id: int, client) -> None:
+    """Создать/показать CRM-карточку клиента у провайдера."""
+    if not provider_id or not client:
+        return
+    from .models import ProviderClientCard
+
+    card, _ = ProviderClientCard.objects.get_or_create(provider_id=provider_id, client=client)
+    if card.hidden:
+        card.hidden = False
+        card.save(update_fields=["hidden", "updated_at"])
+
+
+def ensure_org_client_from_order(
+    *,
+    provider_id: int,
+    phone: str = "",
+    name: str = "",
+    existing_client=None,
+):
+    """
+    Привязать заказ к User-клиенту и карточке CRM.
+    Возвращает client User или None.
+    """
+    client = existing_client
+    if client is not None and getattr(client, "role", None) == User.Role.CLIENT:
+        touch_provider_client_card(provider_id, client)
+        return client
+    phone = (phone or "").strip()
+    if phone and len(phone_digits(phone)) >= 10:
+        try:
+            client = get_or_create_client_by_phone(phone=phone, name=name or "")
+        except ValueError:
+            return existing_client
+        touch_provider_client_card(provider_id, client)
+        return client
+    return existing_client
+
+
 def org_client_ids(provider_id: int) -> set[int]:
-    """Клиенты базы организации: были записи или есть CRM-карточка (не скрытые)."""
+    """Клиенты базы организации: записи, CRM, заказы кафе/магазина."""
     from .models import Booking, ProviderClientCard
 
     booking_ids = (
@@ -166,7 +204,51 @@ def org_client_ids(provider_id: int) -> set[int]:
             "client_id", flat=True
         )
     )
-    return (set(booking_ids) | set(card_ids)) - hidden_ids
+    ids = set(booking_ids) | set(card_ids)
+
+    try:
+        from cafe.models import CafeOrder
+
+        ids |= set(
+            CafeOrder.objects.filter(provider_id=provider_id)
+            .exclude(client_id__isnull=True)
+            .values_list("client_id", flat=True)
+            .distinct()
+        )
+        for ph in (
+            CafeOrder.objects.filter(provider_id=provider_id, client_id__isnull=True)
+            .exclude(guest_phone="")
+            .values_list("guest_phone", flat=True)
+            .distinct()[:300]
+        ):
+            u = find_client_by_phone(ph)
+            if u:
+                ids.add(u.id)
+    except Exception:
+        pass
+
+    try:
+        from shop.models import ShopOrder
+
+        ids |= set(
+            ShopOrder.objects.filter(provider_id=provider_id)
+            .exclude(client_id__isnull=True)
+            .values_list("client_id", flat=True)
+            .distinct()
+        )
+        for ph in (
+            ShopOrder.objects.filter(provider_id=provider_id, client_id__isnull=True)
+            .exclude(guest_phone="")
+            .values_list("guest_phone", flat=True)
+            .distinct()[:300]
+        ):
+            u = find_client_by_phone(ph)
+            if u:
+                ids.add(u.id)
+    except Exception:
+        pass
+
+    return ids - hidden_ids
 
 
 def client_is_blocked_for_provider(provider_id: int, client_id: int) -> bool:
@@ -329,6 +411,56 @@ def list_clients_for_provider(
         .values("client_id")
         .annotate(total=Sum("service__price"))
     }
+
+    try:
+        from cafe.models import CafeOrder
+
+        cafe_revenue = {
+            CafeOrder.Status.PAID,
+            CafeOrder.Status.ACCEPTED,
+            CafeOrder.Status.COOKING,
+            CafeOrder.Status.READY,
+            CafeOrder.Status.DELIVERING,
+            CafeOrder.Status.DONE,
+        }
+        for row in (
+            CafeOrder.objects.filter(
+                provider_id=provider_id,
+                client_id__in=[u.id for u in users],
+                status__in=cafe_revenue,
+            )
+            .values("client_id")
+            .annotate(total=Sum("total"))
+        ):
+            cid = row["client_id"]
+            spent_map[cid] = (spent_map.get(cid) or Decimal("0")) + (row["total"] or Decimal("0"))
+    except Exception:
+        pass
+
+    try:
+        from shop.models import ShopOrder
+
+        shop_revenue = {
+            ShopOrder.Status.PAID,
+            ShopOrder.Status.ASSEMBLING,
+            ShopOrder.Status.READY,
+            ShopOrder.Status.TO_COURIER,
+            ShopOrder.Status.DELIVERING,
+            ShopOrder.Status.DONE,
+        }
+        for row in (
+            ShopOrder.objects.filter(
+                provider_id=provider_id,
+                client_id__in=[u.id for u in users],
+                status__in=shop_revenue,
+            )
+            .values("client_id")
+            .annotate(total=Sum("total"))
+        ):
+            cid = row["client_id"]
+            spent_map[cid] = (spent_map.get(cid) or Decimal("0")) + (row["total"] or Decimal("0"))
+    except Exception:
+        pass
 
     results = []
     for u in users:

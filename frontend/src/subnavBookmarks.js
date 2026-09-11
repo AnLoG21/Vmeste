@@ -34,13 +34,13 @@ export const DEFAULT_SUBNAV_BOOKMARKS = {
   client: ["client_map", "activity", "service_apps", "chats"],
   provider: ["bookings", "clients", "client_map", "analytics", "my_bookings", "service_apps", "chats"],
   staff: ["bookings", "clients", "reviews", "analytics", "service_apps", "chats"],
-  provider_cafe: ["cafe_orders", "cafe", "reviews", "analytics", "client_map", "service_apps", "chats"],
-  staff_cafe: ["cafe_orders", "cafe", "analytics", "service_apps", "chats"],
+  provider_cafe: ["cafe_orders", "cafe", "clients", "reviews", "analytics", "client_map", "service_apps", "chats"],
+  staff_cafe: ["cafe_orders", "cafe", "clients", "analytics", "service_apps", "chats"],
   provider_service: ["bookings", "clients", "client_map", "my_bookings", "analytics", "shop", "service_apps", "chats", "inspections"],
   provider_salon: ["bookings", "clients", "client_map", "my_bookings", "analytics", "shop", "service_apps", "chats"],
   provider_marketplaces: ["marketplaces", "analytics", "reviews", "service_apps", "chats"],
-  provider_shops: ["shop", "reviews", "analytics", "client_map", "service_apps", "chats"],
-  staff_shops: ["shop", "analytics", "service_apps", "chats"],
+  provider_shops: ["shop", "clients", "reviews", "analytics", "client_map", "service_apps", "chats"],
+  staff_shops: ["shop", "clients", "analytics", "service_apps", "chats"],
 };
 
 function ensureServiceAppsBookmark(list, allowed) {
@@ -132,7 +132,6 @@ export function loadSubnavBookmarks(role, sphere) {
       next = next.filter(
         (id) =>
           id !== "bookings" &&
-          id !== "clients" &&
           id !== "intervals" &&
           id !== "services" &&
           id !== "my_bookings" &&

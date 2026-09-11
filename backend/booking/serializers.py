@@ -177,6 +177,7 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
             "hold_label",
             "anonymous_index",
             "service_ids",
+            "location",
             "is_manual_hold",
             "recurrence_group",
             "booking_client_name",

@@ -36,6 +36,7 @@ export function useIntervalHandlers({
     repeat_count: "1",
     assignee: "",
     service_ids: [],
+    location_id: "",
   });
   const [manualHoldForm, setManualHoldForm] = useState(() => ({
     date: todayIsoDate(),
@@ -182,12 +183,14 @@ export function useIntervalHandlers({
     const assignee = parseIntervalAssignee(intervalForm.assignee);
     const templateStaffId = assignee.staff_id;
     const templateAnon = assignee.anonymous_index;
+    const templateLocationId = intervalForm.location_id ? Number(intervalForm.location_id) : null;
     const hasDuplicate = savedIntervals.some(
       (s) =>
         s.start_time === intervalForm.start_time &&
         s.end_time === intervalForm.end_time &&
         (s.staff_id ?? null) === templateStaffId &&
-        (s.anonymous_index ?? null) === templateAnon,
+        (s.anonymous_index ?? null) === templateAnon &&
+        (s.location_id ?? null) === templateLocationId,
     );
     if (hasDuplicate) {
       const msg = "Такой интервал уже есть в сохранённых — выбери другой диапазон времени или сотрудника.";
@@ -213,6 +216,7 @@ export function useIntervalHandlers({
         templateAnon != null
           ? (intervalForm.service_ids || []).map((x) => Number(x)).filter((n) => Number.isFinite(n))
           : [],
+      location_id: templateLocationId,
     };
     setSavedIntervals((prev) => [template, ...prev]);
     setSelectedIntervalId(template.id);
@@ -268,6 +272,7 @@ export function useIntervalHandlers({
         ...(Array.isArray(template.service_ids) && template.service_ids.length
           ? { service_ids: template.service_ids }
           : {}),
+        ...(template.location_id != null ? { location: template.location_id } : {}),
       }),
     });
     if (!response.ok) {
@@ -319,6 +324,7 @@ export function useIntervalHandlers({
           ...(Array.isArray(template.service_ids) && template.service_ids.length
             ? { service_ids: template.service_ids }
             : {}),
+          ...(template.location_id != null ? { location: template.location_id } : {}),
         }),
       });
       if (response.ok) {

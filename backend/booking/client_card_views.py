@@ -57,15 +57,74 @@ class ProviderClientCardView(APIView):
         return provider, card, settings_obj, None
 
     def _serialize(self, card, provider, settings_obj, request=None):
-        recent = (
+        recent_bookings = (
             Booking.objects.filter(provider=provider, client_id=card.client_id)
             .exclude(status=Booking.Status.CANCELLED)
             .select_related("service")
-            .order_by("-created_at")[:8]
+            .order_by("-created_at")[:12]
         )
+        timeline = []
+        status_labels = dict(Booking.Status.choices)
+        for b in recent_bookings:
+            timeline.append(
+                {
+                    "id": f"b-{b.id}",
+                    "kind": "booking",
+                    "service_name": b.service.name if b.service_id else "Запись",
+                    "status": b.status,
+                    "status_label": status_labels.get(b.status, b.status),
+                    "created_at": b.created_at,
+                    "comment": b.comment or "",
+                    "total": float(getattr(b.service, "price", 0) or 0) if b.service_id else 0,
+                }
+            )
+        try:
+            from cafe.models import CafeOrder
+
+            cafe_labels = dict(CafeOrder.Status.choices)
+            for o in CafeOrder.objects.filter(provider=provider, client_id=card.client_id).order_by(
+                "-created_at"
+            )[:8]:
+                timeline.append(
+                    {
+                        "id": f"c-{o.id}",
+                        "kind": "cafe",
+                        "service_name": f"Заказ кафе #{o.id}",
+                        "status": o.status,
+                        "status_label": cafe_labels.get(o.status, o.status),
+                        "created_at": o.created_at,
+                        "comment": "",
+                        "total": float(o.total or 0),
+                    }
+                )
+        except Exception:
+            pass
+        try:
+            from shop.models import ShopOrder
+
+            shop_labels = dict(ShopOrder.Status.choices)
+            for o in ShopOrder.objects.filter(provider=provider, client_id=card.client_id).order_by(
+                "-created_at"
+            )[:8]:
+                timeline.append(
+                    {
+                        "id": f"s-{o.id}",
+                        "kind": "shop",
+                        "service_name": f"Заказ магазина #{o.id}",
+                        "status": o.status,
+                        "status_label": shop_labels.get(o.status, o.status),
+                        "created_at": o.created_at,
+                        "comment": o.comment or "",
+                        "total": float(o.total or 0),
+                    }
+                )
+        except Exception:
+            pass
+        timeline.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+        timeline = timeline[:12]
+
         tech = card.tech if isinstance(card.tech, dict) else {}
         personal = card.personal if isinstance(card.personal, dict) else {}
-        status_labels = dict(Booking.Status.choices)
         av = photo_urls(request, getattr(card.client, "avatar_image", None))
         return {
             "id": card.id,
@@ -96,17 +155,7 @@ class ProviderClientCardView(APIView):
             "preferences_notes": card.preferences_notes or "",
             "field_prefs": _merged_field_prefs(getattr(settings_obj, "client_memory_fields", None)),
             "updated_at": card.updated_at,
-            "recent_visits": [
-                {
-                    "id": b.id,
-                    "service_name": b.service.name if b.service_id else "",
-                    "status": b.status,
-                    "status_label": status_labels.get(b.status, b.status),
-                    "created_at": b.created_at,
-                    "comment": b.comment or "",
-                }
-                for b in recent
-            ],
+            "recent_visits": timeline,
         }
 
     def get(self, request):

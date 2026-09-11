@@ -719,6 +719,28 @@ class PublicShopOrderCreateView(APIView):
         except Exception:
             bonus_requested = Decimal("0")
 
+        guest_name = str(request.data.get("guest_name") or "").strip()[:120]
+        guest_phone = str(request.data.get("guest_phone") or "").strip()[:32]
+        try:
+            from booking.phone_clients import ensure_org_client_from_order
+            from users.models import User as U
+
+            existing = None
+            if (
+                request.user
+                and request.user.is_authenticated
+                and getattr(request.user, "role", None) == U.Role.CLIENT
+            ):
+                existing = request.user
+            client = ensure_org_client_from_order(
+                provider_id=provider.id,
+                phone=guest_phone or (getattr(existing, "phone", "") or ""),
+                name=guest_name,
+                existing_client=existing,
+            )
+        except Exception:
+            pass
+
         with transaction.atomic():
             order = ShopOrder.objects.create(
                 provider=provider,
@@ -727,8 +749,8 @@ class PublicShopOrderCreateView(APIView):
                 status=ShopOrder.Status.AWAITING_PAYMENT,
                 chosen_delivery_provider=chosen_method if mode == ShopOrder.Mode.DELIVERY else "",
                 eta_text=eta_text if mode == ShopOrder.Mode.DELIVERY else "",
-                guest_name=str(request.data.get("guest_name") or "").strip()[:120],
-                guest_phone=str(request.data.get("guest_phone") or "").strip()[:32],
+                guest_name=guest_name,
+                guest_phone=guest_phone,
                 guest_email=str(request.data.get("guest_email") or "").strip()[:120],
                 delivery_address=delivery_address,
                 apartment=str(request.data.get("apartment") or "").strip()[:32],

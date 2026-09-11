@@ -51,6 +51,14 @@ class AvailabilitySlot(models.Model):
         help_text="Для «Без сотрудников»: ID услуг, которые можно оказать в этом интервале. Пусто — все услуги.",
     )
     recurrence_group = models.CharField(max_length=64, blank=True, default="")
+    location = models.ForeignKey(
+        "locations.ProviderLocation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="slots",
+        help_text="Филиал; пусто — основной адрес организации.",
+    )
 
 
 class Booking(models.Model):
@@ -82,6 +90,14 @@ class Booking(models.Model):
         null=True,
         blank=True,
         related_name="staff_bookings",
+    )
+    location = models.ForeignKey(
+        "locations.ProviderLocation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="bookings",
+        help_text="Филиал записи (копируется со слота).",
     )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.NEW)
     comment = models.CharField(max_length=250, blank=True)
