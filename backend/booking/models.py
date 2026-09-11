@@ -265,6 +265,10 @@ class ProviderMessagingSettings(models.Model):
     enable_max = models.BooleanField(default=False)
     enable_whatsapp = models.BooleanField(default=False)
     enable_sms = models.BooleanField(default=False)
+    enable_email = models.BooleanField(
+        default=True,
+        help_text="Письма клиентам о записи (если указан email).",
+    )
     telegram_bot_token = models.CharField(max_length=128, blank=True, default="")
     telegram_notify_chat_id = models.CharField(max_length=64, blank=True, default="")
     max_bot_token = models.CharField(max_length=128, blank=True, default="")
@@ -606,3 +610,40 @@ class WaitlistEntry(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+
+
+class ClientMigrateRequest(models.Model):
+    """Заявка мастера на перенос базы клиентов (оператор импортирует вручную)."""
+
+    class Status(models.TextChoices):
+        NEW = "new", "Новая"
+        IN_PROGRESS = "in_progress", "В работе"
+        DONE = "done", "Готово"
+        REJECTED = "rejected", "Отклонена"
+
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="client_migrate_requests",
+    )
+    file = models.FileField(upload_to="client_migrate/%Y/%m/", blank=True)
+    source_note = models.TextField(
+        blank=True,
+        default="",
+        help_text="Откуда переносим / комментарий мастера.",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.NEW,
+        db_index=True,
+    )
+    result_detail = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Migrate#{self.pk} provider={self.provider_id} {self.status}"

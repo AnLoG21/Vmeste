@@ -5,6 +5,7 @@ from .analytics import AnalyticsSummaryView
 from .calendar_feed import CalendarFeedView, CalendarSettingsView
 from .client_booking_views import (
     BookForClientView,
+    ClientMigrateRequestView,
     ClientPhoneLookupView,
     ProviderClientListView,
     PublicVisitConfirmView,
@@ -53,6 +54,11 @@ urlpatterns = [
     path("loyalty/accounts/", MyLoyaltyAccountsView.as_view(), name="booking-loyalty-accounts"),
     path("client-cards/", ProviderClientCardView.as_view(), name="booking-client-cards"),
     path("clients/lookup/", ClientPhoneLookupView.as_view(), name="booking-clients-lookup"),
+    path(
+        "clients/migrate-request/",
+        ClientMigrateRequestView.as_view(),
+        name="booking-clients-migrate-request",
+    ),
     path("clients/", ProviderClientListView.as_view(), name="booking-clients-list"),
     path("book-for-client/", BookForClientView.as_view(), name="booking-book-for-client"),
     path("public/visit-confirm/<str:token>/", PublicVisitConfirmView.as_view(), name="booking-visit-confirm"),

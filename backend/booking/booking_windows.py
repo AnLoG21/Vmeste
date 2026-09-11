@@ -342,6 +342,10 @@ def book_time_window(
     notify: bool = True,
 ):
     """Забронировать окно внутри свободного интервала без разрезания исходного слота."""
+    from .phone_clients import client_is_blocked_for_provider
+
+    if client and getattr(client, "pk", None) and client_is_blocked_for_provider(provider_id, client.pk):
+        raise ValueError("Онлайн-запись для этого клиента недоступна. Свяжитесь с организацией.")
     service = Service.objects.get(pk=service_id, provider_id=provider_id, is_active=True)
     snapshots = selected_options or []
     booked = _booked_ranges(provider_id, starts_at.date())

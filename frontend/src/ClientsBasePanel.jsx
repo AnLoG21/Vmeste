@@ -22,10 +22,15 @@ export default function ClientsBasePanel({
   const [createForm, setCreateForm] = useState({ name: "", phone: "", source: "" });
   const [createBusy, setCreateBusy] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
+  const [migrateOpen, setMigrateOpen] = useState(false);
+  const [migrateNote, setMigrateNote] = useState("");
+  const [migrateBusy, setMigrateBusy] = useState(false);
+  const [migrateLatest, setMigrateLatest] = useState(null);
   const wrapRef = useRef(null);
   const suggestTimer = useRef(null);
   const listTimer = useRef(null);
   const fileRef = useRef(null);
+  const migrateFileRef = useRef(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -68,6 +73,23 @@ export default function ClientsBasePanel({
       cancelled = true;
     };
   }, [API_URL, authFetch, page, listQuery, reloadKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch(`${API_URL}/booking/clients/migrate-request/`);
+        const json = await res.json().catch(() => ({}));
+        if (cancelled || !res.ok) return;
+        setMigrateLatest(json.latest || null);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [API_URL, authFetch, reloadKey]);
 
   useEffect(() => {
     const q = query.trim();
@@ -155,6 +177,39 @@ export default function ClientsBasePanel({
     }
   }
 
+  async function submitMigrateRequest(e) {
+    e.preventDefault();
+    const file = migrateFileRef.current?.files?.[0] || null;
+    const note = migrateNote.trim();
+    if (!file && !note) {
+      showToast("Прикрепите файл или опишите источник", { tone: "error" });
+      return;
+    }
+    setMigrateBusy(true);
+    try {
+      const fd = new FormData();
+      if (file) fd.append("file", file);
+      if (note) fd.append("source_note", note);
+      const res = await authFetch(`${API_URL}/booking/clients/migrate-request/`, {
+        method: "POST",
+        body: fd,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(json.detail || "Не удалось отправить заявку", { tone: "error" });
+        return;
+      }
+      showToast("Заявка отправлена — перенесём базу");
+      setMigrateOpen(false);
+      setMigrateNote("");
+      if (migrateFileRef.current) migrateFileRef.current.value = "";
+      setMigrateLatest(json);
+      setReloadKey((k) => k + 1);
+    } finally {
+      setMigrateBusy(false);
+    }
+  }
+
   async function deleteClient(c, e) {
     e?.stopPropagation?.();
     if (!c?.id) return;
@@ -202,11 +257,57 @@ export default function ClientsBasePanel({
       </div>
 
       <div className="clients-base-migrate-banner">
-        <strong>Поможем перенести базу клиентов бесплатно за 5 минут</strong>
-        <p className="muted small">
-          Напишите в поддержку — перенесём из Excel, блокнота или другой CRM. Или загрузите файл сами
-          кнопкой выше.
-        </p>
+        <div className="clients-base-migrate-banner-row">
+          <div>
+            <strong>Поможем перенести базу клиентов бесплатно за 5 минут</strong>
+            <p className="muted small">
+              Оставьте заявку с файлом или описанием CRM — мы перенесём. Или загрузите Excel сами кнопкой
+              выше.
+            </p>
+          </div>
+          {migrateLatest ? (
+            <span
+              className={`clients-base-migrate-badge status-${migrateLatest.status || "new"}`}
+              title={migrateLatest.result_detail || ""}
+            >
+              {migrateLatest.status_label || migrateLatest.status}
+            </span>
+          ) : null}
+        </div>
+        {!migrateOpen ? (
+          <button type="button" className="primary-btn clients-base-migrate-cta" onClick={() => setMigrateOpen(true)}>
+            Оставить заявку
+          </button>
+        ) : (
+          <form className="clients-base-migrate-form" onSubmit={submitMigrateRequest}>
+            <label className="field-label">
+              Комментарий
+              <textarea
+                rows={2}
+                placeholder="Откуда переносим: Excel, YCLIENTS, блокнот…"
+                value={migrateNote}
+                onChange={(e) => setMigrateNote(e.target.value)}
+              />
+            </label>
+            <label className="field-label">
+              Файл (необязательно)
+              <input ref={migrateFileRef} type="file" accept=".xlsx,.xls,.csv,.txt" />
+            </label>
+            <div className="clients-base-migrate-form-actions">
+              <button type="submit" className="primary-btn" disabled={migrateBusy}>
+                {migrateBusy ? "Отправка…" : "Отправить заявку"}
+              </button>
+              <button
+                type="button"
+                className="ghost-btn"
+                disabled={migrateBusy}
+                onClick={() => setMigrateOpen(false)}
+              >
+                Отмена
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       <div className="clients-base-search" ref={wrapRef}>

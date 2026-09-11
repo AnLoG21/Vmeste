@@ -160,10 +160,16 @@ def mark_client_arrived(booking, actor):
 
 def mark_booking_no_show(booking, actor):
     """Клиент не пришёл — предоплата (если была) остаётся у организации."""
+    import logging
+
+    from django.db.models import F
+
+    logger = logging.getLogger(__name__)
     if booking.status not in (Booking.Status.NEW, Booking.Status.CONFIRMED, Booking.Status.ARRIVED):
         return False, "invalid_status"
     service_id = getattr(booking, "service_id", None)
     provider_id = booking.provider_id
+    client_id = booking.client_id
     booking.status = Booking.Status.NO_SHOW
     booking.save(update_fields=["status"])
     release_booking_occupancy(booking)
@@ -179,24 +185,27 @@ def mark_booking_no_show(booking, actor):
             title_client="Вы не пришли на запись",
         )
     except Exception:
-        pass
+        logger.exception("no_show notify failed booking=%s", booking.pk)
     try:
         from .waitlist import notify_waitlist_after_slot_freed
 
         notify_waitlist_after_slot_freed(provider_id, service_id)
     except Exception:
-        pass
+        logger.exception("no_show waitlist notify failed booking=%s", booking.pk)
     try:
         from .models import ProviderClientCard
 
         card, _ = ProviderClientCard.objects.get_or_create(
             provider_id=provider_id,
-            client_id=booking.client_id,
+            client_id=client_id,
         )
-        card.no_show_count = int(card.no_show_count or 0) + 1
-        card.save(update_fields=["no_show_count", "updated_at"])
+        ProviderClientCard.objects.filter(pk=card.pk).update(no_show_count=F("no_show_count") + 1)
+        card.refresh_from_db(fields=["no_show_count", "is_blocked"])
+        if int(card.no_show_count or 0) >= 2 and not card.is_blocked:
+            card.is_blocked = True
+            card.save(update_fields=["is_blocked", "updated_at"])
     except Exception:
-        pass
+        logger.exception("no_show counter failed booking=%s", booking.pk)
     return True, None
 
 

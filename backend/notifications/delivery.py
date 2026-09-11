@@ -89,6 +89,19 @@ def _telegram_bot_token(msg) -> str:
     return msg.resolved_telegram_bot_token()
 
 
+def _send_booking_email(user, subject: str, text: str) -> bool:
+    email = (getattr(user, "email", None) or "").strip()
+    if not email or "@" not in email:
+        return False
+    try:
+        from users.email_service import send_booking_notification_email
+
+        return bool(send_booking_notification_email(to=email, subject=subject, text_body=text))
+    except Exception:
+        logger.exception("booking email failed")
+        return False
+
+
 def _fanout_user_channels(msg, user, text: str) -> None:
     if not user or not getattr(user, "pk", None):
         return
@@ -112,6 +125,8 @@ def _fanout_user_channels(msg, user, text: str) -> None:
         phone = (getattr(user, "phone", None) or "").strip()
         if api_id and phone:
             _send_sms(user, phone, text, api_id)
+    if getattr(msg, "enable_email", False):
+        _send_booking_email(user, "Напоминание о записи", text)
 
 
 def _fanout_org_channels(msg, provider, text: str) -> None:
@@ -154,7 +169,7 @@ def deliver_booking_event(
     payload = booking_notification_payload(booking)
 
     is_reminder = event in ("remind_24h", "remind_2h")
-    is_status = event in ("confirm", "cancel", "done", "new_client", "client_confirm")
+    is_status = event in ("confirm", "cancel", "done", "new_client", "client_confirm", "no_show")
 
     # ——— Client ———
     if audience in ("client", "both") and client and client.pk:
@@ -206,6 +221,10 @@ def deliver_booking_event(
                         phone=phone,
                         text=body,
                     )
+            if getattr(msg, "enable_email", False):
+                subj = title_client or ("Напоминание о записи" if is_reminder else "Запись")
+                if _send_booking_email(client, subj, body):
+                    channel_ok = True
 
             # SMS/TG — стабильный канал: не помечаем reminder sent, если канал включён, но не ушёл.
             if is_reminder and (sms_wanted or tg_wanted) and not channel_ok:
@@ -346,3 +365,5 @@ def deliver_winback_message(provider, client, text: str, *, title: str = "Мы �
                 phone=phone,
                 text=body,
             )
+    if getattr(msg, "enable_email", False):
+        _send_booking_email(client, title or "Мы скучаем", body)

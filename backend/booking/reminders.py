@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 
 from django.db.models import Max, Q
 from django.utils import timezone
 
 from .models import Booking, ProviderMessagingSettings, WinbackReminderLog
+
+logger = logging.getLogger(__name__)
 
 
 def send_booking_reminders() -> dict:
@@ -122,6 +125,15 @@ def send_winback_reminders(*, limit: int = 80) -> dict:
                 continue
             if not getattr(client, "notify_booking_reminders", True):
                 continue
+            try:
+                from .models import ProviderClientCard
+
+                if ProviderClientCard.objects.filter(
+                    provider_id=msg.provider_id, client_id=client_id, is_blocked=True
+                ).exists():
+                    continue
+            except Exception:
+                logger.exception("winback block check failed client=%s", client_id)
 
             org = (getattr(msg.provider, "organization_name", None) or "").strip() or "салоне"
             text = render_reminder_template(
@@ -132,12 +144,16 @@ def send_winback_reminders(*, limit: int = 80) -> dict:
                 date="",
                 client=(getattr(client, "first_name", None) or client.username or "клиент"),
             )
-            deliver_winback_message(
-                msg.provider,
-                client,
-                text,
-                title="Мы скучаем",
-            )
+            try:
+                deliver_winback_message(
+                    msg.provider,
+                    client,
+                    text,
+                    title="Мы скучаем",
+                )
+            except Exception:
+                logger.exception("winback deliver failed client=%s", client_id)
+                continue
             WinbackReminderLog.objects.update_or_create(
                 provider_id=msg.provider_id,
                 client_id=client_id,

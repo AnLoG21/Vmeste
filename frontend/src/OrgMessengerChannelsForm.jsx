@@ -193,6 +193,14 @@ export default function OrgMessengerChannelsForm({
           />
         </>
       ) : null}
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={form.enable_email !== false}
+          onChange={(e) => setForm({ enable_email: e.target.checked })}
+        />
+        Email клиентам (если указан email в профиле)
+      </label>
       <button type="submit">Сохранить каналы</button>
       <p className="status">{saveStatus}</p>
     </>

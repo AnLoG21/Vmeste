@@ -698,6 +698,14 @@ class BookingViewSet(viewsets.ModelViewSet):
         if provider_id and str(provider_id) == str(request.user.id):
             return Response({"detail": "Нельзя записаться к своей организации."}, status=status.HTTP_400_BAD_REQUEST)
 
+        from .phone_clients import client_is_blocked_for_provider
+
+        if provider_id and client_is_blocked_for_provider(int(provider_id), request.user.id):
+            return Response(
+                {"detail": "Онлайн-запись для этого клиента недоступна. Свяжитесь с организацией."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         if starts_raw and ends_raw:
             starts_at = parse_datetime(str(starts_raw))
             ends_at = parse_datetime(str(ends_raw))
@@ -1034,6 +1042,7 @@ class MessagingSettingsView(APIView):
             "enable_max": msg.enable_max,
             "enable_whatsapp": msg.enable_whatsapp,
             "enable_sms": msg.enable_sms,
+            "enable_email": msg.enable_email,
             "telegram_notify_chat_id": msg.telegram_notify_chat_id or "",
             "has_telegram": msg.has_telegram(),
             "has_platform_telegram": platform_tg,
@@ -1075,6 +1084,7 @@ class MessagingSettingsView(APIView):
             "enable_max",
             "enable_whatsapp",
             "enable_sms",
+            "enable_email",
         ]
         for f in bool_fields:
             if f in data:

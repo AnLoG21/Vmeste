@@ -213,112 +213,174 @@ class ProviderClientListView(APIView):
         return Response({"ok": True, "hidden": True})
 
     def _import_file(self, request, provider_id, upload):
-        from .models import ProviderClientCard
-        from .phone_clients import client_brief, get_or_create_client_by_name, get_or_create_client_by_phone
+        ok, payload = import_clients_from_upload(provider_id, upload)
+        if not ok:
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+        return Response(payload)
 
-        name = (upload.name or "").lower()
-        rows = []
+
+def import_clients_from_upload(provider_id, upload):
+    """Импорт Excel/CSV в базу клиентов. Returns (ok: bool, payload: dict)."""
+    from .models import ProviderClientCard
+    from .phone_clients import get_or_create_client_by_name, get_or_create_client_by_phone
+
+    name = (getattr(upload, "name", None) or "").lower()
+    rows = []
+    try:
+        if name.endswith(".csv") or name.endswith(".txt"):
+            import csv
+            import io
+
+            text = upload.read().decode("utf-8-sig", errors="replace")
+            reader = csv.DictReader(io.StringIO(text))
+            rows = list(reader)
+        else:
+            from openpyxl import load_workbook
+            import io
+
+            wb = load_workbook(io.BytesIO(upload.read()), read_only=True, data_only=True)
+            ws = wb.active
+            cells = list(ws.iter_rows(values_only=True))
+            if not cells:
+                return False, {"detail": "Пустой файл."}
+            headers = [str(h or "").strip().lower() for h in cells[0]]
+            for row in cells[1:]:
+                item = {}
+                for i, h in enumerate(headers):
+                    if i < len(row):
+                        item[h] = row[i]
+                rows.append(item)
+    except Exception as e:
+        return False, {"detail": f"Не удалось прочитать файл: {e}"}
+
+    created = 0
+    updated = 0
+    errors = []
+    for idx, row in enumerate(rows, start=2):
+        mapped = {}
+        for k, v in (row or {}).items():
+            key = str(k or "").strip().lower()
+            mapped[key] = "" if v is None else str(v).strip()
+        name_v = (
+            mapped.get("name")
+            or mapped.get("имя")
+            or mapped.get("фио")
+            or " ".join(
+                p
+                for p in (
+                    mapped.get("фамилия") or mapped.get("last_name"),
+                    mapped.get("имя") or mapped.get("first_name"),
+                    mapped.get("отчество") or mapped.get("patronymic"),
+                )
+                if p
+            ).strip()
+        )
+        if not name_v or name_v == (mapped.get("имя") or ""):
+            fn = mapped.get("first_name") or mapped.get("имя") or ""
+            ln = mapped.get("last_name") or mapped.get("фамилия") or ""
+            pn = mapped.get("patronymic") or mapped.get("отчество") or ""
+            name_v = " ".join(p for p in (ln, fn, pn) if p).strip() or name_v
+        phone_v = mapped.get("phone") or mapped.get("телефон") or mapped.get("тел") or ""
+        source_v = (
+            mapped.get("source")
+            or mapped.get("acquisition_source")
+            or mapped.get("источник")
+            or ""
+        )[:120]
+        if not name_v and not phone_v:
+            continue
         try:
-            if name.endswith(".csv") or name.endswith(".txt"):
-                import csv
-                import io
-
-                text = upload.read().decode("utf-8-sig", errors="replace")
-                reader = csv.DictReader(io.StringIO(text))
-                rows = list(reader)
+            if phone_v and len(phone_digits(phone_v)) >= 10:
+                client = get_or_create_client_by_phone(phone=phone_v, name=name_v)
             else:
-                from openpyxl import load_workbook
-                import io
-
-                wb = load_workbook(io.BytesIO(upload.read()), read_only=True, data_only=True)
-                ws = wb.active
-                cells = list(ws.iter_rows(values_only=True))
-                if not cells:
-                    return Response({"detail": "Пустой файл."}, status=status.HTTP_400_BAD_REQUEST)
-                headers = [str(h or "").strip().lower() for h in cells[0]]
-                for row in cells[1:]:
-                    item = {}
-                    for i, h in enumerate(headers):
-                        if i < len(row):
-                            item[h] = row[i]
-                    rows.append(item)
+                client = get_or_create_client_by_name(name=name_v or "Клиент", phone=phone_v)
+            card, was_created = ProviderClientCard.objects.get_or_create(
+                provider_id=provider_id, client=client
+            )
+            changed = False
+            if card.hidden:
+                card.hidden = False
+                changed = True
+            if source_v and not card.acquisition_source:
+                card.acquisition_source = source_v
+                changed = True
+            if changed:
+                card.save()
+            if was_created:
+                created += 1
+            else:
+                updated += 1
         except Exception as e:
+            errors.append({"row": idx, "detail": str(e)})
+
+    return True, {
+        "ok": True,
+        "created": created,
+        "updated": updated,
+        "errors": errors[:20],
+        "detail": f"Импортировано: новых {created}, обновлено {updated}.",
+    }
+
+
+class ClientMigrateRequestView(APIView):
+    """GET/POST /api/booking/clients/migrate-request/ — заявка на перенос базы."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    STATUS_LABELS = {
+        "new": "Новая",
+        "in_progress": "В работе",
+        "done": "Готово",
+        "rejected": "Отклонена",
+    }
+
+    def _serialize(self, obj):
+        return {
+            "id": obj.id,
+            "status": obj.status,
+            "status_label": self.STATUS_LABELS.get(obj.status, obj.status),
+            "source_note": obj.source_note or "",
+            "result_detail": obj.result_detail or "",
+            "has_file": bool(obj.file),
+            "file_name": (obj.file.name.rsplit("/", 1)[-1] if obj.file else "") or "",
+            "created_at": obj.created_at.isoformat() if obj.created_at else None,
+            "updated_at": obj.updated_at.isoformat() if obj.updated_at else None,
+        }
+
+    def get(self, request):
+        from .models import ClientMigrateRequest
+
+        provider_id, ok = _provider_context(request.user)
+        if not ok:
+            return Response({"detail": "Нет доступа"}, status=status.HTTP_403_FORBIDDEN)
+        qs = ClientMigrateRequest.objects.filter(provider_id=provider_id).order_by("-created_at")[:20]
+        results = [self._serialize(r) for r in qs]
+        latest = results[0] if results else None
+        return Response({"results": results, "latest": latest})
+
+    def post(self, request):
+        from .models import ClientMigrateRequest
+
+        provider_id, ok = _provider_context(request.user)
+        if not ok:
+            return Response({"detail": "Нет доступа"}, status=status.HTTP_403_FORBIDDEN)
+
+        upload = request.FILES.get("file") or request.FILES.get("excel")
+        note = (
+            (request.data.get("source_note") or request.data.get("note") or request.data.get("comment") or "")
+            .strip()
+        )[:2000]
+        if not upload and not note:
             return Response(
-                {"detail": f"Не удалось прочитать файл: {e}"},
+                {"detail": "Прикрепите файл или опишите, откуда переносить базу."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        created = 0
-        updated = 0
-        errors = []
-        for idx, row in enumerate(rows, start=2):
-            # Normalize keys
-            mapped = {}
-            for k, v in (row or {}).items():
-                key = str(k or "").strip().lower()
-                mapped[key] = "" if v is None else str(v).strip()
-            name_v = (
-                mapped.get("name")
-                or mapped.get("имя")
-                or mapped.get("фио")
-                or " ".join(
-                    p
-                    for p in (
-                        mapped.get("фамилия") or mapped.get("last_name"),
-                        mapped.get("имя") or mapped.get("first_name"),
-                        mapped.get("отчество") or mapped.get("patronymic"),
-                    )
-                    if p
-                ).strip()
-            )
-            # if имя used as first name only
-            if not name_v or name_v == (mapped.get("имя") or ""):
-                fn = mapped.get("first_name") or mapped.get("имя") or ""
-                ln = mapped.get("last_name") or mapped.get("фамилия") or ""
-                pn = mapped.get("patronymic") or mapped.get("отчество") or ""
-                name_v = " ".join(p for p in (ln, fn, pn) if p).strip() or name_v
-            phone_v = mapped.get("phone") or mapped.get("телефон") or mapped.get("тел") or ""
-            source_v = (
-                mapped.get("source")
-                or mapped.get("acquisition_source")
-                or mapped.get("источник")
-                or ""
-            )[:120]
-            if not name_v and not phone_v:
-                continue
-            try:
-                if phone_v and len(phone_digits(phone_v)) >= 10:
-                    client = get_or_create_client_by_phone(phone=phone_v, name=name_v)
-                else:
-                    client = get_or_create_client_by_name(name=name_v or "Клиент", phone=phone_v)
-                card, was_created = ProviderClientCard.objects.get_or_create(
-                    provider_id=provider_id, client=client
-                )
-                changed = False
-                if card.hidden:
-                    card.hidden = False
-                    changed = True
-                if source_v and not card.acquisition_source:
-                    card.acquisition_source = source_v
-                    changed = True
-                if changed:
-                    card.save()
-                if was_created:
-                    created += 1
-                else:
-                    updated += 1
-            except Exception as e:
-                errors.append({"row": idx, "detail": str(e)})
-
-        return Response(
-            {
-                "ok": True,
-                "created": created,
-                "updated": updated,
-                "errors": errors[:20],
-                "detail": f"Импортировано: новых {created}, обновлено {updated}.",
-            }
-        )
+        obj = ClientMigrateRequest(provider_id=provider_id, source_note=note)
+        if upload:
+            obj.file = upload
+        obj.save()
+        return Response(self._serialize(obj), status=status.HTTP_201_CREATED)
 
 
 def client_is_blocked_for_provider(provider_id: int, client_id: int) -> bool:

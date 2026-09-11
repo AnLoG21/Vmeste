@@ -189,6 +189,11 @@ export function useBookingActions({
   async function orgBookingAction(bookingId, action, event) {
     event?.stopPropagation?.();
     event?.preventDefault?.();
+    if (action === "mark-no-show") {
+      if (!window.confirm("Отметить, что клиент не пришёл? Предоплата не возвращается. После 2 неявок клиент попадёт в чёрный список.")) {
+        return;
+      }
+    }
     const res = await authFetch(`${API_URL}/booking/${bookingId}/${action}/`, { method: "POST", body: "{}" });
     if (res.ok) {
       await reloadBookingsList();
@@ -203,7 +208,9 @@ export function useBookingActions({
       err.code === "prepay_required"
     ) {
       setBookingMessageError({ code: err.code, detail: err.detail || "" });
+      return;
     }
+    setClientStatus?.(err.detail || err.code || "Не удалось выполнить действие.");
   }
 
   async function startInspectionFromBooking(booking) {

@@ -11850,6 +11850,16 @@ body.theme-dark .password-eye-btn:hover {
   border-radius: 14px;
   border: 1px dashed #ffb366;
   background: linear-gradient(135deg, #fff8f0 0%, #ffe9d4 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clients-base-migrate-banner-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .clients-base-migrate-banner strong {
@@ -11862,6 +11872,57 @@ body.theme-dark .password-eye-btn:hover {
 
 .clients-base-migrate-banner p {
   margin: 0;
+}
+
+.clients-base-migrate-badge {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #e8c49a;
+  color: #8a3d12;
+  white-space: nowrap;
+}
+
+.clients-base-migrate-badge.status-in_progress {
+  border-color: #7eb6ff;
+  color: #1a4f8a;
+  background: #eef5ff;
+}
+
+.clients-base-migrate-badge.status-done {
+  border-color: #8fd19e;
+  color: #1d6b35;
+  background: #eefaf1;
+}
+
+.clients-base-migrate-badge.status-rejected {
+  border-color: #e8a0a0;
+  color: #8a1f1f;
+  background: #fff0f0;
+}
+
+.clients-base-migrate-cta {
+  align-self: flex-start;
+}
+
+.clients-base-migrate-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.clients-base-migrate-form textarea,
+.clients-base-migrate-form input[type="file"] {
+  width: 100%;
+}
+
+.clients-base-migrate-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .clients-base-search {

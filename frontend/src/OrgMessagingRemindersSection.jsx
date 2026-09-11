@@ -17,7 +17,7 @@ export default function OrgMessagingRemindersSection({
       <h3>Напоминания и мессенджеры</h3>
       <p className="muted small">
         Напоминания за 24 ч и 2 ч до записи: клиентам и организации. При новой записи можно сразу отправить клиенту
-        детали и ссылку на подтверждение визита. Каналы — Telegram, MAX, WhatsApp (Green-API), SMS.
+        детали и ссылку на подтверждение визита.         Каналы — Telegram, MAX, WhatsApp (Green-API), SMS, Email.
         SMS: ключ платформы или свой SMS.ru api_id. Клиент может отключить напоминания в своих настройках. Для салона —
         отдельно «давно не был».
       </p>

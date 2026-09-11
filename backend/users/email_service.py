@@ -76,7 +76,21 @@ def _send_branded(*, to: str, subject: str, text_body: str, html_body: str) -> b
     return True
 
 
-def send_verification_email(user) -> bool:
+def send_booking_notification_email(*, to: str, subject: str, text_body: str) -> bool:
+    """Branded email for booking events (reminders, status, new booking)."""
+    to = (to or "").strip()
+    if not to or "@" not in to:
+        return False
+    paragraphs = [p.strip() for p in (text_body or "").split("\n") if p.strip()]
+    if not paragraphs:
+        paragraphs = [subject or "Уведомление о записи"]
+    html = _wrap_html(
+        title=subject or "Запись",
+        greeting="Здравствуйте!",
+        paragraphs=paragraphs,
+    )
+    return _send_branded(to=to, subject=f"{SITE_BRAND}: {subject}"[:180], text_body=text_body or subject, html_body=html)
+
     if not user.email_verification_token:
         return False
     link = f"{settings.FRONTEND_URL}/verify-email?token={user.email_verification_token}"
