@@ -21,7 +21,6 @@ from .booking_windows import book_time_window, resolve_selected_options
 from .models import Booking, ProviderStaff
 from .phone_clients import (
     client_brief,
-    find_client_by_phone,
     get_or_create_client_by_name,
     get_or_create_client_by_phone,
     normalize_phone,
@@ -92,11 +91,11 @@ class ClientPhoneLookupView(APIView):
         if len(q) < 2:
             return Response({"results": [], "found": False, "client": None, "normalized_phone": ""})
 
-        # Обратная совместимость: один клиент по точному телефону
+        # Обратная совместимость: один клиент по точному телефону — только из своей базы
         phone_only = (request.query_params.get("phone") or "").strip()
         if phone_only and len(phone_digits(phone_only)) >= 10 and not (request.query_params.get("q") or "").strip():
-            client = find_client_by_phone(phone_only)
-            if not client:
+            users = search_clients_for_provider(provider_id, phone_only, limit=1)
+            if not users:
                 return Response(
                     {
                         "found": False,
@@ -105,7 +104,7 @@ class ClientPhoneLookupView(APIView):
                         "normalized_phone": normalize_phone(phone_only),
                     }
                 )
-            brief = client_brief(client, request=request, provider_id=provider_id)
+            brief = client_brief(users[0], request=request, provider_id=provider_id)
             return Response(
                 {
                     "found": True,

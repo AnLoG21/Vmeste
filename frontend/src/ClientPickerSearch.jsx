@@ -199,7 +199,7 @@ export default function ClientPickerSearch({
         </ul>
       ) : null}
       {open && query.trim().length >= 2 && !busy && results.length === 0 ? (
-        <p className="muted small client-picker-empty">Никого не нашли — можно записать по имени ниже.</p>
+        <p className="muted small client-picker-empty">В вашей базе никого не нашли — можно записать нового по имени ниже.</p>
       ) : null}
     </div>
   );

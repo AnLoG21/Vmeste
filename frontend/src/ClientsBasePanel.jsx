@@ -109,7 +109,7 @@ export default function ClientsBasePanel({
         <div>
           <h2>База клиентов</h2>
           <p className="muted small">
-            Карточки с предпочтениями, материалами и историей визитов
+            Клиенты с записями в вашей организации
             {data.count ? ` · ${data.count}` : ""}
           </p>
         </div>
@@ -162,7 +162,7 @@ export default function ClientsBasePanel({
       {loading ? (
         <p className="muted">Загрузка…</p>
       ) : results.length === 0 ? (
-        <p className="muted">Пока нет клиентов — они появятся после записей.</p>
+        <p className="muted">Пока нет клиентов — они появятся после первых записей.</p>
       ) : (
         <ul className="clients-base-grid">
           {results.map((c) => (

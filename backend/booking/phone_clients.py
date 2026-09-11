@@ -140,33 +140,52 @@ def client_brief(user, *, request=None, provider_id=None) -> dict:
     return brief
 
 
-def search_clients_for_provider(provider_id: int, q: str, *, limit: int = 12) -> list:
-    """Подсказки по телефону или имени среди клиентов (с приоритетом уже ходивших к организации)."""
-    from django.db.models import Q
+def org_client_ids(provider_id: int) -> set[int]:
+    """Клиенты базы организации: были записи или есть CRM-карточка."""
+    from .models import Booking, ProviderClientCard
 
-    from .models import Booking
+    booking_ids = (
+        Booking.objects.filter(provider_id=provider_id)
+        .exclude(client_id__isnull=True)
+        .values_list("client_id", flat=True)
+        .distinct()
+    )
+    card_ids = ProviderClientCard.objects.filter(provider_id=provider_id).values_list(
+        "client_id", flat=True
+    )
+    return set(booking_ids) | set(card_ids)
+
+
+def search_clients_for_provider(provider_id: int, q: str, *, limit: int = 12) -> list:
+    """Подсказки только среди клиентов своей базы (записи / CRM), без глобального поиска."""
+    from django.db.models import Q
 
     raw = (q or "").strip()
     if len(raw) < 2:
         return []
 
+    known_ids = org_client_ids(provider_id)
+    if not known_ids:
+        return []
+
+    qs = User.objects.filter(role=User.Role.CLIENT, id__in=known_ids)
+
     digits = phone_digits(raw)
-    if len(digits) >= 7:
-        # Поиск по телефону
+    if len(digits) >= 4:
+        # Сначала точное совпадение телефона внутри базы
         found = find_client_by_phone(raw)
-        if found:
+        if found and found.id in known_ids:
             return [found]
-        # Частичное совпадение по цифрам
-        qs = User.objects.filter(role=User.Role.CLIENT).exclude(phone="").filter(phone__icontains=digits[-7:])[:40]
+        candidates = list(qs.exclude(phone="").filter(phone__icontains=digits[-7:] if len(digits) >= 7 else digits)[:60])
         out = []
-        for u in qs:
-            if digits in phone_digits(u.phone) or phone_digits(u.phone).endswith(digits):
+        for u in candidates:
+            ud = phone_digits(u.phone)
+            if digits in ud or ud.endswith(digits) or ud == digits:
                 out.append(u)
             if len(out) >= limit:
                 break
         return out
 
-    # Поиск по имени / username
     terms = [t for t in re.split(r"\s+", raw) if t]
     name_q = Q()
     for t in terms:
@@ -177,27 +196,7 @@ def search_clients_for_provider(provider_id: int, q: str, *, limit: int = 12) ->
             | Q(username__icontains=t)
         )
 
-    # Сначала клиенты этой организации
-    client_ids = (
-        Booking.objects.filter(provider_id=provider_id)
-        .values_list("client_id", flat=True)
-        .distinct()
-    )
-    known = list(
-        User.objects.filter(role=User.Role.CLIENT, id__in=client_ids)
-        .filter(name_q)
-        .order_by("last_name", "first_name", "id")[:limit]
-    )
-    if len(known) >= limit:
-        return known
-    known_ids = {u.id for u in known}
-    extra = list(
-        User.objects.filter(role=User.Role.CLIENT)
-        .filter(name_q)
-        .exclude(id__in=known_ids)
-        .order_by("last_name", "first_name", "id")[: limit - len(known)]
-    )
-    return known + extra
+    return list(qs.filter(name_q).order_by("last_name", "first_name", "id")[:limit])
 
 
 def get_or_create_client_by_name(*, name: str, phone: str = ""):
@@ -236,27 +235,17 @@ def list_clients_for_provider(
     page_size: int = 20,
 ) -> dict:
     """
-    База клиентов организации: все, у кого были записи или CRM-карточка.
-    Пагинация page/page_size (по умолчанию 20).
+    База клиентов организации: кто был записан (или есть CRM-карточка).
+    Пагинация page/page_size (по умолчанию 20). Поиск только внутри этой базы.
     """
     from django.db.models import F, Max, OrderBy, Q
 
-    from .models import Booking, ProviderClientCard
+    from .models import ProviderClientCard
 
     page = max(1, int(page or 1))
     page_size = min(50, max(1, int(page_size or 20)))
 
-    booking_ids = (
-        Booking.objects.filter(provider_id=provider_id)
-        .exclude(client_id__isnull=True)
-        .values_list("client_id", flat=True)
-        .distinct()
-    )
-    card_ids = ProviderClientCard.objects.filter(provider_id=provider_id).values_list(
-        "client_id", flat=True
-    )
-    client_ids = set(booking_ids) | set(card_ids)
-
+    client_ids = org_client_ids(provider_id)
     qs = User.objects.filter(role=User.Role.CLIENT, id__in=client_ids)
 
     raw = (q or "").strip()
