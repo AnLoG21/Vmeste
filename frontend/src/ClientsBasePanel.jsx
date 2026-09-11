@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { showToast } from "./toast.js";
+import { confirmDialog } from "./confirmDialog.js";
 
 /**
  * База клиентов организации: список, поиск, создание, импорт Excel, CRM-карточки.
@@ -213,7 +214,15 @@ export default function ClientsBasePanel({
   async function deleteClient(c, e) {
     e?.stopPropagation?.();
     if (!c?.id) return;
-    if (!window.confirm(`Удалить «${c.name}» из базы клиентов? История записей сохранится.`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Удалить клиента?",
+        message: `Удалить «${c.name}» из базы клиентов? История записей сохранится.`,
+        confirmLabel: "Удалить",
+      }))
+    ) {
+      return;
+    }
     const res = await authFetch(`${API_URL}/booking/clients/?client=${encodeURIComponent(c.id)}`, {
       method: "DELETE",
     });

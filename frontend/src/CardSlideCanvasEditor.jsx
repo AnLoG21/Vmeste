@@ -18,6 +18,7 @@ import {
   serializeCanvas,
 } from "./cardSlideCanvas.js";
 import { DEFAULT_CARD_STYLE } from "./productCardTemplates.js";
+import { confirmDialog } from "./confirmDialog.js";
 import "./cardSlideCanvasEditor.css";
 
 function isTextObj(obj) {
@@ -427,18 +428,24 @@ export default function CardSlideCanvasEditor({
     commitCanvasChange(canvas);
   }
 
-  function resetStarter() {
+  async function resetStarter() {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    if (!window.confirm("Сбросить сцену к стартовому макету? Текущие объекты пропадут.")) return;
-    (async () => {
-      skipEmitRef.current = true;
-      await loadSceneOntoCanvas(canvas, buildStarterCanvasJson(layout, style));
-      skipEmitRef.current = false;
-      historyRef.current = { past: [JSON.stringify(serializeCanvas(canvas))], future: [] };
-      setHistoryTick((t) => t + 1);
-      commitCanvasChange(canvas, { skipHistory: true });
-    })();
+    if (
+      !(await confirmDialog({
+        title: "Сбросить сцену?",
+        message: "Сбросить сцену к стартовому макету? Текущие объекты пропадут.",
+        confirmLabel: "Сбросить",
+      }))
+    ) {
+      return;
+    }
+    skipEmitRef.current = true;
+    await loadSceneOntoCanvas(canvas, buildStarterCanvasJson(layout, style));
+    skipEmitRef.current = false;
+    historyRef.current = { past: [JSON.stringify(serializeCanvas(canvas))], future: [] };
+    setHistoryTick((t) => t + 1);
+    commitCanvasChange(canvas, { skipHistory: true });
   }
 
   async function insertImageBlob(blob) {

@@ -9,6 +9,7 @@ import {
   conversationClientCorrespondenceTitle,
 } from "./chatHelpers.jsx";
 import { showToast } from "./toast.js";
+import { confirmDialog } from "./confirmDialog.js";
 
 const chatPrefsStorageKey = (id) => `vmeste_chat_prefs_v1_${id}`;
 const chatNotifyStorageKey = (id) => `vmeste_chat_notify_v1_${id}`;
@@ -321,7 +322,15 @@ export function useChatExtras({
     const chatId = target?.id ?? selectedChatId;
     if (!chatId || !target?.is_group) return;
     if (me?.role !== "provider" || Number(target.organization) !== Number(me?.id)) return;
-    if (!window.confirm("Удалить группу для всех участников? Это действие нельзя отменить.")) return;
+    if (
+      !(await confirmDialog({
+        title: "Удалить группу?",
+        message: "Удалить группу для всех участников? Это действие нельзя отменить.",
+        confirmLabel: "Удалить",
+      }))
+    ) {
+      return;
+    }
     setChatInfoHeadMenuOpen(false);
     setChatRowMenuId(null);
     const response = await authFetch(`${API_URL}/chat/conversations/${chatId}/delete-group/`, {

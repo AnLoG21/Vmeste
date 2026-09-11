@@ -1,5 +1,6 @@
 /** Подключение «Мой налог» для автовыдачи чеков самозанятым. */
 import { useCallback, useEffect, useState } from "react";
+import { confirmDialog } from "./confirmDialog.js";
 
 const STATUS_LABEL = {
   issued: "Выбит",
@@ -128,7 +129,15 @@ export default function OrgMoyNalogPanel({ authFetch, API_URL }) {
   }
 
   async function disconnect() {
-    if (!window.confirm("Отключить «Мой налог»? Авточеки прекратятся.")) return;
+    if (
+      !(await confirmDialog({
+        title: "Отключить «Мой налог»?",
+        message: "Отключить «Мой налог»? Авточеки прекратятся.",
+        confirmLabel: "Отключить",
+      }))
+    ) {
+      return;
+    }
     setBusy("disconnect");
     try {
       const res = await authFetch(`${API_URL}/moy-nalog/disconnect/`, { method: "POST" });

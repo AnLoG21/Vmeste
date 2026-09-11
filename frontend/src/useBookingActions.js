@@ -6,6 +6,7 @@ import {
   mergeBookingsWithManualHolds,
   clientWindowKey,
 } from "./bookingCalendarUtils.jsx";
+import { confirmDialog } from "./confirmDialog.js";
 
 /**
  * Booking list actions / client book / payment / inspection links for App.
@@ -190,7 +191,14 @@ export function useBookingActions({
     event?.stopPropagation?.();
     event?.preventDefault?.();
     if (action === "mark-no-show") {
-      if (!window.confirm("Отметить, что клиент не пришёл? Предоплата не возвращается. После 2 неявок клиент попадёт в чёрный список.")) {
+      if (
+        !(await confirmDialog({
+          title: "Клиент не пришёл?",
+          message:
+            "Отметить, что клиент не пришёл? Предоплата не возвращается. После 2 неявок клиент попадёт в чёрный список.",
+          confirmLabel: "Не пришёл",
+        }))
+      ) {
         return;
       }
     }

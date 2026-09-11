@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { InspectionItemBlock, InspectionPhotoLightbox, money } from "./InspectionApproveView.jsx";
 import { EmptyState } from "./EmptyState.jsx";
 import { REPAIR_STATUS_LABELS, REPAIR_STATUS_TOAST } from "./inspectionRepair.js";
+import { confirmDialog } from "./confirmDialog.js";
 
 const SEVERITY_OPTIONS = [
   { value: "critical", label: "Критично" },
@@ -327,7 +328,15 @@ export default function InspectionWorkspace({
 
   async function deleteReport() {
     if (!report) return;
-    if (!window.confirm(`Удалить отчёт #${report.id}? Это действие нельзя отменить.`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Удалить отчёт?",
+        message: `Удалить отчёт #${report.id}? Это действие нельзя отменить.`,
+        confirmLabel: "Удалить",
+      }))
+    ) {
+      return;
+    }
     setBusy(true);
     setStatus("");
     const res = await authFetch(`${API_URL}/inspections/reports/${report.id}/`, { method: "DELETE" });

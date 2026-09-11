@@ -3,6 +3,7 @@ import { API_URL } from "./config.js";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import ServiceMaterialsBlock from "./ServiceMaterialsBlock.jsx";
 import { showToast } from "./toast.js";
+import { confirmDialog } from "./confirmDialog.js";
 
 export function buildServiceDraftFromService(service) {
   return {
@@ -205,7 +206,15 @@ export default function ServiceEditor({
   }
 
   async function removeOption(opt) {
-    if (!window.confirm(`Удалить «${opt.name}»?`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Удалить опцию?",
+        message: `Удалить «${opt.name}»?`,
+        confirmLabel: "Удалить",
+      }))
+    ) {
+      return;
+    }
     setOptBusy(true);
     try {
       const res = await authFetch(`${API_URL}/catalog/services/${service.id}/options/${opt.id}/`, {

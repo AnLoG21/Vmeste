@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { confirmDialog } from "./confirmDialog.js";
 
 const STATUS_LABELS = {
   pending: "Ожидает оплаты",
@@ -223,7 +224,15 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
     const msg = immediate
       ? "Отключить подписку сразу? Если оплата была сегодня (не пробный период и не промокод), деньги вернутся автоматически."
       : "Отключить автопродление? Подписка останется активной до конца оплаченного периода.";
-    if (!window.confirm(msg)) return;
+    if (
+      !(await confirmDialog({
+        title: immediate ? "Отключить подписку?" : "Отключить автопродление?",
+        message: msg,
+        confirmLabel: "Отключить",
+      }))
+    ) {
+      return;
+    }
 
     setStatus("Отключаем подписку...");
     const response = await authFetch(`${apiUrl}/subscriptions/cancel/`, {

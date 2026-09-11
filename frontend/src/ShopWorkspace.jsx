@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_URL } from "./config.js";
 import { getDevicePosition } from "./geoPosition.js";
 import { showToast } from "./toast.js";
+import { confirmDialog } from "./confirmDialog.js";
 import CafeDeliveryZonesEditor from "./CafeDeliveryZonesEditor.jsx";
 import {
   browseShopCategoryChildren,
@@ -504,7 +505,16 @@ export default function ShopWorkspace({ authFetch, me }) {
 
   async function deleteProduct(product) {
     const target = product || selected;
-    if (!target || !window.confirm(`Удалить «${target.name}»?`)) return;
+    if (
+      !target ||
+      !(await confirmDialog({
+        title: "Удалить товар?",
+        message: `Удалить «${target.name}»?`,
+        confirmLabel: "Удалить",
+      }))
+    ) {
+      return;
+    }
     setBusy(true);
     try {
       const res = await authFetch(`${API_URL}/shop/products/${target.id}/`, { method: "DELETE" });
@@ -523,7 +533,15 @@ export default function ShopWorkspace({ authFetch, me }) {
   }
 
   async function deleteCategory(cat) {
-    if (!window.confirm(`Удалить категорию «${cat.name}» и вложенные? Товары останутся без категории.`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Удалить категорию?",
+        message: `Удалить категорию «${cat.name}» и вложенные? Товары останутся без категории.`,
+        confirmLabel: "Удалить",
+      }))
+    ) {
+      return;
+    }
     setBusy(true);
     try {
       const res = await authFetch(`${API_URL}/shop/categories/${cat.id}/`, { method: "DELETE" });

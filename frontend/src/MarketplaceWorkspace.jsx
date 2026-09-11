@@ -23,6 +23,7 @@ import {
   wbCharcInputType,
 } from "./marketplaceCategoryHelpers.js";
 import MarketplaceCategoryPicker from "./marketplaceCategoryPicker.jsx";
+import { confirmDialog } from "./confirmDialog.js";
 import SearchableSelect from "./marketplaceSearchableSelect.jsx";
 import MarketplaceAnalyticsPanel from "./MarketplaceAnalyticsPanel.jsx";
 import { aggregateBuhRows, extractRecords as extractAnalyticsRecords } from "./marketplaceAnalytics.js";
@@ -1564,7 +1565,12 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   async function seedCardDesigns() {
     await withBusy("card-design", async () => {
       const force = cardDesigns.length
-        ? window.confirm("Шаблоны уже есть. Добавить ещё три стартовых?")
+        ? await confirmDialog({
+            title: "Добавить шаблоны?",
+            message: "Шаблоны уже есть. Добавить ещё три стартовых?",
+            confirmLabel: "Добавить",
+            danger: false,
+          })
         : false;
       if (cardDesigns.length && !force) return;
       const res = await authFetch(`${base}/card-designs/`, {
@@ -1622,7 +1628,16 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   }
 
   async function deleteCardDesign(id) {
-    if (!id || !window.confirm("Удалить этот шаблон слайда?")) return;
+    if (
+      !id ||
+      !(await confirmDialog({
+        title: "Удалить шаблон?",
+        message: "Удалить этот шаблон слайда?",
+        confirmLabel: "Удалить",
+      }))
+    ) {
+      return;
+    }
     await withBusy("card-design", async () => {
       const res = await authFetch(`${base}/card-designs/${id}/`, { method: "DELETE" });
       if (!res.ok) {
@@ -1869,7 +1884,15 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   async function deleteProduct(row) {
     const ids = typeof row === "object" ? marketplaceIdsFromRow(row) : { vendorCode: row, nmId: "", productId: "" };
     const label = ids.vendorCode || ids.nmId || ids.productId || "товар";
-    if (!window.confirm(`Удалить карточку ${label} на площадке?`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Удалить карточку?",
+        message: `Удалить карточку ${label} на площадке?`,
+        confirmLabel: "Удалить",
+      }))
+    ) {
+      return;
+    }
     await withBusy("delete", async () => {
       const payload =
         mp === "wildberries"
@@ -2094,7 +2117,15 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
 
   async function cancelOrder(row) {
     const label = row.number || row.id;
-    if (!window.confirm(`Отменить заказ ${label}?`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Отменить заказ?",
+        message: `Отменить заказ ${label}?`,
+        confirmLabel: "Отменить заказ",
+      }))
+    ) {
+      return;
+    }
     await withBusy("order-cancel", async () => {
       if (mp === "wildberries") {
         showLive(await mpCall("orders.cancel", {}, { id: row.id }));
@@ -2116,7 +2147,16 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       setStatus("Отгрузка из кабинета пока для Ozon FBS.");
       return;
     }
-    if (!window.confirm(`Собрать и отгрузить отправление ${row.number}?`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Отгрузить заказ?",
+        message: `Собрать и отгрузить отправление ${row.number}?`,
+        confirmLabel: "Отгрузить",
+        danger: false,
+      }))
+    ) {
+      return;
+    }
     await withBusy("order-ship", async () => {
       const products = (row.raw?.products || [])
         .map((p) => ({
@@ -2511,7 +2551,16 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   async function deliverSupply(id) {
     const supplyId = String(id || selectedSupplyId || "").trim();
     if (!supplyId) throw new Error("Выберите поставку.");
-    if (!window.confirm(`Передать поставку ${supplyId} в доставку? После этого добавить заказы нельзя.`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Передать в доставку?",
+        message: `Передать поставку ${supplyId} в доставку? После этого добавить заказы нельзя.`,
+        confirmLabel: "Передать",
+        danger: false,
+      }))
+    ) {
+      return;
+    }
     await withBusy("supply-deliver", async () => {
       const data = await mpCall("supplies.deliver", {}, { id: supplyId });
       if (data?.sandbox) throw new Error(data.message || "Тестовый режим.");
@@ -2523,7 +2572,15 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   async function deleteSupply(id) {
     const supplyId = String(id || "").trim();
     if (!supplyId) return;
-    if (!window.confirm(`Удалить пустую поставку ${supplyId}?`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Удалить поставку?",
+        message: `Удалить пустую поставку ${supplyId}?`,
+        confirmLabel: "Удалить",
+      }))
+    ) {
+      return;
+    }
     await withBusy("supply-delete", async () => {
       const data = await mpCall("supplies.delete", {}, { id: supplyId });
       if (data?.sandbox) throw new Error(data.message || "Тестовый режим.");
@@ -2545,7 +2602,16 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
     }
     const orderId = orderRow?.id;
     if (orderId == null || orderId === "") throw new Error("Нет ID заказа.");
-    if (!window.confirm(`Добавить заказ ${orderRow.number} в поставку ${supplyId}?`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Добавить в поставку?",
+        message: `Добавить заказ ${orderRow.number} в поставку ${supplyId}?`,
+        confirmLabel: "Добавить",
+        danger: false,
+      }))
+    ) {
+      return;
+    }
     await withBusy("supply-add", async () => {
       const data = await mpCall("supplies.add_order", {}, { id: supplyId, orderId });
       if (data?.sandbox) throw new Error(data.message || "Тестовый режим.");

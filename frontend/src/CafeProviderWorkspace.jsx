@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import CafeFloorCanvas, { QrImg, GRID } from "./CafeFloorCanvas.jsx";
 import CafeQrPrintSheet from "./CafeQrPrintSheet.jsx";
 import CafeDeliveryZonesEditor from "./CafeDeliveryZonesEditor.jsx";
+import { confirmDialog } from "./confirmDialog.js";
 import "./cafeGuest.css";
 import "./cafeProvider.css";
 import { EmptyState } from "./EmptyState.jsx";
@@ -181,7 +182,15 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
   }
 
   async function deleteFloor(id) {
-    if (!window.confirm("Удалить зал и все столы на нём?")) return;
+    if (
+      !(await confirmDialog({
+        title: "Удалить зал?",
+        message: "Удалить зал и все столы на нём?",
+        confirmLabel: "Удалить",
+      }))
+    ) {
+      return;
+    }
     const res = await authFetch(`${API_URL}/cafe/floors/${id}/`, { method: "DELETE" });
     if (res.ok || res.status === 204) {
       const next = floors.filter((f) => f.id !== id);
@@ -265,7 +274,16 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
   }
 
   async function deleteTable(id, { quiet = false } = {}) {
-    if (!quiet && !window.confirm("Удалить стол?")) return;
+    if (
+      !quiet &&
+      !(await confirmDialog({
+        title: "Удалить стол?",
+        message: "Удалить стол с плана зала?",
+        confirmLabel: "Удалить",
+      }))
+    ) {
+      return;
+    }
     const res = await authFetch(`${API_URL}/cafe/tables/${id}/`, { method: "DELETE" });
     if (res.ok || res.status === 204) {
       setFloors((prev) =>
@@ -335,7 +353,15 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
   }
 
   async function deleteCategory(id) {
-    if (!window.confirm("Удалить категорию и блюда?")) return;
+    if (
+      !(await confirmDialog({
+        title: "Удалить категорию?",
+        message: "Удалить категорию и блюда?",
+        confirmLabel: "Удалить",
+      }))
+    ) {
+      return;
+    }
     await authFetch(`${API_URL}/cafe/menu/categories/${id}/`, { method: "DELETE" });
     await loadAll();
   }
@@ -373,7 +399,15 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
   }
 
   async function deleteItem(id) {
-    if (!window.confirm("Удалить блюдо?")) return;
+    if (
+      !(await confirmDialog({
+        title: "Удалить блюдо?",
+        message: "Удалить блюдо из меню?",
+        confirmLabel: "Удалить",
+      }))
+    ) {
+      return;
+    }
     await authFetch(`${API_URL}/cafe/menu/items/${id}/`, { method: "DELETE" });
     await loadAll();
   }
@@ -386,7 +420,15 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
   }
 
   async function deletePhoto(itemId, photoId) {
-    if (!window.confirm("Удалить это фото?")) return;
+    if (
+      !(await confirmDialog({
+        title: "Удалить фото?",
+        message: "Удалить это фото?",
+        confirmLabel: "Удалить",
+      }))
+    ) {
+      return;
+    }
     await authFetch(`${API_URL}/cafe/menu/items/${itemId}/photos/${photoId}/`, { method: "DELETE" });
     await loadAll();
   }
@@ -399,7 +441,15 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
   }
 
   async function clearLogo() {
-    if (!window.confirm("Удалить логотип?")) return;
+    if (
+      !(await confirmDialog({
+        title: "Удалить логотип?",
+        message: "Удалить логотип организации?",
+        confirmLabel: "Удалить",
+      }))
+    ) {
+      return;
+    }
     const fd = new FormData();
     fd.append("clear_logo", "1");
     const res = await authFetch(`${API_URL}/cafe/settings/`, { method: "PATCH", body: fd });
