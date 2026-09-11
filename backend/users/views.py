@@ -178,7 +178,7 @@ class MeView(APIView):
         full_name = " ".join(
             p for p in (u.last_name, u.first_name, getattr(u, "patronymic", "") or "") if p
         ).strip()
-        data = UserSerializer(u).data
+        data = UserSerializer(u, context={"request": request}).data
         data["full_name"] = full_name or u.username
         if u.role == User.Role.STAFF:
             from booking.models import ProviderStaff
@@ -215,9 +215,25 @@ class MeView(APIView):
         return Response(data)
 
     def patch(self, request):
-        ser = UserSerializer(request.user, data=request.data, partial=True)
+        ser = UserSerializer(request.user, data=request.data, partial=True, context={"request": request})
         ser.is_valid(raise_exception=True)
         ser.save()
+        return self.get(request)
+
+    def post(self, request):
+        """Загрузка/удаление аватара: multipart avatar=file или clear_avatar=1."""
+        user = request.user
+        if request.data.get("clear_avatar") in (True, "1", "true", "True"):
+            if user.avatar_image:
+                user.avatar_image.delete(save=False)
+                user.avatar_image = None
+                user.save(update_fields=["avatar_image"])
+            return self.get(request)
+        avatar_file = request.FILES.get("avatar") or request.FILES.get("avatar_image")
+        if not avatar_file:
+            return Response({"detail": "Выберите файл аватара."}, status=status.HTTP_400_BAD_REQUEST)
+        user.avatar_image = avatar_file
+        user.save(update_fields=["avatar_image"])
         return self.get(request)
 
 

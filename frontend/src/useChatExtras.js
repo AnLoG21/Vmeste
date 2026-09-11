@@ -210,6 +210,19 @@ export function useChatExtras({
     return displayConversationTitle(conversation).slice(0, 1).toUpperCase();
   }
 
+  function conversationPeerAvatarUrl(conversation) {
+    if (!conversation || conversation.is_saved_messages || conversation.is_group) return "";
+    const myId = me?.id;
+    const peer =
+      (conversation.members || []).find((m) => Number(m.user) !== Number(myId)) ||
+      null;
+    if (peer?.avatar_url) return peer.avatar_url;
+    if (conversation.org_direct_peer_status?.avatar_url) {
+      return conversation.org_direct_peer_status.avatar_url;
+    }
+    return "";
+  }
+
   function persistChatVisualSettings() {
     if (chatSettingsForId == null) return;
     let prev = {};
@@ -405,6 +418,7 @@ export function useChatExtras({
     createOrgGroup,
     displayConversationTitle,
     conversationAvatarLetter,
+    conversationPeerAvatarUrl,
     persistChatVisualSettings,
     clearChatVisualSettings,
     toggleGroupStaff,

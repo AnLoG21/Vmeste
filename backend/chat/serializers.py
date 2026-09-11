@@ -18,6 +18,7 @@ class ConversationMemberSerializer(serializers.ModelSerializer):
     role = serializers.CharField(source="user.role", read_only=True)
     last_seen_at = serializers.DateTimeField(source="user.last_seen_at", read_only=True)
     is_online = serializers.SerializerMethodField()
+    avatar_url = serializers.SerializerMethodField()
 
     phone = serializers.CharField(source="user.phone", read_only=True)
 
@@ -33,6 +34,7 @@ class ConversationMemberSerializer(serializers.ModelSerializer):
             "organization_name",
             "role",
             "phone",
+            "avatar_url",
             "last_read_message_id",
             "last_seen_at",
             "is_online",
@@ -43,6 +45,13 @@ class ConversationMemberSerializer(serializers.ModelSerializer):
         if not ts:
             return False
         return ts >= timezone.now() - ONLINE_WINDOW
+
+    def get_avatar_url(self, obj):
+        from common.media_urls import photo_urls
+
+        request = self.context.get("request")
+        urls = photo_urls(request, getattr(obj.user, "avatar_image", None))
+        return urls["thumb_url"] or urls["url"] or ""
 
 
 class ConversationSerializer(serializers.ModelSerializer):
@@ -97,6 +106,11 @@ class ConversationSerializer(serializers.ModelSerializer):
         u = peer_m.user
         ts = getattr(u, "last_seen_at", None)
         online = bool(ts and ts >= timezone.now() - ONLINE_WINDOW)
+        from common.media_urls import photo_urls
+
+        request = self.context.get("request")
+        urls = photo_urls(request, getattr(u, "avatar_image", None))
+        avatar_url = urls["thumb_url"] or urls["url"] or ""
         return {
             "is_online": online,
             "last_seen_at": ts.isoformat() if ts else None,
@@ -109,6 +123,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             "organization_name": getattr(u, "organization_name", None) or "",
             "role": u.role or "",
             "phone": getattr(u, "phone", None) or "",
+            "avatar_url": avatar_url,
         }
 
     def get_last_message(self, obj):

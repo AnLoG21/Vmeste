@@ -105,6 +105,14 @@ def client_brief(user, *, request=None, provider_id=None) -> dict:
     parts = [user.first_name or "", user.last_name or ""]
     name = " ".join(p for p in parts if p).strip() or user.username
     initial = (name[:1] or "?").upper()
+    avatar_url = ""
+    try:
+        from common.media_urls import photo_urls
+
+        urls = photo_urls(request, getattr(user, "avatar_image", None))
+        avatar_url = urls["thumb_url"] or urls["url"] or ""
+    except Exception:
+        avatar_url = ""
     brief = {
         "id": user.id,
         "username": user.username,
@@ -114,7 +122,7 @@ def client_brief(user, *, request=None, provider_id=None) -> dict:
         "first_name": user.first_name or "",
         "last_name": user.last_name or "",
         "patronymic": getattr(user, "patronymic", None) or "",
-        "avatar_url": "",
+        "avatar_url": avatar_url,
         "avatar_initial": initial,
         "visits_done": 0,
         "last_visit": "",
@@ -233,6 +241,7 @@ def list_clients_for_provider(
     q: str = "",
     page: int = 1,
     page_size: int = 20,
+    request=None,
 ) -> dict:
     """
     База клиентов организации: кто был записан (или есть CRM-карточка).
@@ -296,7 +305,7 @@ def list_clients_for_provider(
 
     results = []
     for u in users:
-        brief = client_brief(u, provider_id=provider_id)
+        brief = client_brief(u, request=request, provider_id=provider_id)
         card = cards_by_client.get(u.id)
         tech = card.tech if card and isinstance(card.tech, dict) else {}
         personal = card.personal if card and isinstance(card.personal, dict) else {}

@@ -146,7 +146,9 @@ class ProviderClientListView(APIView):
         except (TypeError, ValueError):
             page_size = 20
         q = (request.query_params.get("q") or "").strip()
-        data = list_clients_for_provider(provider_id, q=q, page=page, page_size=page_size)
+        data = list_clients_for_provider(
+            provider_id, q=q, page=page, page_size=page_size, request=request
+        )
         return Response(data)
 
 

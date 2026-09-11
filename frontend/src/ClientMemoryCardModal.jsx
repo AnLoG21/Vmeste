@@ -190,7 +190,11 @@ export default function ClientMemoryCardModal({
 
         <header className="client-memory-head">
           <div className="client-memory-avatar" aria-hidden>
-            {(card?.client_name || clientName || "?").trim().slice(0, 1).toUpperCase()}
+            {card?.client_avatar_url ? (
+              <img src={card.client_avatar_url} alt="" />
+            ) : (
+              (card?.client_name || clientName || "?").trim().slice(0, 1).toUpperCase()
+            )}
           </div>
           <div className="client-memory-head-copy">
             <p className="muted small">Помнить всё</p>

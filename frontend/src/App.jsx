@@ -1613,6 +1613,7 @@ export default function App() {
     createOrgGroup,
     displayConversationTitle,
     conversationAvatarLetter,
+    conversationPeerAvatarUrl,
     persistChatVisualSettings,
     clearChatVisualSettings,
     toggleGroupStaff,
@@ -2197,6 +2198,8 @@ export default function App() {
     deleteAccountStatus,
     deleteAccountBusy,
     updateProfile,
+    uploadAvatar,
+    clearAvatar,
     changePassword,
     changeEmail,
     deleteMyAccount,
@@ -2987,6 +2990,8 @@ export default function App() {
             setPendingInspectionId={setPendingInspectionId}
             setCurrentView={setCurrentView}
             updateProfile={updateProfile}
+            uploadAvatar={uploadAvatar}
+            clearAvatar={clearAvatar}
             profileForm={profileForm}
             setProfileForm={setProfileForm}
             canManageOrgSettings={canManageOrgSettings}
@@ -3240,6 +3245,7 @@ export default function App() {
             clearChatVisualSettings={clearChatVisualSettings}
             clientsFolderUnreadChatsCount={clientsFolderUnreadChatsCount}
             conversationAvatarLetter={conversationAvatarLetter}
+            conversationPeerAvatarUrl={conversationPeerAvatarUrl}
             conversations={conversations}
             createOrgGroup={createOrgGroup}
             currentView={currentView}

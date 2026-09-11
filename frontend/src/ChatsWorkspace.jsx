@@ -80,6 +80,7 @@ export default function ChatsWorkspace({
   clearChatVisualSettings,
   clientsFolderUnreadChatsCount,
   conversationAvatarLetter,
+  conversationPeerAvatarUrl,
   conversations,
   createOrgGroup,
   currentView,
@@ -276,6 +277,8 @@ export default function ChatsWorkspace({
                           <span className={`tg-avatar ${c.is_saved_messages ? "tg-avatar-saved" : ""}`}>
                             {chatLocalPrefs[c.id]?.avatarDataUrl ? (
                               <img src={chatLocalPrefs[c.id].avatarDataUrl} alt="" className="tg-avatar-img" />
+                            ) : conversationPeerAvatarUrl?.(c) ? (
+                              <img src={conversationPeerAvatarUrl(c)} alt="" className="tg-avatar-img" />
                             ) : (
                               conversationAvatarLetter(c)
                             )}
@@ -442,6 +445,12 @@ export default function ChatsWorkspace({
                         <span className="tg-avatar tg-main-head-avatar">
                           {chatLocalPrefs[selectedChatId]?.avatarDataUrl ? (
                             <img src={chatLocalPrefs[selectedChatId].avatarDataUrl} alt="" className="tg-avatar-img" />
+                          ) : conversationPeerAvatarUrl?.(conversations.find((c) => c.id === selectedChatId)) ? (
+                            <img
+                              src={conversationPeerAvatarUrl(conversations.find((c) => c.id === selectedChatId))}
+                              alt=""
+                              className="tg-avatar-img"
+                            />
                           ) : (
                             (displayConversationTitle(conversations.find((c) => c.id === selectedChatId)) || "?")
                               .slice(0, 1)
@@ -1203,6 +1212,8 @@ export default function ChatsWorkspace({
                     <span className="tg-avatar tg-chat-info-avatar">
                       {chatLocalPrefs[selectedChatId]?.avatarDataUrl ? (
                         <img src={chatLocalPrefs[selectedChatId].avatarDataUrl} alt="" className="tg-avatar-img" />
+                      ) : conversationPeerAvatarUrl?.(selectedConv) ? (
+                        <img src={conversationPeerAvatarUrl(selectedConv)} alt="" className="tg-avatar-img" />
                       ) : (
                         (displayConversationTitle(selectedConv) || "?").slice(0, 1).toUpperCase()
                       )}

@@ -14,6 +14,8 @@ export default function ProfileCabinetPanel({
   setPendingInspectionId,
   setCurrentView,
   updateProfile,
+  uploadAvatar,
+  clearAvatar,
   profileForm,
   setProfileForm,
   canManageOrgSettings,
@@ -29,6 +31,9 @@ export default function ProfileCabinetPanel({
   deleteStaffPortfolioPhoto,
   staffInviteStatus,
 }) {
+  const avatarSrc = me?.avatar_thumb_url || me?.avatar_url || "";
+  const avatarInitial = (fullName || me?.username || "?").trim().slice(0, 1).toUpperCase();
+
   return (
     <section className="card profile-card">
       <div className="profile-title-row">
@@ -38,6 +43,32 @@ export default function ProfileCabinetPanel({
             {chatActivity.badge_count > 99 ? "99+" : chatActivity.badge_count}
           </span>
         )}
+      </div>
+      <div className="profile-avatar-block">
+        <div className="profile-avatar" aria-hidden>
+          {avatarSrc ? <img src={avatarSrc} alt="" /> : <span>{avatarInitial}</span>}
+        </div>
+        <div className="profile-avatar-actions">
+          <p className="muted small">Аватар показывается в чатах и карточках</p>
+          <label className="profile-avatar-upload ghost-btn">
+            {avatarSrc ? "Сменить фото" : "Добавить фото"}
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) void uploadAvatar?.(f);
+              }}
+            />
+          </label>
+          {avatarSrc ? (
+            <button type="button" className="ghost-btn" onClick={() => void clearAvatar?.()}>
+              Удалить
+            </button>
+          ) : null}
+        </div>
       </div>
       <p>Вы вошли как: <strong>{fullName}</strong></p>
       {(me?.role === "client" || me?.role === "staff") && (chatActivity?.pending_staff_invites?.length ?? 0) > 0 && (

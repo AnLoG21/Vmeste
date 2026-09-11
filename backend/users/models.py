@@ -150,6 +150,12 @@ class User(AbstractUser):
         db_index=True,
         help_text="ID VK ID (вход через VK, ОК или Mail).",
     )
+    avatar_image = models.ImageField(
+        upload_to="user_avatars/%Y/%m/",
+        blank=True,
+        null=True,
+        help_text="Аватар пользователя (чаты, база клиентов, профиль).",
+    )
 
     def username_is_provisional(self) -> bool:
         """Служебный логин после OAuth (vk_123, ya_…, tg_…) — нужно заменить своим."""

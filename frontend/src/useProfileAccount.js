@@ -45,6 +45,38 @@ export function useProfileAccount({
     loadMe();
   }
 
+  async function uploadAvatar(file) {
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("avatar", file);
+    const response = await authFetch(`${API_URL}/users/me/`, {
+      method: "POST",
+      body: fd,
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      showToast(err.detail || "Не удалось загрузить аватар", { tone: "error" });
+      return;
+    }
+    showToast("Аватар обновлён");
+    loadMe();
+  }
+
+  async function clearAvatar() {
+    const fd = new FormData();
+    fd.append("clear_avatar", "1");
+    const response = await authFetch(`${API_URL}/users/me/`, {
+      method: "POST",
+      body: fd,
+    });
+    if (!response.ok) {
+      showToast("Не удалось удалить аватар", { tone: "error" });
+      return;
+    }
+    showToast("Аватар удалён");
+    loadMe();
+  }
+
   async function changePassword(event) {
     event.preventDefault();
     const response = await authFetch(`${API_URL}/users/change-password/`, {
@@ -130,6 +162,8 @@ export function useProfileAccount({
     deleteAccountStatus,
     deleteAccountBusy,
     updateProfile,
+    uploadAvatar,
+    clearAvatar,
     changePassword,
     changeEmail,
     deleteMyAccount,

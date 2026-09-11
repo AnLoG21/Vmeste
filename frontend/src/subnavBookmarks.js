@@ -50,23 +50,6 @@ function ensureServiceAppsBookmark(list, allowed) {
   return [...list, "service_apps"];
 }
 
-function ensureClientsBookmark(list, allowed, role, sphere) {
-  if (!allowed.has("clients") || list.includes("clients")) return list;
-  if (role !== "provider" && role !== "staff") return list;
-  if (
-    sphere === "cafe_restaurant" ||
-    sphere === "marketplaces" ||
-    sphere === "shops"
-  ) {
-    return list;
-  }
-  const bookingsIdx = list.indexOf("bookings");
-  if (bookingsIdx >= 0) {
-    return [...list.slice(0, bookingsIdx + 1), "clients", ...list.slice(bookingsIdx + 1)];
-  }
-  return ["clients", ...list];
-}
-
 export function defaultSubnavBookmarks(role, sphere) {
   if (role === "provider" && sphere === "cafe_restaurant") {
     return [...DEFAULT_SUBNAV_BOOKMARKS.provider_cafe];
@@ -165,7 +148,6 @@ export function loadSubnavBookmarks(role, sphere) {
       if (!next.includes("shop")) next = ["shop", ...next];
       else next = ["shop", ...next.filter((id) => id !== "shop")];
     }
-    next = ensureClientsBookmark(next, allowed, role, sphere);
     next = ensureServiceAppsBookmark(next, allowed);
     return next.length ? next : [...fallback];
   } catch {

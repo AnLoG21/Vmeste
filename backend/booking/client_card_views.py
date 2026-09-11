@@ -11,6 +11,7 @@ from booking.booking_actions import client_display_name
 from booking.loyalty import get_or_create_loyalty_settings
 from booking.loyalty_views import _resolve_client
 from booking.models import Booking, ProviderClientCard
+from common.media_urls import photo_urls
 from users.models import User
 
 DEFAULT_MEMORY_FIELDS = {
@@ -55,7 +56,7 @@ class ProviderClientCardView(APIView):
         card, _ = ProviderClientCard.objects.get_or_create(provider=provider, client=client)
         return provider, card, settings_obj, None
 
-    def _serialize(self, card, provider, settings_obj):
+    def _serialize(self, card, provider, settings_obj, request=None):
         recent = (
             Booking.objects.filter(provider=provider, client_id=card.client_id)
             .exclude(status=Booking.Status.CANCELLED)
@@ -65,12 +66,14 @@ class ProviderClientCardView(APIView):
         tech = card.tech if isinstance(card.tech, dict) else {}
         personal = card.personal if isinstance(card.personal, dict) else {}
         status_labels = dict(Booking.Status.choices)
+        av = photo_urls(request, getattr(card.client, "avatar_image", None))
         return {
             "id": card.id,
             "provider": provider.id,
             "client": card.client_id,
             "client_name": client_display_name(card.client),
             "client_phone": getattr(card.client, "phone", "") or "",
+            "client_avatar_url": av.get("thumb_url") or av.get("url") or "",
             "tech": {
                 "hair_color": tech.get("hair_color") or "",
                 "lash_length": tech.get("lash_length") or "",
@@ -106,7 +109,7 @@ class ProviderClientCardView(APIView):
         provider, card, settings_obj, err = self._get_card(request)
         if err:
             return err
-        return Response(self._serialize(card, provider, settings_obj))
+        return Response(self._serialize(card, provider, settings_obj, request=request))
 
     def patch(self, request):
         provider, card, settings_obj, err = self._get_card(request)
@@ -135,4 +138,4 @@ class ProviderClientCardView(APIView):
                     cur[key] = str(data["personal"].get(key) or "")[:500]
             card.personal = cur
         card.save()
-        return Response(self._serialize(card, provider, settings_obj))
+        return Response(self._serialize(card, provider, settings_obj, request=request))

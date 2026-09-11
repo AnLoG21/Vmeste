@@ -29,6 +29,8 @@ class UserSerializer(serializers.ModelSerializer):
     profile_complete = serializers.SerializerMethodField()
     provider_authority_confirmed = serializers.SerializerMethodField()
     confirm_provider_authority = serializers.BooleanField(write_only=True, required=False)
+    avatar_url = serializers.SerializerMethodField()
+    avatar_thumb_url = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -42,6 +44,8 @@ class UserSerializer(serializers.ModelSerializer):
             "last_name",
             "patronymic",
             "phone",
+            "avatar_url",
+            "avatar_thumb_url",
             "organization_name",
             "organization_address",
             "organization_entrance",
@@ -85,6 +89,8 @@ class UserSerializer(serializers.ModelSerializer):
             "needs_credentials_setup",
             "profile_complete",
             "provider_authority_confirmed",
+            "avatar_url",
+            "avatar_thumb_url",
         ]
 
     def get_has_usable_password(self, obj):
@@ -98,6 +104,15 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_provider_authority_confirmed(self, obj):
         return bool(obj.provider_authority_confirmed_at)
+
+    def get_avatar_url(self, obj):
+        request = self.context.get("request")
+        return photo_urls(request, getattr(obj, "avatar_image", None))["url"]
+
+    def get_avatar_thumb_url(self, obj):
+        request = self.context.get("request")
+        urls = photo_urls(request, getattr(obj, "avatar_image", None))
+        return urls["thumb_url"] or urls["url"]
 
     def validate_email(self, value):
         email = (value or "").strip().lower()
