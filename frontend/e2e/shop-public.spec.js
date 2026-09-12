@@ -44,6 +44,29 @@ test.describe("Public shop checkout", () => {
     expect(redirected).toBe(false);
   });
 
+  test("delivery cash shows paid without pay redirect", async ({ page }) => {
+    await installShopMocks(page, { online: false, delivery: true });
+    let redirected = false;
+    await page.route("https://pay.example/**", async (route) => {
+      redirected = true;
+      await route.fulfill({ status: 200, body: "pay" });
+    });
+
+    await page.goto(`/s/${SLUG}`);
+    await expect(page.getByRole("heading", { name: "Магазин E2E" })).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: /В корзину/ }).first().click();
+    await page.getByRole("button", { name: /Корзина/ }).click();
+    await page.getByRole("button", { name: /Доставка/ }).click();
+    await page.getByPlaceholder("Телефон *").fill("+79007654321");
+    await page.getByPlaceholder("Адрес доставки *").fill("ул. Доставки, 5");
+    await page.locator("#shop-pay-method").selectOption("cash");
+    await page.getByRole("button", { name: "Оформить заказ" }).click();
+
+    await expect(page.getByRole("heading", { name: "Заказ #9003" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/Статус:/)).toContainText("paid");
+    expect(redirected).toBe(false);
+  });
+
   test("return ?order= shows paid status", async ({ page }) => {
     await installShopMocks(page);
     await page.goto(`/s/${SLUG}?order=9003`);

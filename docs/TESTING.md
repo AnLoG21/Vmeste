@@ -12,24 +12,13 @@ python manage.py test booking.tests_client_book_api subscriptions.tests_yookassa
 
 Local SQLite: `set DJANGO_SETTINGS_MODULE=config.settings_test`
 
-| Module | Covers |
-|--------|--------|
-| `booking.tests_client_book_api` | Client book / pay / loyalty / package |
-| `subscriptions.tests_yookassa_webhook` | Webhook routing |
-| `subscriptions.tests_subscribe_pay` | Pay / confirm / renew (mock YooKassa) |
-| `cafe.tests_guest_order_pay` | Guest order online/cash |
-| `shop.tests_public_order_pay` | Public order online/cash |
-| `marketplaces.tests*` | Webhook Bearer, sync, poll delta |
-
 ## Frontend unit (Vitest)
 
 ```bash
 cd Vmeste/frontend && npm test
 ```
 
-- `bookingDisplay.test.js` — book charge
-- `cafeCheckoutMath.test.js` — tip/service/delivery totals
-- `cafeDeliveryZones.test.js` — `findZoneAt`
+`bookingDisplay` · `cafeCheckoutMath` · `cafeDeliveryZones` (`findZoneAt`)
 
 ## Frontend E2E (Playwright)
 
@@ -42,7 +31,8 @@ npx playwright install chromium && npm run test:e2e
 | `android.spec.js` | APK CTA |
 | `client-book.spec.js` | map → book → pay return |
 | `cafe-guest.spec.js` | online / cash / delivery cash / `?order=` |
-| `shop-public.spec.js` | online / cash / `?order=` |
+| `shop-public.spec.js` | online / cash / delivery cash / `?order=` |
+| `subscription-return.spec.js` | `?payment=success` → Подписки + confirm |
 
 ## CI
 
