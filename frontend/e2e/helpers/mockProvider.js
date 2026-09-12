@@ -40,10 +40,9 @@ const ACTIVE_SUB = {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean }} [options]
- *   forPay: no active sub so «Оплатить» is enabled; POST /subscriptions/pay → confirmation_url
+ * @param {{ forPay?: boolean, waitlist?: object[] }} [options]
  */
-export async function installProviderMocks(page, { forPay = false } = {}) {
+export async function installProviderMocks(page, { forPay = false, waitlist = null } = {}) {
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
     localStorage.setItem("vmeste_access", "e2e-access-token");
@@ -52,6 +51,7 @@ export async function installProviderMocks(page, { forPay = false } = {}) {
   });
 
   let mineSubs = forPay ? [] : [{ ...ACTIVE_SUB }];
+  let waitlistRows = Array.isArray(waitlist) ? waitlist.map((r) => ({ ...r })) : [];
 
   await page.route("**/api/**", async (route) => {
     const req = route.request();
@@ -147,6 +147,17 @@ export async function installProviderMocks(page, { forPay = false } = {}) {
     }
     if (path.includes("/locations")) return json([]);
     if (path.includes("/booking/staff")) return json([]);
+    if (path.includes("/booking/slots")) return json([]);
+    if (path.match(/\/booking\/waitlist\/\d+$/) && method === "PATCH") {
+      const id = Number(path.split("/").pop());
+      waitlistRows = waitlistRows.map((r) =>
+        Number(r.id) === id ? { ...r, status: "cancelled" } : r,
+      );
+      return json(waitlistRows.find((r) => Number(r.id) === id) || { id, status: "cancelled" });
+    }
+    if (path.includes("/booking/waitlist") && method === "GET") {
+      return json(waitlistRows);
+    }
     if (path.includes("/booking")) return json([]);
     if (path.includes("/catalog/")) return json([]);
     if (path.includes("/chat/")) return json([]);
@@ -166,3 +177,13 @@ export async function installProviderMocks(page, { forPay = false } = {}) {
 }
 
 export { ME, PLAN, ACTIVE_SUB };
+
+const WAITLIST_ENTRY = {
+  id: 12,
+  client_name: "Тест Клиент",
+  service_name: "Стрижка",
+  preferred_date: new Date().toISOString().slice(0, 10),
+  status: "waiting",
+};
+
+export { WAITLIST_ENTRY };

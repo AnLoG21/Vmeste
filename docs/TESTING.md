@@ -30,7 +30,9 @@ npx playwright install chromium && npm run test:e2e
 |------|-----------|
 | `android.spec.js` | APK CTA |
 | `client-book.spec.js` | map → book → package / loyalty / pay return |
+| `client-cancel.spec.js` | Моё → Все записи → cancel-by-client |
 | `client-waitlist.spec.js` | empty slots → join waitlist |
+| `provider-waitlist.spec.js` | Записи → Снять waitlist |
 | `cafe-guest.spec.js` | online / cash / delivery cash / `?order=` |
 | `shop-public.spec.js` | online / cash / delivery cash / `?order=` |
 | `subscription-return.spec.js` | `?payment=success` → Подписки + confirm |

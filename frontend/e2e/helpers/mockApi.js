@@ -47,10 +47,17 @@ function windowKey(w) {
 
 export async function installClientMocks(
   page,
-  { prepay = false, emptyWindows = false, loyalty = null, clientPackages = null } = {},
+  {
+    prepay = false,
+    emptyWindows = false,
+    loyalty = null,
+    clientPackages = null,
+    bookings = null,
+  } = {},
 ) {
   const loyaltyPayload = loyalty || { enabled: false, balance: 0, rub_per_point: 1 };
   const packagesPayload = Array.isArray(clientPackages) ? clientPackages : [];
+  let bookingsList = Array.isArray(bookings) ? bookings.map((b) => ({ ...b })) : [];
 
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
@@ -189,7 +196,18 @@ export async function installClientMocks(
     if (path.match(/\/booking\/\d+\/pay$/) && method === "POST") {
       return json({ id: 9001, payment_status: "paid" });
     }
-    if (path.match(/\/booking$/) && method === "GET") return json([]);
+    if (path.match(/\/booking\/\d+\/cancel-by-client$/) && method === "POST") {
+      const id = Number(path.split("/").filter(Boolean).at(-2));
+      bookingsList = bookingsList.map((b) =>
+        Number(b.id) === id ? { ...b, status: "cancelled" } : b,
+      );
+      const updated = bookingsList.find((b) => Number(b.id) === id) || {
+        id,
+        status: "cancelled",
+      };
+      return json(updated);
+    }
+    if (path.match(/\/booking$/) && method === "GET") return json(bookingsList);
     if (path.match(/\/booking$/) && method === "POST") {
       let bodyIn = {};
       try {
@@ -227,4 +245,26 @@ const CLIENT_PACKAGE = {
   status: "active",
 };
 
-export { ORG, ME, SERVICE, WINDOW, windowKey, CLIENT_PACKAGE };
+const CLIENT_BOOKING = (() => {
+  const start = new Date();
+  start.setHours(15, 0, 0, 0);
+  if (start.getTime() <= Date.now()) {
+    start.setDate(start.getDate() + 1);
+  }
+  const end = new Date(start.getTime() + 30 * 60_000);
+  return {
+    id: 9001,
+    status: "confirmed",
+    payment_status: "none",
+    provider: ORG.provider,
+    client: ME.id,
+    service: SERVICE.id,
+    service_name: SERVICE.name,
+    organization_name: ORG.organization_name,
+    slot_starts_at: start.toISOString(),
+    slot_ends_at: end.toISOString(),
+    created_at: new Date().toISOString(),
+  };
+})();
+
+export { ORG, ME, SERVICE, WINDOW, windowKey, CLIENT_PACKAGE, CLIENT_BOOKING };
