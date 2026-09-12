@@ -26,6 +26,7 @@ class OrgBookingActionsApiTests(TestCase):
             organization_name="Салон Org Actions",
             booking_confirm_message_default="Запись подтверждена на {date}.",
             booking_cancel_message_default="Запись отменена ({date}).",
+            booking_done_message_default="Услуга оказана ({date}).",
         )
         self.client_user = User.objects.create_user(
             username="client-org-actions",
@@ -41,8 +42,8 @@ class OrgBookingActionsApiTests(TestCase):
         )
         self.api.force_authenticate(self.provider)
 
-    def _booking(self, **extra):
-        start = timezone.now() + timedelta(hours=4)
+    def _booking(self, hours=4, **extra):
+        start = timezone.now() + timedelta(hours=hours)
         slot = AvailabilitySlot.objects.create(
             provider=self.provider,
             starts_at=start,
@@ -98,3 +99,36 @@ class OrgBookingActionsApiTests(TestCase):
         self.assertEqual(booking.status, Booking.Status.NO_SHOW)
         self.assertFalse(slot.is_booked)
         notify.assert_called_once_with(self.provider.id, self.service.id)
+
+    def test_mark_arrived_ok(self):
+        booking, _ = self._booking(status=Booking.Status.CONFIRMED)
+        with patch("notifications.delivery.deliver_booking_event"):
+            res = self.api.post(f"/api/booking/{booking.id}/mark-arrived/", {}, format="json")
+        self.assertEqual(res.status_code, 200, res.data)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.ARRIVED)
+
+    def test_mark_done_rejects_before_start(self):
+        booking, _ = self._booking(hours=3, status=Booking.Status.ARRIVED)
+        res = self.api.post(f"/api/booking/{booking.id}/mark-done/", {}, format="json")
+        self.assertEqual(res.status_code, 400, res.data)
+        self.assertEqual(res.data.get("code"), "booking_not_started_yet")
+
+    def test_mark_done_requires_message_template(self):
+        self.provider.booking_done_message_default = ""
+        self.provider.save(update_fields=["booking_done_message_default"])
+        booking, _ = self._booking(hours=-1, status=Booking.Status.ARRIVED)
+        res = self.api.post(f"/api/booking/{booking.id}/mark-done/", {}, format="json")
+        self.assertEqual(res.status_code, 400, res.data)
+        self.assertEqual(res.data.get("code"), "done_message_not_set")
+
+    def test_mark_done_ok(self):
+        booking, _ = self._booking(hours=-1, status=Booking.Status.ARRIVED)
+        with patch("booking.booking_actions.post_booking_message"):
+            with patch("notifications.delivery.deliver_booking_event"):
+                with patch("booking.loyalty.consume_package_visit"):
+                    with patch("booking.loyalty.award_loyalty_for_visit", return_value=0):
+                        res = self.api.post(f"/api/booking/{booking.id}/mark-done/", {}, format="json")
+        self.assertEqual(res.status_code, 200, res.data)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.DONE)

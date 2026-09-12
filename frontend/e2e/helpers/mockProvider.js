@@ -199,6 +199,20 @@ export async function installProviderMocks(
       );
       return json(bookingsList.find((b) => Number(b.id) === id) || { id, status: "no_show" });
     }
+    if (path.match(/\/booking\/\d+\/mark-arrived$/) && method === "POST") {
+      const id = Number(path.split("/").filter(Boolean).at(-2));
+      bookingsList = bookingsList.map((b) =>
+        Number(b.id) === id ? { ...b, status: "arrived" } : b,
+      );
+      return json(bookingsList.find((b) => Number(b.id) === id) || { id, status: "arrived" });
+    }
+    if (path.match(/\/booking\/\d+\/mark-done$/) && method === "POST") {
+      const id = Number(path.split("/").filter(Boolean).at(-2));
+      bookingsList = bookingsList.map((b) =>
+        Number(b.id) === id ? { ...b, status: "done" } : b,
+      );
+      return json(bookingsList.find((b) => Number(b.id) === id) || { id, status: "done" });
+    }
     if (path.match(/\/booking\/\d+\/cancel-by-org$/) && method === "POST") {
       const id = Number(path.split("/").filter(Boolean).at(-2));
       bookingsList = bookingsList.map((b) =>

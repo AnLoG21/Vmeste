@@ -33,7 +33,7 @@ npx playwright install chromium && npm run test:e2e
 | `client-cancel.spec.js` | Моё → Все записи → cancel-by-client |
 | `client-waitlist.spec.js` | empty slots → join waitlist |
 | `provider-waitlist.spec.js` | Записи → Снять waitlist |
-| `provider-bookings.spec.js` | confirm + no-show org actions |
+| `provider-bookings.spec.js` | confirm / no-show / arrived / mark-done |
 | `cafe-guest.spec.js` | online / cash / delivery cash / `?order=` |
 | `shop-public.spec.js` | online / cash / delivery cash / `?order=` |
 | `subscription-return.spec.js` | `?payment=success` → Подписки + confirm |
@@ -41,7 +41,7 @@ npx playwright install chromium && npm run test:e2e
 | `subscription-promo.spec.js` | Оплатить → apply VSEVMESTE |
 | `subscription-cancel.spec.js` | Отключить подписку → cancel API |
 
-Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show HTTP, subscription promo/cancel.
+Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done HTTP, subscription promo/cancel.
 
 ## CI
 

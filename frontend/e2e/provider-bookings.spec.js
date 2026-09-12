@@ -72,4 +72,69 @@ test.describe("Org booking actions", () => {
       0,
     );
   });
+
+  test("Клиент пришёл → POST mark-arrived", async ({ page }) => {
+    await installProviderMocks(page, {
+      bookings: [{ ...ORG_BOOKING, status: "confirmed" }],
+    });
+
+    let arrivedUrl = "";
+    page.on("request", (req) => {
+      if (req.method() === "POST" && req.url().includes("/mark-arrived")) {
+        arrivedUrl = req.url();
+      }
+    });
+
+    await openBookingDaySheet(page);
+    await page.locator(".calendar-day-sheet").getByTitle("Клиент пришёл").click();
+
+    await expect
+      .poll(() => arrivedUrl, { timeout: 15_000 })
+      .toContain(`/booking/${ORG_BOOKING.id}/mark-arrived`);
+
+    await reopenDaySheet(page);
+    await expect(page.locator(".calendar-day-sheet").getByText("Клиент пришёл").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.locator(".calendar-day-sheet").getByTitle("Клиент пришёл")).toHaveCount(0);
+  });
+
+  test("Услуга оказана → POST mark-done → Оказана", async ({ page }) => {
+    const started = new Date(Date.now() - 60 * 60_000);
+    const ended = new Date(started.getTime() + 30 * 60_000);
+    await installProviderMocks(page, {
+      bookings: [
+        {
+          ...ORG_BOOKING,
+          status: "arrived",
+          slot_starts_at: started.toISOString(),
+          slot_ends_at: ended.toISOString(),
+        },
+      ],
+    });
+
+    let doneUrl = "";
+    page.on("request", (req) => {
+      if (req.method() === "POST" && req.url().includes("/mark-done")) {
+        doneUrl = req.url();
+      }
+    });
+
+    await openBookingDaySheet(page);
+    const doneBtn = page.locator(".calendar-day-sheet").getByRole("button", { name: "Услуга оказана" });
+    await expect(doneBtn).toBeEnabled();
+    await doneBtn.click();
+
+    await expect
+      .poll(() => doneUrl, { timeout: 15_000 })
+      .toContain(`/booking/${ORG_BOOKING.id}/mark-done`);
+
+    await reopenDaySheet(page);
+    await expect(page.locator(".calendar-day-sheet").getByText("Оказана")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.locator(".calendar-day-sheet").getByRole("button", { name: "Услуга оказана" }),
+    ).toHaveCount(0);
+  });
 });
