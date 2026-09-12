@@ -30,9 +30,13 @@ npx playwright install chromium && npm run test:e2e
 |------|-----------|
 | `android.spec.js` | APK CTA |
 | `client-book.spec.js` | map → book → pay return |
+| `client-waitlist.spec.js` | empty slots → join waitlist |
 | `cafe-guest.spec.js` | online / cash / delivery cash / `?order=` |
 | `shop-public.spec.js` | online / cash / delivery cash / `?order=` |
 | `subscription-return.spec.js` | `?payment=success` → Подписки + confirm |
+| `subscription-pay.spec.js` | Оплатить → promo skip → pay redirect |
+
+Backend `booking.tests_client_book_api` also covers create booking → waitlist `BOOKED`.
 
 ## CI
 

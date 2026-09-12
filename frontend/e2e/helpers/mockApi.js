@@ -45,7 +45,7 @@ function windowKey(w) {
   return `${w.starts_at}|${w.ends_at}|${w.staff_id ?? ""}`;
 }
 
-export async function installClientMocks(page, { prepay = false } = {}) {
+export async function installClientMocks(page, { prepay = false, emptyWindows = false } = {}) {
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
     localStorage.setItem("vmeste_access", "e2e-access-token");
@@ -152,10 +152,26 @@ export async function installClientMocks(page, { prepay = false } = {}) {
     }
     if (path.includes("/reviews")) return json([]);
     if (path.includes("/booking/staff")) return json([]);
-    if (path.includes("/available-windows")) return json([WINDOW]);
+    if (path.includes("/available-windows")) {
+      return json(emptyWindows ? [] : [WINDOW]);
+    }
     if (path.includes("/available-dates")) {
       const iso = start.toISOString().slice(0, 10);
       return json({ dates: [iso] });
+    }
+    if (path.includes("/booking/waitlist") && method === "POST") {
+      return json(
+        {
+          id: 1,
+          provider: ORG.provider,
+          service: SERVICE.id,
+          status: "waiting",
+        },
+        201,
+      );
+    }
+    if (path.includes("/booking/waitlist") && method === "GET") {
+      return json([]);
     }
     if (path.includes("/loyalty/me")) {
       return json({ enabled: false, balance: 0, rub_per_point: 1 });

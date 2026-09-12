@@ -31,12 +31,18 @@ const ACTIVE_SUB = {
   plan: PLAN,
   status: "active",
   source: "paid",
+  is_active_now: true,
   period_start: new Date().toISOString(),
   period_end: new Date(Date.now() + 30 * 86400000).toISOString(),
   auto_renew: true,
 };
 
-export async function installProviderMocks(page) {
+/**
+ * @param {import('@playwright/test').Page} page
+ * @param {{ forPay?: boolean }} [options]
+ *   forPay: no active sub so «Оплатить» is enabled; POST /subscriptions/pay → confirmation_url
+ */
+export async function installProviderMocks(page, { forPay = false } = {}) {
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
     localStorage.setItem("vmeste_access", "e2e-access-token");
@@ -70,20 +76,35 @@ export async function installProviderMocks(page) {
         subscription: ACTIVE_SUB,
       });
     }
+    // Must be before /subscriptions/payments — path includes("/subscriptions/pay") would match both.
+    if (path.endsWith("/subscriptions/pay") && method === "POST") {
+      return json({
+        detail: "Перейдите к оплате.",
+        confirmation_url: "https://pay.example/subscription",
+        payment_id: 99,
+      });
+    }
     if (path.includes("/subscriptions/plans")) return json([PLAN]);
     if (path.includes("/subscriptions/mine")) {
+      if (forPay) {
+        return json({ subscriptions: [], trial_used: true, promo_used_codes: [] });
+      }
       return json({ subscriptions: [ACTIVE_SUB], trial_used: true, promo_used_codes: [] });
     }
     if (path.includes("/subscriptions/payments")) {
-      return json([
-        {
-          id: 42,
-          plan: PLAN,
-          amount: "1990.00",
-          status: "succeeded",
-          created_at: new Date().toISOString(),
-        },
-      ]);
+      return json(
+        forPay
+          ? []
+          : [
+              {
+                id: 42,
+                plan: PLAN,
+                amount: "1990.00",
+                status: "succeeded",
+                created_at: new Date().toISOString(),
+              },
+            ],
+      );
     }
     if (path.includes("/locations")) return json([]);
     if (path.includes("/booking/staff")) return json([]);

@@ -18,6 +18,7 @@ from booking.models import (
     ClientPackage,
     ProviderAcquiring,
     VisitPackage,
+    WaitlistEntry,
 )
 
 
@@ -288,3 +289,42 @@ class ClientBookApiTests(TestCase):
         return_url = create_pay.call_args.kwargs.get("return_url") or ""
         self.assertIn("/activity?booking_payment=success", return_url)
         self.assertIn(f"booking_id={booking.id}", return_url)
+
+    def test_create_booking_marks_waitlist_booked(self):
+        ProviderAcquiring.objects.update_or_create(
+            provider=self.provider,
+            defaults={"prepay_mode": ProviderAcquiring.PrepayMode.OFF},
+        )
+        waiting = WaitlistEntry.objects.create(
+            provider=self.provider,
+            client=self.client_user,
+            service=self.service,
+            status=WaitlistEntry.Status.WAITING,
+        )
+        notified = WaitlistEntry.objects.create(
+            provider=self.provider,
+            client=self.client_user,
+            service=self.service,
+            status=WaitlistEntry.Status.NOTIFIED,
+        )
+        other_client = User.objects.create_user(
+            username="client-waitlist-other",
+            password="x",
+            role=User.Role.CLIENT,
+        )
+        other = WaitlistEntry.objects.create(
+            provider=self.provider,
+            client=other_client,
+            service=self.service,
+            status=WaitlistEntry.Status.WAITING,
+        )
+        slot = self._free_slot(11)
+        with patch("booking.booking_actions.notify_new_booking"):
+            res = self.api.post("/api/booking/", self._book_payload(slot), format="json")
+        self.assertEqual(res.status_code, 201, res.data)
+        waiting.refresh_from_db()
+        notified.refresh_from_db()
+        other.refresh_from_db()
+        self.assertEqual(waiting.status, WaitlistEntry.Status.BOOKED)
+        self.assertEqual(notified.status, WaitlistEntry.Status.BOOKED)
+        self.assertEqual(other.status, WaitlistEntry.Status.WAITING)
