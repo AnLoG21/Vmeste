@@ -54,3 +54,9 @@ Thumbs.db
 frontend/android/app/google-services.json
 frontend/ios/App/App/GoogleService-Info.plist
 !frontend/ios/App/App/GoogleService-Info.plist.example
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+

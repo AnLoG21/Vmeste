@@ -15,4 +15,8 @@ export default defineConfig(({ mode }) => ({
     cssMinify: "esbuild",
     target: "es2020",
   },
+  test: {
+    environment: "jsdom",
+    include: ["src/**/*.test.{js,jsx}"],
+  },
 }));

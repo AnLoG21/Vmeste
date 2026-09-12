@@ -61,6 +61,7 @@ jobs:
           booking.tests_actions
           booking.tests_waitlist
           booking.tests_salon_p2
+          booking.tests_client_book_api
           inspections.tests_pdf
           inspections.tests_repair_funnel
           payments.tests
@@ -78,6 +79,7 @@ jobs:
           vmenu.tests_units
           subscriptions.tests_promos
           subscriptions.tests_trial_voice
+          subscriptions.tests_yookassa_webhook
           notifications.tests_channels
           --verbosity=2
 
@@ -97,6 +99,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install deps
         run: npm ci
+      - name: Unit tests
+        run: npm test
       - name: Build
         run: npm run build
       - name: Assert App Links / Universal Links files
@@ -106,6 +110,29 @@ jobs:
           grep -q 'space.vsevmeste.app' dist/.well-known/assetlinks.json
           grep -q 'space.vsevmeste.app' dist/.well-known/apple-app-site-association
 
+  frontend-e2e:
+    name: Frontend Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: frontend-build
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run E2E
+        run: npm run test:e2e
+        env:
+          CI: "1"
   mobile-cap-sync:
     name: Capacitor Android sync
     runs-on: ubuntu-latest

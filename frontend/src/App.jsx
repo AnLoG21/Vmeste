@@ -25,6 +25,7 @@ import ClientInspectionsPanel from "./ClientInspectionsPanel.jsx";
 import ProviderReviewsPanel from "./ProviderReviewsPanel.jsx";
 import ServiceCatalogTree from "./ServiceCatalogTree.jsx";
 import ClientMapPanel from "./ClientMapPanel.jsx";
+import { installClientE2EHooks } from "./e2eHooks.js";
 import StaffManagementPanel from "./StaffManagementPanel.jsx";
 import GeneralSettingsPanel from "./GeneralSettingsPanel.jsx";
 import OrganizationSettingsPanel from "./OrganizationSettingsPanel.jsx";
@@ -1680,6 +1681,7 @@ export default function App() {
     mapOrgReviewsOrdering,
     setMapOrgReviewsOrdering,
     mapOrgProfile,
+    setMapOrgProfile,
     mapOrgStaff,
     mapOrgCarouselIndex,
     setMapOrgCarouselIndex,
@@ -1710,6 +1712,18 @@ export default function App() {
     fitClientDiscoverMapViewport: (...args) => fitClientDiscoverMapViewportRef.current?.(...args),
   });
   openOrgOnMapRef.current = openOrgOnMap;
+
+  useEffect(() => {
+    return installClientE2EHooks({
+      onClientLocationSelect,
+      setClientBookModalOpen,
+      setClientBookingForm,
+      setClientBookWindows,
+      setMapOrgPopup,
+      setMapOrgProfile,
+      allLocations,
+    });
+  }, [onClientLocationSelect, allLocations]);
 
   const {
     fitClientDiscoverMapViewport,

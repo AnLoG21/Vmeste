@@ -240,6 +240,7 @@ export function useMapOrgSheet({
     mapOrgReviewsOrdering,
     setMapOrgReviewsOrdering,
     mapOrgProfile,
+    setMapOrgProfile,
     mapOrgStaff,
     mapOrgCarouselIndex,
     setMapOrgCarouselIndex,
