@@ -160,7 +160,7 @@ export default function BookingSlotActions({
       {isClient && !cancelled && bookingPayStillOpen(it) && (
         <button
           type="button"
-          className="ghost-btn small"
+          className="booking-history-pay"
           title="Оплатить предоплату"
           onClick={(e) => resumeBookingPayment(it.id, e)}
         >

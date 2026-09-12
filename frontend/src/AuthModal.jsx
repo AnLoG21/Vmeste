@@ -62,24 +62,41 @@ export default function AuthModal({
             <h2>Подтвердите email</h2>
             <p className="auth-verify-lead">{verifyEmailNotice.detail}</p>
             <p>
-              Мы отправили письмо на{" "}
-              <strong>{verifyEmailNotice.email}</strong>. Перейдите по ссылке в письме, затем
-              войдите в аккаунт.
+              Письмо отправлено на <strong>{verifyEmailNotice.email}</strong>. Откройте ссылку в
+              письме, затем войдите.
             </p>
-            <p className="hint">Не видите письмо? Проверьте папку «Спам» или «Промоакции».</p>
+            <p className="hint">Не видите письмо? Проверьте «Спам» или «Промоакции».</p>
+            <p className="auth-verify-next">
+              {verifyEmailNotice.role === "provider"
+                ? "Дальше: один шаг — быстрый старт организации."
+                : "Дальше: карта → точка → «Записаться»."}
+            </p>
             <div className="auth-verify-actions">
-              <button type="button" onClick={() => resendVerificationForEmail(verifyEmailNotice.email)}>
-                Отправить письмо ещё раз
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    if (verifyEmailNotice.role === "client") {
+                      sessionStorage.setItem("vmeste_client_map_tip", "1");
+                    }
+                  } catch {
+                    /* ignore */
+                  }
+                  setVerifyEmailNotice(null);
+                  setResendStatus("");
+                  setAuthMode("login");
+                }}
+              >
+                {verifyEmailNotice.role === "provider"
+                  ? "Войти и настроить организацию"
+                  : "Войти и искать на карте"}
               </button>
               <button
                 type="button"
                 className="ghost-btn"
-                onClick={() => {
-                  setVerifyEmailNotice(null);
-                  setResendStatus("");
-                }}
+                onClick={() => resendVerificationForEmail(verifyEmailNotice.email)}
               >
-                Перейти ко входу
+                Отправить письмо ещё раз
               </button>
             </div>
             {resendStatus ? <p className="status">{resendStatus}</p> : null}

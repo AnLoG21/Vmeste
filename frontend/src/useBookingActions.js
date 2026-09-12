@@ -162,9 +162,17 @@ export function useBookingActions({
       }
       const created = await response.json().catch(() => ({}));
       const payUrl = typeof created.confirmation_url === "string" ? created.confirmation_url.trim() : "";
+      const afterBookView = me?.role === "provider" ? "my_bookings" : "activity";
+
+      // Always dismiss sheets before pay/leave — otherwise mobile returns to a stuck overlay.
+      setClientBookModalOpen(false);
+      setMapOrgPopup(null);
+      resetClientBookingForm();
+      setCurrentView(afterBookView);
+
       if (payUrl) {
-        // Keep modal open only while leaving for acquirer; booking already holds the slot.
-        setClientStatus("Переходим к оплате…");
+        setClientStatus("");
+        showToast("Слот удерживается. Переходим к оплате…", { tone: "info" });
         window.location.href = payUrl;
         return;
       }
@@ -175,13 +183,8 @@ export function useBookingActions({
           ? "Запись создана — баллы учтены в оплате."
           : "Запись создана.";
 
-      // Close immediately so a slow bookings reload cannot leave the sheet stuck open.
-      setClientBookModalOpen(false);
-      setMapOrgPopup(null);
-      resetClientBookingForm();
       setClientStatus(successText);
       showToast(successText, { tone: "success" });
-      setCurrentView(me?.role === "provider" ? "my_bookings" : "bookings");
 
       try {
         await reloadBookingsList();
@@ -204,13 +207,19 @@ export function useBookingActions({
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       setClientStatus(data.detail || "Не удалось открыть оплату.");
+      showToast(data.detail || "Не удалось открыть оплату.", { tone: "error" });
       return;
     }
     if (data.confirmation_url) {
+      setClientBookModalOpen(false);
+      setMapOrgPopup(null);
+      setCurrentView(me?.role === "provider" ? "my_bookings" : "activity");
+      showToast("Переходим к оплате…", { tone: "info" });
       window.location.href = data.confirmation_url;
       return;
     }
     setClientStatus("Оплата уже обработана.");
+    showToast("Оплата уже обработана.", { tone: "success" });
     await reloadBookingsList();
   }
 

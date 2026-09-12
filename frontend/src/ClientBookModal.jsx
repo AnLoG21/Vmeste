@@ -410,22 +410,24 @@ export default function ClientBookModal({
               })()}
             </label>
           ) : null}
-          {clientBookingForm.windowKey && selectedService ? (
-            <p className="muted small client-book-total">
-              {chargeInfo.charge > 0
-                ? mapOrgProfile?.prepay?.ready && mapOrgProfile?.prepay?.mode === "percent"
-                  ? `К оплате сейчас: ${chargeInfo.charge.toLocaleString("ru-RU")} ₽ (из ${chargeInfo.total.toLocaleString("ru-RU")} ₽)`
-                  : `Сумма: ${chargeInfo.charge.toLocaleString("ru-RU")} ₽`
-                : chargeInfo.coveredByLoyalty
-                  ? "К оплате: 0 ₽ (баллы покрывают сумму, без карты)"
-                  : "К оплате: 0 ₽"}
-            </p>
-          ) : null}
-          <button type="submit" disabled={!clientBookingForm.windowKey || submitBusy}>
-            {submitBusy ? "Создаём…" : chargeInfo.submitLabel}
-          </button>
+          <div className="client-book-sticky-cta">
+            {clientBookingForm.windowKey && selectedService ? (
+              <p className="muted small client-book-total">
+                {chargeInfo.charge > 0
+                  ? mapOrgProfile?.prepay?.ready && mapOrgProfile?.prepay?.mode === "percent"
+                    ? `К оплате сейчас: ${chargeInfo.charge.toLocaleString("ru-RU")} ₽ (из ${chargeInfo.total.toLocaleString("ru-RU")} ₽)`
+                    : `Сумма: ${chargeInfo.charge.toLocaleString("ru-RU")} ₽`
+                  : chargeInfo.coveredByLoyalty
+                    ? "К оплате: 0 ₽ (баллы покрывают сумму, без карты)"
+                    : "К оплате: 0 ₽"}
+              </p>
+            ) : null}
+            <button type="submit" disabled={!clientBookingForm.windowKey || submitBusy}>
+              {submitBusy ? "Создаём…" : chargeInfo.submitLabel}
+            </button>
+            {clientStatus ? <p className="status client-book-sticky-status">{clientStatus}</p> : null}
+          </div>
         </form>
-        <p className="status">{clientStatus}</p>
       </div>
     </div>
   );

@@ -138,7 +138,7 @@ def attach_prepay_if_needed(booking: Booking) -> dict | None:
             "Организация включила предоплату, но не указала ключи выбранного эквайера."
         )
     front = (getattr(settings, "FRONTEND_URL", "") or "https://vsevmeste.space").rstrip("/")
-    return_url = f"{front}/bookings?booking_payment=success&booking_id={booking.id}"
+    return_url = f"{front}/activity?booking_payment=success&booking_id={booking.id}"
     discount = Decimal(str(getattr(booking, "loyalty_discount", 0) or 0))
     desc = f"Предоплата записи: {getattr(booking.service, 'name', 'услуга')}"
     if discount > 0:

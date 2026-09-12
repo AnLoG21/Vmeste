@@ -6196,6 +6196,86 @@ body.theme-dark .client-org-search-meta {
 .booking-history-pay {
   margin-top: 10px;
   width: 100%;
+  min-height: 44px;
+  border: none;
+  border-radius: 12px;
+  background: #c85a00;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.booking-history-pay:hover {
+  background: #a84a00;
+}
+
+.booking-history-empty {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+
+.client-book-sticky-cta {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.client-map-next-cta,
+.native-app-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #ffd7b0;
+  background: #fff4ea;
+}
+
+.client-map-next-cta p,
+.native-app-hint p {
+  margin: 0;
+  flex: 1 1 200px;
+  line-height: 1.45;
+  color: #5c3310;
+}
+
+.native-app-hint-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+a.native-app-hint-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  padding: 8px 14px;
+  font-size: 14px;
+}
+
+.client-activity-empty {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  margin: 8px 0 16px;
+}
+
+.client-activity-pay {
+  margin-top: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 10px;
+  background: #c85a00;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .history-switch {
@@ -9037,8 +9117,29 @@ html.native-app .page-logged .hero.top-row {
     max-height: min(94vh, 900px);
     margin: 0;
     border-radius: 18px 18px 0 0;
-    padding: 8px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+    padding: 8px 14px 0;
     box-shadow: 0 -8px 32px rgba(80, 40, 0, 0.16);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .client-book-overlay .form {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .client-book-sticky-cta {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    margin: 0 -14px;
+    padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(180deg, rgba(255, 250, 245, 0), #fffaf5 28%);
+    border-top: 1px solid #ffe0c2;
   }
 
   .client-book-overlay-head {
@@ -9088,7 +9189,7 @@ html.native-app .page-logged .hero.top-row {
 
   .provider-book-client-actions button,
   .visit-confirm-modal button[type="button"],
-  .client-book-overlay .form > button[type="submit"] {
+  .client-book-sticky-cta button[type="submit"] {
     min-height: 46px;
     border-radius: 12px;
     font-weight: 650;
@@ -11001,6 +11102,10 @@ body.theme-dark .password-eye-btn:hover {
   padding: 0;
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+.client-activity-row-wrap {
+  display: grid;
   gap: 8px;
 }
 .client-activity-row {

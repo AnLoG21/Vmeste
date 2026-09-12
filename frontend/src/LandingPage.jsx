@@ -65,7 +65,7 @@ const INTEGRATIONS = [
   {
     title: "Push-уведомления",
     status: "now",
-    text: "В Android-приложении Вместе — скачать APK на /android. iOS после Apple Developer. Ярлык сайта (PWA) системные push не даёт.",
+    text: "Android: скачайте APK на /android — это приложение с push и виджетом. Ярлык «На экран Домой» из браузера — только сайт, без системных уведомлений. iOS — после Apple Developer.",
   },
   {
     title: "Telegram",

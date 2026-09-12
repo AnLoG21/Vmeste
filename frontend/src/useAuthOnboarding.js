@@ -229,6 +229,7 @@ export function useAuthOnboarding({
     setLoginForm({ username: savedUsername, password: savedPassword });
     setVerifyEmailNotice({
       email: savedEmail,
+      role: form.role === "provider" ? "provider" : "client",
       detail:
         data.detail || "Регистрация успешна. Проверьте почту для подтверждения email.",
     });

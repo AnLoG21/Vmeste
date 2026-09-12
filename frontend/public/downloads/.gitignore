@@ -1,0 +1,4 @@
+# Place vmeste-android.apk here for https://vsevmeste.space/downloads/vmeste-android.apk
+# See docs/MOBILE-ANDROID.md — do not commit the binary.
+*
+!.gitignore

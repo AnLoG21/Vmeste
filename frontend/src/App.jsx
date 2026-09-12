@@ -802,8 +802,10 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("booking_payment") !== "success" || !accessToken) return;
-    setVerifyStatus("Проверяем оплату записи…");
-    setCurrentView("bookings");
+    setClientBookModalOpen(false);
+    setMapOrgPopup(null);
+    setCurrentView(me?.role === "provider" ? "my_bookings" : "activity");
+    showToast("Проверяем оплату записи…", { tone: "info" });
     const bookingId = params.get("booking_id");
     const reload = () => {
       authFetch(`${API_URL}/booking/`)
@@ -817,7 +819,7 @@ export default function App() {
     };
     const afterSync = () => {
       reload();
-      setVerifyStatus("Если оплата прошла, статус записи обновится в течение минуты.");
+      showToast("Если оплата прошла, статус обновится в ленте «Моё».", { tone: "success" });
     };
     if (bookingId) {
       authFetch(`${API_URL}/booking/${bookingId}/pay/`, { method: "POST", body: "{}" })
@@ -829,7 +831,7 @@ export default function App() {
     const t = window.setTimeout(reload, 2500);
     window.history.replaceState({}, document.title, window.location.pathname);
     return () => window.clearTimeout(t);
-  }, [accessToken]);
+  }, [accessToken, me?.role]);
 
   async function resendVerificationForEmail(email) {
     const normalized = String(email || "").trim();
@@ -2090,7 +2092,12 @@ export default function App() {
     setDetectedCity,
     onboardingPrefillIdRef,
     onProviderOnboardingDone: (data) => {
-      if (shouldOfferQuickStart(data)) setQuickStartOpen(true);
+      if (shouldOfferQuickStart(data)) {
+        // One clear CTA: quick start — skip auto platform tour that stacks on top.
+        platformTourOfferedRef.current = true;
+        setPlatformTourPhase("hidden");
+        setQuickStartOpen(true);
+      }
     },
   });
 
@@ -3522,6 +3529,7 @@ export default function App() {
             API_URL={API_URL}
             onNavigate={(view) => setCurrentView(view)}
             onRebook={(booking) => openOrgCardFromHistory(booking)}
+            resumeBookingPayment={resumeBookingPayment}
           />
         )}
         {accessToken && me?.role === "client" && currentView === "bookings" && renderBookingsBlock("Мои записи")}

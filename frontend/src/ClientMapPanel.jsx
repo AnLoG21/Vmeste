@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import { ReviewListItem } from "./ProviderReviewsPanel.jsx";
 import { MapOrgContactsBlock, MapOrgHoursBlock } from "./mapOrgBlocks.jsx";
@@ -6,6 +6,7 @@ import { formatStaffFullName, reviewImageUrl } from "./chatHelpers.jsx";
 import { ReviewTextContent } from "./bookingDisplay.jsx";
 import { todayIsoDate } from "./bookingCalendarUtils.jsx";
 import { buildOrgCarouselItems } from "./clientOrgFeatures.js";
+import NativeAppHint from "./NativeAppHint.jsx";
 
 /** Карта услуг: Яндекс-карта (контейнер) и карточка организации. */
 export default function ClientMapPanel({
@@ -56,6 +57,18 @@ export default function ClientMapPanel({
   openReviewPhotoLightbox,
 }) {
   const [locateBusy, setLocateBusy] = useState(false);
+  const [mapTip, setMapTip] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("vmeste_client_map_tip") === "1") {
+        setMapTip(true);
+        sessionStorage.removeItem("vmeste_client_map_tip");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   async function onLocateMe() {
     if (!locateMeNow || locateBusy) return;
@@ -78,6 +91,17 @@ export default function ClientMapPanel({
         </h2>
         <p className="muted client-discover-meta">Найдено точек: {allLocations.length}</p>
       </div>
+      {mapTip ? (
+        <div className="client-map-next-cta" role="status">
+          <p>
+            Дальше одно действие: выберите точку на карте → <strong>Записаться</strong>.
+          </p>
+          <button type="button" className="ghost-btn small" onClick={() => setMapTip(false)}>
+            Понятно
+          </button>
+        </div>
+      ) : null}
+      <NativeAppHint />
       <div
         className={[
           "client-discover-map-wrap",

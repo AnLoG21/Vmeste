@@ -138,7 +138,14 @@ export default function BookingHistory({
           onOpenPhotos={openOrgPhotoLightbox}
         />
       ) : sorted.length === 0 ? (
-        <p className="muted">Записей пока нет.</p>
+        <div className="booking-history-empty">
+          <p className="muted">Записей пока нет.</p>
+          {isClient ? (
+            <button type="button" onClick={() => setCurrentView("client_map")}>
+              Найти на карте и записаться
+            </button>
+          ) : null}
+        </div>
       ) : (
         <ul className="booking-history-list">
           {sorted.map((b) => {
@@ -247,7 +254,11 @@ export default function BookingHistory({
                   </span>
                 </div>
                 {isClient && bookingPayStillOpen(b) ? (
-                  <button type="button" className="ghost-btn small booking-history-pay" onClick={(e) => resumeBookingPayment(b.id, e)}>
+                  <button
+                    type="button"
+                    className="booking-history-pay"
+                    onClick={(e) => resumeBookingPayment(b.id, e)}
+                  >
                     Оплатить {b.prepay_amount ? formatBookingPrice(b.prepay_amount) : ""}
                   </button>
                 ) : null}

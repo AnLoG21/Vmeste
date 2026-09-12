@@ -516,6 +516,16 @@
   flex: 1 1 auto;
 }
 
+.auth-verify-next {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff4ea;
+  border: 1px solid #ffd7b0;
+  font-weight: 600;
+  color: #8d3e00;
+}
+
 .subscriptions-page h2 {
   margin-top: 0;
 }
@@ -836,6 +846,45 @@
 
 .legal-page-body ul {
   padding-left: 22px;
+}
+
+.android-compare {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 28px;
+}
+
+@media (min-width: 720px) {
+  .android-compare {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.android-compare-card {
+  margin: 0;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid #f0d2b4;
+  background: #fffaf5;
+}
+
+.android-compare-card h2 {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+}
+
+.android-compare-card ul {
+  margin: 0 0 14px;
+}
+
+.android-compare-card--app {
+  border-color: #f0a060;
+  box-shadow: 0 6px 20px rgba(141, 62, 0, 0.08);
+}
+
+.android-compare-card--pwa {
+  opacity: 0.95;
+  background: #f7f4f0;
 }
 
 .legal-updated {

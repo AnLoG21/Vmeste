@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { bookingPayStillOpen } from "./bookingCalendarUtils.jsx";
+import { formatBookingPrice, bookingStatusLabel } from "./bookingDisplay.jsx";
 
 const BOOKING_STATUS = {
   new: "Новая",
@@ -44,7 +46,13 @@ function formatWhen(iso) {
 /**
  * Единая лента клиента: записи, заказы кафе, приёмки, лояльность.
  */
-export default function ClientActivityFeed({ authFetch, API_URL, onNavigate, onRebook }) {
+export default function ClientActivityFeed({
+  authFetch,
+  API_URL,
+  onNavigate,
+  onRebook,
+  resumeBookingPayment,
+}) {
   const [tab, setTab] = useState("all");
   const [bookings, setBookings] = useState([]);
   const [cafeOrders, setCafeOrders] = useState([]);
@@ -93,14 +101,21 @@ export default function ClientActivityFeed({ authFetch, API_URL, onNavigate, onR
   const items = useMemo(() => {
     const rows = [];
     for (const b of bookings) {
+      const payOpen = bookingPayStillOpen(b);
       rows.push({
         id: `b-${b.id}`,
         kind: "booking",
         at: parseTs(b.created_at || b.slot_starts_at || b.starts_at),
         title: b.organization_name || b.provider_name || "Запись",
-        subtitle: [b.service_name, BOOKING_STATUS[b.status] || b.status].filter(Boolean).join(" · "),
+        subtitle: [
+          b.service_name,
+          payOpen ? bookingStatusLabel(b) : BOOKING_STATUS[b.status] || b.status,
+        ]
+          .filter(Boolean)
+          .join(" · "),
         view: "bookings",
         booking: b,
+        payOpen,
         canRebook: b.status === "done" || b.status === "cancelled" || b.status === "no_show",
       });
     }
@@ -176,7 +191,12 @@ export default function ClientActivityFeed({ authFetch, API_URL, onNavigate, onR
       {loading && !items.length ? (
         <p className="muted">Загрузка…</p>
       ) : items.length === 0 ? (
-        <p className="muted">Пока пусто — записи и заказы появятся здесь.</p>
+        <div className="client-activity-empty">
+          <p className="muted">Пока пусто — начните с карты.</p>
+          <button type="button" onClick={() => onNavigate?.("client_map")}>
+            Найти на карте и записаться
+          </button>
+        </div>
       ) : (
         <ul className="list client-activity-list">
           {items.map((item) => (
@@ -202,6 +222,18 @@ export default function ClientActivityFeed({ authFetch, API_URL, onNavigate, onR
                   </span>
                   <span className="muted small client-activity-when">{formatWhen(item.at)}</span>
                 </button>
+                {item.payOpen && resumeBookingPayment ? (
+                  <button
+                    type="button"
+                    className="client-activity-pay"
+                    onClick={(e) => resumeBookingPayment(item.booking.id, e)}
+                  >
+                    Оплатить
+                    {item.booking.prepay_amount
+                      ? ` ${formatBookingPrice(item.booking.prepay_amount)}`
+                      : ""}
+                  </button>
+                ) : null}
                 {item.canRebook && (onRebook || onNavigate) ? (
                   <button
                     type="button"
@@ -217,6 +249,9 @@ export default function ClientActivityFeed({ authFetch, API_URL, onNavigate, onR
         </ul>
       )}
       <div className="client-activity-shortcuts">
+        <button type="button" className="ghost-btn" onClick={() => onNavigate?.("client_map")}>
+          Карта
+        </button>
         <button type="button" className="ghost-btn" onClick={() => onNavigate?.("bookings")}>
           Все записи
         </button>
@@ -225,9 +260,6 @@ export default function ClientActivityFeed({ authFetch, API_URL, onNavigate, onR
         </button>
         <button type="button" className="ghost-btn" onClick={() => onNavigate?.("loyalty")}>
           Лояльность
-        </button>
-        <button type="button" className="ghost-btn" onClick={() => onNavigate?.("inspections")}>
-          Приёмки
         </button>
       </div>
     </section>
