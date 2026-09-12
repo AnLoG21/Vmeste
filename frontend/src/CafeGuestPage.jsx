@@ -851,6 +851,18 @@ export default function CafeGuestPage({ mode = "table", keyId, embed = false }) 
             <p className="muted small cafe-dine-attached">Стол подтверждён · можно оформлять заказ</p>
           ) : null}
 
+          {completedOrder?.id ? (
+            <section className="cafe-guest-card cafe-order-status-panel" data-testid="cafe-order-status">
+              <h2>Заказ #{completedOrder.id}</h2>
+              <p className="muted">
+                Статус: <strong>{completedOrder.status}</strong>
+                {completedOrder.total != null
+                  ? ` · ${Number(completedOrder.total).toLocaleString("ru-RU")} ₽`
+                  : ""}
+              </p>
+            </section>
+          ) : null}
+
           {completedOrder?.can_rate ? (
             <section className="cafe-guest-card cafe-rating-panel">
               <h2>Оцените блюда из заказа #{completedOrder.id}</h2>

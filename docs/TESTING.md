@@ -49,11 +49,12 @@ npm run test:e2e
 
 Specs in `e2e/`:
 
-1. `/android` — APK CTA  
-2. Map org sheet → «Записаться»  
-3. Free book → «Моё», modal closed  
-4. Prepay → modal closed before YooKassa redirect  
-5. `/activity?booking_payment=success` → «Моё»
+| Spec | Scenarios |
+|------|-----------|
+| `android.spec.js` | `/android` APK CTA |
+| `client-book.spec.js` | map sheet → book → free/prepay → payment return |
+| `cafe-guest.spec.js` | `/m/…` online takeaway redirect + `?order=` paid status |
+| `shop-public.spec.js` | `/s/…` online pickup redirect + `?order=` paid status |
 
 Config: `playwright.config.js` (builds + Vite preview on `:4173`).
 
