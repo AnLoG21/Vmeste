@@ -13,7 +13,7 @@ function ensureStyles() {
 .vmeste-confirm-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 10050;
+  z-index: 21000;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -1,4 +1,4 @@
-/** Provider auth + subscription API mocks for E2E. */
+/** Provider auth + subscription / booking API mocks for E2E. */
 
 const ME = {
   id: 601,
@@ -38,11 +38,37 @@ const ACTIVE_SUB = {
   cancel_at_period_end: false,
 };
 
+const ORG_BOOKING = (() => {
+  const start = new Date();
+  start.setHours(15, 0, 0, 0);
+  if (start.getTime() <= Date.now()) {
+    start.setDate(start.getDate() + 1);
+  }
+  const end = new Date(start.getTime() + 30 * 60_000);
+  return {
+    id: 8001,
+    status: "new",
+    payment_status: "none",
+    provider: ME.id,
+    client: 501,
+    client_display_name: "Тест Клиент",
+    service: 301,
+    service_name: "Стрижка",
+    organization_name: ME.organization_name,
+    slot_starts_at: start.toISOString(),
+    slot_ends_at: end.toISOString(),
+    created_at: new Date().toISOString(),
+  };
+})();
+
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[] }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[] }} [options]
  */
-export async function installProviderMocks(page, { forPay = false, waitlist = null } = {}) {
+export async function installProviderMocks(
+  page,
+  { forPay = false, waitlist = null, bookings = null } = {},
+) {
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
     localStorage.setItem("vmeste_access", "e2e-access-token");
@@ -52,6 +78,7 @@ export async function installProviderMocks(page, { forPay = false, waitlist = nu
 
   let mineSubs = forPay ? [] : [{ ...ACTIVE_SUB }];
   let waitlistRows = Array.isArray(waitlist) ? waitlist.map((r) => ({ ...r })) : [];
+  let bookingsList = Array.isArray(bookings) ? bookings.map((b) => ({ ...b })) : [];
 
   await page.route("**/api/**", async (route) => {
     const req = route.request();
@@ -158,6 +185,28 @@ export async function installProviderMocks(page, { forPay = false, waitlist = nu
     if (path.includes("/booking/waitlist") && method === "GET") {
       return json(waitlistRows);
     }
+    if (path.match(/\/booking\/\d+\/confirm$/) && method === "POST") {
+      const id = Number(path.split("/").filter(Boolean).at(-2));
+      bookingsList = bookingsList.map((b) =>
+        Number(b.id) === id ? { ...b, status: "confirmed" } : b,
+      );
+      return json(bookingsList.find((b) => Number(b.id) === id) || { id, status: "confirmed" });
+    }
+    if (path.match(/\/booking\/\d+\/mark-no-show$/) && method === "POST") {
+      const id = Number(path.split("/").filter(Boolean).at(-2));
+      bookingsList = bookingsList.map((b) =>
+        Number(b.id) === id ? { ...b, status: "no_show" } : b,
+      );
+      return json(bookingsList.find((b) => Number(b.id) === id) || { id, status: "no_show" });
+    }
+    if (path.match(/\/booking\/\d+\/cancel-by-org$/) && method === "POST") {
+      const id = Number(path.split("/").filter(Boolean).at(-2));
+      bookingsList = bookingsList.map((b) =>
+        Number(b.id) === id ? { ...b, status: "cancelled" } : b,
+      );
+      return json(bookingsList.find((b) => Number(b.id) === id) || { id, status: "cancelled" });
+    }
+    if (path.match(/\/booking$/) && method === "GET") return json(bookingsList);
     if (path.includes("/booking")) return json([]);
     if (path.includes("/catalog/")) return json([]);
     if (path.includes("/chat/")) return json([]);
@@ -176,8 +225,6 @@ export async function installProviderMocks(page, { forPay = false, waitlist = nu
   });
 }
 
-export { ME, PLAN, ACTIVE_SUB };
-
 const WAITLIST_ENTRY = {
   id: 12,
   client_name: "Тест Клиент",
@@ -186,4 +233,4 @@ const WAITLIST_ENTRY = {
   status: "waiting",
 };
 
-export { WAITLIST_ENTRY };
+export { ME, PLAN, ACTIVE_SUB, WAITLIST_ENTRY, ORG_BOOKING };
