@@ -416,7 +416,9 @@ export default function ClientBookModal({
                 ? mapOrgProfile?.prepay?.ready && mapOrgProfile?.prepay?.mode === "percent"
                   ? `К оплате сейчас: ${chargeInfo.charge.toLocaleString("ru-RU")} ₽ (из ${chargeInfo.total.toLocaleString("ru-RU")} ₽)`
                   : `Сумма: ${chargeInfo.charge.toLocaleString("ru-RU")} ₽`
-                : "К оплате: 0 ₽"}
+                : chargeInfo.coveredByLoyalty
+                  ? "К оплате: 0 ₽ (баллы покрывают сумму, без карты)"
+                  : "К оплате: 0 ₽"}
             </p>
           ) : null}
           <button type="submit" disabled={!clientBookingForm.windowKey || submitBusy}>

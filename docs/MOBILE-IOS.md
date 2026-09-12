@@ -74,6 +74,8 @@ Apple CDN кэширует AASA; после смены Team ID может про
 
 ## Push (APNs → FCM)
 
+> **Статус:** код в репозитории готов; **живой iOS push ждёт Apple Developer Program** ($99/год) + ключ APNs в Firebase и сборку на Mac. Без этого TestFlight/устройство не получат системные уведомления. PWA на iPhone системный push не даёт.
+
 Тот же JS (`frontend/src/pushNotifications.js`) и backend FCM HTTP v1, что на Android.
 На iOS Capacitor отдаёт **FCM-токен** только если в приложение вшит **Firebase Messaging** (иначе придёт сырой APNs-токен — сервер его не примет).
 

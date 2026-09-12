@@ -79,6 +79,7 @@ export function estimateClientBookCharge({
       total: 0,
       charge: 0,
       submitLabel: "Записаться по абонементу",
+      coveredByLoyalty: false,
     };
   }
   let total = Number(service?.price) || 0;
@@ -105,6 +106,7 @@ export function estimateClientBookCharge({
       total: payable,
       charge,
       submitLabel: `Перейти к оплате · ${money(charge)}`,
+      coveredByLoyalty: false,
     };
   }
 
@@ -112,7 +114,8 @@ export function estimateClientBookCharge({
     return {
       total: 0,
       charge: 0,
-      submitLabel: "Подтвердить запись",
+      submitLabel: discount > 0 ? "Подтвердить · оплата баллами" : "Подтвердить запись",
+      coveredByLoyalty: discount > 0,
     };
   }
 
@@ -120,6 +123,7 @@ export function estimateClientBookCharge({
     total: payable,
     charge: payable,
     submitLabel: `Подтвердить · ${money(payable)}`,
+    coveredByLoyalty: false,
   };
 }
 
