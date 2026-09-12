@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { JoinWaitlistButton } from "./WaitlistPanel.jsx";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import MiniDatePicker from "./MiniDatePicker.jsx";
 import { formatStaffFullName } from "./chatHelpers.jsx";
-import { bookingPrepayHint } from "./bookingDisplay.jsx";
+import { bookingPrepayHint, estimateClientBookCharge } from "./bookingDisplay.jsx";
 import {
   formatTimeHm,
   clientWindowKey,
@@ -28,6 +29,7 @@ export default function ClientBookModal({
   bookLoyaltyInfo,
   clientStatus,
 }) {
+  const [submitBusy, setSubmitBusy] = useState(false);
   const staffOptions = bookProviderStaff || [];
   const bookableServices = (() => {
     if (clientBookingForm.staffId === "any") return providerServices;
@@ -60,6 +62,29 @@ export default function ClientBookModal({
     thumb_url: p.thumb_url,
   }));
 
+  const chargeInfo = estimateClientBookCharge({
+    service: selectedService,
+    optionIds: clientBookingForm.optionIds,
+    loyaltyPoints: clientBookingForm.loyaltyPoints,
+    rubPerPoint: bookLoyaltyInfo?.rub_per_point,
+    usePackage: clientBookingForm.usePackage,
+    hasPackages: bookClientPackages.length > 0,
+    prepay: mapOrgProfile?.prepay,
+  });
+
+  async function onSubmit(event) {
+    if (submitBusy) {
+      event.preventDefault();
+      return;
+    }
+    setSubmitBusy(true);
+    try {
+      await createClientBooking(event);
+    } finally {
+      setSubmitBusy(false);
+    }
+  }
+
   return (
     <div
       className="modal-backdrop modal-backdrop--app-overlay modal-backdrop--bottom-sheet"
@@ -87,10 +112,10 @@ export default function ClientBookModal({
             ))}
           </div>
         )}
-        {bookingPrepayHint(mapOrgProfile?.prepay) ? (
+        {chargeInfo.charge > 0 && bookingPrepayHint(mapOrgProfile?.prepay) ? (
           <p className="muted small">{bookingPrepayHint(mapOrgProfile.prepay)}</p>
         ) : null}
-        <form onSubmit={createClientBooking} className="form">
+        <form onSubmit={onSubmit} className="form">
           <p className="field-label">Мастер</p>
           <div className="client-book-staff-pick">
             <button
@@ -385,12 +410,17 @@ export default function ClientBookModal({
               })()}
             </label>
           ) : null}
-          <button type="submit" disabled={!clientBookingForm.windowKey}>
-            {clientBookingForm.usePackage && bookClientPackages.length
-              ? "Записаться по абонементу"
-              : mapOrgProfile?.prepay?.ready
-                ? "Перейти к оплате"
-                : "Подтвердить"}
+          {clientBookingForm.windowKey && selectedService ? (
+            <p className="muted small client-book-total">
+              {chargeInfo.charge > 0
+                ? mapOrgProfile?.prepay?.ready && mapOrgProfile?.prepay?.mode === "percent"
+                  ? `К оплате сейчас: ${chargeInfo.charge.toLocaleString("ru-RU")} ₽ (из ${chargeInfo.total.toLocaleString("ru-RU")} ₽)`
+                  : `Сумма: ${chargeInfo.charge.toLocaleString("ru-RU")} ₽`
+                : "К оплате: 0 ₽"}
+            </p>
+          ) : null}
+          <button type="submit" disabled={!clientBookingForm.windowKey || submitBusy}>
+            {submitBusy ? "Создаём…" : chargeInfo.submitLabel}
           </button>
         </form>
         <p className="status">{clientStatus}</p>

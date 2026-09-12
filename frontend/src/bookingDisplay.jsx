@@ -64,6 +64,65 @@ export function bookingPrepayHint(prepay) {
   return "";
 }
 
+/** Estimate payable / prepay amount for the client book submit button. */
+export function estimateClientBookCharge({
+  service,
+  optionIds = [],
+  loyaltyPoints = 0,
+  rubPerPoint = 1,
+  usePackage = false,
+  hasPackages = false,
+  prepay = null,
+}) {
+  if (usePackage && hasPackages) {
+    return {
+      total: 0,
+      charge: 0,
+      submitLabel: "Записаться по абонементу",
+    };
+  }
+  let total = Number(service?.price) || 0;
+  const selected = new Set((optionIds || []).map(Number));
+  for (const opt of service?.options || []) {
+    if (!selected.has(Number(opt.id))) continue;
+    if (opt.is_active === false) continue;
+    total += Number(opt.price) || 0;
+  }
+  const pts = Number(loyaltyPoints) || 0;
+  const rate = Number(rubPerPoint) || 1;
+  const discount = pts > 0 && total > 0 ? Math.min(total, pts * rate) : 0;
+  const payable = Math.max(0, Math.round((total - discount) * 100) / 100);
+  const money = (n) => `${Number(n).toLocaleString("ru-RU")} ₽`;
+
+  if (prepay?.ready && payable > 0) {
+    let charge = payable;
+    if (prepay.mode === "percent") {
+      const percent = Math.min(100, Math.max(1, Number(prepay.percent) || 50));
+      charge = Math.round(((payable * percent) / 100) * 100) / 100;
+      if (charge <= 0) charge = payable;
+    }
+    return {
+      total: payable,
+      charge,
+      submitLabel: `Перейти к оплате · ${money(charge)}`,
+    };
+  }
+
+  if (payable <= 0) {
+    return {
+      total: 0,
+      charge: 0,
+      submitLabel: "Подтвердить запись",
+    };
+  }
+
+  return {
+    total: payable,
+    charge: payable,
+    submitLabel: `Подтвердить · ${money(payable)}`,
+  };
+}
+
 export function formatInAppNotificationText(n) {
   const title = (n?.payload?.title || "").trim();
   const body = (n?.payload?.body || "").trim();

@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { API_URL } from "./config.js";
 import {
   isoMonthKey,
@@ -7,6 +8,7 @@ import {
   clientWindowKey,
 } from "./bookingCalendarUtils.jsx";
 import { confirmDialog } from "./confirmDialog.js";
+import { showToast } from "./toast.js";
 
 /**
  * Booking list actions / client book / payment / inspection links for App.
@@ -39,6 +41,8 @@ export function useBookingActions({
   setClientBookModalOpen,
   setMapOrgPopup,
 }) {
+  const clientBookInFlightRef = useRef(false);
+
   function bookingClientLabel(it) {
     const n = (it.client_display_name || "").trim();
     if (n) return n;
@@ -98,57 +102,7 @@ export function useBookingActions({
     await reloadBookingsList();
   }
 
-  async function createClientBooking(event) {
-    event.preventDefault();
-    const serviceId = Number(clientBookingForm.serviceId);
-    if (!serviceId) {
-      setClientStatus("Выберите услугу.");
-      return;
-    }
-    const win = clientBookWindows.find((w) => clientWindowKey(w) === clientBookingForm.windowKey);
-    if (!win) {
-      setClientStatus("Выберите время записи.");
-      return;
-    }
-    const response = await authFetch(`${API_URL}/booking/`, {
-      method: "POST",
-      body: JSON.stringify({
-        provider: Number(clientBookingForm.provider),
-        service: serviceId,
-        starts_at: win.starts_at,
-        ends_at: win.ends_at,
-        staff: win.staff_id ?? null,
-        comment: clientBookingForm.comment,
-        option_ids: clientBookingForm.optionIds || [],
-        loyalty_points:
-          clientBookingForm.usePackage && bookClientPackages.length
-            ? 0
-            : Number(clientBookingForm.loyaltyPoints) || 0,
-        use_package: Boolean(clientBookingForm.usePackage && clientBookingForm.clientPackageId),
-        client_package: clientBookingForm.usePackage ? clientBookingForm.clientPackageId || null : null,
-      }),
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      setClientStatus(err.detail || "Не удалось создать запись.");
-      return;
-    }
-    const created = await response.json().catch(() => ({}));
-    if (created.confirmation_url) {
-      window.location.href = created.confirmation_url;
-      return;
-    }
-    await reloadBookingsList();
-    const monthKey = isoMonthKey(created.slot_starts_at || win.starts_at);
-    if (monthKey) setBookingsMonth(monthKey);
-    setClientStatus(
-      created.client_package
-        ? "Запись создана — списан визит по абонементу."
-        : Number(created.loyalty_points_redeemed) > 0 &&
-            (created.payment_status === "paid" || !created.confirmation_url)
-          ? "Запись создана — баллы учтены в оплате."
-          : "Запись создана.",
-    );
+  function resetClientBookingForm() {
     setClientBookingForm({
       locationId: "",
       provider: "",
@@ -165,9 +119,82 @@ export function useBookingActions({
     setBookLoyaltyInfo(null);
     setBookClientPackages([]);
     setClientBookWindows([]);
-    setClientBookModalOpen(false);
-    setMapOrgPopup(null);
-    setCurrentView(me?.role === "provider" ? "my_bookings" : "bookings");
+  }
+
+  async function createClientBooking(event) {
+    event.preventDefault();
+    if (clientBookInFlightRef.current) return;
+    const serviceId = Number(clientBookingForm.serviceId);
+    if (!serviceId) {
+      setClientStatus("Выберите услугу.");
+      return;
+    }
+    const win = clientBookWindows.find((w) => clientWindowKey(w) === clientBookingForm.windowKey);
+    if (!win) {
+      setClientStatus("Выберите время записи.");
+      return;
+    }
+    clientBookInFlightRef.current = true;
+    setClientStatus("Создаём запись…");
+    try {
+      const response = await authFetch(`${API_URL}/booking/`, {
+        method: "POST",
+        body: JSON.stringify({
+          provider: Number(clientBookingForm.provider),
+          service: serviceId,
+          starts_at: win.starts_at,
+          ends_at: win.ends_at,
+          staff: win.staff_id ?? null,
+          comment: clientBookingForm.comment,
+          option_ids: clientBookingForm.optionIds || [],
+          loyalty_points:
+            clientBookingForm.usePackage && bookClientPackages.length
+              ? 0
+              : Number(clientBookingForm.loyaltyPoints) || 0,
+          use_package: Boolean(clientBookingForm.usePackage && clientBookingForm.clientPackageId),
+          client_package: clientBookingForm.usePackage ? clientBookingForm.clientPackageId || null : null,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        setClientStatus(err.detail || "Не удалось создать запись.");
+        return;
+      }
+      const created = await response.json().catch(() => ({}));
+      const payUrl = typeof created.confirmation_url === "string" ? created.confirmation_url.trim() : "";
+      if (payUrl) {
+        // Keep modal open only while leaving for acquirer; booking already holds the slot.
+        setClientStatus("Переходим к оплате…");
+        window.location.href = payUrl;
+        return;
+      }
+
+      const successText = created.client_package
+        ? "Запись создана — списан визит по абонементу."
+        : Number(created.loyalty_points_redeemed) > 0 && created.payment_status === "paid"
+          ? "Запись создана — баллы учтены в оплате."
+          : "Запись создана.";
+
+      // Close immediately so a slow bookings reload cannot leave the sheet stuck open.
+      setClientBookModalOpen(false);
+      setMapOrgPopup(null);
+      resetClientBookingForm();
+      setClientStatus(successText);
+      showToast(successText, { tone: "success" });
+      setCurrentView(me?.role === "provider" ? "my_bookings" : "bookings");
+
+      try {
+        await reloadBookingsList();
+        const monthKey = isoMonthKey(created.slot_starts_at || win.starts_at);
+        if (monthKey) setBookingsMonth(monthKey);
+      } catch {
+        showToast("Запись создана, но список не обновился. Обновите экран.", { tone: "info" });
+      }
+    } catch {
+      setClientStatus("Не удалось создать запись. Проверьте соединение.");
+    } finally {
+      clientBookInFlightRef.current = false;
+    }
   }
 
   async function resumeBookingPayment(bookingId, event) {
