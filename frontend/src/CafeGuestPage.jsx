@@ -8,6 +8,7 @@ import { getOrgWorkingHoursStatus, isOrganizationOpenNow } from "./clientOrgFeat
 import CafeGuestDeliveryMap, { findZoneAt } from "./CafeGuestDeliveryMap.jsx";
 import CafeGuestAddressInput from "./CafeGuestAddressInput.jsx";
 import { loadGuestPrefs, saveGuestPrefs } from "./cafeGuestPrefs.js";
+import { SERVICE_CHARGE_PERCENT, estimateCafeGuestCharge } from "./cafeCheckoutMath.js";
 import "./landing.css";
 import "./cafeGuest.css";
 
@@ -16,8 +17,6 @@ const MODE_META = {
   takeaway: { label: "Самовывоз", icon: "🛍️" },
   delivery: { label: "Доставка", icon: "🛵" },
 };
-
-const SERVICE_CHARGE_PERCENT = 3;
 
 function pickDefaultMode(modes = {}, preferDineIn = true) {
   if (preferDineIn && modes.dine_in) return "dine_in";
@@ -266,10 +265,6 @@ export default function CafeGuestPage({ mode = "table", keyId, embed = false }) 
 
   const itemsCount = cartLines.reduce((s, i) => s + i.quantity, 0);
   const cartTotal = cartLines.reduce((s, i) => s + Number(i.price) * i.quantity, 0);
-  const tipAmount = tipCustomMode
-    ? Math.max(0, Number(tipCustomAmount) || 0)
-    : Math.round(cartTotal * (tipPercent / 100));
-  const serviceChargeAmount = includeServiceCharge ? Math.round(cartTotal * (SERVICE_CHARGE_PERCENT / 100)) : 0;
   const deliveryZones = unlock?.delivery_zones || [];
   const needsDeliveryPin = modeOrder === "delivery" && deliveryZones.length > 0;
   const deliveryAmount =
@@ -281,6 +276,16 @@ export default function CafeGuestPage({ mode = "table", keyId, embed = false }) 
           : null
         : Number(unlock?.delivery_fee || 0);
   const deliveryAmountSafe = deliveryAmount == null ? 0 : deliveryAmount;
+  const chargeEstimate = estimateCafeGuestCharge({
+    cartTotal,
+    tipPercent,
+    tipCustomMode,
+    tipCustomAmount,
+    includeServiceCharge,
+    deliveryAmount: deliveryAmountSafe,
+  });
+  const tipAmount = chargeEstimate.tip;
+  const serviceChargeAmount = chargeEstimate.service;
   const deliveryMinOrder =
     modeOrder === "delivery"
       ? Number(
@@ -326,7 +331,7 @@ export default function CafeGuestPage({ mode = "table", keyId, embed = false }) 
     setDeliveryZone(zone || null);
   }
 
-  const grandTotal = cartTotal + tipAmount + deliveryAmountSafe + serviceChargeAmount;
+  const grandTotal = chargeEstimate.total;
 
   const prefsOrgKey = useMemo(() => {
     return (

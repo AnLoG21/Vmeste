@@ -72,6 +72,8 @@ jobs:
           cafe.test_delivery_zones
           cafe.test_courier_access
           cafe.test_menu_nutrition
+          cafe.tests_guest_order_pay
+          shop.tests_public_order_pay
           users.test_working_hours
           users.test_oauth_find_user
           users.test_oauth_credentials
