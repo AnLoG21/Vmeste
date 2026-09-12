@@ -126,16 +126,17 @@ def send_fcm_to_tokens(tokens: list[str], *, title: str, body: str, data: dict |
     return ok
 
 
-def notify_users(user_ids, *, kind: str, title: str, body: str, payload: dict | None = None):
-    """Create in-app rows and push to registered devices."""
+def notify_users(user_ids, *, kind: str, title: str, body: str, payload: dict | None = None, inbox: bool = True):
+    """Create in-app rows (optional) and push to registered devices."""
     ids = list({int(x) for x in user_ids if x})
     if not ids:
         return
     payload = payload or {}
-    rows = [
-        InAppNotification(user_id=uid, kind=kind, payload={**payload, "title": title, "body": body})
-        for uid in ids
-    ]
-    InAppNotification.objects.bulk_create(rows)
+    if inbox:
+        rows = [
+            InAppNotification(user_id=uid, kind=kind, payload={**payload, "title": title, "body": body})
+            for uid in ids
+        ]
+        InAppNotification.objects.bulk_create(rows)
     tokens = list(DevicePushToken.objects.filter(user_id__in=ids).values_list("token", flat=True))
-    send_fcm_to_tokens(tokens, title=title, body=body, data={"kind": kind, **payload})
+    send_fcm_to_tokens(tokens, title=title, body=body, data={"kind": kind, **{str(k): str(v) for k, v in payload.items()}})

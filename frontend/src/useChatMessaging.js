@@ -138,17 +138,24 @@ export function useChatMessaging({
     setMenuOpen(false);
   }
 
-  async function openChatWithProvider(providerId) {
+  async function openChatWithProvider(providerId, opts = {}) {
+    const stayInView = Boolean(opts?.stayInView);
     const res = await authFetch(`${API_URL}/chat/conversations/create-with-provider/`, {
       method: "POST",
       body: JSON.stringify({ provider_id: Number(providerId) }),
     });
-    if (!res.ok) return;
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Не удалось открыть чат с продавцом");
+    }
     const data = await res.json();
     await loadChats();
-    setSelectedChatId(data.id);
-    setCurrentView("chats");
+    setSelectedChatId(Number(data.id));
+    if (!stayInView) {
+      setCurrentView("chats");
+    }
     setMenuOpen(false);
+    return data;
   }
 
   async function fetchChatMessagesPage(conversationId, { beforeId, afterId, limit = CHAT_MSG_PAGE_SIZE } = {}) {

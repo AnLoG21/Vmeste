@@ -48,6 +48,7 @@ export function useAuthOnboarding({
   placemarkRef,
   setDetectedCity,
   onboardingPrefillIdRef,
+  onProviderOnboardingDone,
 }) {
   function destroyRegMap() {
     if (mapRef.current) {
@@ -410,6 +411,7 @@ export function useAuthOnboarding({
       setCurrentView("shop");
     } else if (data.role === "provider") {
       setCurrentView("bookings");
+      onProviderOnboardingDone?.(data);
     }
   }
 

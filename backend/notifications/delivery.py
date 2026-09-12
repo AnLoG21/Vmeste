@@ -181,13 +181,20 @@ def deliver_booking_event(
         elif is_status:
             allow = bool(getattr(client, "notify_booking_status", True))
         if allow:
+            # new_client: short push, no inbox spam; full text (with URL) only on email/SMS/messengers
+            push_body = body
+            inbox = True
+            if event == "new_client":
+                inbox = False
+                push_body = _short_client_booking_push(booking, title_client or "Вы записаны")
             try:
                 notify_users(
                     [client.pk],
                     kind=InAppNotification.Kind.BOOKING,
                     title=(title_client or "Запись")[:120],
-                    body=(body[:240] or title_client),
+                    body=(push_body[:240] or title_client),
                     payload={**payload, "view": "bookings", "event": event},
+                    inbox=inbox,
                 )
             except Exception:
                 logger.exception("client push failed")
@@ -269,6 +276,77 @@ def deliver_booking_event(
             _fanout_user_channels(msg, staff, body)
 
 
+def enqueue_deliver_booking_event(
+    booking,
+    event: str,
+    text: str,
+    *,
+    audience: str = "both",
+    title_client: str = "",
+    title_org: str = "",
+) -> None:
+    """
+    Queue booking fan-out so HTTP create/confirm stays fast.
+    Falls back to a daemon thread if the broker is unavailable / eager would block.
+    """
+    booking_id = int(booking.pk)
+    body = (text or "").strip()
+    title_client = title_client or ""
+    title_org = title_org or ""
+
+    def _run_inline():
+        from django.db import close_old_connections
+
+        close_old_connections()
+        try:
+            from booking.models import Booking
+
+            b = (
+                Booking.objects.select_related("provider", "client", "service", "staff", "slot")
+                .filter(pk=booking_id)
+                .first()
+            )
+            if not b:
+                return
+            deliver_booking_event(
+                b,
+                event,
+                body,
+                audience=audience,
+                title_client=title_client,
+                title_org=title_org,
+            )
+        except Exception:
+            logger.exception("inline booking delivery failed booking_id=%s event=%s", booking_id, event)
+        finally:
+            close_old_connections()
+
+    try:
+        from django.conf import settings
+
+        from .tasks import deliver_booking_event_task
+
+        # ALWAYS_EAGER would re-block the request — prefer a background thread in that mode.
+        if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
+            import threading
+
+            threading.Thread(target=_run_inline, daemon=True, name=f"booking-notify-{booking_id}").start()
+            return
+        deliver_booking_event_task.delay(
+            booking_id,
+            event,
+            body,
+            audience,
+            title_client,
+            title_org,
+        )
+    except Exception:
+        logger.exception("celery enqueue failed; using thread booking_id=%s", booking_id)
+        import threading
+
+        threading.Thread(target=_run_inline, daemon=True, name=f"booking-notify-{booking_id}").start()
+
+
 def _booking_template_vars(booking) -> dict:
     from booking.booking_actions import client_display_name, format_booking_when
 
@@ -314,11 +392,28 @@ def build_client_new_booking_text(booking) -> str:
             tpl.replace(" Подтвердите визит: {confirm_url}", "")
             .replace("Подтвердите визит: {confirm_url}", "")
             .replace("{confirm_url}", "")
+            .replace(" Подтвердите визит в кабинете Вместе.", "")
             .strip()
         )
         if not tpl:
             tpl = "Вы записаны в {org} на {service} — {date}."
-    return render_reminder_template(tpl, **vars_)
+    # Для каналов с длинным URL: если шаблон всё ещё содержит {confirm_url}, оставляем.
+    # Если нет — добавляем короткую отдельную строку только в email/SMS/мессенджеры.
+    text = render_reminder_template(tpl, **vars_)
+    confirm = (vars_.get("confirm_url") or "").strip()
+    if confirm and "{confirm_url}" not in tpl and "confirm_url" not in (tpl or ""):
+        if confirm not in text:
+            text = f"{text.rstrip()}\nПодтвердить: {confirm}"
+    return text
+
+
+def _short_client_booking_push(booking, fallback_title: str) -> str:
+    from booking.booking_actions import format_booking_when
+
+    org = (getattr(booking.provider, "organization_name", None) or "").strip() or "организацию"
+    service = getattr(getattr(booking, "service", None), "name", None) or "услугу"
+    when = format_booking_when(booking)
+    return f"Вы записаны: {service} · {when} · {org}"[:180] or fallback_title
 
 
 def deliver_winback_message(provider, client, text: str, *, title: str = "Мы скучаем") -> None:

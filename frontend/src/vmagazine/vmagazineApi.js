@@ -10,6 +10,14 @@ export async function vmagazineFetch(authFetch, API_URL, path, options = {}) {
   return res.json();
 }
 
+function emitCartChanged() {
+  try {
+    window.dispatchEvent(new CustomEvent("vmag:cart-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function loadHome(authFetch, API_URL, { originals } = {}) {
   const q = originals ? "?originals=1" : "";
   return vmagazineFetch(authFetch, API_URL, `/home/${q}`);
@@ -49,19 +57,25 @@ export function loadCart(authFetch, API_URL) {
   return vmagazineFetch(authFetch, API_URL, "/cart/");
 }
 
-export function setCartItem(authFetch, API_URL, productId, quantity, useBonuses, selectedSize) {
+export async function setCartItem(authFetch, API_URL, productId, quantity, useBonuses, selectedSize) {
   const body = { product_id: productId, quantity };
   if (useBonuses != null) body.use_bonuses = useBonuses;
   if (selectedSize != null) body.selected_size = selectedSize;
-  return vmagazineFetch(authFetch, API_URL, "/cart/", {
+  const data = await vmagazineFetch(authFetch, API_URL, "/cart/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  emitCartChanged();
+  return data;
 }
 
-export function removeCartItem(authFetch, API_URL, productId) {
-  return vmagazineFetch(authFetch, API_URL, `/cart/?product_id=${productId}`, { method: "DELETE" });
+export async function removeCartItem(authFetch, API_URL, productId) {
+  const data = await vmagazineFetch(authFetch, API_URL, `/cart/?product_id=${productId}`, {
+    method: "DELETE",
+  });
+  emitCartChanged();
+  return data;
 }
 
 export function trackProductView(authFetch, API_URL, productId) {
@@ -79,6 +93,14 @@ export function loadAddresses(authFetch, API_URL) {
 export function saveAddress(authFetch, API_URL, payload) {
   return vmagazineFetch(authFetch, API_URL, "/addresses/", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAddress(authFetch, API_URL, payload) {
+  return vmagazineFetch(authFetch, API_URL, "/addresses/", {
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
@@ -120,11 +142,17 @@ export function loadReturns(authFetch, API_URL) {
   return vmagazineFetch(authFetch, API_URL, "/returns/");
 }
 
-export function createReturn(authFetch, API_URL, payload) {
+export function createReturn(authFetch, API_URL, { order_id, order_item_id, reason, photos }) {
+  const fd = new FormData();
+  fd.append("order_id", String(order_id));
+  fd.append("order_item_id", String(order_item_id));
+  fd.append("reason", reason || "");
+  for (const file of photos || []) {
+    if (file) fd.append("photos", file);
+  }
   return vmagazineFetch(authFetch, API_URL, "/returns/", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: fd,
   });
 }
 

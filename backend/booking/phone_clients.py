@@ -463,14 +463,29 @@ def list_clients_for_provider(
         pass
 
     results = []
+    sphere = ""
+    try:
+        provider_user = User.objects.filter(id=provider_id).only("provider_sphere").first()
+        sphere = (getattr(provider_user, "provider_sphere", None) or "").strip()
+    except Exception:
+        sphere = ""
+
     for u in users:
         brief = client_brief(u, request=request, provider_id=provider_id)
         card = cards_by_client.get(u.id)
         tech = card.tech if card and isinstance(card.tech, dict) else {}
         personal = card.personal if card and isinstance(card.personal, dict) else {}
         brief["has_memory"] = bool(card)
-        brief["hair_color"] = (tech.get("hair_color") or "")[:80]
+        brief["provider_sphere"] = sphere
         brief["allergies"] = (personal.get("allergies") or "")[:80]
+        # Sphere-specific list hints (FE picks by provider_sphere)
+        brief["hair_color"] = (tech.get("hair_color") or "")[:80] if sphere != "service_center" and sphere != "shops" else ""
+        brief["vehicle_title"] = (tech.get("vehicle_title") or "")[:80]
+        brief["vehicle_plate"] = (tech.get("vehicle_plate") or "")[:40]
+        brief["mileage_km"] = (tech.get("mileage_km") or "")[:40]
+        brief["last_works"] = (tech.get("last_works") or "")[:80]
+        brief["preferred_size"] = (tech.get("preferred_size") or "")[:40]
+        brief["purchase_notes"] = (tech.get("purchase_notes") or "")[:80]
         brief["is_blocked"] = bool(card.is_blocked) if card else False
         brief["no_show_count"] = int(card.no_show_count or 0) if card else 0
         brief["acquisition_source"] = (card.acquisition_source or "") if card else ""

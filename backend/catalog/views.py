@@ -10,7 +10,7 @@ from users.models import User
 from booking.booking_windows import filter_services_bookable_by_staff
 from booking.models import ProviderStaff
 
-from .catalog_seed import provider_catalog_status, seed_provider_catalog
+from .catalog_seed import provider_catalog_status, run_provider_quick_start, seed_provider_catalog
 from .models import Service, ServiceCategory, ServiceOption, ServiceOptionPhoto, ServicePhoto
 from .serializers import ServiceCategorySerializer, ServiceOptionSerializer, ServicePhotoSerializer, ServiceSerializer
 from .sphere_templates import get_sphere_catalog, list_sphere_catalogs
@@ -362,3 +362,24 @@ class SeedProviderCatalogView(APIView):
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         status_data = provider_catalog_status(request.user)
         return Response({"stats": stats, **status_data})
+
+
+class ProviderQuickStartView(APIView):
+    """Seed catalog + activate services + weekday slots for new booking orgs."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        if request.user.role != User.Role.PROVIDER:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        try:
+            data = run_provider_quick_start(
+                request.user,
+                activate_limit=request.data.get("activate_limit", 5),
+                days=request.data.get("days", 7),
+                start_hour=request.data.get("start_hour", 10),
+                end_hour=request.data.get("end_hour", 19),
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(data)

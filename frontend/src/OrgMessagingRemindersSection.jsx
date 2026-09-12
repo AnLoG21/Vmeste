@@ -16,10 +16,10 @@ export default function OrgMessagingRemindersSection({
     <>
       <h3>Напоминания и мессенджеры</h3>
       <p className="muted small">
-        Напоминания за 24 ч и 2 ч до записи: клиентам и организации. При новой записи можно сразу отправить клиенту
-        детали и ссылку на подтверждение визита.         Каналы — Telegram, MAX, WhatsApp (Green-API), SMS, Email.
-        SMS: ключ платформы или свой SMS.ru api_id. Клиент может отключить напоминания в своих настройках. Для салона —
-        отдельно «давно не был».
+        Напоминания за 24 ч и 2 ч: кабинет и push всегда; email — если включён ниже. Telegram / SMS / WhatsApp /
+        MAX — только исходящие сообщения и только после настройки ключей. Входящего чата из WhatsApp/Telegram в
+        кабинет пока нет. Клиент может отключить напоминания у себя в профиле. Для салона — отдельно «давно не
+        был».
       </p>
       <form onSubmit={onSubmit} className="form">
         <label className="checkbox">
@@ -69,9 +69,13 @@ export default function OrgMessagingRemindersSection({
               label="Текст клиенту о новой записи"
               value={form.client_new_booking_template || ""}
               onChange={(v) => onChange((p) => ({ ...p, client_new_booking_template: v }))}
-              placeholder="Вы записаны в {org} на {service} — {date}. Подтвердите визит: {confirm_url}"
+              placeholder="Вы записаны в {org} на {service} — {date}. Подтвердите визит в кабинете Вместе."
               tokens={["org", "service", "date", "confirm_url", "client"]}
             />
+            <p className="muted small">
+              Ссылка {"{confirm_url}"} уходит только в email / SMS / мессенджеры. В кабинет и зелёный toast длинный
+              текст с URL не пишется.
+            </p>
           </>
         ) : null}
         <label className="checkbox">

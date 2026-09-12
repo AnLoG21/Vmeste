@@ -239,3 +239,19 @@ class ReturnRequest(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+
+
+class ReturnRequestPhoto(models.Model):
+    """Фото к заявке на возврат (обязательны при создании)."""
+
+    return_request = models.ForeignKey(
+        ReturnRequest,
+        on_delete=models.CASCADE,
+        related_name="photos",
+    )
+    image = models.ImageField(upload_to="return_photos/%Y/%m/")
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]

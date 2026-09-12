@@ -292,6 +292,7 @@ export default function ShopWorkspace({ authFetch, me }) {
   const [poolQuery, setPoolQuery] = useState("");
   const [poolHits, setPoolHits] = useState([]);
   const [categoryOpen, setCategoryOpen] = useState({});
+  const [siteWidgetOpen, setSiteWidgetOpen] = useState(false);
 
   const selected = useMemo(
     () => products.find((p) => String(p.id) === String(selectedId)) || null,
@@ -741,18 +742,38 @@ export default function ShopWorkspace({ authFetch, me }) {
               </p>
               {shopSlug ? (
                 <div className="org-widget-embed card-inset" style={{ marginTop: "0.75rem" }}>
-                  <h3 className="shop-section-title">Виджет витрины на сайт</h3>
-                  <p className="muted small">
-                    Скопируйте код и вставьте на сайт магазина. Параметр embed=1 убирает лишний chrome.
-                  </p>
-                  <p className="field-label">Код для сайта</p>
-                  <textarea
-                    readOnly
-                    rows={3}
-                    className="org-widget-code"
-                    value={`<iframe src="${window.location.origin}/s/${shopSlug}?embed=1" width="100%" height="800" style="border:0;border-radius:12px;max-width:720px" title="Магазин"></iframe>`}
-                    onFocus={(e) => e.target.select()}
-                  />
+                  <button
+                    type="button"
+                    className="shop-widget-toggle"
+                    aria-expanded={siteWidgetOpen}
+                    onClick={() => setSiteWidgetOpen((v) => !v)}
+                  >
+                    <h3 className="shop-section-title" style={{ margin: 0 }}>
+                      Виджет витрины на сайт
+                    </h3>
+                    <span className="shop-widget-chevron" aria-hidden>
+                      {siteWidgetOpen ? "▴" : "▾"}
+                    </span>
+                  </button>
+                  {siteWidgetOpen ? (
+                    <>
+                      <p className="muted small">
+                        Скопируйте код и вставьте на сайт магазина. Параметр embed=1 убирает лишний chrome.
+                      </p>
+                      <p className="field-label">Код для сайта</p>
+                      <textarea
+                        readOnly
+                        rows={3}
+                        className="org-widget-code"
+                        value={`<iframe src="${window.location.origin}/s/${shopSlug}?embed=1" width="100%" height="800" style="border:0;border-radius:12px;max-width:720px" title="Магазин"></iframe>`}
+                        onFocus={(e) => e.target.select()}
+                      />
+                    </>
+                  ) : (
+                    <p className="muted small" style={{ margin: "0.35rem 0 0" }}>
+                      Нажмите, чтобы показать код для вставки.
+                    </p>
+                  )}
                 </div>
               ) : null}
             </div>
@@ -1331,6 +1352,25 @@ export default function ShopWorkspace({ authFetch, me }) {
                   {r.client_name} {r.client_phone}
                 </p>
                 {r.reason ? <p className="small">{r.reason}</p> : null}
+                {(r.photos || []).length ? (
+                  <div className="shop-return-photos" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                    {r.photos.map((ph) => (
+                      <a
+                        key={ph.id}
+                        href={ph.url || ph.thumb_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ display: "block", width: 64, height: 64, borderRadius: 8, overflow: "hidden" }}
+                      >
+                        <img
+                          src={ph.thumb_url || ph.url}
+                          alt=""
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
                 {r.refund_id ? (
                   <p className="muted small">
                     Refund: <code>{r.refund_id}</code>

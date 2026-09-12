@@ -160,6 +160,7 @@ export default function ChatsWorkspace({
   updateChatScrollUi,
 }) {
   const microAppChats = currentView === "vmenu" || currentView === "vmagazine";
+  const vmenuContactsMode = currentView === "vmenu";
   return (
           <section className={`card full-width tg-chats-card${microAppChats ? " tg-chats-card--vmenu" : ""}`}>
             <div
@@ -260,7 +261,7 @@ export default function ChatsWorkspace({
                       }}
                       className={[
                         "tg-chat-item-row",
-                        selectedChatId === c.id && "active",
+                        Number(selectedChatId) === Number(c.id) && "active",
                         c.is_saved_messages && "saved",
                         unreadN > 0 && "tg-chat-item-row--unread",
                         isPinned && "tg-chat-item-row--pinned",
@@ -371,7 +372,7 @@ export default function ChatsWorkspace({
                   );
                   })}
                 </div>
-                {microAppChats && filteredVmenuChatContacts.length > 0 ? (
+                {vmenuContactsMode && filteredVmenuChatContacts.length > 0 ? (
                   <>
                     <div className="vmenu-chat-section-label">Подписчики</div>
                     <div className="tg-chat-list vmenu-chat-contacts">
@@ -408,8 +409,13 @@ export default function ChatsWorkspace({
                   </>
                 ) : null}
                 {microAppChats
-                  ? filteredSidebarChats.length === 0 && filteredVmenuChatContacts.length === 0 && (
-                    <p className="tg-empty">Пока нет переписок. Напишите подписчику или откройте профиль пользователя.</p>
+                  ? filteredSidebarChats.length === 0 &&
+                    (!vmenuContactsMode || filteredVmenuChatContacts.length === 0) && (
+                    <p className="tg-empty">
+                      {vmenuContactsMode
+                        ? "Пока нет переписок. Напишите подписчику или откройте профиль пользователя."
+                        : "Пока нет чатов с магазинами — нажмите «Написать продавцу» в карточке товара."}
+                    </p>
                   )
                   : filteredSidebarChats.length === 0 && (
                     <p className="tg-empty">{chatFolder === "clients" ? "Пока нет чатов с клиентами — они появятся здесь автоматически." : "Нет чатов в этой папке."}</p>

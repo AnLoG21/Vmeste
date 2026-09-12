@@ -1492,6 +1492,11 @@
   color: #1f6b2e;
 }
 
+.landing-status--setup {
+  background: #fff8e6;
+  color: #8a5a00;
+}
+
 .landing-status--soon {
   background: #fff3e0;
   color: #9a4000;

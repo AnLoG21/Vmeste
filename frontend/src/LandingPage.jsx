@@ -58,49 +58,44 @@ const CASES = [
 
 const INTEGRATIONS = [
   {
-    title: "Google Календарь",
+    title: "Кабинет, чат и email",
     status: "now",
-    text: "Подписка по ссылке ICS из настроек организации — записи появляются в Google Calendar и обновляются сами.",
-  },
-  {
-    title: "Яндекс Календарь",
-    status: "now",
-    text: "Та же ICS-ссылка: «Добавить календарь → Из интернета» в Яндекс Календаре.",
-  },
-  {
-    title: "Telegram",
-    status: "now",
-    text: "Напоминания о записи и алерты организации в Telegram-бот. Клиент может привязать чат в настройках.",
-  },
-  {
-    title: "WhatsApp",
-    status: "now",
-    text: "Исходящие напоминания через Green-API (ключи организации в настройках).",
-  },
-  {
-    title: "MAX",
-    status: "now",
-    text: "Уведомления в MAX-бот организации о записях и напоминаниях.",
-  },
-  {
-    title: "SMS",
-    status: "now",
-    text: "SMS-напоминания за 24 ч и 2 ч до визита (SMS.ru: ключ платформы или организации).",
+    text: "Статус записи в кабинете и чате сразу. Email клиенту о записи и напоминаниях — если включён у организации и у клиента указан email.",
   },
   {
     title: "Push-уведомления",
     status: "now",
-    text: "Клиент и мастер получают push в приложении Вместе (Android и iOS, если разрешили уведомления).",
+    text: "В Android-приложении Вместе — скачать APK на /android. iOS после Apple Developer. Ярлык сайта (PWA) системные push не даёт.",
   },
   {
-    title: "Кабинет и чат",
+    title: "Telegram",
     status: "now",
-    text: "Подтверждение сеанса сразу видно в личном кабинете и в чате с организацией — без звонка.",
+    text: "Исходящие алерты и напоминания в чат организации и клиенту, если привязан бот. Это не полноценный входящий диалог из Telegram.",
+  },
+  {
+    title: "SMS",
+    status: "setup",
+    text: "Исходящие SMS через SMS.ru: ключ платформы или свой api_id в настройках организации.",
+  },
+  {
+    title: "WhatsApp",
+    status: "setup",
+    text: "Только исходящие напоминания через ваши ключи Green-API. Входящего WhatsApp-чата в Вместе пока нет.",
+  },
+  {
+    title: "MAX",
+    status: "setup",
+    text: "Исходящие уведомления в MAX-бот, когда указаны token и chat id организации.",
+  },
+  {
+    title: "Google / Яндекс Календарь",
+    status: "now",
+    text: "Подписка по ICS-ссылке из настроек (выгрузка записей). Двусторонней синхронизации пока нет.",
   },
   {
     title: "Эквайринг",
     status: "now",
-    text: "ЮKassa, Т‑Банк, CloudPayments и Robokassa — предоплата записи и онлайн-заказы кафе через магазин организации.",
+    text: "ЮKassa, Т‑Банк, CloudPayments и Robokassa — предоплата записи и онлайн-заказы через магазин организации.",
   },
 ];
 export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
@@ -553,8 +548,8 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
             <article>
               <h3>Подтверждение записи</h3>
               <p>
-                Статус в кабинете, чат, push, SMS и мессенджеры (Telegram, WhatsApp, MAX) — по
-                настройкам организации и клиента. Напоминания за 24 ч и 2 ч до визита.
+                Статус в кабинете и чате — сразу. Push в Android-приложении. Email, SMS и мессенджеры —
+                по включённым каналам и ключам организации (см. карточки ниже).
               </p>
             </article>
             <article>
@@ -571,7 +566,11 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
                 <div className="landing-integration-top">
                   <h3>{item.title}</h3>
                   <span className={`landing-status landing-status--${item.status}`}>
-                    {item.status === "now" ? "Доступно" : "В подключении"}
+                    {item.status === "now"
+                      ? "Доступно"
+                      : item.status === "setup"
+                        ? "Нужна настройка"
+                        : "В подключении"}
                   </span>
                 </div>
                 <p>{item.text}</p>
@@ -784,7 +783,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
                 <li>Аналитика: выручка, услуги, динамика записей</li>
                 <li>Профиль организации: адрес, график, галерея, контакты</li>
                 <li>История записей и уведомления в личном кабинете</li>
-                <li>Напоминания о записи (24 ч / 2 ч): push, SMS, Telegram, WhatsApp, MAX</li>
+                <li>Напоминания 24 ч / 2 ч: кабинет, email, push; SMS/Telegram/WhatsApp/MAX — при настроенных ключах</li>
                 <li>Подписки и оплата через ЮKassa</li>
                 <li>Предоплата услуг при записи (частичная или полная) через ЮKassa организации</li>
                 <li>Интерактивная приёмка для сервисных центров: фото дефектов, согласование клиентом, акт и заказ-наряд</li>
@@ -798,11 +797,10 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               <h3>В планах</h3>
               <ul>
                 <li>Email-уведомления о записях</li>
-                <li>Расширенные push-сценарии и доработка мобильного приложения</li>
                 <li>Доработка конструктора рассадки</li>
                 <li>Посадочные страницы по городам и сферам</li>
                 <li>Несколько филиалов у одной организации</li>
-                <li>Интеграции: 1С, CRM, телефония; двусторонняя переписка в мессенджерах</li>
+                <li>Двусторонняя переписка в мессенджерах; интеграции 1С / CRM / телефония</li>
                 <li>Новые сферы бизнеса и отраслевые шаблоны</li>
                 <li>Расширенная автоматизация под ключ для крупного бизнеса</li>
               </ul>
@@ -856,6 +854,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           <a href="/#demo">Демо</a>
           <a href="/#cases">Кейсы</a>
           <a href="/apps">Сервисы</a>
+          <a href="/android">Android</a>
           <a href="/businesses">Для бизнеса</a>
           <a href="/city/moscow">Москва</a>
           <a href="/city/spb">Санкт-Петербург</a>

@@ -2,17 +2,27 @@ from rest_framework import serializers
 
 from shop.serializers import ShopOrderSerializer
 
+from .pickup_points import pickup_points_for_provider
+
 
 class VmagazineOrderSerializer(ShopOrderSerializer):
     provider_name = serializers.SerializerMethodField()
     organization_slug = serializers.SerializerMethodField()
     shop_url = serializers.SerializerMethodField()
+    pickup_address = serializers.SerializerMethodField()
+    pickup_lat = serializers.SerializerMethodField()
+    pickup_lon = serializers.SerializerMethodField()
+    pickup_points = serializers.SerializerMethodField()
 
     class Meta(ShopOrderSerializer.Meta):
         fields = list(ShopOrderSerializer.Meta.fields) + [
             "provider_name",
             "organization_slug",
             "shop_url",
+            "pickup_address",
+            "pickup_lat",
+            "pickup_lon",
+            "pickup_points",
         ]
 
     def get_provider_name(self, obj):
@@ -28,6 +38,30 @@ class VmagazineOrderSerializer(ShopOrderSerializer):
     def get_shop_url(self, obj):
         slug = self.get_organization_slug(obj)
         return f"/s/{slug}" if slug else ""
+
+    def get_pickup_points(self, obj):
+        return pickup_points_for_provider(obj.provider)
+
+    def get_pickup_address(self, obj):
+        points = self.get_pickup_points(obj)
+        if not points:
+            return ""
+        main = next((p for p in points if p.get("is_main")), points[0])
+        return main.get("address") or ""
+
+    def get_pickup_lat(self, obj):
+        points = self.get_pickup_points(obj)
+        if not points:
+            return None
+        main = next((p for p in points if p.get("is_main")), points[0])
+        return main.get("lat")
+
+    def get_pickup_lon(self, obj):
+        points = self.get_pickup_points(obj)
+        if not points:
+            return None
+        main = next((p for p in points if p.get("is_main")), points[0])
+        return main.get("lon")
 
 
 def shop_card_from_provider(provider, *, is_favorite: bool, distance_m=None, avg=None, reviews_count=0):
@@ -48,4 +82,5 @@ def shop_card_from_provider(provider, *, is_favorite: bool, distance_m=None, avg
         "is_favorite": bool(is_favorite),
         "average_rating": round(avg, 2) if avg is not None else None,
         "reviews_count": reviews_count or 0,
+        "pickup_points": pickup_points_for_provider(provider),
     }

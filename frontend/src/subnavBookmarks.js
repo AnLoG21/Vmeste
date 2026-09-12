@@ -34,8 +34,8 @@ export const DEFAULT_SUBNAV_BOOKMARKS = {
   client: ["client_map", "activity", "service_apps", "chats"],
   provider: ["bookings", "clients", "client_map", "analytics", "my_bookings", "service_apps", "chats"],
   staff: ["bookings", "clients", "reviews", "analytics", "service_apps", "chats"],
-  provider_cafe: ["cafe_orders", "cafe", "clients", "reviews", "analytics", "client_map", "service_apps", "chats"],
-  staff_cafe: ["cafe_orders", "cafe", "clients", "analytics", "service_apps", "chats"],
+  provider_cafe: ["cafe_orders", "cafe", "reviews", "analytics", "client_map", "service_apps", "chats"],
+  staff_cafe: ["cafe_orders", "cafe", "analytics", "service_apps", "chats"],
   provider_service: ["bookings", "clients", "client_map", "my_bookings", "analytics", "shop", "service_apps", "chats", "inspections"],
   provider_salon: ["bookings", "clients", "client_map", "my_bookings", "analytics", "shop", "service_apps", "chats"],
   provider_marketplaces: ["marketplaces", "analytics", "reviews", "service_apps", "chats"],
@@ -99,7 +99,14 @@ export function loadSubnavBookmarks(role, sphere) {
       }
     }
     if (role === "provider" && sphere === "cafe_restaurant") {
-      next = next.filter((id) => id !== "bookings");
+      next = next.filter(
+        (id) =>
+          id !== "bookings" &&
+          id !== "clients" &&
+          id !== "intervals" &&
+          id !== "services" &&
+          id !== "my_bookings",
+      );
       if (!next.includes("cafe_orders")) next = ["cafe_orders", ...next];
       else {
         next = ["cafe_orders", ...next.filter((id) => id !== "cafe_orders")];
@@ -109,10 +116,15 @@ export function loadSubnavBookmarks(role, sphere) {
         next = [...next.slice(0, i + 1), "cafe", ...next.slice(i + 1)];
       }
       if (!next.includes("client_map")) next = [...next, "client_map"];
-      if (!next.includes("my_bookings")) next = [...next, "my_bookings"];
     }
     if (role === "staff" && sphere === "cafe_restaurant") {
-      next = next.filter((id) => id !== "bookings" && id !== "intervals" && id !== "services");
+      next = next.filter(
+        (id) =>
+          id !== "bookings" &&
+          id !== "clients" &&
+          id !== "intervals" &&
+          id !== "services",
+      );
       if (!next.includes("cafe_orders")) next = ["cafe_orders", ...next];
       else next = ["cafe_orders", ...next.filter((id) => id !== "cafe_orders")];
     }

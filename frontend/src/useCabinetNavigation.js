@@ -52,7 +52,7 @@ export function useCabinetNavigation({
     }
     if (role === "staff") {
       if (id === "bookings" && !staffHasPerm("manage_bookings")) return false;
-      if (id === "clients" && !staffHasPerm("manage_bookings")) return false;
+      if (id === "clients" && !staffHasPerm("manage_bookings") && !staffHasPerm("manage_shop")) return false;
       if (id === "intervals" && !staffHasPerm("manage_intervals")) return false;
       if (id === "services" && !staffHasPerm("manage_services")) return false;
       if (id === "chats" && !staffHasPerm("manage_chats") && !staffHasPerm("manage_client_chats")) return false;
@@ -71,7 +71,7 @@ export function useCabinetNavigation({
         return false;
       }
       if (id === "clients") {
-        return role === "provider" || (role === "staff" && staffHasPerm("manage_bookings"));
+        return false;
       }
       if ((id === "cafe" || id === "cafe_orders") && !isCafeOrgUser) return false;
       if (id === "cafe" && role === "staff" && !staffHasPerm("cafe_menu") && !staffHasPerm("cafe_settings") && !staffHasPerm("cafe_seating")) {

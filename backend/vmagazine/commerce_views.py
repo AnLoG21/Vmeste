@@ -19,6 +19,7 @@ from .models import (
     ProductLike,
     ProductViewHistory,
     ReturnRequest,
+    ReturnRequestPhoto,
     SavedPaymentCard,
     ShopBonusBalance,
 )
@@ -444,6 +445,57 @@ class AddressesView(APIView):
             )
         return Response({"id": row.id}, status=201)
 
+    def patch(self, request):
+        try:
+            aid = int(request.data.get("id") or request.query_params.get("id"))
+        except (TypeError, ValueError):
+            return Response({"detail": "id"}, status=400)
+        row = DeliveryAddress.objects.filter(user=request.user, pk=aid).first()
+        if not row:
+            return Response({"detail": "Адрес не найден"}, status=404)
+        address = request.data.get("address")
+        if address is not None:
+            address = str(address).strip()
+            if not address:
+                return Response({"detail": "Укажите адрес"}, status=400)
+            row.address = address[:400]
+        for field, maxlen in (
+            ("label", 80),
+            ("entrance", 32),
+            ("floor", 32),
+            ("apartment", 64),
+            ("intercom", 64),
+            ("extra", 255),
+        ):
+            if field in request.data:
+                setattr(row, field, str(request.data.get(field) or "")[:maxlen])
+        if "lat" in request.data:
+            row.lat = request.data.get("lat")
+        if "lon" in request.data:
+            row.lon = request.data.get("lon")
+        with transaction.atomic():
+            if request.data.get("is_default"):
+                DeliveryAddress.objects.filter(user=request.user).exclude(pk=row.pk).update(is_default=False)
+                row.is_default = True
+            elif "is_default" in request.data:
+                row.is_default = bool(request.data.get("is_default"))
+            row.save()
+        return Response(
+            {
+                "id": row.id,
+                "label": row.label,
+                "address": row.address,
+                "entrance": row.entrance,
+                "floor": row.floor,
+                "apartment": row.apartment,
+                "intercom": row.intercom,
+                "extra": row.extra,
+                "lat": row.lat,
+                "lon": row.lon,
+                "is_default": row.is_default,
+            }
+        )
+
     def delete(self, request):
         try:
             aid = int(request.query_params.get("id") or request.data.get("id"))
@@ -709,11 +761,35 @@ class ProductAuthenticityVerifyView(APIView):
 class ReturnRequestsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    def _serialize_photos(self, request, row):
+        from common.media_urls import photo_urls
+
+        out = []
+        for ph in row.photos.all()[:20]:
+            if not ph.image:
+                continue
+            try:
+                urls = photo_urls(request, ph.image)
+                out.append(
+                    {
+                        "id": ph.id,
+                        "url": urls.get("url") or "",
+                        "thumb_url": urls.get("thumb_url") or urls.get("url") or "",
+                    }
+                )
+            except Exception:
+                try:
+                    out.append({"id": ph.id, "url": ph.image.url, "thumb_url": ph.image.url})
+                except Exception:
+                    pass
+        return out
+
     def get(self, request):
         rows = (
             ReturnRequest.objects.filter(user=request.user)
             .select_related("order", "order_item", "order__provider")
-            .order_by("-created_at")[:40]
+            .prefetch_related("photos")
+            .order_by("-created_at")[:80]
         )
         return Response(
             [
@@ -733,6 +809,7 @@ class ReturnRequestsView(APIView):
                     ),
                     "seller_note": r.seller_note or "",
                     "refund_id": r.refund_id or "",
+                    "photos": self._serialize_photos(request, r),
                 }
                 for r in rows
             ]
@@ -744,15 +821,14 @@ class ReturnRequestsView(APIView):
             item_id = int(request.data.get("order_item_id") or request.data.get("item_id"))
         except (TypeError, ValueError):
             return Response({"detail": "Укажите order_id и order_item_id"}, status=400)
-        order = (
-            ShopOrder.objects.filter(pk=order_id, client=request.user)
-            .exclude(status=ShopOrder.Status.CANCELLED)
-            .first()
-        )
+        order = ShopOrder.objects.filter(pk=order_id, client=request.user).first()
         if not order:
             return Response({"detail": "Заказ не найден"}, status=404)
-        if order.status not in (ShopOrder.Status.DONE, ShopOrder.Status.DELIVERING, ShopOrder.Status.READY):
-            return Response({"detail": "Возврат доступен после выдачи/доставки заказа"}, status=400)
+        if order.status != ShopOrder.Status.DONE:
+            return Response(
+                {"detail": "Возврат доступен только после получения заказа."},
+                status=400,
+            )
         item = order.items.filter(pk=item_id).first()
         if not item:
             return Response({"detail": "Позиция заказа не найдена"}, status=404)
@@ -760,16 +836,37 @@ class ReturnRequestsView(APIView):
             status=ReturnRequest.Status.REJECTED
         ).exists():
             return Response({"detail": "Заявка по этой позиции уже есть"}, status=400)
-        row = ReturnRequest.objects.create(
-            user=request.user,
-            order=order,
-            order_item=item,
-            reason=str(request.data.get("reason") or "").strip()[:2000],
-        )
+        reason = str(request.data.get("reason") or "").strip()[:2000]
+        if not reason:
+            return Response({"detail": "Укажите причину возврата"}, status=400)
+        files = list(request.FILES.getlist("photos") or request.FILES.getlist("photo") or [])
+        if not files and request.FILES.get("image"):
+            files = [request.FILES.get("image")]
+        if not files:
+            return Response({"detail": "Прикрепите хотя бы одно фото товара"}, status=400)
+        if len(files) > 12:
+            return Response({"detail": "Не больше 12 фото"}, status=400)
+
+        with transaction.atomic():
+            row = ReturnRequest.objects.create(
+                user=request.user,
+                order=order,
+                order_item=item,
+                reason=reason,
+            )
+            for i, f in enumerate(files):
+                ReturnRequestPhoto.objects.create(return_request=row, image=f, sort_order=i)
         try:
             from shop.notify import notify_new_return_request
 
             notify_new_return_request(row)
         except Exception:
             pass
-        return Response({"id": row.id, "status": row.status}, status=201)
+        return Response(
+            {
+                "id": row.id,
+                "status": row.status,
+                "photos": self._serialize_photos(request, row),
+            },
+            status=201,
+        )

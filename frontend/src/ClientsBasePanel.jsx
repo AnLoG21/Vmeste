@@ -9,7 +9,26 @@ export default function ClientsBasePanel({
   authFetch,
   API_URL,
   onOpenClient,
+  providerSphere = "",
 }) {
+  const sphere = String(providerSphere || "").trim();
+
+  function clientHints(c) {
+    const items = [];
+    if (sphere === "service_center") {
+      if (c.vehicle_title) items.push({ label: "Авто", value: c.vehicle_title });
+      if (c.vehicle_plate) items.push({ label: "Госномер", value: c.vehicle_plate });
+      if (c.mileage_km) items.push({ label: "Пробег", value: `${c.mileage_km} км` });
+      if (c.last_works) items.push({ label: "Работы", value: c.last_works });
+    } else if (sphere === "shops") {
+      if (c.preferred_size) items.push({ label: "Размер", value: c.preferred_size });
+      if (c.purchase_notes) items.push({ label: "Покупки", value: c.purchase_notes });
+    } else if (c.hair_color) {
+      items.push({ label: "Краска", value: c.hair_color });
+    }
+    if (c.allergies) items.push({ label: "Аллергии", value: c.allergies });
+    return items;
+  }
   const [query, setQuery] = useState("");
   const [listQuery, setListQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -406,12 +425,19 @@ export default function ClientsBasePanel({
                         <span className="clients-base-badge">{c.acquisition_source}</span>
                       ) : null}
                     </span>
-                    {(c.hair_color || c.allergies) && (
-                      <span className="clients-base-hints">
-                        {c.hair_color ? <span title="Краска">Краска: {c.hair_color}</span> : null}
-                        {c.allergies ? <span title="Аллергии">Аллергии: {c.allergies}</span> : null}
-                      </span>
-                    )}
+                    {(() => {
+                      const hints = clientHints(c);
+                      if (!hints.length) return null;
+                      return (
+                        <span className="clients-base-hints">
+                          {hints.map((h) => (
+                            <span key={h.label} title={h.label}>
+                              {h.label}: {h.value}
+                            </span>
+                          ))}
+                        </span>
+                      );
+                    })()}
                   </span>
                 </button>
                 <button

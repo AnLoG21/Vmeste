@@ -71,6 +71,26 @@ def build_public_org_payload(provider, request):
     websites = provider.organization_websites if isinstance(provider.organization_websites, list) else []
     websites = [str(w).strip() for w in websites if str(w).strip()]
 
+    services = []
+    try:
+        from catalog.models import Service
+
+        for svc in (
+            Service.objects.filter(provider_id=provider.id, is_active=True)
+            .order_by("category_id", "id")[:12]
+            .only("id", "name", "price", "duration_minutes")
+        ):
+            services.append(
+                {
+                    "id": svc.id,
+                    "name": svc.name,
+                    "price": str(svc.price),
+                    "duration_minutes": svc.duration_minutes,
+                }
+            )
+    except Exception:
+        services = []
+
     return {
         "provider": provider.id,
         "slug": provider.organization_slug or "",
@@ -88,6 +108,7 @@ def build_public_org_payload(provider, request):
         "reviews_count": agg["cnt"] or 0,
         "gallery_photos": gallery,
         "review_photos": review_photos,
+        "services": services,
         "public_url": f"/o/{provider.organization_slug}" if provider.organization_slug else "",
         "is_cafe": provider.provider_sphere == User.ProviderSphere.CAFE_RESTAURANT,
         "is_shop": provider.provider_sphere
@@ -173,6 +194,8 @@ class SitemapXmlView(APIView):
         urls = [
             ("/", "1.0", "weekly", today),
             ("/businesses", "0.95", "weekly", today),
+            ("/apps", "0.85", "weekly", today),
+            ("/android", "0.8", "weekly", today),
             ("/contacts", "0.9", "monthly", today),
             ("/offer", "0.8", "monthly", today),
             ("/privacy", "0.6", "monthly", today),

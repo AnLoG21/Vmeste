@@ -4,6 +4,7 @@ import { showToast } from "../toast.js";
 import { CartTab, FavoritesTab, HomeTab, ProfileTab } from "./VmagazinePanels.jsx";
 import VmagazineLogo from "./VmagazineLogo.jsx";
 import VmagazineProductSheet from "./VmagazineProductSheet.jsx";
+import { loadCart } from "./vmagazineApi.js";
 import "./vmagazine.css";
 
 const TABS = [
@@ -34,7 +35,27 @@ export default function VmagazineApp({
   const [stack, setStack] = useState(null);
   const [paidOrderId, setPaidOrderId] = useState(null);
   const [cartRemainingHint, setCartRemainingHint] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
   const shopBackRef = useRef(null);
+
+  const refreshCartCount = useCallback(async () => {
+    try {
+      const cart = await loadCart(authFetch, API_URL);
+      const n = (Array.isArray(cart) ? cart : []).reduce((s, row) => s + (Number(row.quantity) || 0), 0);
+      setCartCount(n);
+    } catch {
+      /* ignore */
+    }
+  }, [API_URL, authFetch]);
+
+  useEffect(() => {
+    void refreshCartCount();
+    function onCart() {
+      void refreshCartCount();
+    }
+    window.addEventListener("vmag:cart-changed", onCart);
+    return () => window.removeEventListener("vmag:cart-changed", onCart);
+  }, [refreshCartCount]);
 
   useEffect(() => {
     try {
@@ -51,11 +72,12 @@ export default function VmagazineApp({
         sessionStorage.removeItem("vmag_last_paid_order");
         sessionStorage.removeItem("vmag_cart_remaining");
         window.history.replaceState({}, "", "/vmagazine");
+        void refreshCartCount();
       }
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [refreshCartCount]);
 
   useEffect(() => {
     function onOpenOrder(ev) {
@@ -121,6 +143,17 @@ export default function VmagazineApp({
     });
   }
 
+  async function writeSeller(providerId) {
+    if (!openChatWithProvider || !providerId) return;
+    try {
+      await openChatWithProvider(providerId, { stayInView: true });
+      setStack(null);
+      setTab("chats");
+    } catch (e) {
+      showToast(e.message || "Не удалось открыть чат", { tone: "error" });
+    }
+  }
+
   const overlayOpen = Boolean(stack);
 
   return (
@@ -159,12 +192,7 @@ export default function VmagazineApp({
             onOpenShop={openShop}
             onClose={popStack}
             onOpenPhotos={onOpenPhotos}
-            onWriteSeller={async (providerId) => {
-              if (!openChatWithProvider) return;
-              await openChatWithProvider(providerId);
-              setStack(null);
-              setTab("chats");
-            }}
+            onWriteSeller={writeSeller}
           />
         ) : null}
         {stack?.kind === "shop" ? (
@@ -177,12 +205,7 @@ export default function VmagazineApp({
                 shopBackRef.current = fn;
               }}
               onOpenPhotos={onOpenPhotos}
-              onWriteSeller={async (providerId) => {
-                if (!openChatWithProvider) return;
-                await openChatWithProvider(providerId);
-                setStack(null);
-                setTab("chats");
-              }}
+              onWriteSeller={writeSeller}
             />
           </div>
         ) : null}
@@ -220,6 +243,7 @@ export default function VmagazineApp({
                 API_URL={API_URL}
                 onOpenProduct={openProduct}
                 highlightOrderId={paidOrderId}
+                onOpenPhotos={onOpenPhotos}
               />
             ) : null}
           </>
@@ -234,7 +258,12 @@ export default function VmagazineApp({
               className={tab === t.id ? "active" : ""}
               onClick={() => switchTab(t.id)}
             >
-              <span aria-hidden>{t.icon}</span>
+              <span className="vmag-tab-icon-wrap" aria-hidden>
+                <span>{t.icon}</span>
+                {t.id === "cart" && cartCount > 0 ? (
+                  <span className="vmag-cart-badge">{cartCount > 99 ? "99+" : cartCount}</span>
+                ) : null}
+              </span>
               <span>{t.label}</span>
             </button>
           ))}

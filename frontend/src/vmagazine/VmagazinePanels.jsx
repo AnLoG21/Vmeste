@@ -21,6 +21,7 @@ import {
   savePaymentCard,
   searchSuggest,
   setCartItem,
+  updateAddress,
 } from "./vmagazineApi.js";
 
 function EmptyState({ text, onGoHome }) {
@@ -130,9 +131,11 @@ function detectBrandClient(number) {
   return "card";
 }
 
-function AddressPickerModal({ open, onClose, onSaved, authFetch, API_URL, existingCount }) {
+function AddressPickerModal({ open, onClose, onSaved, authFetch, API_URL, existingCount, initial = null }) {
+  const editingId = initial?.id || null;
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
+  const [searchFocused, setSearchFocused] = useState(false);
   const [pin, setPin] = useState(null);
   const [form, setForm] = useState({
     address: "",
@@ -148,23 +151,45 @@ function AddressPickerModal({ open, onClose, onSaved, authFetch, API_URL, existi
 
   useEffect(() => {
     if (!open) return undefined;
-    setQuery("");
+    setSearchFocused(false);
     setSuggestions([]);
-    setPin(null);
-    setForm({
-      address: "",
-      entrance: "",
-      floor: "",
-      apartment: "",
-      intercom: "",
-      extra: "",
-      label: "Дом",
-    });
+    if (initial) {
+      setQuery(initial.address || "");
+      setPin(
+        initial.lat != null && initial.lon != null
+          ? { lat: Number(initial.lat), lon: Number(initial.lon), address: initial.address || "" }
+          : null,
+      );
+      setForm({
+        address: initial.address || "",
+        entrance: initial.entrance || "",
+        floor: initial.floor || "",
+        apartment: initial.apartment || "",
+        intercom: initial.intercom || "",
+        extra: initial.extra || "",
+        label: initial.label || "Дом",
+      });
+    } else {
+      setQuery("");
+      setPin(null);
+      setForm({
+        address: "",
+        entrance: "",
+        floor: "",
+        apartment: "",
+        intercom: "",
+        extra: "",
+        label: existingCount > 0 ? "Работа" : "Дом",
+      });
+    }
     return undefined;
-  }, [open]);
+  }, [open, initial, existingCount]);
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || !searchFocused) {
+      if (!searchFocused) setSuggestions([]);
+      return undefined;
+    }
     if (timerRef.current) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(async () => {
       if (query.trim().length < 2) {
@@ -177,7 +202,7 @@ function AddressPickerModal({ open, onClose, onSaved, authFetch, API_URL, existi
     return () => {
       if (timerRef.current) window.clearTimeout(timerRef.current);
     };
-  }, [query, open]);
+  }, [query, open, searchFocused]);
 
   if (!open) return null;
 
@@ -186,15 +211,28 @@ function AddressPickerModal({ open, onClose, onSaved, authFetch, API_URL, existi
       showToast("Укажите адрес");
       return;
     }
+    if (!form.label.trim()) {
+      showToast("Укажите название адреса");
+      return;
+    }
     setBusy(true);
     try {
-      await saveAddress(authFetch, API_URL, {
+      const payload = {
         ...form,
+        label: form.label.trim().slice(0, 80),
         lat: pin?.lat,
         lon: pin?.lon,
-        is_default: existingCount === 0,
-      });
-      showToast("Адрес сохранён");
+      };
+      if (editingId) {
+        await updateAddress(authFetch, API_URL, { id: editingId, ...payload });
+        showToast("Адрес обновлён");
+      } else {
+        await saveAddress(authFetch, API_URL, {
+          ...payload,
+          is_default: existingCount === 0,
+        });
+        showToast("Адрес сохранён");
+      }
       onSaved?.();
       onClose?.();
     } catch (e) {
@@ -205,10 +243,17 @@ function AddressPickerModal({ open, onClose, onSaved, authFetch, API_URL, existi
   }
 
   return (
-    <div className="vmag-modal-overlay" role="dialog" aria-modal="true">
-      <div className="vmag-modal">
+    <div
+      className="vmag-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
+      <div className="vmag-modal" onClick={(e) => e.stopPropagation()}>
         <div className="vmag-modal-head">
-          <strong>Указать адрес</strong>
+          <strong>{editingId ? "Изменить адрес" : "Указать адрес"}</strong>
           <button type="button" className="ghost-btn" onClick={onClose}>
             ✕
           </button>
@@ -220,19 +265,25 @@ function AddressPickerModal({ open, onClose, onSaved, authFetch, API_URL, existi
               placeholder="Поиск адреса"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => {
+                window.setTimeout(() => setSearchFocused(false), 180);
+              }}
               autoComplete="street-address"
             />
-            {suggestions.length ? (
+            {searchFocused && suggestions.length ? (
               <ul className="vmag-addr-suggest">
                 {suggestions.map((s) => (
                   <li key={`${s.value}-${s.lat}-${s.lon}`}>
                     <button
                       type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
                         setForm((f) => ({ ...f, address: s.value || s.full || "" }));
                         setQuery(s.value || s.full || "");
                         if (s.lat != null && s.lon != null) setPin({ lat: s.lat, lon: s.lon, address: s.value });
                         setSuggestions([]);
+                        setSearchFocused(false);
                       }}
                     >
                       {s.value || s.full}
@@ -251,8 +302,31 @@ function AddressPickerModal({ open, onClose, onSaved, authFetch, API_URL, existi
                 setForm((f) => ({ ...f, address: next.address }));
                 setQuery(next.address);
               }
+              setSuggestions([]);
+              setSearchFocused(false);
             }}
           />
+          <label className="vmag-field">
+            <span>Название</span>
+            <input
+              placeholder="Дом, Работа, Дача…"
+              value={form.label}
+              onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+              maxLength={80}
+            />
+          </label>
+          <div className="vmag-addr-label-chips" role="group" aria-label="Быстрые названия">
+            {["Дом", "Работа", "Другое"].map((lbl) => (
+              <button
+                key={lbl}
+                type="button"
+                className={`shop-size-chip${form.label === lbl ? " is-on" : ""}`}
+                onClick={() => setForm((f) => ({ ...f, label: lbl }))}
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
           <div className="vmag-addr-grid">
             <input
               placeholder="Адрес *"
@@ -286,7 +360,7 @@ function AddressPickerModal({ open, onClose, onSaved, authFetch, API_URL, existi
             />
           </div>
           <button type="button" className="primary-btn" disabled={busy} onClick={() => void save()}>
-            Сохранить адрес
+            {editingId ? "Сохранить изменения" : "Сохранить адрес"}
           </button>
         </div>
       </div>
@@ -299,6 +373,7 @@ export function HomeTab({ authFetch, API_URL, onOpenProduct }) {
   const [addressId, setAddressId] = useState(null);
   const [addrMenuOpen, setAddrMenuOpen] = useState(false);
   const [addressModalOpen, setAddressModalOpen] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(null);
   const [query, setQuery] = useState("");
   const [draftQuery, setDraftQuery] = useState("");
   const [suggest, setSuggest] = useState({ suggestions: [], sections: [], products: [], filters: {} });
@@ -404,7 +479,14 @@ export function HomeTab({ authFetch, API_URL, onOpenProduct }) {
     <div className="vmag-home">
       <div className="vmag-address-bar">
         {!addresses.length ? (
-          <button type="button" className="vmag-address-cta" onClick={() => setAddressModalOpen(true)}>
+          <button
+            type="button"
+            className="vmag-address-cta"
+            onClick={() => {
+              setEditingAddress(null);
+              setAddressModalOpen(true);
+            }}
+          >
             Указать адрес
           </button>
         ) : (
@@ -416,7 +498,10 @@ export function HomeTab({ authFetch, API_URL, onOpenProduct }) {
             >
               <span className="vmag-address-label">Доставка</span>
               <span className="vmag-address-line">
-                <strong>{currentAddress?.address}</strong>
+                <strong>
+                  {currentAddress?.label ? `${currentAddress.label} · ` : ""}
+                  {currentAddress?.address}
+                </strong>
                 <span className="vmag-address-chevron" aria-hidden>
                   {addrMenuOpen ? "▴" : "▾"}
                 </span>
@@ -426,14 +511,17 @@ export function HomeTab({ authFetch, API_URL, onOpenProduct }) {
               type="button"
               className="vmag-address-plus"
               aria-label="Добавить адрес"
-              onClick={() => setAddressModalOpen(true)}
+              onClick={() => {
+                setEditingAddress(null);
+                setAddressModalOpen(true);
+              }}
             >
               +
             </button>
             {addrMenuOpen ? (
               <ul className="vmag-address-menu">
                 {addresses.map((a) => (
-                  <li key={a.id}>
+                  <li key={a.id} className="vmag-address-menu-row">
                     <button
                       type="button"
                       className={a.id === currentAddress?.id ? "is-active" : ""}
@@ -442,8 +530,20 @@ export function HomeTab({ authFetch, API_URL, onOpenProduct }) {
                         setAddrMenuOpen(false);
                       }}
                     >
-                      {a.label ? `${a.label}: ` : ""}
-                      {a.address}
+                      <strong>{a.label || "Адрес"}</strong>
+                      <span className="muted small">{a.address}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-btn vmag-address-edit"
+                      aria-label="Изменить адрес"
+                      onClick={() => {
+                        setEditingAddress(a);
+                        setAddrMenuOpen(false);
+                        setAddressModalOpen(true);
+                      }}
+                    >
+                      ✎
                     </button>
                   </li>
                 ))}
@@ -620,11 +720,15 @@ export function HomeTab({ authFetch, API_URL, onOpenProduct }) {
 
       <AddressPickerModal
         open={addressModalOpen}
-        onClose={() => setAddressModalOpen(false)}
+        onClose={() => {
+          setAddressModalOpen(false);
+          setEditingAddress(null);
+        }}
         onSaved={() => void refreshHome()}
         authFetch={authFetch}
         API_URL={API_URL}
         existingCount={addresses.length}
+        initial={editingAddress}
       />
     </div>
   );
@@ -700,6 +804,7 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
   const [deliveryBySlug, setDeliveryBySlug] = useState({});
   const [quotesBySlug, setQuotesBySlug] = useState({});
   const [quotesLoading, setQuotesLoading] = useState(false);
+  const [pickupBySlug, setPickupBySlug] = useState({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -860,6 +965,34 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
       cancelled = true;
     };
   }, [checkoutOpen, mode, currentAddress?.lat, currentAddress?.lon, selectedSlugsKey, API_URL, authFetch]);
+
+  useEffect(() => {
+    if (!checkoutOpen || mode !== "pickup") return undefined;
+    const slugs = selectedSlugsKey ? selectedSlugsKey.split("|") : [];
+    if (!slugs.length) {
+      setPickupBySlug({});
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      const next = {};
+      await Promise.all(
+        slugs.map(async (slug) => {
+          try {
+            const res = await authFetch(`${API_URL}/shop/public/${encodeURIComponent(slug)}/`);
+            const data = await res.json().catch(() => ({}));
+            next[slug] = Array.isArray(data?.provider?.pickup_points) ? data.provider.pickup_points : [];
+          } catch {
+            next[slug] = [];
+          }
+        }),
+      );
+      if (!cancelled) setPickupBySlug(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [checkoutOpen, mode, selectedSlugsKey, API_URL, authFetch]);
 
   const selectedSum = useMemo(
     () => selectedRows.reduce((s, row) => s + Number(row.product?.price || 0) * Number(row.quantity || 0), 0),
@@ -1247,7 +1380,46 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
               })}
             </>
           ) : (
-            <p className="muted small">Заберёте заказ в магазине продавца.</p>
+            <div className="vmag-pickup-block">
+              <p className="muted small">Заберёте заказ в магазине или филиале продавца.</p>
+              {selectedShopGroups.map((g) => {
+                if (!g.slug) return null;
+                const points = pickupBySlug[g.slug] || [];
+                const withCoords = points.filter((p) => p.lat != null && p.lon != null);
+                return (
+                  <div key={g.slug} className="vmag-pickup-shop" style={{ marginTop: "0.75rem" }}>
+                    <p className="shop-field-label">{g.provider_name}</p>
+                    {points.length ? (
+                      <ul className="vmag-pickup-list">
+                        {points.map((p) => (
+                          <li key={p.id}>
+                            <strong>{p.title || (p.is_main ? "Основной адрес" : "Филиал")}</strong>
+                            {p.address ? <span className="muted small">{p.address}</span> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="muted small">Адрес самовывоза уточнит продавец.</p>
+                    )}
+                    {withCoords.length ? (
+                      <div className="vmag-checkout-map" style={{ marginTop: "0.5rem", minHeight: 160 }}>
+                        <CafeOrderMapPin
+                          markers={withCoords.map((p) => ({
+                            lat: p.lat,
+                            lon: p.lon,
+                            label: p.title || p.address || "Самовывоз",
+                            preset: p.is_main ? "islands#orangeDotIcon" : "islands#blueDotIcon",
+                          }))}
+                          height={180}
+                          mapKey={`pickup-checkout-${g.slug}-${withCoords.length}`}
+                          primaryLabel="Самовывоз"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </section>
 
@@ -1520,7 +1692,7 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
   );
 }
 
-export function ProfileTab({ authFetch, API_URL, onOpenProduct, highlightOrderId }) {
+export function ProfileTab({ authFetch, API_URL, onOpenProduct, highlightOrderId, onOpenPhotos }) {
   const [hub, setHub] = useState(null);
   const [bonuses, setBonuses] = useState([]);
   const [cards, setCards] = useState([]);
@@ -1529,8 +1701,11 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct, highlightOrderId
   const [recentAll, setRecentAll] = useState(false);
   const [cardFormOpen, setCardFormOpen] = useState(false);
   const [cardForm, setCardForm] = useState({ number: "", exp_month: "", exp_year: "" });
-  const [returnForm, setReturnForm] = useState(null); // { orderId, itemId, name }
+  const [returnForm, setReturnForm] = useState(null); // { orderId, itemId, name, reason, photos }
   const [reviewForm, setReviewForm] = useState(null); // { orderId, providerId, name, rating, text }
+  const [expandedOrderId, setExpandedOrderId] = useState(null);
+  const [returnsOpen, setReturnsOpen] = useState(false);
+  const returnPhotoInputRef = useRef(null);
 
   async function reloadCards() {
     setCards(await loadPaymentCards(authFetch, API_URL));
@@ -1584,6 +1759,10 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct, highlightOrderId
     return () => window.clearInterval(timer);
   }, [hub?.active_orders, API_URL, authFetch]);
 
+  useEffect(() => {
+    if (highlightOrderId) setExpandedOrderId(String(highlightOrderId));
+  }, [highlightOrderId]);
+
   async function openAllRecent() {
     setRecentAll(true);
     try {
@@ -1595,13 +1774,11 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct, highlightOrderId
 
   const previewBrand = detectBrandClient(cardForm.number);
   const returnableOrders = useMemo(() => {
-    const list = [];
-    for (const o of hub?.purchases || []) list.push(o);
-    for (const o of hub?.active_orders || []) {
-      if (["ready", "delivering", "done"].includes(String(o.status))) list.push(o);
-    }
+    // Только полученные заказы (status=done) — как в purchases
+    const list = [...(hub?.purchases || [])];
     const seen = new Set();
     return list.filter((o) => {
+      if (String(o.status) !== "done") return false;
       if (seen.has(o.id)) return false;
       seen.add(o.id);
       return true;
@@ -1626,48 +1803,130 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct, highlightOrderId
       <section className="vmag-widget">
         <h3>Заказы</h3>
         <div className="vmagazine-list">
-          {(hub?.active_orders || []).map((o) => (
-            <article
-              key={o.id}
-              className={`vmagazine-card${String(highlightOrderId) === String(o.id) ? " is-highlight" : ""}`}
-            >
-              <div className="vmagazine-card-head">
-                <div>
-                  <strong>{o.provider_name || `Заказ #${o.id}`}</strong>
-                  <p className="muted small">
-                    {orderStatusLabel(o.status)}
-                    {o.eta_text ? ` · ≈ ${o.eta_text}` : ""}
-                    {o.chosen_delivery_provider ? ` · ${o.chosen_delivery_provider}` : ""}
-                  </p>
-                </div>
-                <strong>{Number(o.total).toLocaleString("ru-RU")} ₽</strong>
-              </div>
-              <OrderStatusTrack status={o.status} mode={o.mode || "delivery"} />
-              {o.external_tracking_id ? (
-                <p className="muted small">
-                  Трек: <code>{o.external_tracking_id}</code>
-                  {o.external_delivery_provider ? ` (${o.external_delivery_provider})` : ""}
-                </p>
-              ) : null}
-              {o.mode === "delivery" && o.delivery_lat != null && o.delivery_lon != null ? (
-                <div className="vmag-order-map">
-                  <CafeOrderMapPin
-                    lat={o.delivery_lat}
-                    lon={o.delivery_lon}
-                    courierLat={o.courier_lat}
-                    courierLon={o.courier_lon}
-                    height={180}
-                    mapKey={`order-${o.id}-${o.courier_updated_at || ""}`}
-                  />
-                  {o.courier_lat != null ? (
-                    <p className="muted small">Курьер на карте</p>
-                  ) : (
-                    <p className="muted small">Ожидаем позицию курьера</p>
-                  )}
-                </div>
-              ) : null}
-            </article>
-          ))}
+          {(hub?.active_orders || []).map((o) => {
+            const expanded = String(expandedOrderId) === String(o.id);
+            const pickupPoints = Array.isArray(o.pickup_points) ? o.pickup_points : [];
+            const pickupMarkers = pickupPoints
+              .filter((p) => p.lat != null && p.lon != null)
+              .map((p) => ({
+                lat: p.lat,
+                lon: p.lon,
+                label: p.title || p.address || "Самовывоз",
+                preset: p.is_main ? "islands#orangeDotIcon" : "islands#blueDotIcon",
+              }));
+            return (
+              <article
+                key={o.id}
+                className={`vmagazine-card vmagazine-card--order${
+                  String(highlightOrderId) === String(o.id) ? " is-highlight" : ""
+                }${expanded ? " is-expanded" : ""}`}
+              >
+                <button
+                  type="button"
+                  className="vmagazine-card-head vmagazine-card-head--btn"
+                  onClick={() =>
+                    setExpandedOrderId((cur) => (String(cur) === String(o.id) ? null : o.id))
+                  }
+                >
+                  <div>
+                    <strong>{o.provider_name || `Заказ #${o.id}`}</strong>
+                    <p className="muted small">
+                      {orderStatusLabel(o.status)}
+                      {o.mode === "pickup" ? " · самовывоз" : ""}
+                      {o.eta_text ? ` · ≈ ${o.eta_text}` : ""}
+                      {o.chosen_delivery_provider ? ` · ${o.chosen_delivery_provider}` : ""}
+                    </p>
+                  </div>
+                  <span className="vmag-order-head-right">
+                    <strong>{Number(o.total).toLocaleString("ru-RU")} ₽</strong>
+                    <ChevronIcon open={expanded} />
+                  </span>
+                </button>
+                {expanded ? (
+                  <div className="vmag-order-details">
+                    <OrderStatusTrack status={o.status} mode={o.mode || "delivery"} />
+                    {(o.items || []).length ? (
+                      <ul className="muted small vmag-order-items">
+                        {o.items.map((it) => (
+                          <li key={it.id}>
+                            {it.name} × {it.quantity}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {o.external_tracking_id ? (
+                      <p className="muted small">
+                        Трек: <code>{o.external_tracking_id}</code>
+                        {o.external_delivery_provider ? ` (${o.external_delivery_provider})` : ""}
+                      </p>
+                    ) : null}
+                    {o.mode === "pickup" ? (
+                      <div className="vmag-pickup-block">
+                        <p className="shop-field-label">Откуда забрать</p>
+                        {pickupPoints.length ? (
+                          <ul className="vmag-pickup-list">
+                            {pickupPoints.map((p) => (
+                              <li key={p.id}>
+                                <strong>{p.title || (p.is_main ? "Основной адрес" : "Филиал")}</strong>
+                                {p.address ? <span className="muted small">{p.address}</span> : null}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : o.pickup_address ? (
+                          <p className="muted small">{o.pickup_address}</p>
+                        ) : (
+                          <p className="muted small">Адрес уточнит продавец.</p>
+                        )}
+                        {pickupMarkers.length ? (
+                          <div className="vmag-order-map">
+                            <CafeOrderMapPin
+                              markers={pickupMarkers}
+                              height={180}
+                              mapKey={`order-pickup-${o.id}-${pickupMarkers.length}`}
+                              primaryLabel="Самовывоз"
+                            />
+                          </div>
+                        ) : o.pickup_lat != null && o.pickup_lon != null ? (
+                          <div className="vmag-order-map">
+                            <CafeOrderMapPin
+                              lat={o.pickup_lat}
+                              lon={o.pickup_lon}
+                              height={180}
+                              mapKey={`order-pickup-${o.id}`}
+                              primaryLabel="Самовывоз"
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {o.mode === "delivery" && o.delivery_lat != null && o.delivery_lon != null ? (
+                      <div className="vmag-order-map">
+                        <CafeOrderMapPin
+                          lat={o.delivery_lat}
+                          lon={o.delivery_lon}
+                          courierLat={o.courier_lat}
+                          courierLon={o.courier_lon}
+                          height={180}
+                          mapKey={`order-${o.id}-${o.courier_updated_at || ""}`}
+                          primaryLabel="Доставка"
+                        />
+                        {o.courier_lat != null ? (
+                          <p className="muted small">Курьер на карте</p>
+                        ) : (
+                          <p className="muted small">Ожидаем позицию курьера</p>
+                        )}
+                      </div>
+                    ) : null}
+                    {o.mode === "delivery" && o.delivery_address ? (
+                      <p className="muted small">Адрес: {o.delivery_address}</p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <OrderStatusTrack status={o.status} mode={o.mode || "delivery"} />
+                )}
+              </article>
+            );
+          })}
           {!hub?.active_orders?.length ? <p className="muted">Нет активных заказов.</p> : null}
         </div>
       </section>
@@ -1768,107 +2027,248 @@ export function ProfileTab({ authFetch, API_URL, onOpenProduct, highlightOrderId
       </section>
 
       <section className="vmag-widget">
-        <h3>Возвраты</h3>
-        <div className="vmagazine-list">
-          {returnableOrders.map((o) => (
-            <article key={`ret-src-${o.id}`} className="vmagazine-card">
-              <div className="vmagazine-card-head">
-                <div>
-                  <strong>{o.provider_name || `Заказ #${o.id}`}</strong>
-                  <p className="muted small">
-                    {o.created_at ? new Date(o.created_at).toLocaleDateString("ru-RU") : ""} ·{" "}
-                    {orderStatusLabel(o.status)}
-                  </p>
-                </div>
-                <strong>{Number(o.total).toLocaleString("ru-RU")} ₽</strong>
-              </div>
-              <ul className="muted small">
-                {(o.items || []).map((it) => {
-                  const existing = returns.find((r) => Number(r.order_item_id) === Number(it.id));
-                  return (
-                    <li key={it.id}>
-                      {it.name} × {it.quantity}
-                      {existing ? (
-                        <span> — {returnStatusLabel(existing.status)}</span>
-                      ) : (
-                        <button
-                          type="button"
-                          className="ghost-btn"
-                          style={{ marginLeft: 8 }}
-                          onClick={() =>
-                            setReturnForm({
-                              orderId: o.id,
-                              itemId: it.id,
-                              name: it.name,
-                              reason: "",
-                            })
-                          }
-                        >
-                          Вернуть
-                        </button>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </article>
-          ))}
-          {!returnableOrders.length ? <p className="muted">Нет заказов для возврата.</p> : null}
-        </div>
-        {returnForm ? (
-          <div className="vmag-return-form">
-            <strong>Возврат: {returnForm.name}</strong>
-            <textarea
-              placeholder="Причина возврата"
-              value={returnForm.reason}
-              onChange={(e) => setReturnForm((f) => ({ ...f, reason: e.target.value }))}
-            />
-            <div className="vmag-return-actions">
-              <button
-                type="button"
-                className="vmag-icon-btn"
-                aria-label="Закрыть"
-                onClick={() => setReturnForm(null)}
-              >
-                <CloseIcon />
-              </button>
-              <button
-                type="button"
-                className="primary-btn"
-                onClick={async () => {
-                  try {
-                    await createReturn(authFetch, API_URL, {
-                      order_id: returnForm.orderId,
-                      order_item_id: returnForm.itemId,
-                      reason: returnForm.reason,
-                    });
-                    setReturnForm(null);
-                    await reloadReturns();
-                    showToast("Заявка на возврат отправлена");
-                  } catch (e) {
-                    showToast(e.message || "Не удалось создать заявку");
-                  }
-                }}
-              >
-                Отправить
-              </button>
+        <button
+          type="button"
+          className="vmag-widget-toggle"
+          aria-expanded={returnsOpen}
+          onClick={() => setReturnsOpen((v) => !v)}
+        >
+          <h3>Возвраты</h3>
+          <span className="vmag-widget-toggle-meta">
+            {returns.length ? (
+              <span className="muted small">{returns.length}</span>
+            ) : null}
+            <ChevronIcon open={returnsOpen} />
+          </span>
+        </button>
+        {returnsOpen ? (
+          <>
+            <div className="vmagazine-list">
+              {returnableOrders.map((o) => (
+                <article key={`ret-src-${o.id}`} className="vmagazine-card">
+                  <div className="vmagazine-card-head">
+                    <div>
+                      <strong>{o.provider_name || `Заказ #${o.id}`}</strong>
+                      <p className="muted small">
+                        {o.created_at ? new Date(o.created_at).toLocaleDateString("ru-RU") : ""} · получено
+                      </p>
+                    </div>
+                    <strong>{Number(o.total).toLocaleString("ru-RU")} ₽</strong>
+                  </div>
+                  <ul className="muted small">
+                    {(o.items || []).map((it) => {
+                      const existing = returns.find((r) => Number(r.order_item_id) === Number(it.id));
+                      return (
+                        <li key={it.id}>
+                          {it.name} × {it.quantity}
+                          {existing ? (
+                            <span> — {returnStatusLabel(existing.status)}</span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="ghost-btn"
+                              style={{ marginLeft: 8 }}
+                              onClick={() =>
+                                setReturnForm({
+                                  orderId: o.id,
+                                  itemId: it.id,
+                                  name: it.name,
+                                  reason: "",
+                                  photos: [],
+                                })
+                              }
+                            >
+                              Вернуть
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </article>
+              ))}
+              {!returnableOrders.length ? (
+                <p className="muted">Возврат доступен после получения заказа.</p>
+              ) : null}
             </div>
-          </div>
-        ) : null}
-        {returns.length ? (
-          <div className="vmagazine-list" style={{ marginTop: "0.75rem" }}>
-            <h4 style={{ margin: 0 }}>Мои заявки</h4>
-            {returns.map((r) => (
-              <article key={r.id} className="vmagazine-card">
-                <strong>{r.product_name}</strong>
-                <p className="muted small">
-                  {r.provider_name} · {returnStatusLabel(r.status)}
-                </p>
-                {r.reason ? <p className="small">{r.reason}</p> : null}
-              </article>
-            ))}
-          </div>
-        ) : null}
+            {returnForm ? (
+              <div className="vmag-return-form">
+                <strong>Возврат: {returnForm.name}</strong>
+                <textarea
+                  placeholder="Причина возврата"
+                  value={returnForm.reason}
+                  onChange={(e) => setReturnForm((f) => ({ ...f, reason: e.target.value }))}
+                />
+                <div className="vmag-return-photos">
+                  <div className="vmag-return-photos-head">
+                    <span className="muted small">Фото товара (обязательно)</span>
+                    <button
+                      type="button"
+                      className="vmag-icon-btn"
+                      aria-label="Добавить фото"
+                      onClick={() => returnPhotoInputRef.current?.click()}
+                    >
+                      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="currentColor">
+                        <path d="M19 7v2.99s-1.99.01-2 0V7h-3s.01-1.99 0-2h3V2h2v3h3v2h-3zm-3 4V8h-3V5H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-8h-3zM5 19l3-4 2 3 3-4 4 5H5z" />
+                      </svg>
+                    </button>
+                    <input
+                      ref={returnPhotoInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      hidden
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        e.target.value = "";
+                        if (!files.length) return;
+                        setReturnForm((f) => {
+                          const next = [...(f.photos || [])];
+                          for (const file of files) {
+                            if (next.length >= 12) break;
+                            next.push({
+                              id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                              file,
+                              url: URL.createObjectURL(file),
+                            });
+                          }
+                          return { ...f, photos: next };
+                        });
+                      }}
+                    />
+                  </div>
+                  {(returnForm.photos || []).length ? (
+                    <ul className="vmag-return-photo-grid">
+                      {returnForm.photos.map((p, idx) => (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            className="vmag-return-photo-thumb"
+                            onClick={() => {
+                              const items = returnForm.photos.map((x) => ({
+                                url: x.url,
+                                thumb_url: x.url,
+                              }));
+                              if (onOpenPhotos) onOpenPhotos(items, idx);
+                              else window.open(p.url, "_blank", "noopener,noreferrer");
+                            }}
+                          >
+                            <img src={p.url} alt="" />
+                          </button>
+                          <button
+                            type="button"
+                            className="vmag-return-photo-del"
+                            aria-label="Удалить фото"
+                            onClick={() => {
+                              setReturnForm((f) => {
+                                const target = (f.photos || []).find((x) => x.id === p.id);
+                                if (target?.url) URL.revokeObjectURL(target.url);
+                                return {
+                                  ...f,
+                                  photos: (f.photos || []).filter((x) => x.id !== p.id),
+                                };
+                              });
+                            }}
+                          >
+                            <TrashIcon />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="muted small">Нажмите на иконку, чтобы добавить фото.</p>
+                  )}
+                </div>
+                <div className="vmag-return-actions">
+                  <button
+                    type="button"
+                    className="vmag-icon-btn"
+                    aria-label="Закрыть"
+                    onClick={() => {
+                      for (const p of returnForm.photos || []) {
+                        if (p?.url) URL.revokeObjectURL(p.url);
+                      }
+                      setReturnForm(null);
+                    }}
+                  >
+                    <CloseIcon />
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    onClick={async () => {
+                      if (!(returnForm.reason || "").trim()) {
+                        showToast("Укажите причину возврата", { tone: "error" });
+                        return;
+                      }
+                      if (!(returnForm.photos || []).length) {
+                        showToast("Прикрепите хотя бы одно фото", { tone: "error" });
+                        return;
+                      }
+                      try {
+                        await createReturn(authFetch, API_URL, {
+                          order_id: returnForm.orderId,
+                          order_item_id: returnForm.itemId,
+                          reason: returnForm.reason,
+                          photos: returnForm.photos.map((p) => p.file),
+                        });
+                        for (const p of returnForm.photos || []) {
+                          if (p?.url) URL.revokeObjectURL(p.url);
+                        }
+                        setReturnForm(null);
+                        await reloadReturns();
+                        showToast("Заявка на возврат отправлена");
+                      } catch (e) {
+                        showToast(e.message || "Не удалось создать заявку", { tone: "error" });
+                      }
+                    }}
+                  >
+                    Отправить
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            <div className="vmagazine-list" style={{ marginTop: "0.75rem" }}>
+              <h4 style={{ margin: "0 0 0.5rem" }}>Все заявки</h4>
+              {returns.map((r) => (
+                <article key={r.id} className="vmagazine-card">
+                  <strong>{r.product_name}</strong>
+                  <p className="muted small">
+                    {r.provider_name} · {returnStatusLabel(r.status)}
+                    {r.created_at ? ` · ${new Date(r.created_at).toLocaleDateString("ru-RU")}` : ""}
+                  </p>
+                  {r.reason ? <p className="small">{r.reason}</p> : null}
+                  {r.seller_note ? <p className="muted small">Ответ продавца: {r.seller_note}</p> : null}
+                  {(r.photos || []).length ? (
+                    <ul className="vmag-return-photo-grid vmag-return-photo-grid--sm">
+                      {r.photos.map((ph, idx) => (
+                        <li key={ph.id || idx}>
+                          <button
+                            type="button"
+                            className="vmag-return-photo-thumb"
+                            onClick={() => {
+                              const items = r.photos.map((x) => ({
+                                url: x.url,
+                                thumb_url: x.thumb_url || x.url,
+                              }));
+                              if (onOpenPhotos) onOpenPhotos(items, idx);
+                              else if (ph.url) window.open(ph.url, "_blank", "noopener,noreferrer");
+                            }}
+                          >
+                            <img src={ph.thumb_url || ph.url} alt="" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </article>
+              ))}
+              {!returns.length ? <p className="muted">Заявок пока нет.</p> : null}
+            </div>
+          </>
+        ) : (
+          <p className="muted small">Нажмите, чтобы открыть возвраты и заявки.</p>
+        )}
       </section>
 
       <section className="vmag-widget">

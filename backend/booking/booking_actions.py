@@ -84,12 +84,12 @@ def notify_new_booking(booking):
         from notifications.delivery import (
             build_client_new_booking_text,
             build_new_booking_text,
-            deliver_booking_event,
+            enqueue_deliver_booking_event,
             get_or_create_messaging,
         )
 
         body = build_new_booking_text(booking)
-        deliver_booking_event(
+        enqueue_deliver_booking_event(
             booking,
             "new",
             body or "Клиент записался",
@@ -101,7 +101,7 @@ def notify_new_booking(booking):
         if getattr(msg, "notify_client_on_new", True):
             client_body = build_client_new_booking_text(booking)
             if client_body:
-                deliver_booking_event(
+                enqueue_deliver_booking_event(
                     booking,
                     "new_client",
                     client_body,

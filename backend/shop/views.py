@@ -555,6 +555,8 @@ class PublicShopCatalogView(APIView):
         dest_lat = _parse_coord(request.query_params.get("lat"))
         dest_lon = _parse_coord(request.query_params.get("lon"))
         origin_lat, origin_lon = _provider_origin_coords(provider)
+        from vmagazine.pickup_points import pickup_points_for_provider
+
         return Response(
             {
                 "provider": {
@@ -565,6 +567,8 @@ class PublicShopCatalogView(APIView):
                     "logo_url": logo_url,
                     "latitude": origin_lat,
                     "longitude": origin_lon,
+                    "address": provider.organization_address or "",
+                    "pickup_points": pickup_points_for_provider(provider),
                 },
                 "settings": {
                     "enable_pickup": settings_obj.enable_pickup,
@@ -930,8 +934,33 @@ class ShopReturnRequestsView(APIView):
         rows = (
             ReturnRequest.objects.filter(order__provider=provider)
             .select_related("order", "order_item", "user")
+            .prefetch_related("photos")
             .order_by("-created_at")[:80]
         )
+
+        def _photos(r):
+            from common.media_urls import photo_urls
+
+            out = []
+            for ph in r.photos.all()[:20]:
+                if not ph.image:
+                    continue
+                try:
+                    urls = photo_urls(request, ph.image)
+                    out.append(
+                        {
+                            "id": ph.id,
+                            "url": urls.get("url") or "",
+                            "thumb_url": urls.get("thumb_url") or urls.get("url") or "",
+                        }
+                    )
+                except Exception:
+                    try:
+                        out.append({"id": ph.id, "url": ph.image.url, "thumb_url": ph.image.url})
+                    except Exception:
+                        pass
+            return out
+
         return Response(
             [
                 {
@@ -954,6 +983,7 @@ class ShopReturnRequestsView(APIView):
                         or (r.user.username if r.user_id else "")
                     ),
                     "client_phone": r.order.guest_phone or getattr(r.user, "phone", "") or "",
+                    "photos": _photos(r),
                 }
                 for r in rows
             ]

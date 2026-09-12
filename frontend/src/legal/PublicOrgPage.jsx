@@ -196,6 +196,22 @@ export default function PublicOrgPage({ slug }) {
             ))}
           </div>
         ) : null}
+        {org.services?.length ? (
+          <section style={{ marginTop: 20 }}>
+            <h2 style={{ fontSize: "1.15rem" }}>Услуги</h2>
+            <ul>
+              {org.services.map((s) => (
+                <li key={s.id}>
+                  {s.name}
+                  {s.price != null && s.price !== ""
+                    ? ` — ${Number(s.price).toLocaleString("ru-RU")} ₽`
+                    : ""}
+                  {s.duration_minutes ? ` · ${s.duration_minutes} мин` : ""}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         <div className="landing-hero-actions" style={{ marginTop: 24 }}>
           {org.is_cafe ? (
             <a className="landing-btn landing-btn--primary" href={`/m/${org.slug}`}>
@@ -206,13 +222,18 @@ export default function PublicOrgPage({ slug }) {
               Онлайн-запись
             </a>
           )}
+          {org.shop_url ? (
+            <a className="landing-btn landing-btn--outline" href={org.shop_url}>
+              Витрина
+            </a>
+          ) : null}
           <a className="landing-btn landing-btn--outline" href="/">
             О платформе Вместе
           </a>
         </div>
         <p className="muted" style={{ marginTop: 16 }}>
           <a href="/city/moscow">Москва</a> · <a href="/city/spb">Санкт-Петербург</a> ·{" "}
-          <a href="/businesses">Для бизнеса</a>
+          <a href="/businesses">Для бизнеса</a> · <a href="/android">Android</a>
         </p>
       </article>
     </div>

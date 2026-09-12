@@ -1,55 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { bookingStatusLabel } from "./bookingDisplay.jsx";
 import { showToast } from "./toast.js";
-
-const emptyTech = () => ({
-  hair_color: "",
-  lash_length: "",
-  lash_curl: "",
-  nail_shape: "",
-  wax_brand: "",
-  materials: "",
-});
-
-const emptyPersonal = () => ({
-  music: "",
-  drink: "",
-  allergies: "",
-  talk_topics: "",
-});
-
-const DEFAULT_FIELD_PREFS = {
-  hair_color: true,
-  lash_length: true,
-  lash_curl: true,
-  nail_shape: true,
-  wax_brand: true,
-  materials: true,
-  technical_notes: true,
-  music: true,
-  drink: true,
-  allergies: true,
-  talk_topics: true,
-  preferences_notes: true,
-};
-
-const TECH_PREF_OPTIONS = [
-  { key: "hair_color", label: "Краска / формула" },
-  { key: "lash_length", label: "Ресницы: длина" },
-  { key: "lash_curl", label: "Ресницы: изгиб" },
-  { key: "nail_shape", label: "Форма ногтей" },
-  { key: "wax_brand", label: "Воск / материал" },
-  { key: "materials", label: "Другие материалы" },
-  { key: "technical_notes", label: "Заметки по технологии" },
-];
-
-const PERSONAL_PREF_OPTIONS = [
-  { key: "music", label: "Музыка / атмосфера" },
-  { key: "drink", label: "Напиток" },
-  { key: "allergies", label: "Аллергии" },
-  { key: "talk_topics", label: "О чём говорить" },
-  { key: "preferences_notes", label: "Ещё заметки" },
-];
+import {
+  emptyPersonalForSphere,
+  emptyTechForSphere,
+  memoryFieldsForSphere,
+  personalOptionsForSphere,
+  personalTabLabel,
+  techOptionsForSphere,
+  techTabLabel,
+  TECH_FIELD_META,
+} from "./clientMemoryFields.js";
 
 function MemoryField({ label, children }) {
   return (
@@ -60,8 +21,15 @@ function MemoryField({ label, children }) {
   );
 }
 
+function visitKindLabel(kind) {
+  if (kind === "cafe") return "Кафе · ";
+  if (kind === "shop") return "Магазин · ";
+  if (kind === "inspection") return "Приёмка · ";
+  return "";
+}
+
 /**
- * CRM «Помнить всё»: техкарта материалов + личные особенности клиента.
+ * CRM «Помнить всё»: поля зависят от сферы организации.
  */
 export default function ClientMemoryCardModal({
   clientId,
@@ -70,20 +38,26 @@ export default function ClientMemoryCardModal({
   API_URL,
   onClose,
   onOpenChat,
+  providerSphere = "",
 }) {
   const [tab, setTab] = useState("tech");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [card, setCard] = useState(null);
-  const [tech, setTech] = useState(emptyTech);
-  const [personal, setPersonal] = useState(emptyPersonal);
+  const [sphere, setSphere] = useState(providerSphere || "");
+  const [tech, setTech] = useState(() => emptyTechForSphere(providerSphere));
+  const [personal, setPersonal] = useState(() => emptyPersonalForSphere(providerSphere));
   const [technicalNotes, setTechnicalNotes] = useState("");
   const [preferencesNotes, setPreferencesNotes] = useState("");
-  const [fieldPrefs, setFieldPrefs] = useState(DEFAULT_FIELD_PREFS);
+  const [fieldPrefs, setFieldPrefs] = useState(() => memoryFieldsForSphere(providerSphere));
   const [isBlocked, setIsBlocked] = useState(false);
   const [noShowCount, setNoShowCount] = useState(0);
   const [acquisitionSource, setAcquisitionSource] = useState("");
+
+  const techOptions = useMemo(() => techOptionsForSphere(sphere), [sphere]);
+  const personalOptions = useMemo(() => personalOptionsForSphere(sphere), [sphere]);
+  const defaults = useMemo(() => memoryFieldsForSphere(sphere), [sphere]);
 
   useEffect(() => {
     if (!clientId) return undefined;
@@ -97,12 +71,14 @@ export default function ClientMemoryCardModal({
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.detail || "Не удалось загрузить карточку");
         if (cancelled) return;
+        const nextSphere = data.provider_sphere || providerSphere || "";
+        setSphere(nextSphere);
         setCard(data);
-        setTech({ ...emptyTech(), ...(data.tech || {}) });
-        setPersonal({ ...emptyPersonal(), ...(data.personal || {}) });
+        setTech({ ...emptyTechForSphere(nextSphere), ...(data.tech || {}) });
+        setPersonal({ ...emptyPersonalForSphere(nextSphere), ...(data.personal || {}) });
         setTechnicalNotes(data.technical_notes || "");
         setPreferencesNotes(data.preferences_notes || "");
-        setFieldPrefs({ ...DEFAULT_FIELD_PREFS, ...(data.field_prefs || {}) });
+        setFieldPrefs({ ...memoryFieldsForSphere(nextSphere), ...(data.field_prefs || {}) });
         setIsBlocked(Boolean(data.is_blocked));
         setNoShowCount(Number(data.no_show_count) || 0);
         setAcquisitionSource(data.acquisition_source || "");
@@ -115,7 +91,7 @@ export default function ClientMemoryCardModal({
     return () => {
       cancelled = true;
     };
-  }, [API_URL, authFetch, clientId]);
+  }, [API_URL, authFetch, clientId, providerSphere]);
 
   async function save(extra = {}) {
     setSaving(true);
@@ -140,7 +116,7 @@ export default function ClientMemoryCardModal({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Не удалось сохранить");
       setCard(data);
-      if (data.field_prefs) setFieldPrefs({ ...DEFAULT_FIELD_PREFS, ...data.field_prefs });
+      if (data.field_prefs) setFieldPrefs({ ...defaults, ...data.field_prefs });
       showToast("Карточка сохранена");
       return true;
     } catch (e) {
@@ -165,7 +141,7 @@ export default function ClientMemoryCardModal({
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Не удалось сохранить настройки");
-      if (data.field_prefs) setFieldPrefs({ ...DEFAULT_FIELD_PREFS, ...data.field_prefs });
+      if (data.field_prefs) setFieldPrefs({ ...defaults, ...data.field_prefs });
     } catch (e) {
       setFieldPrefs(fieldPrefs);
       showToast(e.message || "Ошибка настроек", { tone: "error" });
@@ -175,7 +151,44 @@ export default function ClientMemoryCardModal({
   }
 
   const title = card?.client_name || clientName || `Клиент #${clientId}`;
-  const show = (key) => fieldPrefs[key] !== false;
+  const show = (key) => fieldPrefs[key] !== false && key in defaults;
+
+  const techIntro =
+    sphere === "service_center"
+      ? "Автомобиль, пробеги, работы и детали — чтобы следующий визит был быстрее."
+      : sphere === "shops"
+        ? "Размеры, доставка и заметки по покупкам."
+        : "Материалы и формулы, чтобы в следующий раз повторить тот же результат.";
+
+  const personalIntro =
+    sphere === "service_center"
+      ? "Аллергии на химию, пожелания клиента и свободные заметки."
+      : "Мелочи, от которых клиент чувствует себя особенным — и возвращается.";
+
+  function renderTechInput(key) {
+    if (!show(key)) return null;
+    const label = TECH_FIELD_META[key]?.label || key;
+    const long = key === "last_works" || key === "parts_notes" || key === "purchase_notes";
+    if (long) {
+      return (
+        <MemoryField key={key} label={label}>
+          <textarea
+            rows={3}
+            value={tech[key] || ""}
+            onChange={(e) => setTech((t) => ({ ...t, [key]: e.target.value }))}
+          />
+        </MemoryField>
+      );
+    }
+    return (
+      <MemoryField key={key} label={label}>
+        <input
+          value={tech[key] || ""}
+          onChange={(e) => setTech((t) => ({ ...t, [key]: e.target.value }))}
+        />
+      </MemoryField>
+    );
+  }
 
   return (
     <div className="modal-backdrop client-memory-backdrop" onClick={onClose}>
@@ -186,12 +199,7 @@ export default function ClientMemoryCardModal({
         aria-label="Карточка клиента"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          type="button"
-          className="client-memory-close"
-          onClick={onClose}
-          aria-label="Закрыть"
-        >
+        <button type="button" className="client-memory-close" onClick={onClose} aria-label="Закрыть">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="currentColor">
             <path d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 0 0 5.7 7.11L10.59 12l-4.89 4.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4z" />
           </svg>
@@ -226,30 +234,30 @@ export default function ClientMemoryCardModal({
 
         {settingsOpen ? (
           <div className="client-memory-settings">
-            <p className="muted small">Отметьте поля, которые нужны в вашей работе.</p>
+            <p className="muted small">Отметьте поля, которые нужны в вашей работе (набор зависит от сферы).</p>
             <div className="client-memory-settings-grid">
               <div>
-                <strong className="client-memory-settings-title">Техкарта</strong>
-                {TECH_PREF_OPTIONS.map((o) => (
+                <strong className="client-memory-settings-title">{techTabLabel(sphere)}</strong>
+                {techOptions.map((o) => (
                   <label key={o.key} className="client-memory-check">
-                    <input
-                      type="checkbox"
-                      checked={show(o.key)}
-                      onChange={() => void togglePref(o.key)}
-                    />
+                    <input type="checkbox" checked={show(o.key)} onChange={() => void togglePref(o.key)} />
                     <span>{o.label}</span>
                   </label>
                 ))}
+                <label className="client-memory-check">
+                  <input
+                    type="checkbox"
+                    checked={show("technical_notes")}
+                    onChange={() => void togglePref("technical_notes")}
+                  />
+                  <span>Технические заметки</span>
+                </label>
               </div>
               <div>
-                <strong className="client-memory-settings-title">Личное</strong>
-                {PERSONAL_PREF_OPTIONS.map((o) => (
+                <strong className="client-memory-settings-title">{personalTabLabel(sphere)}</strong>
+                {personalOptions.map((o) => (
                   <label key={o.key} className="client-memory-check">
-                    <input
-                      type="checkbox"
-                      checked={show(o.key)}
-                      onChange={() => void togglePref(o.key)}
-                    />
+                    <input type="checkbox" checked={show(o.key)} onChange={() => void togglePref(o.key)} />
                     <span>{o.label}</span>
                   </label>
                 ))}
@@ -259,13 +267,8 @@ export default function ClientMemoryCardModal({
         ) : null}
 
         <div className="client-memory-tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            className={tab === "tech" ? "is-active" : ""}
-            onClick={() => setTab("tech")}
-          >
-            Техкарта
+          <button type="button" role="tab" className={tab === "tech" ? "is-active" : ""} onClick={() => setTab("tech")}>
+            {techTabLabel(sphere)}
           </button>
           <button
             type="button"
@@ -273,7 +276,7 @@ export default function ClientMemoryCardModal({
             className={tab === "personal" ? "is-active" : ""}
             onClick={() => setTab("personal")}
           >
-            Личное
+            {personalTabLabel(sphere)}
           </button>
           <button
             type="button"
@@ -281,7 +284,7 @@ export default function ClientMemoryCardModal({
             className={tab === "visits" ? "is-active" : ""}
             onClick={() => setTab("visits")}
           >
-            Визиты
+            История
           </button>
           <button
             type="button"
@@ -299,115 +302,55 @@ export default function ClientMemoryCardModal({
           <div className="client-memory-body">
             {tab === "tech" ? (
               <>
-                <p className="muted small">
-                  Материалы и формулы, чтобы в следующий раз повторить тот же результат.
-                </p>
-                {show("hair_color") ? (
-                  <MemoryField label="Номер / формула краски">
-                    <input
-                      value={tech.hair_color}
-                      onChange={(e) => setTech((t) => ({ ...t, hair_color: e.target.value }))}
-                      placeholder="Напр. 7/1 + оксид 3%"
-                    />
-                  </MemoryField>
-                ) : null}
-                {show("lash_length") || show("lash_curl") ? (
-                  <div className="client-memory-row">
-                    {show("lash_length") ? (
-                      <MemoryField label="Ресницы: длина">
-                        <input
-                          value={tech.lash_length}
-                          onChange={(e) => setTech((t) => ({ ...t, lash_length: e.target.value }))}
-                          placeholder="8–12 мм"
-                        />
-                      </MemoryField>
-                    ) : null}
-                    {show("lash_curl") ? (
-                      <MemoryField label="Изгиб">
-                        <input
-                          value={tech.lash_curl}
-                          onChange={(e) => setTech((t) => ({ ...t, lash_curl: e.target.value }))}
-                          placeholder="C / D / L"
-                        />
-                      </MemoryField>
-                    ) : null}
-                  </div>
-                ) : null}
-                {show("nail_shape") || show("wax_brand") ? (
-                  <div className="client-memory-row">
-                    {show("nail_shape") ? (
-                      <MemoryField label="Форма ногтей">
-                        <input
-                          value={tech.nail_shape}
-                          onChange={(e) => setTech((t) => ({ ...t, nail_shape: e.target.value }))}
-                          placeholder="миндаль, квадрат…"
-                        />
-                      </MemoryField>
-                    ) : null}
-                    {show("wax_brand") ? (
-                      <MemoryField label="Марка воска / материал">
-                        <input
-                          value={tech.wax_brand}
-                          onChange={(e) => setTech((t) => ({ ...t, wax_brand: e.target.value }))}
-                        />
-                      </MemoryField>
-                    ) : null}
-                  </div>
-                ) : null}
-                {show("materials") ? (
-                  <MemoryField label="Другие материалы">
-                    <input
-                      value={tech.materials}
-                      onChange={(e) => setTech((t) => ({ ...t, materials: e.target.value }))}
-                      placeholder="Тоник, база, клей…"
-                    />
-                  </MemoryField>
-                ) : null}
+                <p className="muted small">{techIntro}</p>
+                {techOptions.map((o) => renderTechInput(o.key))}
                 {show("technical_notes") ? (
-                  <MemoryField label="Заметки по технологии">
+                  <MemoryField label="Технические заметки">
                     <textarea
                       rows={4}
                       value={technicalNotes}
                       onChange={(e) => setTechnicalNotes(e.target.value)}
-                      placeholder="Время выдержки, схема пробора, особенности кожи…"
+                      placeholder={
+                        sphere === "service_center"
+                          ? "Особенности кузова, доступ к VIN, рекомендации…"
+                          : "Время выдержки, схема пробора…"
+                      }
                     />
                   </MemoryField>
                 ) : null}
-                {!TECH_PREF_OPTIONS.some((o) => show(o.key)) ? (
-                  <p className="muted small">В настройках не выбрано ни одного поля техкарты.</p>
+                {!techOptions.some((o) => show(o.key)) && !show("technical_notes") ? (
+                  <p className="muted small">В настройках не выбрано ни одного поля.</p>
                 ) : null}
               </>
             ) : null}
 
             {tab === "personal" ? (
               <>
-                <p className="muted small">
-                  Мелочи, от которых клиент чувствует себя особенным — и возвращается.
-                </p>
+                <p className="muted small">{personalIntro}</p>
                 {show("music") ? (
                   <MemoryField label="Музыка / атмосфера">
                     <input
-                      value={personal.music}
+                      value={personal.music || ""}
                       onChange={(e) => setPersonal((p) => ({ ...p, music: e.target.value }))}
-                      placeholder="Лоунж, без разговоров по телефону…"
                     />
                   </MemoryField>
                 ) : null}
                 {show("drink") ? (
                   <MemoryField label="Напиток">
                     <input
-                      value={personal.drink}
+                      value={personal.drink || ""}
                       onChange={(e) => setPersonal((p) => ({ ...p, drink: e.target.value }))}
-                      placeholder="Кофе с молоком / чай без сахара"
                     />
                   </MemoryField>
                 ) : null}
                 {show("allergies") ? (
                   <MemoryField label="Аллергии / противопоказания">
                     <input
-                      value={personal.allergies}
+                      value={personal.allergies || ""}
                       onChange={(e) => setPersonal((p) => ({ ...p, allergies: e.target.value }))}
-                      placeholder="На латекс, аромат…"
+                      placeholder={
+                        sphere === "service_center" ? "На химию, латекс перчаток…" : "На латекс, аромат…"
+                      }
                     />
                   </MemoryField>
                 ) : null}
@@ -415,9 +358,8 @@ export default function ClientMemoryCardModal({
                   <MemoryField label="О чём говорить / спросить">
                     <textarea
                       rows={3}
-                      value={personal.talk_topics}
+                      value={personal.talk_topics || ""}
                       onChange={(e) => setPersonal((p) => ({ ...p, talk_topics: e.target.value }))}
-                      placeholder="Спросить, как прошёл отпуск; ребёнок в школе…"
                     />
                   </MemoryField>
                 ) : null}
@@ -427,12 +369,11 @@ export default function ClientMemoryCardModal({
                       rows={3}
                       value={preferencesNotes}
                       onChange={(e) => setPreferencesNotes(e.target.value)}
-                      placeholder="Температура в кабинете, предпочитает тишину…"
                     />
                   </MemoryField>
                 ) : null}
-                {!PERSONAL_PREF_OPTIONS.some((o) => show(o.key)) ? (
-                  <p className="muted small">В настройках не выбрано ни одного личного поля.</p>
+                {!personalOptions.some((o) => show(o.key)) ? (
+                  <p className="muted small">В настройках не выбрано ни одного поля.</p>
                 ) : null}
               </>
             ) : null}
@@ -443,7 +384,7 @@ export default function ClientMemoryCardModal({
                   <li key={v.id}>
                     <strong>{v.service_name || `Запись #${v.id}`}</strong>
                     <span className="muted small">
-                      {v.kind === "cafe" ? "Кафе · " : v.kind === "shop" ? "Магазин · " : ""}
+                      {visitKindLabel(v.kind)}
                       {v.created_at ? new Date(v.created_at).toLocaleString("ru-RU") : ""} ·{" "}
                       {v.status_label || bookingStatusLabel(v.status) || v.status}
                       {v.total ? ` · ${Math.round(v.total).toLocaleString("ru-RU")} ₽` : ""}
@@ -451,67 +392,52 @@ export default function ClientMemoryCardModal({
                     {v.comment ? <p className="small">{v.comment}</p> : null}
                   </li>
                 ))}
-                {!card?.recent_visits?.length ? <li className="muted">Пока нет визитов.</li> : null}
+                {!card?.recent_visits?.length ? <li className="muted">Пока нет истории.</li> : null}
               </ul>
             ) : null}
 
             {tab === "trust" ? (
               <>
-                <p className="muted small">
-                  После 2 неявок клиент автоматически попадает в чёрный список и не сможет записаться онлайн.
-                  Можно снять блок вручную.
-                </p>
-                <MemoryField label="Откуда пришёл клиент">
+                <MemoryField label="Источник клиента">
                   <input
                     value={acquisitionSource}
                     onChange={(e) => setAcquisitionSource(e.target.value)}
-                    placeholder="Рекомендация / Instagram / Реклама…"
+                    placeholder="Реклама, рекомендация…"
                   />
                 </MemoryField>
-                <MemoryField label="Неявок без предупреждения">
+                <MemoryField label="Неявки">
                   <input
                     type="number"
-                    min={0}
-                    max={999}
+                    min="0"
+                    max="999"
                     value={noShowCount}
                     onChange={(e) => setNoShowCount(Number(e.target.value) || 0)}
                   />
                 </MemoryField>
                 <label className="client-memory-check">
-                  <input
-                    type="checkbox"
-                    checked={isBlocked}
-                    onChange={(e) => setIsBlocked(e.target.checked)}
-                  />
-                  <span>Чёрный список — запретить онлайн-запись</span>
+                  <input type="checkbox" checked={isBlocked} onChange={(e) => setIsBlocked(e.target.checked)} />
+                  <span>В чёрном списке (онлайн-запись недоступна)</span>
                 </label>
-                {noShowCount >= 2 && !isBlocked ? (
-                  <p className="muted small">
-                    Счётчик ≥ 2: при следующей отметке «не пришёл» клиент будет заблокирован автоматически.
-                    Сейчас блок снят вручную.
-                  </p>
-                ) : null}
+                <p className="muted small">После 2 неявок клиент обычно блокируется автоматически.</p>
               </>
             ) : null}
           </div>
         )}
 
-        <footer className="client-memory-footer">
-          {onOpenChat ? (
+        <footer className="client-memory-foot">
+          {typeof onOpenChat === "function" ? (
             <button
               type="button"
               className="ghost-btn"
-              onClick={() => {
-                onOpenChat(clientId);
-                onClose?.();
-              }}
+              onClick={() => onOpenChat(clientId, title)}
+              disabled={!clientId}
             >
               Чат
             </button>
           ) : (
             <span />
           )}
-          <button type="button" className="primary-btn" disabled={saving || loading} onClick={() => void save()}>
+          <button type="button" disabled={saving || loading} onClick={() => void save()}>
             {saving ? "Сохранение…" : "Сохранить"}
           </button>
         </footer>

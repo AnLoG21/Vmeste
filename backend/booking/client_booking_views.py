@@ -132,11 +132,20 @@ class ProviderClientListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        from .client_memory_fields import client_base_enabled_for_sphere
         from .phone_clients import list_clients_for_provider
+        from users.models import User as AppUser
 
         provider_id, ok = _provider_context(request.user)
         if not ok:
             return Response({"detail": "Нет доступа"}, status=status.HTTP_403_FORBIDDEN)
+        provider = AppUser.objects.filter(id=provider_id).only("provider_sphere").first()
+        sphere = getattr(provider, "provider_sphere", "") or ""
+        if not client_base_enabled_for_sphere(sphere):
+            return Response(
+                {"detail": "База клиентов для этой сферы не используется."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         try:
             page = int(request.query_params.get("page") or 1)
         except (TypeError, ValueError):
@@ -152,12 +161,21 @@ class ProviderClientListView(APIView):
         return Response(data)
 
     def post(self, request):
+        from .client_memory_fields import client_base_enabled_for_sphere
         from .models import ProviderClientCard
         from .phone_clients import client_brief, get_or_create_client_by_name, get_or_create_client_by_phone
+        from users.models import User as AppUser
 
         provider_id, ok = _provider_context(request.user)
         if not ok:
             return Response({"detail": "Нет доступа"}, status=status.HTTP_403_FORBIDDEN)
+        provider = AppUser.objects.filter(id=provider_id).only("provider_sphere").first()
+        sphere = getattr(provider, "provider_sphere", "") or ""
+        if not client_base_enabled_for_sphere(sphere):
+            return Response(
+                {"detail": "База клиентов для этой сферы не используется."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         # Импорт Excel/CSV
         upload = request.FILES.get("file") or request.FILES.get("excel")
@@ -195,11 +213,20 @@ class ProviderClientListView(APIView):
         return Response(brief, status=status.HTTP_201_CREATED)
 
     def delete(self, request):
+        from .client_memory_fields import client_base_enabled_for_sphere
         from .models import ProviderClientCard
+        from users.models import User as AppUser
 
         provider_id, ok = _provider_context(request.user)
         if not ok:
             return Response({"detail": "Нет доступа"}, status=status.HTTP_403_FORBIDDEN)
+        provider = AppUser.objects.filter(id=provider_id).only("provider_sphere").first()
+        sphere = getattr(provider, "provider_sphere", "") or ""
+        if not client_base_enabled_for_sphere(sphere):
+            return Response(
+                {"detail": "База клиентов для этой сферы не используется."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         raw = request.query_params.get("client") or request.data.get("client")
         try:
             client_id = int(raw)

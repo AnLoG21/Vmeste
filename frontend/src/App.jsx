@@ -71,6 +71,7 @@ import {
 import SalonLoyaltyPackagesPanel from "./SalonLoyaltyPackagesPanel.jsx";
 import PlatformTour from "./PlatformTour.jsx";
 import SetupChecklist from "./SetupChecklist.jsx";
+import ProviderQuickStartModal, { shouldOfferQuickStart } from "./ProviderQuickStartModal.jsx";
 import {
   buildPlatformTourSteps,
   readPlatformTourDone,
@@ -117,7 +118,7 @@ import {
   showLocalBrowserNotification,
 } from "./pushNotifications.js";
 import { clearBookingWidget, syncBookingWidget } from "./bookingWidget.js";
-import { showToast } from "./toast.js";
+import { showToast, toastFriendlyText } from "./toast.js";
 import { navigateView, viewFromPath } from "./viewRoutes.js";
 import { setNoIndexAppMeta, setPageMeta } from "./seo/setPageMeta.js";
 
@@ -184,6 +185,8 @@ export default function App() {
   const [platformTourPhase, setPlatformTourPhase] = useState("hidden");
   const [platformTourStep, setPlatformTourStep] = useState(0);
   const [setupChecklistDismissed, setSetupChecklistDismissed] = useState(false);
+  const [quickStartOpen, setQuickStartOpen] = useState(false);
+  const [quickStartBusy, setQuickStartBusy] = useState(false);
   const platformTourOfferedRef = useRef(false);
   const [currentView, setCurrentViewState] = useState(() => viewFromPath(window.location.pathname) || "bookings");
   const setCurrentView = useCallback((view) => {
@@ -925,7 +928,11 @@ export default function App() {
     })[0];
     if (!newest || newest.id === lastNotificationToastIdRef.current) return;
     lastNotificationToastIdRef.current = newest.id;
-    showToast(newest.payload?.body || formatInAppNotificationText(newest));
+    // Skip noisy/long booking-confirm spam; email/SMS carry the confirm link.
+    if (newest.payload?.event === "new_client") return;
+    const raw = newest.payload?.body || formatInAppNotificationText(newest);
+    const text = toastFriendlyText(raw);
+    if (text) showToast(text, { tone: "success", ms: 3000 });
   }, [chatActivity?.notifications]);
 
   useEffect(() => {
@@ -2082,6 +2089,9 @@ export default function App() {
     placemarkRef,
     setDetectedCity,
     onboardingPrefillIdRef,
+    onProviderOnboardingDone: (data) => {
+      if (shouldOfferQuickStart(data)) setQuickStartOpen(true);
+    },
   });
 
   useEffect(() => {
@@ -2351,6 +2361,45 @@ export default function App() {
     setSetupChecklistDismissed(true);
   }
 
+  async function runProviderQuickStartInline() {
+    if (quickStartBusy) return;
+    setQuickStartBusy(true);
+    try {
+      const res = await authFetch(`${API_URL}/catalog/quick-start/`, {
+        method: "POST",
+        body: JSON.stringify({ activate_limit: 5, days: 7, start_hour: 10, end_hour: 19 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.detail || "Не удалось выполнить быстрый старт.", { tone: "error" });
+        return;
+      }
+      const path = data.booking_path || "";
+      const origin = window.location.origin;
+      const url = path ? `${origin}${path}` : "";
+      showToast(
+        url
+          ? `Готово: услуги и слоты созданы. Ссылка: ${url}`
+          : `Готово: ${data.activated_services || 0} услуг, ${data.slots_created || 0} интервалов.`,
+        { tone: "success", ms: 8000 },
+      );
+      if (url) {
+        try {
+          await navigator.clipboard.writeText(url);
+        } catch {
+          /* ignore */
+        }
+      }
+      await loadMe();
+      if (typeof loadSellerData === "function") await loadSellerData();
+      setCurrentView("bookings");
+    } catch {
+      showToast("Сеть недоступна. Попробуйте ещё раз.", { tone: "error" });
+    } finally {
+      setQuickStartBusy(false);
+    }
+  }
+
   async function requestPasswordResetFromLogin(event) {
     event.preventDefault();
     const email = (loginForm.email || "").trim();
@@ -2608,7 +2657,7 @@ export default function App() {
     let list = conversations;
     if (currentView === "vmenu") {
       list = list.filter((c) => c.is_user_direct && !c.is_saved_messages);
-    } else if (me?.role === "client") {
+    } else if (currentView === "vmagazine" || me?.role === "client") {
       list = list.filter((c) => c.is_client_correspondence && !c.is_saved_messages);
     } else {
       const folder = chatFolder;
@@ -2925,6 +2974,12 @@ export default function App() {
         me.setup_progress.some((s) => !s.done) ? (
           <SetupChecklist
             steps={me.setup_progress}
+            showQuickStart={
+              shouldOfferQuickStart(me) &&
+              me.setup_progress.some((s) => (s.id === "services" || s.id === "intervals") && !s.done)
+            }
+            quickStartBusy={quickStartBusy}
+            onQuickStart={runProviderQuickStartInline}
             onOpen={(view) => {
               if (view === "marketplaces") {
                 setMarketplaceInitialTab("settings");
@@ -3180,15 +3235,20 @@ export default function App() {
           </>
         )}
         {accessToken &&
-          ((me?.role === "provider" && me?.provider_sphere !== "marketplaces") ||
+          ((me?.role === "provider" &&
+            me?.provider_sphere !== "marketplaces" &&
+            me?.provider_sphere !== "cafe_restaurant") ||
             (me?.role === "staff" &&
               (staffHasPerm("manage_bookings") || staffHasPerm("manage_shop")) &&
               me?.employer_sphere !== "marketplaces" &&
-              me?.provider_sphere !== "marketplaces")) &&
+              me?.provider_sphere !== "marketplaces" &&
+              me?.employer_sphere !== "cafe_restaurant" &&
+              me?.provider_sphere !== "cafe_restaurant")) &&
           currentView === "clients" && (
             <ClientsBasePanel
               authFetch={authFetch}
               API_URL={API_URL}
+              providerSphere={me?.provider_sphere || me?.employer_sphere || ""}
               onOpenClient={(clientId, clientName) =>
                 setClientMemoryCard({ clientId, clientName: clientName || "" })
               }
@@ -3638,6 +3698,7 @@ export default function App() {
               clientName={clientMemoryCard.clientName}
               authFetch={authFetch}
               API_URL={API_URL}
+              providerSphere={me?.provider_sphere || me?.employer_sphere || ""}
               onClose={() => setClientMemoryCard(null)}
               onOpenChat={openChatWithClient}
             />,
@@ -3654,6 +3715,17 @@ export default function App() {
           onNext={() => setPlatformTourStep((s) => Math.min(s + 1, platformTourSteps.length - 1))}
           onBack={() => setPlatformTourStep((s) => Math.max(0, s - 1))}
           onPrepareStep={preparePlatformTourStep}
+        />
+        <ProviderQuickStartModal
+          open={quickStartOpen}
+          onClose={() => setQuickStartOpen(false)}
+          authFetch={authFetch}
+          API_URL={API_URL}
+          me={me}
+          onDone={async () => {
+            await loadMe();
+            if (typeof loadSellerData === "function") await loadSellerData();
+          }}
         />
       </div>
 

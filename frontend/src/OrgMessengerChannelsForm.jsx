@@ -22,12 +22,10 @@ export default function OrgMessengerChannelsForm({
       </label>
       {form.enable_telegram ? (
         <>
-          {form.has_platform_telegram ? (
-            <p className="muted small">
-              Используется бот платформы. Достаточно указать Chat ID организации. Свой token — только если нужен
-              отдельный бот.
-            </p>
-          ) : null}
+          <p className="muted small">
+            Исходящие уведомления в Chat ID. Чтобы получать их, привяжите чат через бота. Это не двусторонний диалог с
+            клиентом внутри Вместе.
+          </p>
           <label className="field-label" htmlFor="org-tg-bot-token">
             Bot token{form.has_platform_telegram ? " (свой, необязательно)" : ""}
           </label>
@@ -139,6 +137,10 @@ export default function OrgMessengerChannelsForm({
       </label>
       {form.enable_whatsapp ? (
         <>
+          <p className="muted small">
+            Только исходящие напоминания. Нужен аккаунт Green-API. Входящие сообщения WhatsApp в Вместе не
+            принимаются.
+          </p>
           <label className="field-label" htmlFor="org-wa-api-url">
             API URL
           </label>
@@ -180,6 +182,9 @@ export default function OrgMessengerChannelsForm({
       </label>
       {form.enable_sms ? (
         <>
+          <p className="muted small">
+            Исходящие SMS. Укажите api_id организации или используйте ключ платформы, если он задан на сервере.
+          </p>
           <label className="field-label" htmlFor="org-sms-api-id">
             api_id организации (если пусто — ключ платформы)
           </label>

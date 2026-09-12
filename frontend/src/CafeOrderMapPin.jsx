@@ -2,30 +2,40 @@ import { useEffect, useRef } from "react";
 import { hasCoords } from "./geoPosition.js";
 import { loadYandexMaps } from "./yandexMapsLoader.js";
 
-/** Компактная карта с меткой адреса (и опционально курьера). */
+/** Компактная карта с меткой(ами) адреса (и опционально курьера). */
 export default function CafeOrderMapPin({
   lat,
   lon,
   courierLat,
   courierLon,
+  /** Доп. точки: [{ lat, lon, label?, preset? }] — вместе с lat/lon или вместо них */
+  markers = null,
   height = 220,
   className = "",
   mapKey = "",
   /** Если задан — клик по карте ставит точку курьера */
   onPickCourier = null,
   pickHint = "",
+  primaryLabel = "Адрес",
 }) {
   const hostRef = useRef(null);
   const mapRef = useRef(null);
   const onPickRef = useRef(onPickCourier);
   onPickRef.current = onPickCourier;
 
+  const markerList = Array.isArray(markers)
+    ? markers.filter((m) => hasCoords(m?.lat, m?.lon))
+    : hasCoords(lat, lon)
+      ? [{ lat, lon, label: primaryLabel, preset: "islands#orangeDotIcon" }]
+      : [];
+
+  const centerLat = markerList[0]?.lat ?? lat;
+  const centerLon = markerList[0]?.lon ?? lon;
+
   useEffect(() => {
     let cancelled = false;
-    if (!hasCoords(lat, lon)) return undefined;
+    if (!markerList.length) return undefined;
 
-    const la = Number(lat);
-    const lo = Number(lon);
     const showCourier = hasCoords(courierLat, courierLon);
     const cLa = showCourier ? Number(courierLat) : null;
     const cLo = showCourier ? Number(courierLon) : null;
@@ -45,17 +55,20 @@ export default function CafeOrderMapPin({
               mapRef.current = null;
             }
             const map = new ymaps.Map(hostRef.current, {
-              center: [la, lo],
+              center: [Number(centerLat), Number(centerLon)],
               zoom: 15,
               controls: ["zoomControl"],
             });
-            map.geoObjects.add(
-              new ymaps.Placemark(
-                [la, lo],
-                { hintContent: "Адрес доставки", balloonContent: "Адрес доставки" },
-                { preset: "islands#orangeDotIcon" },
-              ),
-            );
+            markerList.forEach((m, i) => {
+              const label = m.label || (i === 0 ? primaryLabel : "Точка");
+              map.geoObjects.add(
+                new ymaps.Placemark(
+                  [Number(m.lat), Number(m.lon)],
+                  { hintContent: label, balloonContent: label },
+                  { preset: m.preset || (i === 0 ? "islands#orangeDotIcon" : "islands#blueDotIcon") },
+                ),
+              );
+            });
             if (showCourier) {
               map.geoObjects.add(
                 new ymaps.Placemark(
@@ -64,6 +77,8 @@ export default function CafeOrderMapPin({
                   { preset: "islands#blueCircleDotIcon" },
                 ),
               );
+            }
+            if (markerList.length > 1 || showCourier) {
               try {
                 map.setBounds(map.geoObjects.getBounds(), { checkZoomRange: true, zoomMargin: 48 });
               } catch {
@@ -103,9 +118,10 @@ export default function CafeOrderMapPin({
         mapRef.current = null;
       }
     };
-  }, [lat, lon, courierLat, courierLon, mapKey, Boolean(onPickCourier)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- markerList serialized via mapKey + coords
+  }, [centerLat, centerLon, courierLat, courierLon, mapKey, Boolean(onPickCourier), markerList.length]);
 
-  if (!hasCoords(lat, lon)) return null;
+  if (!markerList.length) return null;
 
   return (
     <div className={`cafe-order-map-wrap ${className}`.trim()}>

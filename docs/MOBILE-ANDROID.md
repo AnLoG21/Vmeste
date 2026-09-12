@@ -151,6 +151,20 @@ cd android
 
 Обновление — при открытии приложения / обновлении списка записей (не live без открытия приложения).
 
+### Раздача APK с сайта
+
+1. Соберите APK (`assembleDebug` или release).
+2. Скопируйте на сервер как публичный файл:
+
+```bash
+# на VPS (пример)
+mkdir -p /opt/vmeste/frontend/public/downloads
+cp app-release.apk /opt/vmeste/frontend/public/downloads/vmeste-android.apk
+# либо в volume/static, который отдаёт Caddy/nginx по URL /downloads/vmeste-android.apk
+```
+
+Страница для пользователей: https://vsevmeste.space/android
+
 ---
 
 ## Backend (CORS)

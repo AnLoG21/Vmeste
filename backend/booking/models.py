@@ -225,8 +225,7 @@ DEFAULT_REMINDER_TEMPLATE = (
 )
 DEFAULT_NEW_BOOKING_TEMPLATE = "Новая запись в {org}: {service} — {date}."
 DEFAULT_CLIENT_NEW_BOOKING_TEMPLATE = (
-    "Вы записаны в {org} на {service} — {date}. "
-    "Подтвердите визит: {confirm_url}"
+    "Вы записаны в {org} на {service} — {date}. Подтвердите визит в кабинете Вместе."
 )
 DEFAULT_WINBACK_TEMPLATE = (
     "Давно не виделись в {org}! Последний визит был {weeks} нед. назад. "

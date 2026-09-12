@@ -153,3 +153,97 @@ def provider_catalog_status(provider) -> dict[str, Any]:
         "total_services": total_services,
         "active_services": active_services,
     }
+
+
+BOOKING_QUICK_START_SPHERES = frozenset({"hair_salon", "service_center"})
+
+
+def run_provider_quick_start(
+    provider,
+    *,
+    activate_limit: int = 5,
+    days: int = 7,
+    start_hour: int = 10,
+    end_hour: int = 19,
+) -> dict[str, Any]:
+    """
+    One-shot setup for booking spheres: seed template catalog, activate first N services,
+    ensure anonymous seat, create weekday slots for the next `days` calendar days.
+    """
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from booking.models import AvailabilitySlot
+    from django.utils import timezone as dj_tz
+
+    sphere = (getattr(provider, "provider_sphere", "") or "").strip()
+    if sphere not in BOOKING_QUICK_START_SPHERES:
+        raise ValueError("Быстрый старт доступен для салона красоты и сервисного центра.")
+
+    activate_limit = max(1, min(20, int(activate_limit or 5)))
+    days = max(1, min(14, int(days or 7)))
+    start_hour = max(0, min(22, int(start_hour)))
+    end_hour = max(start_hour + 1, min(23, int(end_hour)))
+
+    seed_stats = seed_provider_catalog(provider, sphere)
+
+    services = list(
+        Service.objects.filter(provider=provider)
+        .order_by("category_id", "subcategory_id", "id")[: activate_limit * 3]
+    )
+    activated = []
+    for svc in services:
+        if len(activated) >= activate_limit:
+            break
+        changed = []
+        if not svc.is_active:
+            svc.is_active = True
+            changed.append("is_active")
+        if changed:
+            svc.save(update_fields=changed)
+        activated.append(svc)
+
+    service_ids = [int(s.id) for s in activated]
+
+    if int(getattr(provider, "anonymous_seat_count", 0) or 0) < 1:
+        provider.anonymous_seat_count = 1
+        provider.save(update_fields=["anonymous_seat_count"])
+
+    tz = ZoneInfo("Europe/Moscow")
+    today = dj_tz.now().astimezone(tz).date()
+    slots_created = 0
+    for offset in range(days):
+        day = today + timedelta(days=offset)
+        if day.weekday() >= 5:  # Sat/Sun
+            continue
+        starts = datetime(day.year, day.month, day.day, start_hour, 0, tzinfo=tz)
+        ends = datetime(day.year, day.month, day.day, end_hour, 0, tzinfo=tz)
+        exists = AvailabilitySlot.objects.filter(
+            provider=provider,
+            anonymous_index=1,
+            starts_at=starts,
+            ends_at=ends,
+        ).exists()
+        if exists:
+            continue
+        AvailabilitySlot.objects.create(
+            provider=provider,
+            staff=None,
+            anonymous_index=1,
+            starts_at=starts,
+            ends_at=ends,
+            service_ids=service_ids,
+        )
+        slots_created += 1
+
+    slug = (getattr(provider, "organization_slug", None) or "").strip()
+    status = provider_catalog_status(provider)
+    return {
+        **status,
+        "seed": seed_stats,
+        "activated_services": len(service_ids),
+        "service_ids": service_ids,
+        "slots_created": slots_created,
+        "booking_path": f"/w/{slug}" if slug else "",
+        "org_path": f"/o/{slug}" if slug else "",
+    }
