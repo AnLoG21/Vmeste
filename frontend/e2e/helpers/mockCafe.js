@@ -19,21 +19,30 @@ const HOURS = Object.fromEntries(
   ]),
 );
 
-const UNLOCK = {
-  session_token: SESSION,
-  organization_name: "Кафе E2E",
-  provider_slug: SLUG,
-  table_label: "",
-  is_open: true,
-  modes: { dine_in: false, takeaway: true, delivery: false },
-  pay_methods: { online: true, cash: true, card_on_spot: false },
-  delivery_fee: "0",
-  delivery_min_order: "0",
-  delivery_zones: [],
-  working_hours: HOURS,
-};
+function buildUnlock({ delivery = false } = {}) {
+  return {
+    session_token: SESSION,
+    organization_name: "Кафе E2E",
+    provider_slug: SLUG,
+    table_label: "",
+    is_open: true,
+    modes: {
+      dine_in: false,
+      takeaway: !delivery,
+      delivery: Boolean(delivery),
+    },
+    pay_methods: { online: true, cash: true, card_on_spot: false },
+    delivery_fee: delivery ? "120" : "0",
+    delivery_min_order: "0",
+    delivery_zones: [],
+    delivery_info: "",
+    working_hours: HOURS,
+  };
+}
 
-export async function installCafeMocks(page, { prepay = true } = {}) {
+export async function installCafeMocks(page, { prepay = true, delivery = false } = {}) {
+  const unlock = buildUnlock({ delivery });
+
   await page.addInitScript(() => {
     localStorage.setItem("vmeste_cookie_consent_v1", "necessary");
   });
@@ -58,12 +67,12 @@ export async function installCafeMocks(page, { prepay = true } = {}) {
         logo_url: "",
         need_pin: false,
         is_open: true,
-        modes: UNLOCK.modes,
+        modes: unlock.modes,
         working_hours: HOURS,
       });
     }
     if (path.includes(`/cafe/m/${SLUG}`) && method === "POST") {
-      return json(UNLOCK);
+      return json(unlock);
     }
     if (path.includes("/cafe/guest/menu") && method === "GET") {
       return json({
@@ -84,22 +93,26 @@ export async function installCafeMocks(page, { prepay = true } = {}) {
       });
     }
     if (path.includes("/cafe/guest/order") && method === "POST") {
-      let payMethod = "online";
+      let body = {};
       try {
-        const raw = req.postDataJSON?.() || JSON.parse(req.postData() || "{}");
-        payMethod = String(raw.pay_method || "online");
+        body = req.postDataJSON?.() || JSON.parse(req.postData() || "{}");
       } catch {
-        /* keep online */
+        body = {};
       }
+      const payMethod = String(body.pay_method || "online");
       const wantsPay = prepay && payMethod === "online";
+      if (delivery && body.mode === "delivery" && !String(body.delivery_address || "").trim()) {
+        return json({ delivery_address: ["Укажите адрес доставки."] }, 400);
+      }
       return json(
         {
           id: 9002,
           status: wantsPay ? "awaiting_payment" : "accepted",
-          total: "515.00",
+          total: wantsPay ? "635.00" : "635.00",
           confirmation_url: wantsPay ? "https://pay.example/cafe" : "",
           can_rate: false,
           items: [],
+          delivery_fee: delivery ? "120.00" : "0",
         },
         201,
       );

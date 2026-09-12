@@ -1,31 +1,25 @@
 # Testing
 
-How to run booking/cafe/shop/marketplace test layers locally and what CI covers.
+How to run booking/cafe/shop/marketplace/subscription test layers locally and what CI covers.
 
 ## Backend (Django API)
 
 From `Vmeste/backend`:
 
 ```bash
-python manage.py test booking.tests_client_book_api subscriptions.tests_yookassa_webhook cafe.tests_guest_order_pay shop.tests_public_order_pay marketplaces.tests marketplaces.tests_sync marketplaces.tests_e2e_sandbox --verbosity=2
+python manage.py test booking.tests_client_book_api subscriptions.tests_yookassa_webhook subscriptions.tests_subscribe_pay cafe.tests_guest_order_pay shop.tests_public_order_pay marketplaces.tests marketplaces.tests_sync marketplaces.tests_e2e_sandbox --verbosity=2
 ```
 
-Local SQLite:
-
-```bash
-set DJANGO_SETTINGS_MODULE=config.settings_test
-python manage.py test …  # same modules
-```
+Local SQLite: `set DJANGO_SETTINGS_MODULE=config.settings_test`
 
 | Module | Covers |
 |--------|--------|
-| `booking.tests_client_book_api` | Client book / pay / loyalty / package / return_url |
-| `subscriptions.tests_yookassa_webhook` | Webhook routing booking / cafe / shop / subscription |
-| `cafe.tests_guest_order_pay` | Guest order online/cash, tip+service, payment failure |
-| `shop.tests_public_order_pay` | Public order online/cash, instant success, cancel on fail |
-| `marketplaces.tests` | Helpers, webhook Bearer/JSON secret, sync enqueue |
-| `marketplaces.tests_sync` | Ozon pending→success/fail, max attempts |
-| `marketplaces.tests_e2e_sandbox` | Sandbox import, order poll notify delta |
+| `booking.tests_client_book_api` | Client book / pay / loyalty / package |
+| `subscriptions.tests_yookassa_webhook` | Webhook routing |
+| `subscriptions.tests_subscribe_pay` | Pay / confirm / renew (mock YooKassa) |
+| `cafe.tests_guest_order_pay` | Guest order online/cash |
+| `shop.tests_public_order_pay` | Public order online/cash |
+| `marketplaces.tests*` | Webhook Bearer, sync, poll delta |
 
 ## Frontend unit (Vitest)
 
@@ -33,27 +27,23 @@ python manage.py test …  # same modules
 cd Vmeste/frontend && npm test
 ```
 
-- `bookingDisplay.test.js` — `estimateClientBookCharge`
-- `cafeCheckoutMath.test.js` — `estimateCafeGuestCharge`
+- `bookingDisplay.test.js` — book charge
+- `cafeCheckoutMath.test.js` — tip/service/delivery totals
+- `cafeDeliveryZones.test.js` — `findZoneAt`
 
 ## Frontend E2E (Playwright)
 
 ```bash
-npx playwright install chromium
-npm run test:e2e
+npx playwright install chromium && npm run test:e2e
 ```
 
 | Spec | Scenarios |
 |------|-----------|
 | `android.spec.js` | APK CTA |
-| `client-book.spec.js` | map → book → free/prepay → payment return |
-| `cafe-guest.spec.js` | `/m` online + cash + `?order=` paid |
-| `shop-public.spec.js` | `/s` online + cash + `?order=` paid |
+| `client-book.spec.js` | map → book → pay return |
+| `cafe-guest.spec.js` | online / cash / delivery cash / `?order=` |
+| `shop-public.spec.js` | online / cash / `?order=` |
 
 ## CI
 
-| Job | What |
-|-----|------|
-| `backend-tests` | Django suite incl. book/cafe/shop/MP |
-| `frontend-build` | `npm test` + build |
-| `frontend-e2e` | Playwright Chromium |
+`backend-tests` · `frontend-build` (`npm test`) · `frontend-e2e`

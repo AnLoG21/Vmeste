@@ -83,6 +83,7 @@ jobs:
           subscriptions.tests_promos
           subscriptions.tests_trial_voice
           subscriptions.tests_yookassa_webhook
+          subscriptions.tests_subscribe_pay
           notifications.tests_channels
           --verbosity=2
 
