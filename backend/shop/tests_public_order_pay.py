@@ -124,3 +124,79 @@ class PublicShopOrderPayTests(TestCase):
                         )
         self.assertEqual(res.status_code, 201, res.data)
         mark_paid.assert_called_once()
+
+    def _enable_delivery_with_zone(self):
+        square = [[55.0, 37.0], [55.0, 38.0], [56.0, 38.0], [56.0, 37.0]]
+        self.settings.enable_delivery = True
+        self.settings.enable_own_courier = True
+        self.settings.delivery_fee = Decimal("99.00")
+        self.settings.delivery_min_order = Decimal("0")
+        self.settings.delivery_zones = [
+            {
+                "id": "z1",
+                "name": "Центр",
+                "fee": "150",
+                "min_order": "0",
+                "polygon": square,
+            }
+        ]
+        self.settings.save()
+
+    def test_delivery_inside_zone_uses_zone_fee(self):
+        self._enable_delivery_with_zone()
+        with patch("shop.views.create_org_payment") as create_pay:
+            with patch("shop.notify.notify_new_shop_order"):
+                with patch("shop.notify.notify_shop_order_status"):
+                    res = self.api.post(
+                        "/api/shop/public/shop-pay-api/order/",
+                        self._payload(
+                            mode="delivery",
+                            payment_method="cash",
+                            delivery_method="own",
+                            delivery_address="ул. Зона, 1",
+                            delivery_lat=55.5,
+                            delivery_lon=37.5,
+                        ),
+                        format="json",
+                    )
+        self.assertEqual(res.status_code, 201, res.data)
+        create_pay.assert_not_called()
+        order = ShopOrder.objects.get(pk=res.data["order_id"])
+        self.assertEqual(order.delivery_fee, Decimal("150.00"))
+        self.assertEqual(order.total, Decimal("1150.00"))
+
+    def test_delivery_outside_zone_rejected(self):
+        self._enable_delivery_with_zone()
+        with patch("shop.views.create_org_payment") as create_pay:
+            res = self.api.post(
+                "/api/shop/public/shop-pay-api/order/",
+                self._payload(
+                    mode="delivery",
+                    payment_method="cash",
+                    delivery_method="own",
+                    delivery_address="далеко",
+                    delivery_lat=50.0,
+                    delivery_lon=30.0,
+                ),
+                format="json",
+            )
+        self.assertEqual(res.status_code, 400, res.data)
+        self.assertIn("вне зоны", res.data.get("detail", "").lower())
+        create_pay.assert_not_called()
+
+    def test_delivery_zones_require_map_point(self):
+        self._enable_delivery_with_zone()
+        with patch("shop.views.create_org_payment") as create_pay:
+            res = self.api.post(
+                "/api/shop/public/shop-pay-api/order/",
+                self._payload(
+                    mode="delivery",
+                    payment_method="cash",
+                    delivery_method="own",
+                    delivery_address="ул. Без точки",
+                ),
+                format="json",
+            )
+        self.assertEqual(res.status_code, 400, res.data)
+        self.assertIn("карте", res.data.get("detail", "").lower())
+        create_pay.assert_not_called()

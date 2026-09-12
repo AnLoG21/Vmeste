@@ -6,6 +6,7 @@ import {
   WINDOW,
   windowKey,
   CLIENT_PACKAGE,
+  CLIENT_BOOKING,
 } from "./helpers/mockApi.js";
 
 async function waitE2E(page) {
@@ -220,5 +221,39 @@ test.describe("Client book path", () => {
     await page.goto("/activity?booking_payment=success&booking_id=9001");
     await waitE2E(page);
     await expect(page.getByRole("heading", { name: "Моё" })).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("Моё Оплатить resumes confirmation_url", async ({ page }) => {
+    await installClientMocks(page, {
+      bookings: [
+        {
+          ...CLIENT_BOOKING,
+          status: "new",
+          payment_status: "pending",
+          created_at: new Date().toISOString(),
+          prepay_amount: "500.00",
+        },
+      ],
+    });
+
+    let redirected = "";
+    let payUrl = "";
+    await page.route("https://pay.example/**", async (route) => {
+      redirected = route.request().url();
+      await route.fulfill({ status: 200, body: "pay" });
+    });
+    page.on("request", (req) => {
+      if (req.method() === "POST" && /\/booking\/\d+\/pay(?:\/|$)/.test(req.url())) {
+        payUrl = req.url();
+      }
+    });
+
+    await page.goto("/activity");
+    await waitE2E(page);
+    await expect(page.getByRole("heading", { name: "Моё" })).toBeVisible({ timeout: 20_000 });
+    await page.getByRole("button", { name: /Оплатить/ }).click();
+
+    await expect.poll(() => payUrl, { timeout: 15_000 }).toContain(`/booking/${CLIENT_BOOKING.id}/pay`);
+    await expect.poll(() => redirected, { timeout: 15_000 }).toContain("pay.example/resume");
   });
 });

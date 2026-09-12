@@ -63,11 +63,11 @@ const ORG_BOOKING = (() => {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[] }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], confirmError?: string|null }} [options]
  */
 export async function installProviderMocks(
   page,
-  { forPay = false, waitlist = null, bookings = null } = {},
+  { forPay = false, waitlist = null, bookings = null, confirmError = null } = {},
 ) {
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
@@ -186,6 +186,18 @@ export async function installProviderMocks(
       return json(waitlistRows);
     }
     if (path.match(/\/booking\/\d+\/confirm$/) && method === "POST") {
+      if (confirmError) {
+        return json(
+          {
+            code: confirmError,
+            detail:
+              confirmError === "confirm_message_not_set"
+                ? "Сообщение для подтверждения записи не задано."
+                : "Ошибка подтверждения.",
+          },
+          400,
+        );
+      }
       const id = Number(path.split("/").filter(Boolean).at(-2));
       bookingsList = bookingsList.map((b) =>
         Number(b.id) === id ? { ...b, status: "confirmed" } : b,

@@ -194,7 +194,12 @@ export async function installClientMocks(
     }
     if (path.includes("/packages")) return json([]);
     if (path.match(/\/booking\/\d+\/pay$/) && method === "POST") {
-      return json({ id: 9001, payment_status: "paid" });
+      const id = Number(path.split("/").filter(Boolean).at(-2));
+      return json({
+        id,
+        payment_status: "pending",
+        confirmation_url: "https://pay.example/resume",
+      });
     }
     if (path.match(/\/booking\/\d+\/cancel-by-client$/) && method === "POST") {
       const id = Number(path.split("/").filter(Boolean).at(-2));

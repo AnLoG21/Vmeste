@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { installCafeMocks, SLUG } from "./helpers/mockCafe.js";
+import { installCafeMocks, SLUG, ZONE_CENTER } from "./helpers/mockCafe.js";
+import { installYmapsStub, installPhotonSuggest, clickYmapsAt } from "./helpers/mockYmaps.js";
 
 test.describe("Cafe guest checkout", () => {
   test("online takeaway redirects to pay URL", async ({ page }) => {
@@ -94,5 +95,49 @@ test.describe("Cafe guest checkout", () => {
     await expect(page.getByTestId("cafe-order-status")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("heading", { name: "Заказ #9002" })).toBeVisible();
     await expect(page.getByText(/Статус:/)).toContainText("paid");
+  });
+
+  test("delivery with zone map pick shows 150 ₽ fee and posts zone id", async ({ page }) => {
+    await installYmapsStub(page);
+    await installPhotonSuggest(page, { lat: 55.5, lon: 37.5, label: "ул. Зона, 1" });
+    await installCafeMocks(page, {
+      prepay: false,
+      delivery: true,
+      deliveryZones: [ZONE_CENTER],
+    });
+
+    let orderBody = null;
+    page.on("request", (req) => {
+      if (req.method() === "POST" && req.url().includes("/cafe/guest/order")) {
+        try {
+          orderBody = JSON.parse(req.postData() || "{}");
+        } catch {
+          orderBody = null;
+        }
+      }
+    });
+
+    await page.goto(`/m/${SLUG}`);
+    await expect(page.getByRole("heading", { name: "Кафе E2E" })).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: /Доставка/ }).click();
+    await page.locator(".cafe-menu-item").filter({ hasText: "Борщ" }).getByRole("button", { name: "+" }).click();
+    await page.getByRole("button", { name: /Корзина/ }).click();
+
+    await page.getByPlaceholder("Телефон *").fill("+79001234567");
+    await page.getByPlaceholder("Адрес доставки *").fill("ул. Зона, 1");
+    await clickYmapsAt(page, 55.5, 37.5);
+
+    await expect(page.locator(".cafe-delivery-fee-box")).toContainText("150", { timeout: 10_000 });
+    await page.locator(".cafe-delivery-house-toggle input[type='checkbox']").check();
+    await page.locator("select").filter({ has: page.locator('option[value="cash"]') }).selectOption("cash");
+    await page.getByRole("button", { name: "Оформить заказ" }).click();
+
+    await expect.poll(() => orderBody, { timeout: 15_000 }).toMatchObject({
+      mode: "delivery",
+      delivery_zone_id: "z1",
+      delivery_lat: 55.5,
+      delivery_lon: 37.5,
+    });
+    await expect(page.getByTestId("cafe-order-status")).toBeVisible({ timeout: 15_000 });
   });
 });

@@ -163,4 +163,23 @@ test.describe("Org booking actions", () => {
     });
     await expect(page.locator(".calendar-day-sheet").getByTitle("Отменить")).toHaveCount(0);
   });
+
+  test("Подтвердить without message → modal → настройки", async ({ page }) => {
+    await installProviderMocks(page, {
+      bookings: [ORG_BOOKING],
+      confirmError: "confirm_message_not_set",
+    });
+
+    await openBookingDaySheet(page);
+    await page.locator(".calendar-day-sheet").getByTitle("Подтвердить").click();
+
+    await expect(page.getByRole("heading", { name: "Сообщение не задано" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(/Сообщение для подтверждения записи не задано/)).toBeVisible();
+    await page.getByRole("button", { name: "Перейти в настройки" }).click();
+    await expect(page.getByRole("heading", { name: "Организация" })).toBeVisible({
+      timeout: 15_000,
+    });
+  });
 });

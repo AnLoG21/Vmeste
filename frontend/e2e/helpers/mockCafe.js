@@ -19,7 +19,12 @@ const HOURS = Object.fromEntries(
   ]),
 );
 
-function buildUnlock({ delivery = false } = {}) {
+function buildUnlock({ delivery = false, deliveryZones = null } = {}) {
+  const zones = Array.isArray(deliveryZones)
+    ? deliveryZones
+    : delivery
+      ? []
+      : [];
   return {
     session_token: SESSION,
     organization_name: "Кафе E2E",
@@ -34,14 +39,34 @@ function buildUnlock({ delivery = false } = {}) {
     pay_methods: { online: true, cash: true, card_on_spot: false },
     delivery_fee: delivery ? "120" : "0",
     delivery_min_order: "0",
-    delivery_zones: [],
+    delivery_zones: zones,
     delivery_info: "",
     working_hours: HOURS,
+    organization_latitude: 55.5,
+    organization_longitude: 37.5,
   };
 }
 
-export async function installCafeMocks(page, { prepay = true, delivery = false } = {}) {
-  const unlock = buildUnlock({ delivery });
+const ZONE_SQUARE = [
+  [55.0, 37.0],
+  [55.0, 38.0],
+  [56.0, 38.0],
+  [56.0, 37.0],
+];
+
+const ZONE_CENTER = {
+  id: "z1",
+  name: "Центр",
+  fee: "150",
+  min_order: "0",
+  polygon: ZONE_SQUARE,
+};
+
+export async function installCafeMocks(
+  page,
+  { prepay = true, delivery = false, deliveryZones = null } = {},
+) {
+  const unlock = buildUnlock({ delivery, deliveryZones });
 
   await page.addInitScript(() => {
     localStorage.setItem("vmeste_cookie_consent_v1", "necessary");
@@ -104,21 +129,23 @@ export async function installCafeMocks(page, { prepay = true, delivery = false }
       if (delivery && body.mode === "delivery" && !String(body.delivery_address || "").trim()) {
         return json({ delivery_address: ["Укажите адрес доставки."] }, 400);
       }
+      const zoneFee =
+        body.delivery_zone_id === "z1" ? "150.00" : delivery ? "120.00" : "0";
       return json(
         {
           id: 9002,
           status: wantsPay ? "awaiting_payment" : "accepted",
-          total: wantsPay ? "635.00" : "635.00",
+          total: wantsPay ? "650.00" : "650.00",
           confirmation_url: wantsPay ? "https://pay.example/cafe" : "",
           can_rate: false,
           items: [],
-          delivery_fee: delivery ? "120.00" : "0",
+          delivery_fee: zoneFee,
         },
         201,
       );
     }
-    return json({});
+    return json([]);
   });
 }
 
-export { SLUG, SESSION, MENU_ITEM };
+export { SLUG, SESSION, MENU_ITEM, ZONE_CENTER, ZONE_SQUARE };
