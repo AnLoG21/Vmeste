@@ -63,11 +63,18 @@ const ORG_BOOKING = (() => {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], confirmError?: string|null }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], confirmError?: string|null, doneError?: string|null, cancelError?: string|null }} [options]
  */
 export async function installProviderMocks(
   page,
-  { forPay = false, waitlist = null, bookings = null, confirmError = null } = {},
+  {
+    forPay = false,
+    waitlist = null,
+    bookings = null,
+    confirmError = null,
+    doneError = null,
+    cancelError = null,
+  } = {},
 ) {
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
@@ -219,6 +226,18 @@ export async function installProviderMocks(
       return json(bookingsList.find((b) => Number(b.id) === id) || { id, status: "arrived" });
     }
     if (path.match(/\/booking\/\d+\/mark-done$/) && method === "POST") {
+      if (doneError) {
+        return json(
+          {
+            code: doneError,
+            detail:
+              doneError === "done_message_not_set"
+                ? "Сообщение при отметке «услуга оказана» не задано."
+                : "Ошибка отметки.",
+          },
+          400,
+        );
+      }
       const id = Number(path.split("/").filter(Boolean).at(-2));
       bookingsList = bookingsList.map((b) =>
         Number(b.id) === id ? { ...b, status: "done" } : b,
@@ -226,6 +245,18 @@ export async function installProviderMocks(
       return json(bookingsList.find((b) => Number(b.id) === id) || { id, status: "done" });
     }
     if (path.match(/\/booking\/\d+\/cancel-by-org$/) && method === "POST") {
+      if (cancelError) {
+        return json(
+          {
+            code: cancelError,
+            detail:
+              cancelError === "cancel_message_not_set"
+                ? "Сообщение об отмене записи не задано."
+                : "Ошибка отмены.",
+          },
+          400,
+        );
+      }
       const id = Number(path.split("/").filter(Boolean).at(-2));
       bookingsList = bookingsList.map((b) =>
         Number(b.id) === id ? { ...b, status: "cancelled" } : b,

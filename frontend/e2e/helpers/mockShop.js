@@ -12,7 +12,29 @@ const PRODUCT = {
   attrs: {},
 };
 
-export async function installShopMocks(page, { online = true, delivery = false } = {}) {
+const ZONE_SQUARE = [
+  [55.0, 37.0],
+  [55.0, 38.0],
+  [56.0, 38.0],
+  [56.0, 37.0],
+];
+
+const ZONE_CENTER = {
+  id: "z1",
+  name: "Центр",
+  fee: "150",
+  min_order: "0",
+  polygon: ZONE_SQUARE,
+};
+
+export async function installShopMocks(
+  page,
+  { online = true, delivery = false, deliveryZones = null } = {},
+) {
+  const zones = Array.isArray(deliveryZones) ? deliveryZones : [];
+  const hasZones = zones.length > 0;
+  const optionFee = hasZones ? 150 : 200;
+
   await page.addInitScript(() => {
     localStorage.setItem("vmeste_cookie_consent_v1", "necessary");
   });
@@ -37,19 +59,19 @@ export async function installShopMocks(page, { online = true, delivery = false }
           slug: SLUG,
           sphere: "shops",
           logo_url: "",
-          latitude: 55.75,
-          longitude: 37.62,
+          latitude: 55.5,
+          longitude: 37.5,
         },
         settings: {
           enable_pickup: true,
           enable_delivery: Boolean(delivery),
           accept_online_payment: true,
-          delivery_fee: "200",
+          delivery_fee: String(optionFee),
           delivery_min_order: "0",
           delivery_options: delivery
-            ? [{ id: "own", label: "Свой курьер", fee: 200, eta: "1–3 часа" }]
+            ? [{ id: "own", label: "Свой курьер", fee: optionFee, eta: "1–3 часа" }]
             : [],
-          delivery_zones: [],
+          delivery_zones: delivery ? zones : [],
         },
         categories: [],
         products: [PRODUCT],
@@ -57,7 +79,7 @@ export async function installShopMocks(page, { online = true, delivery = false }
     }
     if (path.includes("/delivery-quote") && method === "GET") {
       return json({
-        delivery_options: [{ id: "own", label: "Свой курьер", fee: 200, eta: "1–3 часа" }],
+        delivery_options: [{ id: "own", label: "Свой курьер", fee: optionFee, eta: "1–3 часа" }],
         distance_m: 1200,
       });
     }
@@ -65,7 +87,7 @@ export async function installShopMocks(page, { online = true, delivery = false }
       return json({
         id: 9003,
         status: "paid",
-        total: delivery ? "1200.00" : "1000.00",
+        total: delivery ? (hasZones ? "1150.00" : "1200.00") : "1000.00",
       });
     }
     if (path.includes(`/shop/public/${SLUG}/order`) && method === "POST") {
@@ -80,7 +102,19 @@ export async function installShopMocks(page, { online = true, delivery = false }
       if (body.mode === "delivery" && !String(body.delivery_address || "").trim()) {
         return json({ detail: "Укажите адрес доставки" }, 400);
       }
-      const total = body.mode === "delivery" ? "1200.00" : "1000.00";
+      if (body.mode === "delivery" && hasZones) {
+        const lat = Number(body.delivery_lat);
+        const lon = Number(body.delivery_lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+          return json({ detail: "Укажите точку доставки на карте" }, 400);
+        }
+        const inside = lat >= 55 && lat <= 56 && lon >= 37 && lon <= 38;
+        if (!inside) {
+          return json({ detail: "Адрес вне зоны доставки" }, 400);
+        }
+      }
+      const total =
+        body.mode === "delivery" ? (hasZones ? "1150.00" : "1200.00") : "1000.00";
       return json(
         {
           order_id: 9003,
@@ -93,8 +127,8 @@ export async function installShopMocks(page, { online = true, delivery = false }
       );
     }
     if (path.includes("/reviews")) return json([]);
-    return json({});
+    return json([]);
   });
 }
 
-export { SLUG, PRODUCT };
+export { SLUG, PRODUCT, ZONE_CENTER, ZONE_SQUARE };

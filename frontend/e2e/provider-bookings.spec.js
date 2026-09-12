@@ -182,4 +182,53 @@ test.describe("Org booking actions", () => {
       timeout: 15_000,
     });
   });
+
+  test("Услуга оказана without message → modal → настройки", async ({ page }) => {
+    const started = new Date(Date.now() - 60 * 60_000);
+    const ended = new Date(started.getTime() + 30 * 60_000);
+    await installProviderMocks(page, {
+      bookings: [
+        {
+          ...ORG_BOOKING,
+          status: "arrived",
+          slot_starts_at: started.toISOString(),
+          slot_ends_at: ended.toISOString(),
+        },
+      ],
+      doneError: "done_message_not_set",
+    });
+
+    await openBookingDaySheet(page);
+    await page.locator(".calendar-day-sheet").getByRole("button", { name: "Услуга оказана" }).click();
+
+    await expect(page.getByRole("heading", { name: "Сообщение не задано" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.locator(".modal-card").getByText(/Сообщение при отметке «услуга оказана» не задано/),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Перейти в настройки" }).click();
+    await expect(page.getByRole("heading", { name: "Организация" })).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test("Отменить without message → modal → настройки", async ({ page }) => {
+    await installProviderMocks(page, {
+      bookings: [{ ...ORG_BOOKING, status: "confirmed" }],
+      cancelError: "cancel_message_not_set",
+    });
+
+    await openBookingDaySheet(page);
+    await page.locator(".calendar-day-sheet").getByTitle("Отменить").click();
+
+    await expect(page.getByRole("heading", { name: "Сообщение не задано" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(/Сообщение об отмене записи не задано/)).toBeVisible();
+    await page.getByRole("button", { name: "Перейти в настройки" }).click();
+    await expect(page.getByRole("heading", { name: "Организация" })).toBeVisible({
+      timeout: 15_000,
+    });
+  });
 });

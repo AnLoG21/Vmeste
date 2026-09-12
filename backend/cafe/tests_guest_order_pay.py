@@ -146,3 +146,88 @@ class CafeGuestOrderPayTests(TestCase):
         self.assertEqual(res.status_code, 201, res.data)
         # 500 + tip 50 + service 15 = 565
         self.assertEqual(Decimal(str(create_pay.call_args.kwargs["amount"])), Decimal("565.00"))
+
+    def _enable_delivery_with_zone(self):
+        square = [[55.0, 37.0], [55.0, 38.0], [56.0, 38.0], [56.0, 37.0]]
+        self.settings.enable_delivery = True
+        self.settings.delivery_fee = Decimal("99.00")
+        self.settings.delivery_min_order = Decimal("0")
+        self.settings.delivery_zones = [
+            {
+                "id": "z1",
+                "name": "Центр",
+                "fee": "150",
+                "min_order": "0",
+                "polygon": square,
+            }
+        ]
+        self.settings.save()
+
+    def _delivery_payload(self, **extra):
+        return self._payload(
+            mode=CafeOrder.Mode.DELIVERY,
+            pay_method=CafeOrder.PayMethod.CASH,
+            delivery_address="ул. Зона, 1",
+            delivery_private_house=True,
+            include_service_charge=True,
+            tip_percent=0,
+            **extra,
+        )
+
+    def test_delivery_inside_zone_uses_zone_fee(self):
+        self._enable_delivery_with_zone()
+        with patch("payments.gateway.create_org_payment") as create_pay:
+            with patch("cafe.notify.notify_new_cafe_order"):
+                with patch("cafe.views.send_order_receipt_after_payment"):
+                    res = self.api.post(
+                        "/api/cafe/guest/order/",
+                        self._delivery_payload(delivery_lat=55.5, delivery_lon=37.5),
+                        format="json",
+                        **self._headers(),
+                    )
+        self.assertEqual(res.status_code, 201, res.data)
+        create_pay.assert_not_called()
+        order = CafeOrder.objects.get(pk=res.data["id"])
+        self.assertEqual(order.delivery_fee, Decimal("150.00"))
+        # 500 + 150 delivery + 15 service (3%) = 665
+        self.assertEqual(order.total, Decimal("665.00"))
+
+    def test_delivery_outside_zone_rejected(self):
+        self._enable_delivery_with_zone()
+        with patch("payments.gateway.create_org_payment") as create_pay:
+            res = self.api.post(
+                "/api/cafe/guest/order/",
+                self._delivery_payload(delivery_lat=50.0, delivery_lon=30.0),
+                format="json",
+                **self._headers(),
+            )
+        self.assertEqual(res.status_code, 400, res.data)
+        blob = " ".join(
+            str(x)
+            for x in (
+                [res.data.get("detail")]
+                if res.data.get("detail")
+                else (res.data.get("delivery_address") or [])
+            )
+        ).lower()
+        self.assertIn("вне зон", blob)
+        create_pay.assert_not_called()
+        self.assertEqual(CafeOrder.objects.count(), 0)
+
+    def test_delivery_zones_require_map_point(self):
+        self._enable_delivery_with_zone()
+        with patch("payments.gateway.create_org_payment") as create_pay:
+            res = self.api.post(
+                "/api/cafe/guest/order/",
+                self._delivery_payload(),
+                format="json",
+                **self._headers(),
+            )
+        self.assertEqual(res.status_code, 400, res.data)
+        errs = res.data.get("delivery_address") or []
+        blob = " ".join(str(x) for x in errs).lower() if isinstance(errs, list) else str(errs).lower()
+        if not blob:
+            blob = str(res.data.get("detail") or "").lower()
+        self.assertIn("карте", blob)
+        create_pay.assert_not_called()
+        self.assertEqual(CafeOrder.objects.count(), 0)
