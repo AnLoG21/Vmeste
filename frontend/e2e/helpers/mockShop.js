@@ -57,13 +57,21 @@ export async function installShopMocks(page, { online = true } = {}) {
       });
     }
     if (path.includes(`/shop/public/${SLUG}/order`) && method === "POST") {
+      let paymentMethod = "online";
+      try {
+        const raw = req.postDataJSON?.() || JSON.parse(req.postData() || "{}");
+        paymentMethod = String(raw.payment_method || "online").toLowerCase();
+      } catch {
+        /* keep online */
+      }
+      const isOnline = online && paymentMethod === "online";
       return json(
         {
           order_id: 9003,
           total: "1000.00",
-          status: online ? "awaiting_payment" : "paid",
-          confirmation_url: online ? "https://pay.example/shop" : "",
-          payment_method: online ? "online" : "cash",
+          status: isOnline ? "awaiting_payment" : "paid",
+          confirmation_url: isOnline ? "https://pay.example/shop" : "",
+          payment_method: isOnline ? "online" : paymentMethod,
         },
         201,
       );

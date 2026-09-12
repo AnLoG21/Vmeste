@@ -106,6 +106,43 @@ class MarketplaceSandboxE2ETests(TestCase):
         self.assertTrue(resp.data["ok"])
         self.assertTrue(resp.data["conversation_id"])
 
+    @patch("marketplaces.notify.notify_new_orders")
+    @patch("marketplaces.clients.request_json")
+    def test_poll_new_orders_notifies_delta_once(self, mocked_req, mocked_notify):
+        from marketplaces.tasks import poll_new_orders_task
+
+        self.settings_obj.environment = "prod"
+        self.settings_obj.ozon_client_id = "cid"
+        self.settings_obj.ozon_api_key = "key"
+        self.settings_obj.notify_on_new_orders = True
+        self.settings_obj.last_seen_order_ids = {"ozon": ["A"]}
+        self.settings_obj.save()
+        mocked_req.return_value = {
+            "result": {"postings": [{"posting_number": "A"}, {"posting_number": "B"}]},
+        }
+        result = poll_new_orders_task.run()
+        self.assertGreaterEqual(result.get("notified", 0), 1)
+        mocked_notify.assert_called_once()
+        self.settings_obj.refresh_from_db()
+        self.assertIn("B", self.settings_obj.last_seen_order_ids.get("ozon") or [])
+
+        mocked_notify.reset_mock()
+        poll_new_orders_task.run()
+        mocked_notify.assert_not_called()
+
+    @patch("marketplaces.clients.request_json")
+    def test_poll_new_orders_skips_sandbox(self, mocked_req):
+        from marketplaces.tasks import poll_new_orders_task
+
+        self.settings_obj.environment = "sandbox"
+        self.settings_obj.notify_on_new_orders = True
+        self.settings_obj.ozon_client_id = "cid"
+        self.settings_obj.ozon_api_key = "key"
+        self.settings_obj.save()
+        result = poll_new_orders_task.run()
+        mocked_req.assert_not_called()
+        self.assertEqual(result.get("checked", 0), 0)
+
     @patch("notifications.push.notify_users")
     @patch("notifications.channels.send_telegram", return_value=True)
     def test_notify_marketplace_uses_flags(self, mocked_tg, mocked_push):

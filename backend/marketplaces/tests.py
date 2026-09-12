@@ -21,6 +21,7 @@ from marketplaces.views import (
     MarketplaceExportView,
     MarketplaceLogsView,
     MarketplaceSettingsView,
+    MarketplaceSyncView,
     MarketplaceWebhookView,
     _active_api_log_errors,
     _history_item,
@@ -152,6 +153,35 @@ class MarketplaceApiTests(TestCase):
             format="json",
         )
         resp = MarketplaceWebhookView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data.get("ok"))
+        mock_delay.assert_called_once_with(self.provider.id)
+
+    @patch("marketplaces.tasks.sync_provider_task.delay")
+    def test_webhook_bearer_triggers_sync(self, mock_delay):
+        mock_delay.return_value = MagicMock(id="task-bearer-1")
+        req = self.factory.post(
+            "/api/marketplaces/webhook/",
+            {},
+            format="json",
+            HTTP_AUTHORIZATION="Bearer test-secret-xyz",
+        )
+        resp = MarketplaceWebhookView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data.get("provider_id"), self.provider.id)
+        mock_delay.assert_called_once_with(self.provider.id)
+
+    def test_webhook_empty_secret_unauthorized(self):
+        req = self.factory.post("/api/marketplaces/webhook/", {}, format="json")
+        resp = MarketplaceWebhookView.as_view()(req)
+        self.assertEqual(resp.status_code, 401)
+
+    @patch("marketplaces.tasks.sync_provider_task.delay")
+    def test_sync_view_enqueues_provider_task(self, mock_delay):
+        mock_delay.return_value = MagicMock(id="sync-task-1")
+        req = self.factory.post("/api/marketplaces/sync/", {}, format="json")
+        force_authenticate(req, user=self.provider)
+        resp = MarketplaceSyncView.as_view()(req)
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data.get("ok"))
         mock_delay.assert_called_once_with(self.provider.id)

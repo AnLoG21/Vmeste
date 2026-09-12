@@ -73,6 +73,20 @@ class OzonImportSyncTests(TestCase):
         self.assertEqual(hist.status, "failed")
         self.assertIn("bad attr", hist.response.get("import_errors") or "")
 
+    @patch("marketplaces.clients.request_json")
+    def test_sync_fails_after_max_attempts_on_api_error(self, mocked):
+        from marketplaces.clients import MarketplaceError
+
+        hist = self._pending("ERR-1", task_id=11)
+        hist.response = {**(hist.response or {}), "sync_attempts": 7}
+        hist.save(update_fields=["response", "updated_at"])
+        mocked.side_effect = MarketplaceError("ozon down", status_code=500)
+        result = sync_pending_ozon_imports(limit=10)
+        self.assertEqual(result["failed"], 1)
+        hist.refresh_from_db()
+        self.assertEqual(hist.status, "failed")
+        self.assertIn("ozon down", hist.response.get("import_errors") or "")
+
     def test_sync_skips_sandbox_and_missing_task(self):
         self.settings_obj.environment = "sandbox"
         self.settings_obj.save(update_fields=["environment", "updated_at"])

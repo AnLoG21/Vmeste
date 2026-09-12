@@ -84,12 +84,20 @@ export async function installCafeMocks(page, { prepay = true } = {}) {
       });
     }
     if (path.includes("/cafe/guest/order") && method === "POST") {
+      let payMethod = "online";
+      try {
+        const raw = req.postDataJSON?.() || JSON.parse(req.postData() || "{}");
+        payMethod = String(raw.pay_method || "online");
+      } catch {
+        /* keep online */
+      }
+      const wantsPay = prepay && payMethod === "online";
       return json(
         {
           id: 9002,
-          status: prepay ? "awaiting_payment" : "accepted",
+          status: wantsPay ? "awaiting_payment" : "accepted",
           total: "515.00",
-          confirmation_url: prepay ? "https://pay.example/cafe" : "",
+          confirmation_url: wantsPay ? "https://pay.example/cafe" : "",
           can_rate: false,
           items: [],
         },

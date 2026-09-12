@@ -49,6 +49,7 @@ export default function PublicShopPage({
   const [detailTab, setDetailTab] = useState("description"); // description | attrs
   const [detailExpanded, setDetailExpanded] = useState(false);
   const [selectedSize, setSelectedSize] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("online");
 
   const [deliveryOptionsLive, setDeliveryOptionsLive] = useState(null);
   const [etaLoading, setEtaLoading] = useState(false);
@@ -259,6 +260,7 @@ export default function PublicShopPage({
       const body = {
         mode,
         delivery_method: mode === "delivery" ? deliveryMethod : "",
+        payment_method: paymentMethod,
         items: cartLines.map((l) => ({ product_id: l.product.id, quantity: l.qty })),
         guest_name: guest.name,
         guest_phone: guest.phone,
@@ -766,6 +768,21 @@ export default function PublicShopPage({
                   </>
                 ) : null}
 
+                <label className="shop-field-label" htmlFor="shop-pay-method">
+                  Оплата
+                </label>
+                <select
+                  id="shop-pay-method"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                >
+                  {settings.accept_online_payment !== false ? (
+                    <option value="online">Онлайн</option>
+                  ) : null}
+                  <option value="cash">Наличные при получении</option>
+                  <option value="on_receipt">При получении</option>
+                </select>
+
                 <p className="cafe-cart-total">
                   Итого: <strong>{checkoutTotal.toLocaleString("ru-RU")} ₽</strong>
                   {mode === "delivery" && deliveryFeePreview > 0
@@ -773,7 +790,11 @@ export default function PublicShopPage({
                     : ""}
                 </p>
                 <button type="submit" className="landing-btn landing-btn--primary" disabled={busy}>
-                  {busy ? "Оформляем…" : "Оплатить"}
+                  {busy
+                    ? "Оформляем…"
+                    : paymentMethod === "online"
+                      ? "Оплатить"
+                      : "Оформить заказ"}
                 </button>
               </form>
             ) : null}
