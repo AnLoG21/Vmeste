@@ -3730,6 +3730,10 @@ export default function App() {
           authFetch={authFetch}
           API_URL={API_URL}
           me={me}
+          onOpenView={(view) => {
+            if (view === "marketplaces") setMarketplaceInitialTab("settings");
+            setCurrentView(view);
+          }}
           onDone={async () => {
             await loadMe();
             if (typeof loadSellerData === "function") await loadSellerData();

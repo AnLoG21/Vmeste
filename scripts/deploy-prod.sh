@@ -22,11 +22,13 @@ free_kb() {
 ensure_disk_space() {
   local free_mb=$(( $(free_kb) / 1024 ))
   echo "[deploy] free on /: ${free_mb} MiB (min ${MIN_FREE_MB})"
+  # Always drop dangling layers; aggressive prune only when below threshold.
+  docker container prune -f >/dev/null 2>&1 || true
+  docker image prune -f >/dev/null 2>&1 || true
   if (( free_mb >= MIN_FREE_MB )); then
     return 0
   fi
   echo "[deploy] low disk — pruning Docker (images/build-cache; volumes kept)..."
-  docker container prune -f >/dev/null 2>&1 || true
   docker image prune -af >/dev/null 2>&1 || true
   docker builder prune -af >/dev/null 2>&1 || true
   docker buildx prune -af >/dev/null 2>&1 || true

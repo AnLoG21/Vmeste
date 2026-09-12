@@ -13,6 +13,7 @@ export default function SetupChecklist({
 
   const doneCount = (steps || []).filter((s) => s.done).length;
   const total = (steps || []).length || 3;
+  const next = pending[0];
 
   return (
     <section className="setup-checklist" aria-label="Первые шаги">
@@ -37,6 +38,13 @@ export default function SetupChecklist({
           </p>
           <button type="button" disabled={quickStartBusy} onClick={onQuickStart}>
             {quickStartBusy ? "Настраиваем…" : "Быстрый старт (~1 мин)"}
+          </button>
+        </div>
+      ) : next?.view ? (
+        <div className="setup-checklist-quick">
+          <p className="muted small">Сейчас важно: {next.label}</p>
+          <button type="button" onClick={() => onOpen?.(next.view)}>
+            {next.label}
           </button>
         </div>
       ) : null}
