@@ -132,3 +132,24 @@ class OrgBookingActionsApiTests(TestCase):
         self.assertEqual(res.status_code, 200, res.data)
         booking.refresh_from_db()
         self.assertEqual(booking.status, Booking.Status.DONE)
+
+    def test_cancel_by_org_requires_message_template(self):
+        self.provider.booking_cancel_message_default = ""
+        self.provider.save(update_fields=["booking_cancel_message_default"])
+        booking, _ = self._booking(status=Booking.Status.CONFIRMED)
+        res = self.api.post(f"/api/booking/{booking.id}/cancel-by-org/", {}, format="json")
+        self.assertEqual(res.status_code, 400, res.data)
+        self.assertEqual(res.data.get("code"), "cancel_message_not_set")
+
+    def test_cancel_by_org_frees_slot_and_notifies_waitlist(self):
+        booking, slot = self._booking(status=Booking.Status.CONFIRMED)
+        with patch("booking.booking_actions.post_booking_message"):
+            with patch("booking.waitlist.notify_waitlist_after_slot_freed") as notify:
+                with patch("notifications.delivery.deliver_booking_event"):
+                    res = self.api.post(f"/api/booking/{booking.id}/cancel-by-org/", {}, format="json")
+        self.assertEqual(res.status_code, 200, res.data)
+        booking.refresh_from_db()
+        slot.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.CANCELLED)
+        self.assertFalse(slot.is_booked)
+        notify.assert_called_once_with(self.provider.id, self.service.id)

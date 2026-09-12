@@ -137,4 +137,30 @@ test.describe("Org booking actions", () => {
       page.locator(".calendar-day-sheet").getByRole("button", { name: "Услуга оказана" }),
     ).toHaveCount(0);
   });
+
+  test("Отменить → POST cancel-by-org → Отменена", async ({ page }) => {
+    await installProviderMocks(page, {
+      bookings: [{ ...ORG_BOOKING, status: "confirmed" }],
+    });
+
+    let cancelUrl = "";
+    page.on("request", (req) => {
+      if (req.method() === "POST" && req.url().includes("/cancel-by-org")) {
+        cancelUrl = req.url();
+      }
+    });
+
+    await openBookingDaySheet(page);
+    await page.locator(".calendar-day-sheet").getByTitle("Отменить").click();
+
+    await expect
+      .poll(() => cancelUrl, { timeout: 15_000 })
+      .toContain(`/booking/${ORG_BOOKING.id}/cancel-by-org`);
+
+    await reopenDaySheet(page);
+    await expect(page.locator(".calendar-day-sheet").getByText("Отменена")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.locator(".calendar-day-sheet").getByTitle("Отменить")).toHaveCount(0);
+  });
 });
