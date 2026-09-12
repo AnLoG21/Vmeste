@@ -1,6 +1,6 @@
 # Testing
 
-How to run the booking/payments test layers locally and what CI covers.
+How to run the booking/payments and cafe/shop checkout test layers locally and what CI covers.
 
 ## Backend (Django API)
 
@@ -8,21 +8,22 @@ From `Vmeste/backend`:
 
 ```bash
 # Prefer Postgres like CI (see .github/workflows/ci.yml env).
-python manage.py test booking.tests_client_book_api subscriptions.tests_yookassa_webhook --verbosity=2
-
-# Full CI-aligned suite (subset listed in ci.yml):
-python manage.py test config.tests.test_health booking.tests_loyalty_pay booking.tests_client_book_api subscriptions.tests_yookassa_webhook --verbosity=2
+python manage.py test booking.tests_client_book_api subscriptions.tests_yookassa_webhook cafe.tests_guest_order_pay shop.tests_public_order_pay --verbosity=2
 ```
 
 Local SQLite shortcut (no Postgres):
 
 ```bash
 set DJANGO_SETTINGS_MODULE=config.settings_test
-python manage.py test booking.tests_client_book_api subscriptions.tests_yookassa_webhook --verbosity=2
+python manage.py test booking.tests_client_book_api subscriptions.tests_yookassa_webhook cafe.tests_guest_order_pay shop.tests_public_order_pay --verbosity=2
 ```
 
-`tests_client_book_api` covers client `POST /api/booking/`, loyalty/package paths, `.../pay/`, and `return_url` with `/activity?booking_payment=success`.  
-`tests_yookassa_webhook` covers payment routing for booking / cafe / shop / subscription / fallback / unknown id.
+| Module | Covers |
+|--------|--------|
+| `booking.tests_client_book_api` | Client `POST /api/booking/`, loyalty/package, `.../pay/`, `return_url` |
+| `subscriptions.tests_yookassa_webhook` | Webhook routing booking / cafe / shop / subscription / fallback |
+| `cafe.tests_guest_order_pay` | Guest order online/cash, tip+service amount, payment create failure |
+| `shop.tests_public_order_pay` | Public order online/cash, instant succeeded, payment failure → cancel |
 
 ## Frontend unit (Vitest)
 
@@ -34,7 +35,8 @@ npm test
 npm run test:watch
 ```
 
-Covers `estimateClientBookCharge` in `src/bookingDisplay.test.js` (loyalty, percent prepay, package, zero price).
+- `bookingDisplay.test.js` — `estimateClientBookCharge`
+- `cafeCheckoutMath.test.js` — `estimateCafeGuestCharge` (tip / service / delivery)
 
 ## Frontend E2E (Playwright)
 
@@ -51,7 +53,7 @@ Specs in `e2e/`:
 2. Map org sheet → «Записаться»  
 3. Free book → «Моё», modal closed  
 4. Prepay → modal closed before YooKassa redirect  
-5. `/?booking_payment=success` / `/activity?...` → «Моё»
+5. `/activity?booking_payment=success` → «Моё»
 
 Config: `playwright.config.js` (builds + Vite preview on `:4173`).
 
@@ -59,6 +61,6 @@ Config: `playwright.config.js` (builds + Vite preview on `:4173`).
 
 | Job | What |
 |-----|------|
-| `backend-tests` | Django modules including client book API + YooKassa webhook |
+| `backend-tests` | Django modules including book API, cafe/shop pay, YooKassa webhook |
 | `frontend-build` | `npm test` then production build |
 | `frontend-e2e` | Playwright Chromium after frontend-build |
