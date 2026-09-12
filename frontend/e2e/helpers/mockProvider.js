@@ -35,6 +35,7 @@ const ACTIVE_SUB = {
   period_start: new Date().toISOString(),
   period_end: new Date(Date.now() + 30 * 86400000).toISOString(),
   auto_renew: true,
+  cancel_at_period_end: false,
 };
 
 /**
@@ -49,6 +50,8 @@ export async function installProviderMocks(page, { forPay = false } = {}) {
     localStorage.setItem("vmeste_refresh", "e2e-refresh-token");
     localStorage.setItem("vmeste_cookie_consent_v1", "necessary");
   });
+
+  let mineSubs = forPay ? [] : [{ ...ACTIVE_SUB }];
 
   await page.route("**/api/**", async (route) => {
     const req = route.request();
@@ -84,12 +87,48 @@ export async function installProviderMocks(page, { forPay = false } = {}) {
         payment_id: 99,
       });
     }
+    if (path.endsWith("/subscriptions/promo") && method === "POST") {
+      const promoSub = {
+        ...ACTIVE_SUB,
+        id: 88,
+        source: "promo",
+        promo_code: "VSEVMESTE",
+        auto_renew: false,
+        is_active_now: true,
+      };
+      mineSubs = [promoSub];
+      return json({
+        detail: "Промокод применён: 1 месяц «Бизнес» бесплатно.",
+        subscription: promoSub,
+      });
+    }
+    if (path.endsWith("/subscriptions/cancel") && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const immediate = Boolean(body.immediate);
+      const cancelled = {
+        ...ACTIVE_SUB,
+        auto_renew: false,
+        cancel_at_period_end: !immediate,
+        status: immediate ? "cancelled" : "active",
+        is_active_now: !immediate,
+      };
+      mineSubs = [cancelled];
+      return json({
+        detail: immediate
+          ? "Подписка отключена."
+          : "Автопродление отключено. Подписка действует до конца периода.",
+        subscription: cancelled,
+        refunded: false,
+      });
+    }
     if (path.includes("/subscriptions/plans")) return json([PLAN]);
     if (path.includes("/subscriptions/mine")) {
-      if (forPay) {
-        return json({ subscriptions: [], trial_used: true, promo_used_codes: [] });
-      }
-      return json({ subscriptions: [ACTIVE_SUB], trial_used: true, promo_used_codes: [] });
+      return json({ subscriptions: mineSubs, trial_used: true, promo_used_codes: [] });
     }
     if (path.includes("/subscriptions/payments")) {
       return json(

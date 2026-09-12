@@ -62,6 +62,7 @@ jobs:
           booking.tests_waitlist
           booking.tests_salon_p2
           booking.tests_client_book_api
+          booking.tests_cancel_client_api
           inspections.tests_pdf
           inspections.tests_repair_funnel
           payments.tests
@@ -84,6 +85,7 @@ jobs:
           subscriptions.tests_trial_voice
           subscriptions.tests_yookassa_webhook
           subscriptions.tests_subscribe_pay
+          subscriptions.tests_cancel_promo_api
           notifications.tests_channels
           --verbosity=2
 

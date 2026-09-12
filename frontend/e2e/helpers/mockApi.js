@@ -45,7 +45,13 @@ function windowKey(w) {
   return `${w.starts_at}|${w.ends_at}|${w.staff_id ?? ""}`;
 }
 
-export async function installClientMocks(page, { prepay = false, emptyWindows = false } = {}) {
+export async function installClientMocks(
+  page,
+  { prepay = false, emptyWindows = false, loyalty = null, clientPackages = null } = {},
+) {
+  const loyaltyPayload = loyalty || { enabled: false, balance: 0, rub_per_point: 1 };
+  const packagesPayload = Array.isArray(clientPackages) ? clientPackages : [];
+
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
     localStorage.setItem("vmeste_access", "e2e-access-token");
@@ -174,20 +180,32 @@ export async function installClientMocks(page, { prepay = false, emptyWindows = 
       return json([]);
     }
     if (path.includes("/loyalty/me")) {
-      return json({ enabled: false, balance: 0, rub_per_point: 1 });
+      return json(loyaltyPayload);
     }
-    if (path.includes("/client-packages") || path.includes("/packages")) return json([]);
+    if (path.includes("/client-packages")) {
+      return json(packagesPayload);
+    }
+    if (path.includes("/packages")) return json([]);
     if (path.match(/\/booking\/\d+\/pay$/) && method === "POST") {
       return json({ id: 9001, payment_status: "paid" });
     }
     if (path.match(/\/booking$/) && method === "GET") return json([]);
     if (path.match(/\/booking$/) && method === "POST") {
+      let bodyIn = {};
+      try {
+        bodyIn = req.postDataJSON() || {};
+      } catch {
+        bodyIn = {};
+      }
+      const usePkg = Boolean(bodyIn.use_package);
+      const loyaltyPts = Number(bodyIn.loyalty_points) || 0;
+      const covered = usePkg || loyaltyPts >= 1000;
       const body = {
         id: 9001,
-        payment_status: prepay ? "pending" : "none",
-        confirmation_url: prepay ? "https://pay.example/e2e" : "",
-        client_package: null,
-        loyalty_points_redeemed: 0,
+        payment_status: covered ? "paid" : prepay ? "pending" : "none",
+        confirmation_url: !covered && prepay ? "https://pay.example/e2e" : "",
+        client_package: usePkg ? Number(bodyIn.client_package) || 55 : null,
+        loyalty_points_redeemed: loyaltyPts,
         slot_starts_at: WINDOW.starts_at,
       };
       return json(body, 201);
@@ -196,8 +214,17 @@ export async function installClientMocks(page, { prepay = false, emptyWindows = 
     if (path.includes("/notifications")) return json([]);
     if (path.includes("/health")) return json({ status: "ok", checks: { db: true } });
 
-    return json({});
+    return json([]);
   });
 }
 
-export { ORG, ME, SERVICE, WINDOW, windowKey };
+const CLIENT_PACKAGE = {
+  id: 55,
+  provider: ORG.provider,
+  package_name: "5 стрижек",
+  visits_total: 5,
+  visits_remaining: 3,
+  status: "active",
+};
+
+export { ORG, ME, SERVICE, WINDOW, windowKey, CLIENT_PACKAGE };
