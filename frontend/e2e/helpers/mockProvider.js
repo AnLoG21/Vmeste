@@ -261,6 +261,8 @@ export async function installProviderMocks(
     voice_minutes_used: 0,
     voice_minutes_left: 30,
   };
+  let inspectionReports = [];
+  let inspectionReportSeq = 8800;
   let shopCatSeq = 8100;
   let shopProductSeq = 9200;
   let mePayload = {
@@ -291,6 +293,10 @@ export async function installProviderMocks(
     if (providerSphere === "marketplaces") {
       mePayload.organization_name = "Маркетплейсы E2E";
       mePayload.organization_slug = "e2e-marketplaces";
+    }
+    if (providerSphere === "service_center") {
+      mePayload.organization_name = "СТО E2E";
+      mePayload.organization_slug = "e2e-sto";
     }
   }
   let calendarToken = "token-old";
@@ -1749,6 +1755,65 @@ export async function installProviderMocks(
       return json({ bookings: [], enabled: false });
     }
     if (path.includes("/voice/")) return json([]);
+    if (path.match(/\/inspections\/reports\/?$/) && method === "GET") {
+      return json(inspectionReports);
+    }
+    if (path.match(/\/inspections\/reports\/?$/) && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const id = ++inspectionReportSeq;
+      const created = {
+        id,
+        provider: mePayload.id,
+        client: Number(body.client),
+        booking: body.booking ? Number(body.booking) : null,
+        booking_summary: null,
+        created_by: mePayload.id,
+        vehicle_title: body.vehicle_title || "",
+        vehicle_plate: body.vehicle_plate || "",
+        vehicle_vin: body.vehicle_vin || "",
+        notes: body.notes || "",
+        status: "draft",
+        repair_status: "none",
+        share_token: `e2e-share-${id}`,
+        public_url: "",
+        parts_total: "0.00",
+        labor_total: "0.00",
+        grand_total: "0.00",
+        sent_at: null,
+        approved_at: null,
+        repair_status_updated_at: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        client_display_name: "Тест Клиент",
+        organization_name: mePayload.organization_name,
+        items: [],
+      };
+      inspectionReports = [created, ...inspectionReports];
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify(created),
+      });
+    }
+    const inspectionDetail = path.match(/\/inspections\/reports\/(\d+)\/?$/);
+    if (inspectionDetail && method === "GET") {
+      const id = Number(inspectionDetail[1]);
+      const row = inspectionReports.find((r) => Number(r.id) === id);
+      if (!row) {
+        return route.fulfill({
+          status: 404,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Not found." }),
+        });
+      }
+      return json(row);
+    }
+    if (path.includes("/inspections/")) return json([]);
     if (path.includes("/reviews/unread-count") && method === "GET") {
       const count = reviewsPayload.filter((r) => r.is_new || !r.provider_seen_at).length;
       return json({ count });
