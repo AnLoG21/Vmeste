@@ -63,7 +63,7 @@ const ORG_BOOKING = (() => {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[] }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[] }} [options]
  */
 export async function installProviderMocks(
   page,
@@ -79,6 +79,8 @@ export async function installProviderMocks(
     cancelError = null,
     staff = null,
     locations = null,
+    catalogServices = null,
+    catalogCategories = null,
   } = {},
 ) {
   await page.addInitScript(() => {
@@ -131,6 +133,10 @@ export async function installProviderMocks(
   let staffLinks = Array.isArray(staff) ? staff.map((s) => ({ ...s })) : [];
   let locationRows = Array.isArray(locations) ? locations.map((l) => ({ ...l })) : [];
   let galleryPhotos = [];
+  const servicesPayload = Array.isArray(catalogServices) ? catalogServices.map((s) => ({ ...s })) : [];
+  const categoriesPayload = Array.isArray(catalogCategories)
+    ? catalogCategories.map((c) => ({ ...c }))
+    : [];
   const conversationsPayload = Array.isArray(conversations)
     ? conversations.map((c) => ({ ...c }))
     : [];
@@ -242,6 +248,8 @@ export async function installProviderMocks(
       mePayload = { ...mePayload, ...body };
       return json(mePayload);
     }
+    if (path.includes("/catalog/categories")) return json(categoriesPayload);
+    if (path.includes("/catalog/services")) return json(servicesPayload);
     if (path.includes("/users/organization-info") && method === "PATCH") {
       let body = {};
       try {
@@ -404,7 +412,19 @@ export async function installProviderMocks(
       } catch {
         body = {};
       }
-      staffLinks = staffLinks.map((l) => (Number(l.id) === id ? { ...l, ...body } : l));
+      staffLinks = staffLinks.map((l) =>
+        Number(l.id) === id
+          ? {
+              ...l,
+              ...body,
+              permissions: body.permissions ? { ...(l.permissions || {}), ...body.permissions } : l.permissions,
+              assigned_service_ids:
+                body.assigned_service_ids != null ? body.assigned_service_ids : l.assigned_service_ids,
+              assigned_category_ids:
+                body.assigned_category_ids != null ? body.assigned_category_ids : l.assigned_category_ids,
+            }
+          : l,
+      );
       return json(staffLinks.find((l) => Number(l.id) === id) || { id, ...body });
     }
     if (path.match(/\/booking\/staff\/?$/) && method === "POST") {
