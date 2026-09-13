@@ -624,6 +624,35 @@ export async function installProviderMocks(
       return json(created, 201);
     }
     if (path.includes("/booking/staff")) return json(staffLinks);
+    if (path.includes("/booking/slots/manual-hold") && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const created = {
+        id: 5100 + slotsPayload.length,
+        provider: ME.id,
+        staff: null,
+        starts_at: body.starts_at,
+        ends_at: body.ends_at,
+        is_booked: true,
+        hold_label: body.guest_name || body.hold_label || "",
+        anonymous_index: 1,
+        service_ids: [],
+        location: null,
+        recurrence_group: "",
+        is_manual_hold: true,
+      };
+      slotsPayload = [...slotsPayload, created];
+      return json(created, 201);
+    }
+    if (path.match(/\/booking\/slots\/\d+\/release-hold$/) && method === "POST") {
+      const id = Number(path.split("/").slice(-2, -1)[0]);
+      slotsPayload = slotsPayload.filter((s) => Number(s.id) !== id);
+      return route.fulfill({ status: 204, body: "" });
+    }
     if (path.match(/\/booking\/slots\/\d+$/) && method === "DELETE") {
       const id = Number(path.split("/").pop());
       slotsPayload = slotsPayload.filter((s) => Number(s.id) !== id);
