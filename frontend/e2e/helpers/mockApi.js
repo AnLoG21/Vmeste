@@ -242,6 +242,12 @@ export async function installClientMocks(
         detail: "Email изменён. Подтвердите новый адрес по ссылке из письма (это письмо о смене почты).",
       });
     }
+    if (path.includes("/users/resend-verification") && method === "POST") {
+      return json({ detail: "Письмо отправлено. Проверьте почту." });
+    }
+    if (path.includes("/users/verify-email") && method === "POST") {
+      return json({ detail: "ok" });
+    }
     if (path.includes("/users/roles")) return json([{ key: "client", value: "Клиент" }]);
     if (path.includes("/users/spheres")) {
       return json([{ key: "hair_salon", value: "Салон красоты" }]);

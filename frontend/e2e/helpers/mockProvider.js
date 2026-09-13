@@ -86,10 +86,48 @@ export async function installProviderMocks(
     localStorage.setItem("vmeste_cookie_consent_v1", "necessary");
   });
 
+  await page.addInitScript(() => {
+    window.ymaps = {
+      ready(cb) {
+        queueMicrotask(() => cb());
+      },
+      Map: class {
+        constructor() {
+          this.geoObjects = { add() {}, remove() {} };
+          this.events = { add() {}, remove() {} };
+          this.margin = { setDefaultMargin() {} };
+        }
+        destroy() {}
+        setBounds() {}
+        setCenter() {}
+        getCenter() {
+          return [55.75, 37.62];
+        }
+        getZoom() {
+          return 12;
+        }
+      },
+      Placemark: class {
+        constructor() {
+          this.events = { add() {} };
+          this.geometry = { setCoordinates() {} };
+        }
+      },
+      Clusterer: class {
+        constructor() {
+          this.events = { add() {} };
+        }
+        add() {}
+        removeAll() {}
+      },
+    };
+  });
+
   let mineSubs = forPay ? [] : [{ ...ACTIVE_SUB }];
   let waitlistRows = Array.isArray(waitlist) ? waitlist.map((r) => ({ ...r })) : [];
   let bookingsList = Array.isArray(bookings) ? bookings.map((b) => ({ ...b })) : [];
   let staffLinks = [];
+  let locationRows = [];
   const conversationsPayload = Array.isArray(conversations)
     ? conversations.map((c) => ({ ...c }))
     : [];
@@ -100,6 +138,14 @@ export async function installProviderMocks(
     booking_confirm_message_default: "",
     booking_cancel_message_default: "",
     booking_done_message_default: "",
+    organization_address: "Москва, ул. Старая, 1",
+    organization_entrance: "",
+    organization_floor: "",
+    organization_apartment: "",
+    organization_intercom: "",
+    organization_address_extra: "",
+    organization_latitude: "55.751244",
+    organization_longitude: "37.618423",
   };
   let calendarToken = "token-old";
   let acquiringPayload = {
@@ -269,7 +315,30 @@ export async function installProviderMocks(
             ],
       );
     }
-    if (path.includes("/locations")) return json([]);
+    if (path.includes("/locations") && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const created = {
+        id: 7000 + locationRows.length,
+        provider: ME.id,
+        title: body.title || "Филиал",
+        address: body.address || "",
+        latitude: body.latitude || "55.751244",
+        longitude: body.longitude || "37.618423",
+        entrance: body.entrance || "",
+        floor: body.floor || "",
+        apartment: body.apartment || "",
+        intercom: body.intercom || "",
+        address_details: body.address_details || "",
+      };
+      locationRows = [...locationRows, created];
+      return json(created, 201);
+    }
+    if (path.includes("/locations")) return json(locationRows);
     if (path.match(/\/booking\/staff\/?$/) && method === "POST") {
       let body = {};
       try {
