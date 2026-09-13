@@ -56,6 +56,7 @@ export async function installClientMocks(
     offerPackages = null,
     bookings = null,
     conversations = null,
+    activityNotifications = null,
   } = {},
 ) {
   const loyaltyPayload = loyalty || { enabled: false, balance: 0, rub_per_point: 1 };
@@ -79,6 +80,10 @@ export async function installClientMocks(
   let reviewsStore = [];
   const conversationsPayload = Array.isArray(conversations)
     ? conversations.map((c) => ({ ...c }))
+    : [];
+  let messagesStore = [];
+  let activityNotes = Array.isArray(activityNotifications)
+    ? activityNotifications.map((n) => ({ ...n }))
     : [];
 
   await page.addInitScript(() => {
@@ -366,24 +371,59 @@ export async function installClientMocks(
     if (path.includes("/chat/conversations") && method === "GET") {
       return json(conversationsPayload);
     }
+    if (path.includes("/chat/messages") && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const created = {
+        id: 5000 + messagesStore.length + 1,
+        conversation: Number(body.conversation) || 0,
+        sender: ME.id,
+        kind: body.kind || "text",
+        text: String(body.text || ""),
+        display_text: String(body.text || ""),
+        created_at: new Date().toISOString(),
+        sender_username: ME.username,
+        viewed_by_peer: false,
+      };
+      messagesStore = [...messagesStore, created];
+      return json(created, 201);
+    }
     if (path.includes("/chat/messages") && method === "GET") {
-      return json([]);
+      const cid = Number(url.searchParams.get("conversation") || 0);
+      const list = cid
+        ? messagesStore.filter((m) => Number(m.conversation) === cid)
+        : messagesStore;
+      return json(list);
     }
     if (path.includes("/chat/activity")) {
       return json({
         pending_staff_invites: [],
-        notifications: [],
-        unread_notification_count: 0,
+        notifications: activityNotes,
+        unread_notification_count: activityNotes.length,
         pending_invite_count: 0,
         unread_chat_messages_count: conversationsPayload.reduce(
           (s, c) => s + (Number(c.unread_message_count) || 0),
           0,
         ),
-        badge_count: conversationsPayload.reduce(
-          (s, c) => s + (Number(c.unread_message_count) || 0),
-          0,
-        ),
+        badge_count:
+          activityNotes.length +
+          conversationsPayload.reduce((s, c) => s + (Number(c.unread_message_count) || 0), 0),
       });
+    }
+    if (path.includes("/notifications/in-app/mark-read") && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const ids = new Set((body.ids || []).map(Number));
+      activityNotes = activityNotes.filter((n) => !ids.has(Number(n.id)));
+      return json({ ok: true });
     }
     if (path.includes("/chat/")) return json([]);
     if (path.includes("/cafe/my-orders")) return json([]);

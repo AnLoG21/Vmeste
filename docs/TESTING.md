@@ -46,8 +46,11 @@ npx playwright install chromium && npm run test:e2e
 | `client-loyalty.spec.js` | /loyalty → org → buy package → POST purchase |
 | `client-activity.spec.js` | /activity → booking+loyalty tabs → Все записи |
 | `client-chats.spec.js` | /chats → org chat → open thread |
+| `client-chats-send.spec.js` | /chats → send text → POST /messages/ |
+| `client-notifications.spec.js` | /cabinet → Понятно → mark-read |
 | `provider-chats.spec.js` | /chats → Избранное |
 | `provider-loyalty.spec.js` | /service-catalog → save loyalty PATCH |
+| `provider-sell-package.spec.js` | /service-catalog → Выдать → POST client-packages |
 | `inspection-public.spec.js` | `/i/:token` → Утвердить ремонт → POST approve |
 | `client-waitlist.spec.js` | empty slots → join waitlist |
 | `provider-waitlist.spec.js` | Записи → Снять waitlist |
@@ -59,7 +62,7 @@ npx playwright install chromium && npm run test:e2e
 | `subscription-promo.spec.js` | Оплатить → apply VSEVMESTE |
 | `subscription-cancel.spec.js` | Отключить подписку → cancel API |
 
-Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity smoke.
+Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity smoke, in-app mark-read + push register.
 
 ## CI
 

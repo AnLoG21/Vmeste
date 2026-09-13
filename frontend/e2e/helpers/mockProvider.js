@@ -63,7 +63,7 @@ const ORG_BOOKING = (() => {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], confirmError?: string|null, doneError?: string|null, cancelError?: string|null }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], confirmError?: string|null, doneError?: string|null, cancelError?: string|null }} [options]
  */
 export async function installProviderMocks(
   page,
@@ -72,6 +72,7 @@ export async function installProviderMocks(
     waitlist = null,
     bookings = null,
     conversations = null,
+    packages = null,
     confirmError = null,
     doneError = null,
     cancelError = null,
@@ -90,6 +91,8 @@ export async function installProviderMocks(
   const conversationsPayload = Array.isArray(conversations)
     ? conversations.map((c) => ({ ...c }))
     : [];
+  let packagesPayload = Array.isArray(packages) ? packages.map((p) => ({ ...p })) : [];
+  let purchasesPayload = [];
   await page.route("**/api/**", async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -295,8 +298,36 @@ export async function installProviderMocks(
         welcome_bonus: Number(body.welcome_bonus) || 0,
       });
     }
-    if (path.includes("/booking/packages") && method === "GET") return json([]);
-    if (path.includes("/booking/client-packages") && method === "GET") return json([]);
+    if (path.includes("/booking/client-packages") && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const pkgId = Number(body.package) || 0;
+      const offer = packagesPayload.find((p) => Number(p.id) === pkgId) || {
+        id: pkgId,
+        name: "Абонемент",
+        visits_count: 5,
+      };
+      const sold = {
+        id: 900 + purchasesPayload.length,
+        provider: ME.id,
+        client: 501,
+        client_name: String(body.client || "клиент"),
+        package: pkgId,
+        package_name: offer.name,
+        visits_total: Number(offer.visits_count) || 5,
+        visits_remaining: Number(offer.visits_count) || 5,
+        status: "active",
+        note: String(body.note || ""),
+      };
+      purchasesPayload = [sold, ...purchasesPayload];
+      return json(sold, 201);
+    }
+    if (path.includes("/booking/client-packages") && method === "GET") return json(purchasesPayload);
+    if (/\/booking\/packages\/?$/.test(path) && method === "GET") return json(packagesPayload);
     if (path.includes("/booking")) return json([]);
     if (path.includes("/catalog/")) return json([]);
     if (path.includes("/chat/conversations") && method === "GET") {
