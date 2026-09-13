@@ -72,3 +72,25 @@ class LocationBranchApiTests(TestCase):
         self.assertEqual(res.status_code, 200, res.data)
         self.assertEqual(len(res.data), 1)
         self.assertEqual(res.data[0]["title"], "Точка 1")
+
+    def test_patch_and_delete_branch(self):
+        loc = ProviderLocation.objects.create(
+            provider=self.provider,
+            title="Старый",
+            address="Адрес старый",
+            latitude=Decimal("55.75"),
+            longitude=Decimal("37.62"),
+        )
+        patch = self.api.patch(
+            f"/api/locations/{loc.id}/",
+            {"title": "Новый филиал", "address": "Адрес новый"},
+            format="json",
+        )
+        self.assertEqual(patch.status_code, 200, patch.data)
+        loc.refresh_from_db()
+        self.assertEqual(loc.title, "Новый филиал")
+        self.assertEqual(loc.address, "Адрес новый")
+
+        deleted = self.api.delete(f"/api/locations/{loc.id}/")
+        self.assertEqual(deleted.status_code, 204)
+        self.assertFalse(ProviderLocation.objects.filter(pk=loc.id).exists())

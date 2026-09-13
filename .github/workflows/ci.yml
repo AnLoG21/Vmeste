@@ -65,6 +65,7 @@ jobs:
           booking.tests_acquiring_api
           booking.tests_staff_invite_api
           booking.tests_staff_invite_create_api
+          booking.tests_staff_deactivate_api
           booking.tests_actions
           booking.tests_waitlist
           booking.tests_salon_p2

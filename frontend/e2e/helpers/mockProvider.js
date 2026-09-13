@@ -63,7 +63,7 @@ const ORG_BOOKING = (() => {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[] }} [options]
  */
 export async function installProviderMocks(
   page,
@@ -77,6 +77,8 @@ export async function installProviderMocks(
     confirmError = null,
     doneError = null,
     cancelError = null,
+    staff = null,
+    locations = null,
   } = {},
 ) {
   await page.addInitScript(() => {
@@ -126,8 +128,8 @@ export async function installProviderMocks(
   let mineSubs = forPay ? [] : [{ ...ACTIVE_SUB }];
   let waitlistRows = Array.isArray(waitlist) ? waitlist.map((r) => ({ ...r })) : [];
   let bookingsList = Array.isArray(bookings) ? bookings.map((b) => ({ ...b })) : [];
-  let staffLinks = [];
-  let locationRows = [];
+  let staffLinks = Array.isArray(staff) ? staff.map((s) => ({ ...s })) : [];
+  let locationRows = Array.isArray(locations) ? locations.map((l) => ({ ...l })) : [];
   let galleryPhotos = [];
   const conversationsPayload = Array.isArray(conversations)
     ? conversations.map((c) => ({ ...c }))
@@ -377,7 +379,34 @@ export async function installProviderMocks(
       locationRows = [...locationRows, created];
       return json(created, 201);
     }
+    if (path.match(/\/locations\/\d+$/) && method === "PATCH") {
+      const id = Number(path.split("/").pop());
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      locationRows = locationRows.map((l) => (Number(l.id) === id ? { ...l, ...body } : l));
+      return json(locationRows.find((l) => Number(l.id) === id) || { id, ...body });
+    }
+    if (path.match(/\/locations\/\d+$/) && method === "DELETE") {
+      const id = Number(path.split("/").pop());
+      locationRows = locationRows.filter((l) => Number(l.id) !== id);
+      return route.fulfill({ status: 204, body: "" });
+    }
     if (path.includes("/locations")) return json(locationRows);
+    if (path.match(/\/booking\/staff\/\d+$/) && method === "PATCH") {
+      const id = Number(path.split("/").pop());
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      staffLinks = staffLinks.map((l) => (Number(l.id) === id ? { ...l, ...body } : l));
+      return json(staffLinks.find((l) => Number(l.id) === id) || { id, ...body });
+    }
     if (path.match(/\/booking\/staff\/?$/) && method === "POST") {
       let body = {};
       try {
