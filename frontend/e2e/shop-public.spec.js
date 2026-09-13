@@ -109,6 +109,35 @@ test.describe("Public shop checkout", () => {
     await expect(page.getByText(/Статус:/)).toContainText("paid");
   });
 
+  test("delivery outside zone shows map hint and keeps cart", async ({ page }) => {
+    await installYmapsStub(page);
+    await installPhotonSuggest(page, { lat: 50.0, lon: 30.0, label: "далеко" });
+    await installShopMocks(page, {
+      online: false,
+      delivery: true,
+      deliveryZones: [ZONE_CENTER],
+    });
+
+    await page.goto(`/s/${SLUG}`);
+    await expect(page.getByRole("heading", { name: "Магазин E2E" })).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: /В корзину/ }).first().click();
+    await page.getByRole("button", { name: /Корзина/ }).click();
+    await page.getByRole("button", { name: /Доставка/ }).click();
+    await page.getByPlaceholder("Телефон *").fill("+79007654321");
+    await page.getByPlaceholder("Адрес доставки *").fill("далеко");
+    await clickYmapsAt(page, 50.0, 30.0);
+
+    await expect(page.locator(".cafe-guest-delivery-map")).toContainText(/вне зоны/i, {
+      timeout: 10_000,
+    });
+    await page.locator("#shop-pay-method").selectOption("cash");
+    await page.getByRole("button", { name: "Оформить заказ" }).click();
+
+    await expect(page.getByText(/вне зоны/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Корзина" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Заказ #9003" })).toHaveCount(0);
+  });
+
   test("return ?order= shows paid status", async ({ page }) => {
     await installShopMocks(page);
     await page.goto(`/s/${SLUG}?order=9003`);

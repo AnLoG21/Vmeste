@@ -231,4 +231,48 @@ test.describe("Org booking actions", () => {
       timeout: 15_000,
     });
   });
+
+  test("Подтвердить with pending prepay → Нужна предоплата", async ({ page }) => {
+    await installProviderMocks(page, {
+      bookings: [ORG_BOOKING],
+      confirmError: "prepay_required",
+    });
+
+    await openBookingDaySheet(page);
+    await page.locator(".calendar-day-sheet").getByTitle("Подтвердить").click();
+
+    await expect(page.getByRole("heading", { name: "Нужна предоплата" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(/ещё не внёс предоплату/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Перейти в настройки" })).toHaveCount(0);
+    await page.getByRole("alertdialog").getByRole("button", { name: "Закрыть" }).click();
+    await expect(page.getByRole("heading", { name: "Нужна предоплата" })).toHaveCount(0);
+  });
+
+  test("Услуга оказана before start → Рано отмечать готовым", async ({ page }) => {
+    const started = new Date(Date.now() - 60 * 60_000);
+    const ended = new Date(started.getTime() + 30 * 60_000);
+    await installProviderMocks(page, {
+      bookings: [
+        {
+          ...ORG_BOOKING,
+          status: "arrived",
+          slot_starts_at: started.toISOString(),
+          slot_ends_at: ended.toISOString(),
+        },
+      ],
+      doneError: "booking_not_started_yet",
+    });
+
+    await openBookingDaySheet(page);
+    await page.locator(".calendar-day-sheet").getByRole("button", { name: "Услуга оказана" }).click();
+
+    await expect(page.getByRole("heading", { name: "Рано отмечать готовым" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByRole("button", { name: "Перейти в настройки" })).toHaveCount(0);
+    await page.getByRole("alertdialog").getByRole("button", { name: "Закрыть" }).click();
+    await expect(page.getByRole("heading", { name: "Рано отмечать готовым" })).toHaveCount(0);
+  });
 });

@@ -44,9 +44,9 @@ npx playwright install chromium && npm run test:e2e
 | `client-cancel.spec.js` | Моё → Все записи → cancel-by-client |
 | `client-waitlist.spec.js` | empty slots → join waitlist |
 | `provider-waitlist.spec.js` | Записи → Снять waitlist |
-| `provider-bookings.spec.js` | confirm / no-show / arrived / mark-done / cancel-by-org / message-not-set modals |
+| `provider-bookings.spec.js` | confirm / no-show / arrived / mark-done / cancel-by-org / message + prepay + not-started modals |
 | `cafe-guest.spec.js` | online / cash / delivery cash / zone map pick + fee / outside zone / `?order=` |
-| `shop-public.spec.js` | online / cash / delivery cash / zone map pick / `?order=` |
+| `shop-public.spec.js` | online / cash / delivery cash / zone map pick / outside zone / `?order=` |
 | `subscription-return.spec.js` | `?payment=success` → Подписки + confirm |
 | `subscription-pay.spec.js` | Оплатить → promo skip → pay redirect |
 | `subscription-promo.spec.js` | Оплатить → apply VSEVMESTE |

@@ -200,7 +200,9 @@ export async function installProviderMocks(
             detail:
               confirmError === "confirm_message_not_set"
                 ? "Сообщение для подтверждения записи не задано."
-                : "Ошибка подтверждения.",
+                : confirmError === "prepay_required"
+                  ? "Клиент ещё не внёс предоплату — подтвердить запись нельзя."
+                  : "Ошибка подтверждения.",
           },
           400,
         );
@@ -233,7 +235,9 @@ export async function installProviderMocks(
             detail:
               doneError === "done_message_not_set"
                 ? "Сообщение при отметке «услуга оказана» не задано."
-                : "Ошибка отметки.",
+                : doneError === "booking_not_started_yet"
+                  ? "Отметить «услуга оказана» можно только после начала записи по времени."
+                  : "Ошибка отметки.",
           },
           400,
         );
