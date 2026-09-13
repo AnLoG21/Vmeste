@@ -63,7 +63,7 @@ const ORG_BOOKING = (() => {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[], catalogSeeded?: boolean|null, slots?: object[], clients?: object[], reviews?: object[], providerSphere?: string|null, shopCategories?: object[], shopProducts?: object[], cafeOrders?: object[] }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[], catalogSeeded?: boolean|null, slots?: object[], clients?: object[], reviews?: object[], providerSphere?: string|null, shopCategories?: object[], shopProducts?: object[], cafeOrders?: object[], shopOrders?: object[] }} [options]
  */
 export async function installProviderMocks(
   page,
@@ -89,6 +89,7 @@ export async function installProviderMocks(
     shopCategories = null,
     shopProducts = null,
     cafeOrders = null,
+    shopOrders = null,
   } = {},
 ) {
   await page.addInitScript(() => {
@@ -165,6 +166,7 @@ export async function installProviderMocks(
   let cafeOrdersPayload = Array.isArray(cafeOrders) ? cafeOrders.map((o) => ({ ...o })) : [];
   let shopCategoriesPayload = Array.isArray(shopCategories) ? shopCategories.map((c) => ({ ...c })) : [];
   let shopProductsPayload = Array.isArray(shopProducts) ? shopProducts.map((p) => ({ ...p })) : [];
+  let shopOrdersPayload = Array.isArray(shopOrders) ? shopOrders.map((o) => ({ ...o })) : [];
   let shopCatSeq = 8100;
   let shopProductSeq = 9200;
   let mePayload = {
@@ -1517,6 +1519,24 @@ export async function installProviderMocks(
         accept_online_payment: false,
         accept_cash: true,
       });
+    }
+    if (path.match(/\/shop\/orders\/?$/) && method === "GET") {
+      return json(shopOrdersPayload);
+    }
+    const shopOrderMatch = path.match(/\/shop\/orders\/(\d+)$/);
+    if (shopOrderMatch && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const id = Number(shopOrderMatch[1]);
+      shopOrdersPayload = shopOrdersPayload.map((o) =>
+        Number(o.id) === id ? { ...o, ...body, id } : o,
+      );
+      const updated = shopOrdersPayload.find((o) => Number(o.id) === id);
+      return json(updated || { id, ...body });
     }
     if (path.includes("/shop/")) return json([]);
     if (path.includes("/reviews/unread-count") && method === "GET") {
