@@ -50,10 +50,13 @@ npx playwright install chromium && npm run test:e2e
 | `client-chats-mark-read.spec.js` | /chats → open thread → POST mark-read |
 | `client-notifications.spec.js` | /cabinet → Понятно → mark-read |
 | `client-telegram-link.spec.js` | /settings → telegram link GET |
+| `client-telegram-unlink.spec.js` | /settings → Отвязать → DELETE |
+| `client-notify-prefs.spec.js` | /settings → save notify prefs PATCH |
 | `provider-chats.spec.js` | /chats → Избранное |
 | `provider-loyalty.spec.js` | /service-catalog → save loyalty PATCH |
 | `provider-create-package.spec.js` | /service-catalog → Создать абонемент → POST |
 | `provider-sell-package.spec.js` | /service-catalog → Выдать → POST client-packages |
+| `provider-messaging.spec.js` | /organization → enable Telegram → PATCH messaging |
 | `inspection-public.spec.js` | `/i/:token` → Утвердить ремонт → POST approve |
 | `client-waitlist.spec.js` | empty slots → join waitlist |
 | `provider-waitlist.spec.js` | Записи → Снять waitlist |
@@ -65,7 +68,7 @@ npx playwright install chromium && npm run test:e2e
 | `subscription-promo.spec.js` | Оплатить → apply VSEVMESTE |
 | `subscription-cancel.spec.js` | Отключить подписку → cancel API |
 
-Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token.
+Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token, client notify prefs, org messaging settings + org telegram link.
 
 ## CI
 

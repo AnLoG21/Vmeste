@@ -58,6 +58,7 @@ export async function installClientMocks(
     conversations = null,
     activityNotifications = null,
     seedMessages = null,
+    telegramLinked = false,
   } = {},
 ) {
   const loyaltyPayload = loyalty || { enabled: false, balance: 0, rub_per_point: 1 };
@@ -86,7 +87,22 @@ export async function installClientMocks(
   let activityNotes = Array.isArray(activityNotifications)
     ? activityNotifications.map((n) => ({ ...n }))
     : [];
-  let telegramLink = null;
+  let telegramLink = telegramLinked
+    ? {
+        link_token: "e2e-tg-token",
+        telegram_chat_id: "123456",
+        linked: true,
+        deep_link: "https://t.me/vmeste_e2e_bot?start=e2e-tg-token",
+        bot_username: "vmeste_e2e_bot",
+        hint: "",
+      }
+    : null;
+  let mePayload = {
+    ...ME,
+    notify_booking_reminders: true,
+    notify_booking_status: true,
+    email_verified: true,
+  };
 
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
@@ -173,7 +189,17 @@ export async function installClientMocks(
       return json({ access: "e2e-access-token" });
     }
     if (path.endsWith("/users/me") && method === "GET") {
-      return json(ME);
+      return json(mePayload);
+    }
+    if (path.endsWith("/users/me") && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      mePayload = { ...mePayload, ...body };
+      return json(mePayload);
     }
     if (path.includes("/users/roles")) return json([{ key: "client", value: "Клиент" }]);
     if (path.includes("/users/spheres")) {
@@ -444,9 +470,14 @@ export async function installClientMocks(
       return json(telegramLink);
     }
     if (path.includes("/notifications/telegram/link") && method === "DELETE") {
-      if (telegramLink) {
-        telegramLink = { ...telegramLink, linked: false, telegram_chat_id: "" };
-      }
+      telegramLink = {
+        link_token: (telegramLink && telegramLink.link_token) || "e2e-tg-token",
+        telegram_chat_id: "",
+        linked: false,
+        deep_link: "https://t.me/vmeste_e2e_bot?start=e2e-tg-token",
+        bot_username: "vmeste_e2e_bot",
+        hint: "",
+      };
       return json({ ok: true, linked: false });
     }
     if (path.includes("/chat/")) return json([]);

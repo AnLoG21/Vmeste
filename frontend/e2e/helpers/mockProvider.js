@@ -93,6 +93,34 @@ export async function installProviderMocks(
     : [];
   let packagesPayload = Array.isArray(packages) ? packages.map((p) => ({ ...p })) : [];
   let purchasesPayload = [];
+  let messagingPayload = {
+    remind_clients: true,
+    remind_org: false,
+    notify_org_on_new: false,
+    notify_client_on_new: true,
+    send_client_confirm_link: false,
+    winback_enabled: false,
+    winback_weeks: 4,
+    winback_template: "",
+    enable_telegram: false,
+    enable_max: false,
+    enable_whatsapp: false,
+    enable_sms: false,
+    enable_email: false,
+    telegram_notify_chat_id: "",
+    has_telegram: false,
+    has_platform_telegram: true,
+    has_org_telegram_token: false,
+    max_notify_chat_id: "",
+    has_max: false,
+    wa_api_url: "https://api.green-api.com",
+    wa_id_instance: "",
+    has_whatsapp: false,
+    has_sms_org: false,
+    reminder_template: "",
+    new_booking_template: "",
+    client_new_booking_template: "",
+  };
   await page.route("**/api/**", async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -348,6 +376,35 @@ export async function installProviderMocks(
       return json(created, 201);
     }
     if (/\/booking\/packages\/?$/.test(path) && method === "GET") return json(packagesPayload);
+    if (path.includes("/booking/messaging/telegram-link") && method === "GET") {
+      return json({
+        link_token: "e2e-org-tg",
+        start_param: "org_e2e-org-tg",
+        telegram_notify_chat_id: messagingPayload.telegram_notify_chat_id || "",
+        linked: Boolean(messagingPayload.telegram_notify_chat_id),
+        deep_link: "https://t.me/vmeste_e2e_bot?start=org_e2e-org-tg",
+        bot_username: "vmeste_e2e_bot",
+        hint: "",
+      });
+    }
+    if (path.includes("/booking/messaging/telegram-link") && method === "DELETE") {
+      messagingPayload = { ...messagingPayload, telegram_notify_chat_id: "" };
+      return json({ ok: true, linked: false, telegram_notify_chat_id: "" });
+    }
+    if (path.includes("/booking/messaging") && method === "GET") {
+      return json(messagingPayload);
+    }
+    if (path.includes("/booking/messaging") && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      messagingPayload = { ...messagingPayload, ...body, telegram_bot_token: undefined };
+      delete messagingPayload.telegram_bot_token;
+      return json(messagingPayload);
+    }
     if (path.includes("/booking")) return json([]);
     if (path.includes("/catalog/")) return json([]);
     if (path.includes("/chat/conversations") && method === "GET") {

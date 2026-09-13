@@ -60,6 +60,7 @@ jobs:
           booking.tests_loyalty_pay
           booking.tests_loyalty_me_api
           booking.tests_loyalty_settings_api
+          booking.tests_messaging_api
           booking.tests_actions
           booking.tests_waitlist
           booking.tests_salon_p2
@@ -75,6 +76,7 @@ jobs:
           chat.tests_mark_read_api
           notifications.tests_in_app_api
           notifications.tests_telegram_link_api
+          users.tests_notify_prefs_api
           payments.tests
           marketplaces.tests
           marketplaces.tests_analytics
