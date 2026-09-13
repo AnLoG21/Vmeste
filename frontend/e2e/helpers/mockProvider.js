@@ -237,6 +237,30 @@ export async function installProviderMocks(
     },
     telegram_ready: false,
   };
+  let voiceSettingsPayload = {
+    enabled: false,
+    inbound_phone: "",
+    transfer_phone: "",
+    greeting_text: "",
+    ats_provider: "asterisk",
+    confirm_outbound_enabled: false,
+    tts_enabled: false,
+    legal_ack: false,
+    caller_disclosure: "",
+    mango_line_number: "",
+    mango_extension: "",
+    has_mango: false,
+    has_sip: false,
+    speechkit_ready: false,
+    webhook_token: "e2e-voice-token",
+    sip_server: "",
+    sip_username: "",
+    sip_auth_user: "",
+    sip_did: "",
+    voice_minutes_quota: 30,
+    voice_minutes_used: 0,
+    voice_minutes_left: 30,
+  };
   let shopCatSeq = 8100;
   let shopProductSeq = 9200;
   let mePayload = {
@@ -1690,6 +1714,41 @@ export async function installProviderMocks(
       }
       return json([]);
     }
+    if (path.includes("/voice/settings") && method === "GET") {
+      return json(voiceSettingsPayload);
+    }
+    if (path.includes("/voice/settings") && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const next = { ...voiceSettingsPayload, ...body };
+      delete next.sip_password;
+      delete next.mango_api_key;
+      delete next.mango_api_salt;
+      if (next.enabled && !next.legal_ack) {
+        return route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({
+            detail:
+              "Чтобы включить голос, подтвердите согласие 152-ФЗ (уведомление звонящего и обработка речи через SpeechKit).",
+            code: "voice_legal_ack_required",
+          }),
+        });
+      }
+      voiceSettingsPayload = next;
+      return json(voiceSettingsPayload);
+    }
+    if (path.includes("/voice/sessions") && method === "GET") {
+      return json([]);
+    }
+    if (path.includes("/voice/outbound/pending") && method === "GET") {
+      return json({ bookings: [], enabled: false });
+    }
+    if (path.includes("/voice/")) return json([]);
     if (path.includes("/reviews/unread-count") && method === "GET") {
       const count = reviewsPayload.filter((r) => r.is_new || !r.provider_seen_at).length;
       return json({ count });
