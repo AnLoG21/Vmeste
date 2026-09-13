@@ -63,7 +63,7 @@ const ORG_BOOKING = (() => {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[], catalogSeeded?: boolean|null, slots?: object[], clients?: object[], reviews?: object[], providerSphere?: string|null }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[], catalogSeeded?: boolean|null, slots?: object[], clients?: object[], reviews?: object[], providerSphere?: string|null, shopCategories?: object[], shopProducts?: object[] }} [options]
  */
 export async function installProviderMocks(
   page,
@@ -86,6 +86,8 @@ export async function installProviderMocks(
     clients = null,
     reviews = null,
     providerSphere = null,
+    shopCategories = null,
+    shopProducts = null,
   } = {},
 ) {
   await page.addInitScript(() => {
@@ -156,6 +158,10 @@ export async function installProviderMocks(
   let cafeCategories = [];
   let cafeItemSeq = 9000;
   let cafeCatSeq = 8000;
+  let shopCategoriesPayload = Array.isArray(shopCategories) ? shopCategories.map((c) => ({ ...c })) : [];
+  let shopProductsPayload = Array.isArray(shopProducts) ? shopProducts.map((p) => ({ ...p })) : [];
+  let shopCatSeq = 8100;
+  let shopProductSeq = 9200;
   let mePayload = {
     ...ME,
     anonymous_seat_count: 1,
@@ -176,6 +182,10 @@ export async function installProviderMocks(
     if (providerSphere === "cafe_restaurant") {
       mePayload.organization_name = "Кафе E2E";
       mePayload.organization_slug = "e2e-cafe";
+    }
+    if (providerSphere === "shops") {
+      mePayload.organization_name = "Магазин E2E";
+      mePayload.organization_slug = "e2e-shop";
     }
   }
   let calendarToken = "token-old";
@@ -1284,6 +1294,107 @@ export async function installProviderMocks(
       return route.fulfill({ status: 204, body: "" });
     }
     if (path.includes("/cafe/")) return json([]);
+    if (path.includes("/shop/categories/from-pool") && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const pathNodes = Array.isArray(body.path) ? body.path : [];
+      const created = [];
+      let parent = null;
+      for (const node of pathNodes) {
+        let existing = shopCategoriesPayload.find((c) => c.pool_key && c.pool_key === node.key);
+        if (!existing) {
+          existing = {
+            id: ++shopCatSeq,
+            name: node.name || "Категория",
+            parent: parent,
+            pool_key: node.key || "",
+            sort_order: created.length,
+          };
+          shopCategoriesPayload = [...shopCategoriesPayload, existing];
+        }
+        parent = existing.id;
+        created.push(existing);
+      }
+      const leaf = created[created.length - 1];
+      return json(
+        {
+          leaf,
+          path: created.map((c) => ({ id: c.id, name: c.name, pool_key: c.pool_key })),
+        },
+        201,
+      );
+    }
+    if (path.match(/\/shop\/categories\/?$/) && method === "GET") {
+      return json(shopCategoriesPayload);
+    }
+    if (path.match(/\/shop\/products\/?$/) && method === "GET") {
+      return json(shopProductsPayload);
+    }
+    if (path.match(/\/shop\/products\/?$/) && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const created = {
+        id: ++shopProductSeq,
+        name: body.name || "Товар",
+        description: body.description || "",
+        sku: body.sku || "",
+        unit: body.unit || "шт",
+        price: body.price || "0",
+        category: body.category || null,
+        stock_qty: 0,
+        is_active: body.is_active !== false,
+        is_featured: Boolean(body.is_featured),
+        featured_order: Number(body.featured_order) || 0,
+        bonus_points: Number(body.bonus_points) || 0,
+        photos: [],
+        attrs: body.attrs || {},
+        sizes: body.sizes || [],
+        related_product_ids: body.related_product_ids || [],
+        authenticity_status: "",
+      };
+      shopProductsPayload = [...shopProductsPayload, created];
+      return json(created, 201);
+    }
+    const shopProductMatch = path.match(/\/shop\/products\/(\d+)$/);
+    if (shopProductMatch && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const id = Number(shopProductMatch[1]);
+      shopProductsPayload = shopProductsPayload.map((p) =>
+        Number(p.id) === id ? { ...p, ...body, id } : p,
+      );
+      const updated = shopProductsPayload.find((p) => Number(p.id) === id);
+      return json(updated || { id, ...body });
+    }
+    if (shopProductMatch && method === "DELETE") {
+      const id = Number(shopProductMatch[1]);
+      shopProductsPayload = shopProductsPayload.filter((p) => Number(p.id) !== id);
+      return route.fulfill({ status: 204, body: "" });
+    }
+    if (path.includes("/shop/settings") && method === "GET") {
+      return json({
+        enable_pickup: true,
+        enable_delivery: false,
+        delivery_fee: "0",
+        delivery_min_order: "0",
+        delivery_zones: [],
+        accept_online_payment: false,
+        accept_cash: true,
+      });
+    }
+    if (path.includes("/shop/")) return json([]);
     if (path.includes("/reviews/unread-count") && method === "GET") {
       const count = reviewsPayload.filter((r) => r.is_new || !r.provider_seen_at).length;
       return json({ count });
