@@ -89,6 +89,7 @@ export async function installProviderMocks(
   let mineSubs = forPay ? [] : [{ ...ACTIVE_SUB }];
   let waitlistRows = Array.isArray(waitlist) ? waitlist.map((r) => ({ ...r })) : [];
   let bookingsList = Array.isArray(bookings) ? bookings.map((b) => ({ ...b })) : [];
+  let staffLinks = [];
   const conversationsPayload = Array.isArray(conversations)
     ? conversations.map((c) => ({ ...c }))
     : [];
@@ -269,7 +270,32 @@ export async function installProviderMocks(
       );
     }
     if (path.includes("/locations")) return json([]);
-    if (path.includes("/booking/staff")) return json([]);
+    if (path.match(/\/booking\/staff\/?$/) && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const created = {
+        id: 9000 + staffLinks.length,
+        invitation_status: "pending",
+        is_active: false,
+        job_title: body.job_title || "",
+        permissions: body.permissions || {},
+        staff: 502,
+        staff_user: {
+          id: 502,
+          username: body.invite_identifier || "invited",
+          first_name: "Приглашённый",
+          last_name: "Клиент",
+        },
+        provider: ME.id,
+      };
+      staffLinks = [...staffLinks, created];
+      return json(created, 201);
+    }
+    if (path.includes("/booking/staff")) return json(staffLinks);
     if (path.includes("/booking/slots")) return json([]);
     if (path.match(/\/booking\/waitlist\/\d+$/) && method === "PATCH") {
       const id = Number(path.split("/").pop());

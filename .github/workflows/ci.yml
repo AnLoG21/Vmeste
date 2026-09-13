@@ -64,6 +64,7 @@ jobs:
           booking.tests_calendar_api
           booking.tests_acquiring_api
           booking.tests_staff_invite_api
+          booking.tests_staff_invite_create_api
           booking.tests_actions
           booking.tests_waitlist
           booking.tests_salon_p2
@@ -82,6 +83,7 @@ jobs:
           users.tests_notify_prefs_api
           users.tests_booking_messages_api
           users.tests_change_password_api
+          users.tests_confirm_password_change_api
           payments.tests
           marketplaces.tests
           marketplaces.tests_analytics
