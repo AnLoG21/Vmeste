@@ -61,6 +61,7 @@ jobs:
           booking.tests_loyalty_me_api
           booking.tests_loyalty_settings_api
           booking.tests_messaging_api
+          booking.tests_calendar_api
           booking.tests_actions
           booking.tests_waitlist
           booking.tests_salon_p2
@@ -77,6 +78,7 @@ jobs:
           notifications.tests_in_app_api
           notifications.tests_telegram_link_api
           users.tests_notify_prefs_api
+          users.tests_booking_messages_api
           payments.tests
           marketplaces.tests
           marketplaces.tests_analytics
@@ -101,6 +103,7 @@ jobs:
           subscriptions.tests_cancel_promo_api
           notifications.tests_channels
           moy_nalog.tests
+          moy_nalog.tests_api
           --verbosity=2
       - name: Coverage report
         run: |

@@ -63,7 +63,7 @@ const ORG_BOOKING = (() => {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], confirmError?: string|null, doneError?: string|null, cancelError?: string|null }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null }} [options]
  */
 export async function installProviderMocks(
   page,
@@ -73,6 +73,7 @@ export async function installProviderMocks(
     bookings = null,
     conversations = null,
     packages = null,
+    moyNalogConnected = false,
     confirmError = null,
     doneError = null,
     cancelError = null,
@@ -93,6 +94,32 @@ export async function installProviderMocks(
     : [];
   let packagesPayload = Array.isArray(packages) ? packages.map((p) => ({ ...p })) : [];
   let purchasesPayload = [];
+  let mePayload = {
+    ...ME,
+    booking_confirm_message_default: "",
+    booking_cancel_message_default: "",
+    booking_done_message_default: "",
+  };
+  let calendarToken = "token-old";
+  let moyStatus = moyNalogConnected
+    ? {
+        connected: true,
+        enabled: true,
+        inn: "971500759750",
+        display_name: "ИП Тест",
+        phone: "79991234567",
+        connected_at: new Date().toISOString(),
+        last_error: "",
+      }
+    : {
+        connected: false,
+        enabled: false,
+        inn: "",
+        display_name: "",
+        phone: "",
+        connected_at: null,
+        last_error: "",
+      };
   let messagingPayload = {
     remind_clients: true,
     remind_org: false,
@@ -136,7 +163,17 @@ export async function installProviderMocks(
     if (path.endsWith("/auth/token/refresh") && method === "POST") {
       return json({ access: "e2e-access-token" });
     }
-    if (path.endsWith("/users/me") && method === "GET") return json(ME);
+    if (path.endsWith("/users/me") && method === "GET") return json(mePayload);
+    if (path.endsWith("/users/me") && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      mePayload = { ...mePayload, ...body };
+      return json(mePayload);
+    }
     if (path.includes("/users/roles")) return json([{ key: "provider", value: "Организация" }]);
     if (path.includes("/users/spheres")) {
       return json([{ key: "hair_salon", value: "Салон красоты" }]);
@@ -405,7 +442,52 @@ export async function installProviderMocks(
       delete messagingPayload.telegram_bot_token;
       return json(messagingPayload);
     }
+    if (path.includes("/booking/calendar/settings") && method === "POST") {
+      calendarToken = "token-new";
+      const ics = `https://vsevmeste.space/api/booking/calendar/${calendarToken}.ics`;
+      return json({
+        ics_url: ics,
+        webcal_url: ics.replace("https://", "webcal://"),
+        google_url: `https://calendar.google.com/calendar/r?cid=${ics}`,
+        yandex_hint: "Яндекс Календарь → Добавить календарь",
+      });
+    }
+    if (path.includes("/booking/calendar/settings") && method === "GET") {
+      const ics = `https://vsevmeste.space/api/booking/calendar/${calendarToken}.ics`;
+      return json({
+        ics_url: ics,
+        webcal_url: ics.replace("https://", "webcal://"),
+        google_url: `https://calendar.google.com/calendar/r?cid=${ics}`,
+        yandex_hint: "Яндекс Календарь → Добавить календарь",
+      });
+    }
     if (path.includes("/booking")) return json([]);
+    if (path.includes("/moy-nalog/status") && method === "GET") return json(moyStatus);
+    if (path.includes("/moy-nalog/status") && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      if (!moyStatus.connected) return json({ detail: "Сначала подключите «Мой налог»" }, 400);
+      moyStatus = { ...moyStatus, enabled: Boolean(body.enabled) };
+      return json(moyStatus);
+    }
+    if (path.includes("/moy-nalog/receipts")) return json([]);
+    if (path.includes("/moy-nalog/disconnect") && method === "POST") {
+      moyStatus = {
+        connected: false,
+        enabled: false,
+        inn: "",
+        display_name: "",
+        phone: "",
+        connected_at: null,
+        last_error: "",
+      };
+      return json(moyStatus);
+    }
+    if (path.includes("/moy-nalog/")) return json({});
     if (path.includes("/catalog/")) return json([]);
     if (path.includes("/chat/conversations") && method === "GET") {
       return json(conversationsPayload);

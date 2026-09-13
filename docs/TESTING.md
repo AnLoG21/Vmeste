@@ -57,6 +57,9 @@ npx playwright install chromium && npm run test:e2e
 | `provider-create-package.spec.js` | /service-catalog → Создать абонемент → POST |
 | `provider-sell-package.spec.js` | /service-catalog → Выдать → POST client-packages |
 | `provider-messaging.spec.js` | /organization → enable Telegram → PATCH messaging |
+| `provider-booking-messages.spec.js` | /organization → save booking message templates |
+| `provider-calendar.spec.js` | /organization → rotate calendar ICS link |
+| `provider-moy-nalog.spec.js` | /organization → toggle MoyNalog auto receipt |
 | `inspection-public.spec.js` | `/i/:token` → Утвердить ремонт → POST approve |
 | `client-waitlist.spec.js` | empty slots → join waitlist |
 | `provider-waitlist.spec.js` | Записи → Снять waitlist |
@@ -68,7 +71,7 @@ npx playwright install chromium && npm run test:e2e
 | `subscription-promo.spec.js` | Оплатить → apply VSEVMESTE |
 | `subscription-cancel.spec.js` | Отключить подписку → cancel API |
 
-Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token, client notify prefs, org messaging settings + org telegram link.
+Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers + status/enable/disconnect API, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token, client notify prefs, org messaging settings + org telegram link, calendar ICS rotate, booking message templates.
 
 ## CI
 
