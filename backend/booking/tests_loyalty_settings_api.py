@@ -1,7 +1,5 @@
 """HTTP: provider loyalty settings GET/PATCH + create/sell visit package."""
 
-from decimal import Decimal
-
 from django.test import TestCase
 from rest_framework.test import APIClient
 
