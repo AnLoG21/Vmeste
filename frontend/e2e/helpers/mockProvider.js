@@ -689,7 +689,51 @@ export async function installProviderMocks(
     if (path.includes("/booking/clients") && method === "DELETE") {
       const id = Number(url.searchParams.get("client") || 0);
       clientsPayload = clientsPayload.filter((c) => Number(c.id) !== id);
-      return route.fulfill({ status: 204, body: "" });
+      return json({ ok: true, hidden: true });
+    }
+    if (path.includes("/booking/client-cards") && method === "GET") {
+      const id = Number(url.searchParams.get("client") || 0);
+      const c = clientsPayload.find((x) => Number(x.id) === id) || { id, name: `Клиент #${id}` };
+      return json({
+        client: id,
+        client_name: c.name || `Клиент #${id}`,
+        provider_sphere: "hair_salon",
+        tech: { hair_color: "" },
+        personal: {},
+        technical_notes: "",
+        preferences_notes: "",
+        acquisition_source: "",
+        is_blocked: false,
+        no_show_count: 0,
+        field_prefs: {},
+        field_catalog: {},
+        recent_visits: [],
+      });
+    }
+    if (path.includes("/booking/client-cards") && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const id = Number(url.searchParams.get("client") || body.client || 0);
+      const c = clientsPayload.find((x) => Number(x.id) === id) || { id, name: `Клиент #${id}` };
+      return json({
+        client: id,
+        client_name: c.name || `Клиент #${id}`,
+        provider_sphere: "hair_salon",
+        tech: body.tech || {},
+        personal: body.personal || {},
+        technical_notes: body.technical_notes || "",
+        preferences_notes: body.preferences_notes || "",
+        acquisition_source: body.acquisition_source || "",
+        is_blocked: Boolean(body.is_blocked),
+        no_show_count: Number(body.no_show_count) || 0,
+        field_prefs: body.field_prefs || {},
+        field_catalog: {},
+        recent_visits: [],
+      });
     }
     if (path.includes("/booking/slots/manual-hold") && method === "POST") {
       let body = {};

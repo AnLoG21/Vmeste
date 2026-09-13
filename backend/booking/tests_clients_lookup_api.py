@@ -57,3 +57,13 @@ class ClientsLookupApiTests(TestCase):
         res = self.api.get("/api/booking/clients/")
         self.assertEqual(res.status_code, 200, res.data)
         self.assertGreaterEqual(res.data.get("count") or 0, 1)
+
+    def test_delete_hides_client(self):
+        res = self.api.delete(f"/api/booking/clients/?client={self.client_user.id}")
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertTrue(res.data.get("hidden"))
+        card = ProviderClientCard.objects.get(provider=self.provider, client=self.client_user)
+        self.assertTrue(card.hidden)
+        listed = self.api.get("/api/booking/clients/")
+        ids = [c.get("id") for c in listed.data.get("results") or []]
+        self.assertNotIn(self.client_user.id, ids)

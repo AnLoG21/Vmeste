@@ -82,6 +82,9 @@ npx playwright install chromium && npm run test:e2e
 | `provider-service-option-toggle.spec.js` | /service-catalog → toggle option → PATCH |
 | `provider-service-option-delete.spec.js` | /service-catalog → delete option → DELETE |
 | `provider-clients-create.spec.js` | /clients → Добавить клиента → POST |
+| `provider-clients-delete.spec.js` | /clients → Удалить из базы → DELETE |
+| `provider-client-memory.spec.js` | /clients → memory card → PATCH client-cards |
+| `provider-client-picker.spec.js` | /intervals → picker lookup → book-for-client |
 | `provider-release-hold.spec.js` | /intervals → Снять ручную бронь → POST release-hold |
 | `provider-org-address.spec.js` | /organization → save org address → PATCH me |
 | `provider-branch-create.spec.js` | /organization → add branch → POST /locations/ |
@@ -107,7 +110,7 @@ npx playwright install chromium && npm run test:e2e
 | `subscription-promo.spec.js` | Оплатить → apply VSEVMESTE |
 | `subscription-cancel.spec.js` | Отключить подписку → cancel API |
 
-Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers + status/enable/disconnect API, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token, client notify prefs, org messaging settings + org telegram link, calendar ICS rotate, booking message templates, acquiring settings, staff invite accept/reject + create (Business gate) + deactivate + permissions/service assignment, catalog seed + service PATCH activate/price + options CRUD + service photos, booking slots create + manual-hold/release + public widget catalog/book + visit-confirm + book-for-client + clients lookup/create, change-password email flow + confirm-password-change token, change-email verification flow, me avatar upload/clear, me profile PATCH, delete-account anonymize, password-reset request/confirm, email verify/resend, provider branch locations create/patch/delete, organization-info working hours/contacts, org gallery upload/delete.
+Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers + status/enable/disconnect API, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token, client notify prefs, org messaging settings + org telegram link, calendar ICS rotate, booking message templates, acquiring settings, staff invite accept/reject + create (Business gate) + deactivate + permissions/service assignment, catalog seed + service PATCH activate/price + options CRUD + service photos, booking slots create + manual-hold/release + public widget catalog/book + visit-confirm + book-for-client + clients lookup/create/delete + client memory card, change-password email flow + confirm-password-change token, change-email verification flow, me avatar upload/clear, me profile PATCH, delete-account anonymize, password-reset request/confirm, email verify/resend, provider branch locations create/patch/delete, organization-info working hours/contacts, org gallery upload/delete.
 
 ## CI
 
