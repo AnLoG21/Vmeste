@@ -501,6 +501,14 @@ export async function installClientMocks(
     if (path.includes("/users/change-password") && method === "POST") {
       return json({ detail: "Проверьте почту для подтверждения смены пароля." });
     }
+    if (path.includes("/users/request-password-reset") && method === "POST") {
+      return json({
+        detail: "Мы отправили ссылку для сброса пароля на вашу почту. Перейдите по ней в течение 24 часов.",
+      });
+    }
+    if (path.includes("/users/confirm-password-reset") && method === "POST") {
+      return json({ detail: "Пароль обновлён. Войдите с новым паролем." });
+    }
     if (path.includes("/notifications/in-app/mark-read") && method === "POST") {
       let body = {};
       try {
