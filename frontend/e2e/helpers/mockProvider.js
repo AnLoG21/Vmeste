@@ -624,6 +624,26 @@ export async function installProviderMocks(
       return json(created, 201);
     }
     if (path.includes("/booking/staff")) return json(staffLinks);
+    if (path.includes("/booking/book-for-client") && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      return json(
+        {
+          id: 8801,
+          status: "new",
+          service: body.service,
+          starts_at: body.starts_at,
+          ends_at: body.ends_at,
+          client_display_name: body.name || "Клиент",
+        },
+        201,
+      );
+    }
+    if (path.includes("/booking/clients/lookup")) return json([]);
     if (path.includes("/booking/slots/manual-hold") && method === "POST") {
       let body = {};
       try {
