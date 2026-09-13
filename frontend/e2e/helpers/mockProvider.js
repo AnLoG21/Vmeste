@@ -63,7 +63,7 @@ const ORG_BOOKING = (() => {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[] }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[], catalogSeeded?: boolean|null }} [options]
  */
 export async function installProviderMocks(
   page,
@@ -81,6 +81,7 @@ export async function installProviderMocks(
     locations = null,
     catalogServices = null,
     catalogCategories = null,
+    catalogSeeded = null,
   } = {},
 ) {
   await page.addInitScript(() => {
@@ -133,10 +134,12 @@ export async function installProviderMocks(
   let staffLinks = Array.isArray(staff) ? staff.map((s) => ({ ...s })) : [];
   let locationRows = Array.isArray(locations) ? locations.map((l) => ({ ...l })) : [];
   let galleryPhotos = [];
-  const servicesPayload = Array.isArray(catalogServices) ? catalogServices.map((s) => ({ ...s })) : [];
-  const categoriesPayload = Array.isArray(catalogCategories)
+  let servicesPayload = Array.isArray(catalogServices) ? catalogServices.map((s) => ({ ...s })) : [];
+  let categoriesPayload = Array.isArray(catalogCategories)
     ? catalogCategories.map((c) => ({ ...c }))
     : [];
+  let catalogSeededFlag =
+    catalogSeeded == null ? servicesPayload.length > 0 : Boolean(catalogSeeded);
   const conversationsPayload = Array.isArray(conversations)
     ? conversations.map((c) => ({ ...c }))
     : [];
@@ -248,7 +251,69 @@ export async function installProviderMocks(
       mePayload = { ...mePayload, ...body };
       return json(mePayload);
     }
+    if (path.includes("/catalog/seed-catalog") && method === "GET") {
+      return json({
+        sphere: mePayload.provider_sphere || "hair_salon",
+        sphere_label: "Салон красоты",
+        has_template: true,
+        catalog_seeded: catalogSeededFlag,
+        total_services: servicesPayload.length,
+        active_services: servicesPayload.filter((s) => s.is_active).length,
+      });
+    }
+    if (path.includes("/catalog/seed-catalog") && method === "POST") {
+      if (!categoriesPayload.length) {
+        categoriesPayload = [{ id: 11, name: "Стрижки", provider: ME.id, subcategories: [] }];
+      }
+      if (!servicesPayload.length) {
+        servicesPayload = [
+          {
+            id: 301,
+            name: "Стрижка",
+            price: "0.00",
+            duration_minutes: 30,
+            is_active: false,
+            category: categoriesPayload[0].id,
+            options: [],
+            gallery: [],
+          },
+        ];
+      }
+      catalogSeededFlag = true;
+      return json({
+        stats: { services: servicesPayload.length, services_created: servicesPayload.length },
+        sphere: mePayload.provider_sphere || "hair_salon",
+        sphere_label: "Салон красоты",
+        has_template: true,
+        catalog_seeded: true,
+        total_services: servicesPayload.length,
+        active_services: servicesPayload.filter((s) => s.is_active).length,
+      });
+    }
     if (path.includes("/catalog/categories")) return json(categoriesPayload);
+    {
+      const svcMatch = path.match(/\/catalog\/services\/(\d+)$/);
+      if (svcMatch && method === "PATCH") {
+        const id = Number(svcMatch[1]);
+        let body = {};
+        try {
+          body = req.postDataJSON() || {};
+        } catch {
+          body = {};
+        }
+        servicesPayload = servicesPayload.map((s) =>
+          Number(s.id) === id
+            ? {
+                ...s,
+                ...(body.price != null ? { price: String(body.price) } : {}),
+                ...(body.duration_minutes != null ? { duration_minutes: body.duration_minutes } : {}),
+                ...(body.is_active != null ? { is_active: Boolean(body.is_active) } : {}),
+              }
+            : s,
+        );
+        return json(servicesPayload.find((s) => Number(s.id) === id) || { id, ...body });
+      }
+    }
     if (path.includes("/catalog/services")) return json(servicesPayload);
     if (path.includes("/users/organization-info") && method === "PATCH") {
       let body = {};
