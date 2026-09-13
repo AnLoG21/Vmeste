@@ -51,3 +51,28 @@ class MeProfileApiTests(TestCase):
         self.assertEqual(res.data.get("first_name"), "Пётр")
         self.user.refresh_from_db()
         self.assertEqual(self.user.last_name, "Имя")
+
+
+class MeAnonymousSeatApiTests(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+        self.provider = User.objects.create_user(
+            username="salon-anon-seat",
+            password="x",
+            role=User.Role.PROVIDER,
+            provider_sphere=User.ProviderSphere.HAIR_SALON,
+            organization_name="Салон Anon",
+            anonymous_seat_count=1,
+        )
+        self.api.force_authenticate(self.provider)
+
+    def test_patch_anonymous_seat_count(self):
+        res = self.api.patch(
+            "/api/users/me/",
+            {"anonymous_seat_count": 2},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertEqual(res.data.get("anonymous_seat_count"), 2)
+        self.provider.refresh_from_db()
+        self.assertEqual(self.provider.anonymous_seat_count, 2)

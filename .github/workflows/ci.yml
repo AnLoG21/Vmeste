@@ -72,6 +72,7 @@ jobs:
           catalog.tests_service_options_api
           catalog.tests_service_photos_api
           booking.tests_slots_create_api
+          booking.tests_slots_delete_api
           booking.tests_manual_hold_api
           booking.tests_public_widget_api
           booking.tests_visit_confirm_api
