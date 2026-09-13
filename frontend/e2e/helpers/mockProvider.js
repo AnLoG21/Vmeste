@@ -84,6 +84,7 @@ export async function installProviderMocks(
     catalogSeeded = null,
     slots = null,
     clients = null,
+    reviews = null,
   } = {},
 ) {
   await page.addInitScript(() => {
@@ -150,6 +151,7 @@ export async function installProviderMocks(
   let slotsPayload = Array.isArray(slots) ? slots.map((s) => ({ ...s })) : [];
   let clientsPayload = Array.isArray(clients) ? clients.map((c) => ({ ...c })) : [];
   let migrateRequests = [];
+  let reviewsPayload = Array.isArray(reviews) ? reviews.map((r) => ({ ...r })) : [];
   let mePayload = {
     ...ME,
     anonymous_seat_count: 1,
@@ -1038,6 +1040,38 @@ export async function installProviderMocks(
     if (path.includes("/booking/acquiring") && method === "GET") {
       return json(acquiringPayload);
     }
+    if (path.includes("/booking/analytics") && method === "GET") {
+      const today = new Date().toISOString().slice(0, 10);
+      return json({
+        from: today,
+        to: today,
+        totals: {
+          bookings: 3,
+          by_status: { new: 1, confirmed: 1, done: 1 },
+          revenue_estimate: 4500,
+          reviews_count: 1,
+          average_rating: 5,
+        },
+        by_day: [{ date: today, bookings: 3, done: 1, revenue: 1500 }],
+        by_service: [{ id: 301, name: "Стрижка", count: 3, revenue: 4500 }],
+        by_staff: [{ id: null, name: "Без мастера", count: 3, done: 1 }],
+        rating_histogram: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 },
+        bookings: [
+          {
+            id: 8001,
+            created_at: new Date().toISOString(),
+            status: "done",
+            service: "Стрижка",
+            service_id: 301,
+            price: 1500,
+            staff: "Без мастера",
+            staff_id: null,
+            client: "Тест Клиент",
+            slot_starts_at: new Date().toISOString(),
+          },
+        ],
+      });
+    }
     if (path.includes("/booking/acquiring") && method === "PATCH") {
       let body = {};
       try {
@@ -1113,6 +1147,47 @@ export async function installProviderMocks(
       });
     }
     if (path.includes("/health")) return json({ status: "ok", checks: { db: true } });
+    if (path.includes("/reviews/unread-count") && method === "GET") {
+      const count = reviewsPayload.filter((r) => r.is_new || !r.provider_seen_at).length;
+      return json({ count });
+    }
+    if (path.includes("/reviews/mark-seen") && method === "POST") {
+      const marked = reviewsPayload.filter((r) => r.is_new || !r.provider_seen_at).length;
+      reviewsPayload = reviewsPayload.map((r) => ({
+        ...r,
+        is_new: false,
+        provider_seen_at: new Date().toISOString(),
+      }));
+      return json({ marked });
+    }
+    const replyMatch = path.match(/\/reviews\/(\d+)\/reply\/?$/);
+    if (replyMatch && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const id = Number(replyMatch[1]);
+      reviewsPayload = reviewsPayload.map((r) =>
+        Number(r.id) === id
+          ? {
+              ...r,
+              reply: {
+                id: 1,
+                text: body.text || "",
+                sent_via_chat: Boolean(body.via_chat),
+                created_at: new Date().toISOString(),
+              },
+            }
+          : r,
+      );
+      const updated = reviewsPayload.find((r) => Number(r.id) === id) || { id, reply: { text: body.text } };
+      return json(updated);
+    }
+    if (path.match(/\/reviews\/?$/) && method === "GET") {
+      return json(reviewsPayload);
+    }
     // Prefer empty lists over {} — many App loaders call .filter on arrays.
     return json([]);
   });
