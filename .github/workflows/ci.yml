@@ -123,6 +123,7 @@ jobs:
           cafe.tests_guest_order_pay
           cafe.tests_menu_api
           cafe.tests_floors_api
+          cafe.tests_orders_status_api
           shop.tests_public_order_pay
           shop.tests_menu_api
           users.test_working_hours

@@ -63,7 +63,7 @@ const ORG_BOOKING = (() => {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[], catalogSeeded?: boolean|null, slots?: object[], clients?: object[], reviews?: object[], providerSphere?: string|null, shopCategories?: object[], shopProducts?: object[] }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[], catalogSeeded?: boolean|null, slots?: object[], clients?: object[], reviews?: object[], providerSphere?: string|null, shopCategories?: object[], shopProducts?: object[], cafeOrders?: object[] }} [options]
  */
 export async function installProviderMocks(
   page,
@@ -88,6 +88,7 @@ export async function installProviderMocks(
     providerSphere = null,
     shopCategories = null,
     shopProducts = null,
+    cafeOrders = null,
   } = {},
 ) {
   await page.addInitScript(() => {
@@ -161,6 +162,7 @@ export async function installProviderMocks(
   let cafeFloors = [];
   let cafeFloorSeq = 7000;
   let cafeTableSeq = 7100;
+  let cafeOrdersPayload = Array.isArray(cafeOrders) ? cafeOrders.map((o) => ({ ...o })) : [];
   let shopCategoriesPayload = Array.isArray(shopCategories) ? shopCategories.map((c) => ({ ...c })) : [];
   let shopProductsPayload = Array.isArray(shopProducts) ? shopProducts.map((p) => ({ ...p })) : [];
   let shopCatSeq = 8100;
@@ -1396,6 +1398,24 @@ export async function installProviderMocks(
         items: (c.items || []).filter((it) => Number(it.id) !== id),
       }));
       return route.fulfill({ status: 204, body: "" });
+    }
+    if (path.match(/\/cafe\/orders\/?$/) && method === "GET") {
+      return json(cafeOrdersPayload);
+    }
+    const cafeOrderMatch = path.match(/\/cafe\/orders\/(\d+)$/);
+    if (cafeOrderMatch && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const id = Number(cafeOrderMatch[1]);
+      cafeOrdersPayload = cafeOrdersPayload.map((o) =>
+        Number(o.id) === id ? { ...o, ...body, id } : o,
+      );
+      const updated = cafeOrdersPayload.find((o) => Number(o.id) === id);
+      return json(updated || { id, ...body });
     }
     if (path.includes("/cafe/")) return json([]);
     if (path.includes("/shop/categories/from-pool") && method === "POST") {
