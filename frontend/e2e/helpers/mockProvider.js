@@ -63,7 +63,7 @@ const ORG_BOOKING = (() => {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[], catalogSeeded?: boolean|null, slots?: object[], clients?: object[], reviews?: object[], providerSphere?: string|null, shopCategories?: object[], shopProducts?: object[], cafeOrders?: object[], shopOrders?: object[] }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[], catalogSeeded?: boolean|null, slots?: object[], clients?: object[], reviews?: object[], providerSphere?: string|null, shopCategories?: object[], shopProducts?: object[], cafeOrders?: object[], shopOrders?: object[], shopReturns?: object[] }} [options]
  */
 export async function installProviderMocks(
   page,
@@ -90,6 +90,7 @@ export async function installProviderMocks(
     shopProducts = null,
     cafeOrders = null,
     shopOrders = null,
+    shopReturns = null,
   } = {},
 ) {
   await page.addInitScript(() => {
@@ -186,6 +187,7 @@ export async function installProviderMocks(
   let shopCategoriesPayload = Array.isArray(shopCategories) ? shopCategories.map((c) => ({ ...c })) : [];
   let shopProductsPayload = Array.isArray(shopProducts) ? shopProducts.map((p) => ({ ...p })) : [];
   let shopOrdersPayload = Array.isArray(shopOrders) ? shopOrders.map((o) => ({ ...o })) : [];
+  let shopReturnsPayload = Array.isArray(shopReturns) ? shopReturns.map((r) => ({ ...r })) : [];
   let shopCatSeq = 8100;
   let shopProductSeq = 9200;
   let mePayload = {
@@ -1557,6 +1559,41 @@ export async function installProviderMocks(
       );
       const updated = shopOrdersPayload.find((o) => Number(o.id) === id);
       return json(updated || { id, ...body });
+    }
+    if (path.match(/\/shop\/returns\/?$/) && method === "GET") {
+      return json(shopReturnsPayload);
+    }
+    if (path.match(/\/shop\/returns\/?$/) && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const id = Number(body.id || body.return_id);
+      shopReturnsPayload = shopReturnsPayload.map((r) =>
+        Number(r.id) === id
+          ? {
+              ...r,
+              status: body.status || r.status,
+              seller_note:
+                body.seller_note != null && body.seller_note !== ""
+                  ? body.seller_note
+                  : r.seller_note,
+              id,
+            }
+          : r,
+      );
+      const updated = shopReturnsPayload.find((r) => Number(r.id) === id);
+      return json({
+        id,
+        status: updated?.status || body.status || "pending",
+        seller_note: updated?.seller_note || "",
+        refund_id: "",
+        bonus_restored: "0",
+        bonus_clawback: "0",
+        stock_restocked: 0,
+      });
     }
     if (path.includes("/shop/")) return json([]);
     if (path.includes("/reviews/unread-count") && method === "GET") {
