@@ -63,7 +63,7 @@ const ORG_BOOKING = (() => {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[], catalogSeeded?: boolean|null, slots?: object[], clients?: object[], reviews?: object[], providerSphere?: string|null, shopCategories?: object[], shopProducts?: object[], cafeOrders?: object[], shopOrders?: object[], shopReturns?: object[] }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[], catalogSeeded?: boolean|null, slots?: object[], clients?: object[], reviews?: object[], providerSphere?: string|null, shopCategories?: object[], shopProducts?: object[], cafeOrders?: object[], shopOrders?: object[], shopReturns?: object[], inspectionReports?: object[] }} [options]
  */
 export async function installProviderMocks(
   page,
@@ -91,6 +91,7 @@ export async function installProviderMocks(
     cafeOrders = null,
     shopOrders = null,
     shopReturns = null,
+    inspectionReports: inspectionReportsOpt = null,
   } = {},
 ) {
   await page.addInitScript(() => {
@@ -261,7 +262,12 @@ export async function installProviderMocks(
     voice_minutes_used: 0,
     voice_minutes_left: 30,
   };
-  let inspectionReports = [];
+  let inspectionReports = Array.isArray(inspectionReportsOpt)
+    ? inspectionReportsOpt.map((r) => ({
+        ...r,
+        items: Array.isArray(r.items) ? r.items.map((it) => ({ ...it })) : [],
+      }))
+    : [];
   let inspectionReportSeq = 8800;
   let inspectionItemSeq = 8900;
   let shopCatSeq = 8100;
@@ -1878,6 +1884,48 @@ export async function installProviderMocks(
       row.sent_at = new Date().toISOString();
       row.public_url = `/i/${row.share_token}`;
       row.updated_at = row.sent_at;
+      return json(row);
+    }
+    const inspectionRepairMatch = path.match(/\/inspections\/reports\/(\d+)\/repair-status\/?$/);
+    if (inspectionRepairMatch && method === "POST") {
+      const id = Number(inspectionRepairMatch[1]);
+      const row = inspectionReports.find((r) => Number(r.id) === id);
+      if (!row) {
+        return route.fulfill({
+          status: 404,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Not found." }),
+        });
+      }
+      if (row.status !== "approved") {
+        return route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({
+            detail: "Статус ремонта можно менять только после утверждения клиентом.",
+          }),
+        });
+      }
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const value = String(body.repair_status || body.status || "").trim();
+      const allowed = new Set(["waiting_parts", "in_progress", "ready", "handed_over"]);
+      if (!allowed.has(value)) {
+        return route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({
+            detail: "Укажите статус: ждём запчасти / в работе / готов / выдан.",
+          }),
+        });
+      }
+      row.repair_status = value;
+      row.repair_status_updated_at = new Date().toISOString();
+      row.updated_at = row.repair_status_updated_at;
       return json(row);
     }
     const inspectionDetail = path.match(/\/inspections\/reports\/(\d+)\/?$/);
