@@ -100,6 +100,13 @@ export async function installProviderMocks(
     localStorage.setItem("vmeste_cookie_consent_v1", "necessary");
   });
 
+  if (providerSphere === "marketplaces") {
+    await page.addInitScript(() => {
+      localStorage.setItem("vmeste_mp_onboard_done", "1");
+      localStorage.setItem("vmeste_mp_ui_mode", "advanced");
+    });
+  }
+
   await page.addInitScript(() => {
     window.ymaps = {
       ready(cb) {
@@ -199,6 +206,37 @@ export async function installProviderMocks(
     bonus_earn_percent: "0",
     bonus_max_spend_percent: "50",
   };
+  let mpSettingsPayload = {
+    environment: "sandbox",
+    ozon_client_id: "e2e-ozon-client",
+    has_ozon_api_key: true,
+    has_wb_api_key: false,
+    has_yandex_disk: false,
+    yandex_disk_oauth: false,
+    video_enabled: true,
+    ai_enabled: false,
+    ai_model: "",
+    has_webhook_secret: false,
+    webhook_url: "https://example.test/api/marketplaces/webhook/",
+    last_sync_at: null,
+    low_stock_threshold: 5,
+    price_protect_enabled: false,
+    price_min_floor_percent: 10,
+    ozon_disable_auto_actions: true,
+    sku_costs: {},
+    spp_rules: [],
+    spp_reprice_enabled: false,
+    notify_telegram: true,
+    notify_push: true,
+    notify_on_new_orders: true,
+    notify_on_sync_errors: true,
+    permissions: {
+      marketplace_view_keys: true,
+      marketplace_manage_orders: true,
+      marketplace_manage_catalog: true,
+    },
+    telegram_ready: false,
+  };
   let shopCatSeq = 8100;
   let shopProductSeq = 9200;
   let mePayload = {
@@ -225,6 +263,10 @@ export async function installProviderMocks(
     if (providerSphere === "shops") {
       mePayload.organization_name = "Магазин E2E";
       mePayload.organization_slug = "e2e-shop";
+    }
+    if (providerSphere === "marketplaces") {
+      mePayload.organization_name = "Маркетплейсы E2E";
+      mePayload.organization_slug = "e2e-marketplaces";
     }
   }
   let calendarToken = "token-old";
@@ -1609,6 +1651,45 @@ export async function installProviderMocks(
       });
     }
     if (path.includes("/shop/")) return json([]);
+    if (path.includes("/marketplaces/settings") && method === "GET") {
+      return json(mpSettingsPayload);
+    }
+    if (path.includes("/marketplaces/settings") && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      mpSettingsPayload = {
+        ...mpSettingsPayload,
+        ...body,
+        has_ozon_api_key:
+          Boolean(mpSettingsPayload.has_ozon_api_key) ||
+          Boolean(body.ozon_api_key && !String(body.ozon_api_key).startsWith("•")),
+        has_wb_api_key:
+          Boolean(mpSettingsPayload.has_wb_api_key) ||
+          Boolean(body.wb_api_key && !String(body.wb_api_key).startsWith("•")),
+      };
+      delete mpSettingsPayload.ozon_api_key;
+      delete mpSettingsPayload.wb_api_key;
+      delete mpSettingsPayload.yandex_disk_token;
+      return json(mpSettingsPayload);
+    }
+    if (path.includes("/marketplaces/")) {
+      if (
+        path.includes("/history") ||
+        path.includes("/templates") ||
+        path.includes("/reply-templates") ||
+        path.includes("/card-designs")
+      ) {
+        return json({ results: [] });
+      }
+      if (path.includes("/alerts")) {
+        return json({ counts: { low_stock: 0, failed_imports: 0, log_errors: 0 }, items: [] });
+      }
+      return json([]);
+    }
     if (path.includes("/reviews/unread-count") && method === "GET") {
       const count = reviewsPayload.filter((r) => r.is_new || !r.provider_seen_at).length;
       return json({ count });

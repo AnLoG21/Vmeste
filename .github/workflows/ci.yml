@@ -117,6 +117,7 @@ jobs:
           marketplaces.tests_card_designs
           marketplaces.tests_sync
           marketplaces.tests_e2e_sandbox
+          marketplaces.tests_settings_api
           cafe.test_delivery_zones
           cafe.test_courier_access
           cafe.test_menu_nutrition
