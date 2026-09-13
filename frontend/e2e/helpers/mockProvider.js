@@ -327,6 +327,26 @@ export async function installProviderMocks(
       return json(sold, 201);
     }
     if (path.includes("/booking/client-packages") && method === "GET") return json(purchasesPayload);
+    if (/\/booking\/packages\/?$/.test(path) && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const created = {
+        id: 800 + packagesPayload.length,
+        provider: ME.id,
+        name: String(body.name || "Абонемент"),
+        visits_count: Number(body.visits_count) || 1,
+        price: String(body.price || "0"),
+        validity_days: body.validity_days == null ? null : Number(body.validity_days),
+        service_ids: Array.isArray(body.service_ids) ? body.service_ids : [],
+        is_active: true,
+      };
+      packagesPayload = [...packagesPayload, created];
+      return json(created, 201);
+    }
     if (/\/booking\/packages\/?$/.test(path) && method === "GET") return json(packagesPayload);
     if (path.includes("/booking")) return json([]);
     if (path.includes("/catalog/")) return json([]);

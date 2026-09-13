@@ -72,7 +72,9 @@ jobs:
           reviews.tests_client_reviews_api
           chat.tests_conversations_api
           chat.tests_chat_activity_api
+          chat.tests_mark_read_api
           notifications.tests_in_app_api
+          notifications.tests_telegram_link_api
           payments.tests
           marketplaces.tests
           marketplaces.tests_analytics

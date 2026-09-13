@@ -57,6 +57,7 @@ export async function installClientMocks(
     bookings = null,
     conversations = null,
     activityNotifications = null,
+    seedMessages = null,
   } = {},
 ) {
   const loyaltyPayload = loyalty || { enabled: false, balance: 0, rub_per_point: 1 };
@@ -81,10 +82,11 @@ export async function installClientMocks(
   const conversationsPayload = Array.isArray(conversations)
     ? conversations.map((c) => ({ ...c }))
     : [];
-  let messagesStore = [];
+  let messagesStore = Array.isArray(seedMessages) ? seedMessages.map((m) => ({ ...m })) : [];
   let activityNotes = Array.isArray(activityNotifications)
     ? activityNotifications.map((n) => ({ ...n }))
     : [];
+  let telegramLink = null;
 
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
@@ -371,6 +373,9 @@ export async function installClientMocks(
     if (path.includes("/chat/conversations") && method === "GET") {
       return json(conversationsPayload);
     }
+    if (path.match(/\/chat\/conversations\/\d+\/mark-read$/) && method === "POST") {
+      return json({ ok: true, last_read_message_id: 501 });
+    }
     if (path.includes("/chat/messages") && method === "POST") {
       let body = {};
       try {
@@ -424,6 +429,25 @@ export async function installClientMocks(
       const ids = new Set((body.ids || []).map(Number));
       activityNotes = activityNotes.filter((n) => !ids.has(Number(n.id)));
       return json({ ok: true });
+    }
+    if (path.includes("/notifications/telegram/link") && method === "GET") {
+      if (!telegramLink) {
+        telegramLink = {
+          link_token: "e2e-tg-token",
+          telegram_chat_id: "",
+          linked: false,
+          deep_link: "https://t.me/vmeste_e2e_bot?start=e2e-tg-token",
+          bot_username: "vmeste_e2e_bot",
+          hint: "",
+        };
+      }
+      return json(telegramLink);
+    }
+    if (path.includes("/notifications/telegram/link") && method === "DELETE") {
+      if (telegramLink) {
+        telegramLink = { ...telegramLink, linked: false, telegram_chat_id: "" };
+      }
+      return json({ ok: true, linked: false });
     }
     if (path.includes("/chat/")) return json([]);
     if (path.includes("/cafe/my-orders")) return json([]);
