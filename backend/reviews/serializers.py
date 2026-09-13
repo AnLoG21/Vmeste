@@ -107,7 +107,9 @@ class ReviewSerializer(serializers.ModelSerializer):
     def get_is_new(self, obj):
         request = self.context.get("request")
         user = getattr(request, "user", None) if request else None
-        if not user or user.role not in ("provider", "staff"):
+        if not user or not getattr(user, "is_authenticated", False):
+            return False
+        if user.role not in ("provider", "staff"):
             return False
         return obj.provider_seen_at is None
 

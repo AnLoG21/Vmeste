@@ -66,6 +66,8 @@ jobs:
           booking.tests_org_booking_actions_api
           inspections.tests_pdf
           inspections.tests_repair_funnel
+          inspections.tests_public_approve_api
+          reviews.tests_client_reviews_api
           payments.tests
           marketplaces.tests
           marketplaces.tests_analytics

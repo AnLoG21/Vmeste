@@ -58,6 +58,7 @@ export async function installClientMocks(
   const loyaltyPayload = loyalty || { enabled: false, balance: 0, rub_per_point: 1 };
   const packagesPayload = Array.isArray(clientPackages) ? clientPackages : [];
   let bookingsList = Array.isArray(bookings) ? bookings.map((b) => ({ ...b })) : [];
+  let reviewsStore = [];
 
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
@@ -163,7 +164,90 @@ export async function installClientMocks(
           : { ready: false, mode: "off", percent: 50 },
       });
     }
-    if (path.includes("/reviews")) return json([]);
+    if (path.match(/\/reviews\/\d+$/) && method === "PATCH") {
+      const id = Number(path.split("/").pop());
+      let append = "";
+      try {
+        const raw = req.postData() || "";
+        if (raw.includes("append_text") || raw.includes("form-data")) {
+          const m = raw.match(/name="append_text"[\r\n]+([\s\S]*?)[\r\n]+-{2,}/);
+          append = m ? m[1].trim() : "";
+        } else {
+          const body = req.postDataJSON?.() || JSON.parse(raw || "{}");
+          append = String(body.append_text || body.text || "").trim();
+        }
+      } catch {
+        append = "";
+      }
+      const existing = reviewsStore.find((r) => Number(r.id) === id);
+      if (!existing) return json({ detail: "Not found" }, 404);
+      if (existing.supplemented_at) return json({ detail: "Отзыв уже дополнен." }, 400);
+      const updated = {
+        ...existing,
+        text: append ? `${existing.text || ""}\n\n${append}`.trim() : existing.text,
+        supplemented_at: new Date().toISOString(),
+      };
+      reviewsStore = reviewsStore.map((r) => (Number(r.id) === id ? updated : r));
+      bookingsList = bookingsList.map((b) =>
+        Number(b.id) === Number(updated.booking)
+          ? { ...b, review: { id: updated.id, rating: updated.rating, text: updated.text } }
+          : b,
+      );
+      return json(updated);
+    }
+    if (path.includes("/reviews") && method === "POST") {
+      let rating = 5;
+      let text = "";
+      let bookingId = 0;
+      let providerId = ORG.provider;
+      try {
+        const raw = req.postData() || "";
+        if (raw.includes("form-data") || raw.includes("Content-Disposition")) {
+          const ratingM = raw.match(/name="rating"[\r\n]+([\s\S]*?)[\r\n]+-{2,}/);
+          const textM = raw.match(/name="text"[\r\n]+([\s\S]*?)[\r\n]+-{2,}/);
+          const bookingM = raw.match(/name="booking"[\r\n]+([\s\S]*?)[\r\n]+-{2,}/);
+          const providerM = raw.match(/name="provider"[\r\n]+([\s\S]*?)[\r\n]+-{2,}/);
+          if (ratingM) rating = Number(ratingM[1].trim()) || 5;
+          if (textM) text = textM[1].trim();
+          if (bookingM) bookingId = Number(bookingM[1].trim()) || 0;
+          if (providerM) providerId = Number(providerM[1].trim()) || ORG.provider;
+        } else {
+          const body = req.postDataJSON?.() || JSON.parse(raw || "{}");
+          rating = Number(body.rating) || 5;
+          text = String(body.text || "");
+          bookingId = Number(body.booking) || 0;
+          providerId = Number(body.provider) || ORG.provider;
+        }
+      } catch {
+        /* defaults */
+      }
+      const created = {
+        id: 7001 + reviewsStore.length,
+        booking: bookingId,
+        provider: providerId,
+        rating,
+        text,
+        created_at: new Date().toISOString(),
+        photos: [],
+        reply: null,
+      };
+      reviewsStore = [created, ...reviewsStore];
+      bookingsList = bookingsList.map((b) =>
+        Number(b.id) === bookingId
+          ? {
+              ...b,
+              review: {
+                id: created.id,
+                rating: created.rating,
+                text: created.text,
+                created_at: created.created_at,
+              },
+            }
+          : b,
+      );
+      return json(created, 201);
+    }
+    if (path.includes("/reviews")) return json(reviewsStore);
     if (path.includes("/booking/staff")) return json([]);
     if (path.includes("/available-windows")) {
       return json(emptyWindows ? [] : [WINDOW]);
@@ -272,4 +356,11 @@ const CLIENT_BOOKING = (() => {
   };
 })();
 
-export { ORG, ME, SERVICE, WINDOW, windowKey, CLIENT_PACKAGE, CLIENT_BOOKING };
+const DONE_BOOKING = {
+  ...CLIENT_BOOKING,
+  id: 9002,
+  status: "done",
+  payment_status: "paid",
+};
+
+export { ORG, ME, SERVICE, WINDOW, windowKey, CLIENT_PACKAGE, CLIENT_BOOKING, DONE_BOOKING };
