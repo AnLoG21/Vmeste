@@ -63,7 +63,7 @@ const ORG_BOOKING = (() => {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[], catalogSeeded?: boolean|null }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[], catalogSeeded?: boolean|null, slots?: object[], clients?: object[] }} [options]
  */
 export async function installProviderMocks(
   page,
@@ -82,6 +82,8 @@ export async function installProviderMocks(
     catalogServices = null,
     catalogCategories = null,
     catalogSeeded = null,
+    slots = null,
+    clients = null,
   } = {},
 ) {
   await page.addInitScript(() => {
@@ -145,7 +147,8 @@ export async function installProviderMocks(
     : [];
   let packagesPayload = Array.isArray(packages) ? packages.map((p) => ({ ...p })) : [];
   let purchasesPayload = [];
-  let slotsPayload = [];
+  let slotsPayload = Array.isArray(slots) ? slots.map((s) => ({ ...s })) : [];
+  let clientsPayload = Array.isArray(clients) ? clients.map((c) => ({ ...c })) : [];
   let mePayload = {
     ...ME,
     anonymous_seat_count: 1,
@@ -643,7 +646,51 @@ export async function installProviderMocks(
         201,
       );
     }
-    if (path.includes("/booking/clients/lookup")) return json([]);
+    if (path.includes("/booking/clients/lookup") && method === "GET") {
+      const q = (url.searchParams.get("q") || "").trim().toLowerCase();
+      const results = clientsPayload.filter((c) => {
+        const name = String(c.name || "").toLowerCase();
+        const phone = String(c.phone || "");
+        return !q || name.includes(q) || phone.includes(q);
+      });
+      return json({
+        found: results.length > 0,
+        client: results[0] || null,
+        results,
+        normalized_phone: "",
+      });
+    }
+    if (path.match(/\/booking\/clients\/?$/) && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const created = {
+        id: 7000 + clientsPayload.length,
+        name: body.name || "Клиент",
+        phone: body.phone || "",
+        avatar_url: "",
+        avatar_initial: (body.name || "К")[0],
+      };
+      clientsPayload = [...clientsPayload, created];
+      return json(created, 201);
+    }
+    if (path.includes("/booking/clients") && method === "GET") {
+      return json({
+        results: clientsPayload,
+        count: clientsPayload.length,
+        page: 1,
+        total_pages: 1,
+        page_size: 20,
+      });
+    }
+    if (path.includes("/booking/clients") && method === "DELETE") {
+      const id = Number(url.searchParams.get("client") || 0);
+      clientsPayload = clientsPayload.filter((c) => Number(c.id) !== id);
+      return route.fulfill({ status: 204, body: "" });
+    }
     if (path.includes("/booking/slots/manual-hold") && method === "POST") {
       let body = {};
       try {
