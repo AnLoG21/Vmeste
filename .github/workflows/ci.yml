@@ -91,6 +91,8 @@ jobs:
           users.tests_password_reset_api
           users.tests_email_verification_api
           locations.tests_branch_api
+          users.tests_organization_info_api
+          users.tests_gallery_api
           payments.tests
           marketplaces.tests
           marketplaces.tests_analytics

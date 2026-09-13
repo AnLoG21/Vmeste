@@ -128,6 +128,7 @@ export async function installProviderMocks(
   let bookingsList = Array.isArray(bookings) ? bookings.map((b) => ({ ...b })) : [];
   let staffLinks = [];
   let locationRows = [];
+  let galleryPhotos = [];
   const conversationsPayload = Array.isArray(conversations)
     ? conversations.map((c) => ({ ...c }))
     : [];
@@ -238,6 +239,44 @@ export async function installProviderMocks(
       }
       mePayload = { ...mePayload, ...body };
       return json(mePayload);
+    }
+    if (path.includes("/users/organization-info") && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      mePayload = {
+        ...mePayload,
+        ...(body.organization_working_hours
+          ? { organization_working_hours: body.organization_working_hours }
+          : {}),
+        ...(body.organization_phones ? { organization_phones: body.organization_phones } : {}),
+        ...(body.organization_websites ? { organization_websites: body.organization_websites } : {}),
+        ...(body.organization_card_note != null
+          ? { organization_card_note: body.organization_card_note }
+          : {}),
+      };
+      return json(mePayload);
+    }
+    if (path.includes("/users/gallery") && method === "GET") {
+      return json({ photos: galleryPhotos, max_photos: 5, count: galleryPhotos.length });
+    }
+    if (path.includes("/users/gallery") && method === "POST") {
+      const created = {
+        id: 8000 + galleryPhotos.length,
+        url: "https://example.com/e2e-org-gallery.png",
+        thumb_url: "https://example.com/e2e-org-gallery-thumb.png",
+        sort_order: galleryPhotos.length + 1,
+      };
+      galleryPhotos = [...galleryPhotos, created];
+      return json(created, 201);
+    }
+    if (path.includes("/users/gallery") && method === "DELETE") {
+      const id = Number(url.searchParams.get("id") || 0);
+      galleryPhotos = galleryPhotos.filter((p) => Number(p.id) !== id);
+      return route.fulfill({ status: 204, body: "" });
     }
     if (path.includes("/users/roles")) return json([{ key: "provider", value: "Организация" }]);
     if (path.includes("/users/spheres")) {

@@ -68,6 +68,8 @@ npx playwright install chromium && npm run test:e2e
 | `provider-staff-invite.spec.js` | /staff → create invite → POST /booking/staff/ |
 | `provider-org-address.spec.js` | /organization → save org address → PATCH me |
 | `provider-branch-create.spec.js` | /organization → add branch → POST /locations/ |
+| `provider-org-card.spec.js` | /organization → save client card → PATCH organization-info |
+| `provider-org-gallery.spec.js` | /organization → upload gallery → POST /users/gallery/ |
 | `provider-chats.spec.js` | /chats → Избранное |
 | `provider-loyalty.spec.js` | /service-catalog → save loyalty PATCH |
 | `provider-create-package.spec.js` | /service-catalog → Создать абонемент → POST |
@@ -87,7 +89,7 @@ npx playwright install chromium && npm run test:e2e
 | `subscription-promo.spec.js` | Оплатить → apply VSEVMESTE |
 | `subscription-cancel.spec.js` | Отключить подписку → cancel API |
 
-Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers + status/enable/disconnect API, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token, client notify prefs, org messaging settings + org telegram link, calendar ICS rotate, booking message templates, acquiring settings, staff invite accept/reject + create (Business gate), change-password email flow + confirm-password-change token, change-email verification flow, me avatar upload/clear, me profile PATCH, delete-account anonymize, password-reset request/confirm, email verify/resend, provider branch locations create.
+Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers + status/enable/disconnect API, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token, client notify prefs, org messaging settings + org telegram link, calendar ICS rotate, booking message templates, acquiring settings, staff invite accept/reject + create (Business gate), change-password email flow + confirm-password-change token, change-email verification flow, me avatar upload/clear, me profile PATCH, delete-account anonymize, password-reset request/confirm, email verify/resend, provider branch locations create, organization-info working hours/contacts, org gallery upload/delete.
 
 ## CI
 
