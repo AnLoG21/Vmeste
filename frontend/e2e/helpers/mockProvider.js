@@ -158,6 +158,9 @@ export async function installProviderMocks(
   let cafeCategories = [];
   let cafeItemSeq = 9000;
   let cafeCatSeq = 8000;
+  let cafeFloors = [];
+  let cafeFloorSeq = 7000;
+  let cafeTableSeq = 7100;
   let shopCategoriesPayload = Array.isArray(shopCategories) ? shopCategories.map((c) => ({ ...c })) : [];
   let shopProductsPayload = Array.isArray(shopProducts) ? shopProducts.map((p) => ({ ...p })) : [];
   let shopCatSeq = 8100;
@@ -1189,8 +1192,109 @@ export async function installProviderMocks(
         updated_at: new Date().toISOString(),
       });
     }
-    if (path.includes("/cafe/floors") && method === "GET") {
-      return json([]);
+    if (path.includes("/cafe/floors") && method === "GET" && !path.match(/\/floors\/\d+/)) {
+      return json(cafeFloors);
+    }
+    if (path.match(/\/cafe\/floors\/?$/) && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const created = {
+        id: ++cafeFloorSeq,
+        name: body.name || `Зал ${cafeFloors.length + 1}`,
+        width: Number(body.width) || 800,
+        height: Number(body.height) || 600,
+        drawings: Array.isArray(body.drawings) ? body.drawings : [],
+        tables: [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      cafeFloors = [...cafeFloors, created];
+      return json(created, 201);
+    }
+    const cafeFloorTablesMatch = path.match(/\/cafe\/floors\/(\d+)\/tables$/);
+    if (cafeFloorTablesMatch && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const floorId = Number(cafeFloorTablesMatch[1]);
+      const created = {
+        id: ++cafeTableSeq,
+        label: body.label || "Стол",
+        x: Number(body.x) || 40,
+        y: Number(body.y) || 40,
+        width: Number(body.width) || 88,
+        height: Number(body.height) || 88,
+        rotation: Number(body.rotation) || 0,
+        seats: Number(body.seats) || 4,
+        shape: body.shape || "round",
+        pin_code: body.pin_code || "123456",
+        public_token: `tbl${cafeTableSeq}`,
+        is_active: true,
+        is_occupied: false,
+        guest_count: 0,
+        waiter_called_at: null,
+        sort_order: 0,
+        qr_path: `/t/tbl${cafeTableSeq}`,
+      };
+      cafeFloors = cafeFloors.map((f) =>
+        Number(f.id) === floorId ? { ...f, tables: [...(f.tables || []), created] } : f,
+      );
+      return json(created, 201);
+    }
+    const cafeFloorMatch = path.match(/\/cafe\/floors\/(\d+)$/);
+    if (cafeFloorMatch && method === "DELETE") {
+      const id = Number(cafeFloorMatch[1]);
+      cafeFloors = cafeFloors.filter((f) => Number(f.id) !== id);
+      return route.fulfill({ status: 204, body: "" });
+    }
+    if (cafeFloorMatch && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const id = Number(cafeFloorMatch[1]);
+      cafeFloors = cafeFloors.map((f) =>
+        Number(f.id) === id ? { ...f, ...body, tables: f.tables || [] } : f,
+      );
+      const updated = cafeFloors.find((f) => Number(f.id) === id);
+      return json(updated || body);
+    }
+    const cafeTableMatch = path.match(/\/cafe\/tables\/(\d+)$/);
+    if (cafeTableMatch && method === "DELETE") {
+      const id = Number(cafeTableMatch[1]);
+      cafeFloors = cafeFloors.map((f) => ({
+        ...f,
+        tables: (f.tables || []).filter((t) => Number(t.id) !== id),
+      }));
+      return route.fulfill({ status: 204, body: "" });
+    }
+    if (cafeTableMatch && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const id = Number(cafeTableMatch[1]);
+      let updated = null;
+      cafeFloors = cafeFloors.map((f) => ({
+        ...f,
+        tables: (f.tables || []).map((t) => {
+          if (Number(t.id) !== id) return t;
+          updated = { ...t, ...body };
+          return updated;
+        }),
+      }));
+      return json(updated || { id, ...body });
     }
     if (path.match(/\/cafe\/menu\/categories\/?$/) && method === "GET") {
       return json(cafeCategories);
