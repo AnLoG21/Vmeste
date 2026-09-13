@@ -63,7 +63,7 @@ const ORG_BOOKING = (() => {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], confirmError?: string|null, doneError?: string|null, cancelError?: string|null }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], confirmError?: string|null, doneError?: string|null, cancelError?: string|null }} [options]
  */
 export async function installProviderMocks(
   page,
@@ -71,6 +71,7 @@ export async function installProviderMocks(
     forPay = false,
     waitlist = null,
     bookings = null,
+    conversations = null,
     confirmError = null,
     doneError = null,
     cancelError = null,
@@ -86,7 +87,9 @@ export async function installProviderMocks(
   let mineSubs = forPay ? [] : [{ ...ACTIVE_SUB }];
   let waitlistRows = Array.isArray(waitlist) ? waitlist.map((r) => ({ ...r })) : [];
   let bookingsList = Array.isArray(bookings) ? bookings.map((b) => ({ ...b })) : [];
-
+  const conversationsPayload = Array.isArray(conversations)
+    ? conversations.map((c) => ({ ...c }))
+    : [];
   await page.route("**/api/**", async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -268,8 +271,48 @@ export async function installProviderMocks(
       return json(bookingsList.find((b) => Number(b.id) === id) || { id, status: "cancelled" });
     }
     if (path.match(/\/booking$/) && method === "GET") return json(bookingsList);
+    if (path.includes("/booking/loyalty/settings") && method === "GET") {
+      return json({
+        enabled: false,
+        points_per_visit: 1,
+        points_per_100_rub: 0,
+        rub_per_point: "1.00",
+        welcome_bonus: 0,
+      });
+    }
+    if (path.includes("/booking/loyalty/settings") && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      return json({
+        enabled: Boolean(body.enabled),
+        points_per_visit: Number(body.points_per_visit) || 0,
+        points_per_100_rub: Number(body.points_per_100_rub) || 0,
+        rub_per_point: String(body.rub_per_point || "1"),
+        welcome_bonus: Number(body.welcome_bonus) || 0,
+      });
+    }
+    if (path.includes("/booking/packages") && method === "GET") return json([]);
+    if (path.includes("/booking/client-packages") && method === "GET") return json([]);
     if (path.includes("/booking")) return json([]);
     if (path.includes("/catalog/")) return json([]);
+    if (path.includes("/chat/conversations") && method === "GET") {
+      return json(conversationsPayload);
+    }
+    if (path.includes("/chat/messages") && method === "GET") return json([]);
+    if (path.includes("/chat/activity")) {
+      return json({
+        pending_staff_invites: [],
+        notifications: [],
+        unread_notification_count: 0,
+        pending_invite_count: 0,
+        unread_chat_messages_count: 0,
+        badge_count: 0,
+      });
+    }
     if (path.includes("/chat/")) return json([]);
     if (path.includes("/notifications")) return json([]);
     if (path.includes("/organization-profile")) {

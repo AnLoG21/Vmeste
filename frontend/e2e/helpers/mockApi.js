@@ -55,6 +55,7 @@ export async function installClientMocks(
     clientPackages = null,
     offerPackages = null,
     bookings = null,
+    conversations = null,
   } = {},
 ) {
   const loyaltyPayload = loyalty || { enabled: false, balance: 0, rub_per_point: 1 };
@@ -76,6 +77,9 @@ export async function installClientMocks(
       : [];
   let bookingsList = Array.isArray(bookings) ? bookings.map((b) => ({ ...b })) : [];
   let reviewsStore = [];
+  const conversationsPayload = Array.isArray(conversations)
+    ? conversations.map((c) => ({ ...c }))
+    : [];
 
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
@@ -359,7 +363,31 @@ export async function installClientMocks(
       };
       return json(body, 201);
     }
+    if (path.includes("/chat/conversations") && method === "GET") {
+      return json(conversationsPayload);
+    }
+    if (path.includes("/chat/messages") && method === "GET") {
+      return json([]);
+    }
+    if (path.includes("/chat/activity")) {
+      return json({
+        pending_staff_invites: [],
+        notifications: [],
+        unread_notification_count: 0,
+        pending_invite_count: 0,
+        unread_chat_messages_count: conversationsPayload.reduce(
+          (s, c) => s + (Number(c.unread_message_count) || 0),
+          0,
+        ),
+        badge_count: conversationsPayload.reduce(
+          (s, c) => s + (Number(c.unread_message_count) || 0),
+          0,
+        ),
+      });
+    }
     if (path.includes("/chat/")) return json([]);
+    if (path.includes("/cafe/my-orders")) return json([]);
+    if (path.includes("/inspections/reports")) return json([]);
     if (path.includes("/notifications")) return json([]);
     if (path.includes("/health")) return json({ status: "ok", checks: { db: true } });
 
