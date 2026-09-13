@@ -263,6 +263,7 @@ export async function installProviderMocks(
   };
   let inspectionReports = [];
   let inspectionReportSeq = 8800;
+  let inspectionItemSeq = 8900;
   let shopCatSeq = 8100;
   let shopProductSeq = 9200;
   let mePayload = {
@@ -1799,6 +1800,85 @@ export async function installProviderMocks(
         contentType: "application/json",
         body: JSON.stringify(created),
       });
+    }
+    const inspectionItemsMatch = path.match(/\/inspections\/reports\/(\d+)\/items\/?$/);
+    if (inspectionItemsMatch && method === "POST") {
+      const id = Number(inspectionItemsMatch[1]);
+      const row = inspectionReports.find((r) => Number(r.id) === id);
+      if (!row) {
+        return route.fulfill({
+          status: 404,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Not found." }),
+        });
+      }
+      if (row.status !== "draft") {
+        return route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Пункты можно менять только в черновике." }),
+        });
+      }
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const parts = Number(body.parts_price || 0);
+      const labor = Number(body.labor_price || 0);
+      const severity = body.severity || "recommended";
+      const item = {
+        id: ++inspectionItemSeq,
+        title: body.title || "",
+        description: body.description || "",
+        severity,
+        parts_price: String(parts.toFixed(2)),
+        labor_price: String(labor.toFixed(2)),
+        client_selected: false,
+        sort_order: body.sort_order ?? (row.items || []).length,
+        line_total: String((parts + labor).toFixed(2)),
+        selectable: severity !== "ok",
+        photos: [],
+      };
+      row.items = [...(row.items || []), item];
+      row.updated_at = new Date().toISOString();
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify(item),
+      });
+    }
+    const inspectionSendMatch = path.match(/\/inspections\/reports\/(\d+)\/send\/?$/);
+    if (inspectionSendMatch && method === "POST") {
+      const id = Number(inspectionSendMatch[1]);
+      const row = inspectionReports.find((r) => Number(r.id) === id);
+      if (!row) {
+        return route.fulfill({
+          status: 404,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Not found." }),
+        });
+      }
+      if (row.status !== "draft") {
+        return route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Отправить можно только черновик." }),
+        });
+      }
+      if (!(row.items || []).length) {
+        return route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Добавьте хотя бы один пункт диагностики." }),
+        });
+      }
+      row.status = "sent";
+      row.sent_at = new Date().toISOString();
+      row.public_url = `/i/${row.share_token}`;
+      row.updated_at = row.sent_at;
+      return json(row);
     }
     const inspectionDetail = path.match(/\/inspections\/reports\/(\d+)\/?$/);
     if (inspectionDetail && method === "GET") {

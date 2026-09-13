@@ -92,6 +92,7 @@ jobs:
           inspections.tests_repair_funnel
           inspections.tests_public_approve_api
           inspections.tests_create_api
+          inspections.tests_add_send_api
           reviews.tests_client_reviews_api
           reviews.tests_provider_reply_api
           chat.tests_conversations_api
