@@ -294,9 +294,13 @@ class ServiceViewSet(viewsets.ModelViewSet):
                 break
             ph = ServicePhoto.objects.create(service=service, image=f, sort_order=existing + i)
             created.append(ph)
+        # Avoid stale prefetch_related("photos") from get_object().
+        if hasattr(service, "_prefetched_objects_cache"):
+            service._prefetched_objects_cache.pop("photos", None)
+        photos = list(service.photos.all())
         return Response(
             {
-                "photos": ServicePhotoSerializer(service.photos.all(), many=True, context={"request": request}).data,
+                "photos": ServicePhotoSerializer(photos, many=True, context={"request": request}).data,
                 "gallery": ServiceSerializer(service, context={"request": request}).data.get("gallery"),
             },
             status=status.HTTP_201_CREATED,

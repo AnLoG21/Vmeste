@@ -145,8 +145,10 @@ export async function installProviderMocks(
     : [];
   let packagesPayload = Array.isArray(packages) ? packages.map((p) => ({ ...p })) : [];
   let purchasesPayload = [];
+  let slotsPayload = [];
   let mePayload = {
     ...ME,
+    anonymous_seat_count: 1,
     booking_confirm_message_default: "",
     booking_cancel_message_default: "",
     booking_done_message_default: "",
@@ -292,6 +294,110 @@ export async function installProviderMocks(
     }
     if (path.includes("/catalog/categories")) return json(categoriesPayload);
     {
+      const optPhotoMatch = path.match(/\/catalog\/services\/(\d+)\/options\/(\d+)\/photos(?:\/(\d+))?$/);
+      if (optPhotoMatch) {
+        const svcId = Number(optPhotoMatch[1]);
+        const optId = Number(optPhotoMatch[2]);
+        const photoId = optPhotoMatch[3] ? Number(optPhotoMatch[3]) : null;
+        const svc = servicesPayload.find((s) => Number(s.id) === svcId);
+        const opts = Array.isArray(svc?.options) ? svc.options : [];
+        const opt = opts.find((o) => Number(o.id) === optId);
+        if (method === "DELETE" && photoId && opt) {
+          opt.photos = (opt.photos || []).filter((p) => Number(p.id) !== photoId);
+          return json({ ok: true });
+        }
+        if (method === "POST" && opt) {
+          const ph = {
+            id: 7000 + (opt.photos || []).length,
+            image: "https://example.com/e2e-opt.png",
+            thumb_url: "https://example.com/e2e-opt-thumb.png",
+            sort_order: (opt.photos || []).length + 1,
+          };
+          opt.photos = [...(opt.photos || []), ph];
+          return json(opt, 201);
+        }
+      }
+      const optMatch = path.match(/\/catalog\/services\/(\d+)\/options(?:\/(\d+))?$/);
+      if (optMatch) {
+        const svcId = Number(optMatch[1]);
+        const optId = optMatch[2] ? Number(optMatch[2]) : null;
+        const svcIdx = servicesPayload.findIndex((s) => Number(s.id) === svcId);
+        if (svcIdx < 0) return json({ detail: "Not found" }, 404);
+        const svc = servicesPayload[svcIdx];
+        let options = Array.isArray(svc.options) ? [...svc.options] : [];
+        if (method === "GET" && optId == null) return json(options);
+        if (method === "POST" && optId == null) {
+          let body = {};
+          try {
+            body = req.postDataJSON() || {};
+          } catch {
+            body = {};
+          }
+          const created = {
+            id: 401 + options.length,
+            service: svcId,
+            name: body.name || "Опция",
+            price: String(body.price ?? 0),
+            extra_minutes: Number(body.extra_minutes) || 0,
+            is_active: body.is_active !== false,
+            photos: [],
+          };
+          options = [...options, created];
+          servicesPayload[svcIdx] = { ...svc, options };
+          return json(created, 201);
+        }
+        if (optId != null && method === "PATCH") {
+          let body = {};
+          try {
+            body = req.postDataJSON() || {};
+          } catch {
+            body = {};
+          }
+          options = options.map((o) =>
+            Number(o.id) === optId
+              ? {
+                  ...o,
+                  ...(body.name != null ? { name: body.name } : {}),
+                  ...(body.price != null ? { price: String(body.price) } : {}),
+                  ...(body.extra_minutes != null ? { extra_minutes: body.extra_minutes } : {}),
+                  ...(body.is_active != null ? { is_active: Boolean(body.is_active) } : {}),
+                }
+              : o,
+          );
+          servicesPayload[svcIdx] = { ...svc, options };
+          return json(options.find((o) => Number(o.id) === optId) || { id: optId, ...body });
+        }
+        if (optId != null && method === "DELETE") {
+          options = options.filter((o) => Number(o.id) !== optId);
+          servicesPayload[svcIdx] = { ...svc, options };
+          return route.fulfill({ status: 204, body: "" });
+        }
+      }
+      const photoMatch = path.match(/\/catalog\/services\/(\d+)\/photos(?:\/(\d+))?$/);
+      if (photoMatch) {
+        const svcId = Number(photoMatch[1]);
+        const photoId = photoMatch[2] ? Number(photoMatch[2]) : null;
+        const svcIdx = servicesPayload.findIndex((s) => Number(s.id) === svcId);
+        if (svcIdx < 0) return json({ detail: "Not found" }, 404);
+        const svc = servicesPayload[svcIdx];
+        let photos = Array.isArray(svc.photos) ? [...svc.photos] : [];
+        if (method === "POST" && photoId == null) {
+          const ph = {
+            id: 6000 + photos.length,
+            image: "https://example.com/e2e-svc.png",
+            thumb_url: "https://example.com/e2e-svc-thumb.png",
+            sort_order: photos.length + 1,
+          };
+          photos = [...photos, ph];
+          servicesPayload[svcIdx] = { ...svc, photos, gallery: photos };
+          return json({ photos, gallery: photos }, 201);
+        }
+        if (method === "DELETE" && photoId != null) {
+          photos = photos.filter((p) => Number(p.id) !== photoId);
+          servicesPayload[svcIdx] = { ...svc, photos, gallery: photos };
+          return json({ ok: true });
+        }
+      }
       const svcMatch = path.match(/\/catalog\/services\/(\d+)$/);
       if (svcMatch && method === "PATCH") {
         const id = Number(svcMatch[1]);
@@ -518,7 +624,35 @@ export async function installProviderMocks(
       return json(created, 201);
     }
     if (path.includes("/booking/staff")) return json(staffLinks);
-    if (path.includes("/booking/slots")) return json([]);
+    if (path.match(/\/booking\/slots\/\d+$/) && method === "DELETE") {
+      const id = Number(path.split("/").pop());
+      slotsPayload = slotsPayload.filter((s) => Number(s.id) !== id);
+      return route.fulfill({ status: 204, body: "" });
+    }
+    if (path.match(/\/booking\/slots\/?$/) && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const created = {
+        id: 5000 + slotsPayload.length,
+        provider: ME.id,
+        staff: body.staff ?? null,
+        starts_at: body.starts_at,
+        ends_at: body.ends_at,
+        is_booked: false,
+        hold_label: "",
+        anonymous_index: body.anonymous_index ?? null,
+        service_ids: body.service_ids || [],
+        location: body.location ?? null,
+        recurrence_group: "",
+      };
+      slotsPayload = [...slotsPayload, created];
+      return json(created, 201);
+    }
+    if (path.includes("/booking/slots")) return json(slotsPayload);
     if (path.match(/\/booking\/waitlist\/\d+$/) && method === "PATCH") {
       const id = Number(path.split("/").pop());
       waitlistRows = waitlistRows.map((r) =>
