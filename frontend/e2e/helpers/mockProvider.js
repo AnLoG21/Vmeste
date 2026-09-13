@@ -63,7 +63,7 @@ const ORG_BOOKING = (() => {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[], catalogSeeded?: boolean|null, slots?: object[], clients?: object[] }} [options]
+ * @param {{ forPay?: boolean, waitlist?: object[], bookings?: object[], conversations?: object[], packages?: object[], moyNalogConnected?: boolean, confirmError?: string|null, doneError?: string|null, cancelError?: string|null, staff?: object[], locations?: object[], catalogServices?: object[], catalogCategories?: object[], catalogSeeded?: boolean|null, slots?: object[], clients?: object[], reviews?: object[], providerSphere?: string|null }} [options]
  */
 export async function installProviderMocks(
   page,
@@ -85,6 +85,7 @@ export async function installProviderMocks(
     slots = null,
     clients = null,
     reviews = null,
+    providerSphere = null,
   } = {},
 ) {
   await page.addInitScript(() => {
@@ -152,6 +153,9 @@ export async function installProviderMocks(
   let clientsPayload = Array.isArray(clients) ? clients.map((c) => ({ ...c })) : [];
   let migrateRequests = [];
   let reviewsPayload = Array.isArray(reviews) ? reviews.map((r) => ({ ...r })) : [];
+  let cafeCategories = [];
+  let cafeItemSeq = 9000;
+  let cafeCatSeq = 8000;
   let mePayload = {
     ...ME,
     anonymous_seat_count: 1,
@@ -167,6 +171,13 @@ export async function installProviderMocks(
     organization_latitude: "55.751244",
     organization_longitude: "37.618423",
   };
+  if (providerSphere) {
+    mePayload.provider_sphere = providerSphere;
+    if (providerSphere === "cafe_restaurant") {
+      mePayload.organization_name = "Кафе E2E";
+      mePayload.organization_slug = "e2e-cafe";
+    }
+  }
   let calendarToken = "token-old";
   let acquiringPayload = {
     payment_provider: "yookassa",
@@ -1147,6 +1158,132 @@ export async function installProviderMocks(
       });
     }
     if (path.includes("/health")) return json({ status: "ok", checks: { db: true } });
+    if (path.includes("/cafe/settings") && method === "GET") {
+      return json({
+        enable_dine_in: true,
+        enable_takeaway: true,
+        enable_delivery: false,
+        delivery_info: "",
+        delivery_fee: "0",
+        delivery_min_order: "0",
+        delivery_zones: [],
+        accept_online_payment: false,
+        accept_cash: true,
+        accept_card_on_spot: true,
+        payment_provider: "yookassa",
+        yookassa_shop_id: "",
+        has_yookassa: false,
+        has_payment_keys: false,
+        logo_url: "",
+        logo_thumb_url: "",
+        updated_at: new Date().toISOString(),
+      });
+    }
+    if (path.includes("/cafe/floors") && method === "GET") {
+      return json([]);
+    }
+    if (path.match(/\/cafe\/menu\/categories\/?$/) && method === "GET") {
+      return json(cafeCategories);
+    }
+    if (path.match(/\/cafe\/menu\/categories\/?$/) && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const created = {
+        id: ++cafeCatSeq,
+        name: body.name || "Категория",
+        sort_order: Number(body.sort_order) || 0,
+        is_novelties: Boolean(body.is_novelties),
+        is_active: body.is_active !== false,
+        items: [],
+      };
+      cafeCategories = [...cafeCategories, created];
+      return json(created, 201);
+    }
+    const cafeCatMatch = path.match(/\/cafe\/menu\/categories\/(\d+)$/);
+    if (cafeCatMatch && method === "DELETE") {
+      const id = Number(cafeCatMatch[1]);
+      cafeCategories = cafeCategories.filter((c) => Number(c.id) !== id);
+      return route.fulfill({ status: 204, body: "" });
+    }
+    if (cafeCatMatch && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const id = Number(cafeCatMatch[1]);
+      cafeCategories = cafeCategories.map((c) =>
+        Number(c.id) === id ? { ...c, ...body, items: c.items || [] } : c,
+      );
+      const updated = cafeCategories.find((c) => Number(c.id) === id);
+      return json(updated || body);
+    }
+    if (path.match(/\/cafe\/menu\/items\/?$/) && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const created = {
+        id: ++cafeItemSeq,
+        category: Number(body.category),
+        name: body.name || "Блюдо",
+        description: body.description || "",
+        composition: body.composition || "",
+        weight_grams: body.weight_grams ?? null,
+        calories: body.calories ?? null,
+        price: body.price || "0",
+        is_new: Boolean(body.is_new),
+        is_available: body.is_available !== false,
+        is_active: true,
+        rating_avg: null,
+        rating_count: 0,
+        sort_order: 0,
+        photos: [],
+        removable_ingredients: [],
+      };
+      cafeCategories = cafeCategories.map((c) =>
+        Number(c.id) === Number(body.category)
+          ? { ...c, items: [...(c.items || []), created] }
+          : c,
+      );
+      return json(created, 201);
+    }
+    const cafeItemMatch = path.match(/\/cafe\/menu\/items\/(\d+)$/);
+    if (cafeItemMatch && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const id = Number(cafeItemMatch[1]);
+      let updated = null;
+      cafeCategories = cafeCategories.map((c) => ({
+        ...c,
+        items: (c.items || []).map((it) => {
+          if (Number(it.id) !== id) return it;
+          updated = { ...it, ...body };
+          return updated;
+        }),
+      }));
+      return json(updated || { id, ...body });
+    }
+    if (cafeItemMatch && method === "DELETE") {
+      const id = Number(cafeItemMatch[1]);
+      cafeCategories = cafeCategories.map((c) => ({
+        ...c,
+        items: (c.items || []).filter((it) => Number(it.id) !== id),
+      }));
+      return route.fulfill({ status: 204, body: "" });
+    }
+    if (path.includes("/cafe/")) return json([]);
     if (path.includes("/reviews/unread-count") && method === "GET") {
       const count = reviewsPayload.filter((r) => r.is_new || !r.provider_seen_at).length;
       return json({ count });

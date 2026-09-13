@@ -121,6 +121,7 @@ jobs:
           cafe.test_courier_access
           cafe.test_menu_nutrition
           cafe.tests_guest_order_pay
+          cafe.tests_menu_api
           shop.tests_public_order_pay
           users.test_working_hours
           users.test_oauth_find_user
