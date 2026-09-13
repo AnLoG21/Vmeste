@@ -51,12 +51,29 @@ export async function installClientMocks(
     prepay = false,
     emptyWindows = false,
     loyalty = null,
+    loyaltyAccounts = null,
     clientPackages = null,
+    offerPackages = null,
     bookings = null,
   } = {},
 ) {
   const loyaltyPayload = loyalty || { enabled: false, balance: 0, rub_per_point: 1 };
-  const packagesPayload = Array.isArray(clientPackages) ? clientPackages : [];
+  let packagesPayload = Array.isArray(clientPackages) ? clientPackages.map((p) => ({ ...p })) : [];
+  const offerPackagesPayload = Array.isArray(offerPackages) ? offerPackages.map((p) => ({ ...p })) : [];
+  const accountsPayload = Array.isArray(loyaltyAccounts)
+    ? loyaltyAccounts.map((a) => ({ ...a }))
+    : loyalty && loyalty.provider != null
+      ? [
+          {
+            id: 1,
+            provider: loyalty.provider,
+            provider_name: loyalty.provider_name || ORG.organization_name,
+            balance: Number(loyalty.balance) || 0,
+            level: loyalty.level || "start",
+            level_label: loyalty.level_label || "Старт",
+          },
+        ]
+      : [];
   let bookingsList = Array.isArray(bookings) ? bookings.map((b) => ({ ...b })) : [];
   let reviewsStore = [];
 
@@ -270,13 +287,38 @@ export async function installClientMocks(
     if (path.includes("/booking/waitlist") && method === "GET") {
       return json([]);
     }
+    if (path.includes("/loyalty/accounts")) {
+      return json(accountsPayload);
+    }
     if (path.includes("/loyalty/me")) {
       return json(loyaltyPayload);
     }
     if (path.includes("/client-packages")) {
       return json(packagesPayload);
     }
-    if (path.includes("/packages")) return json([]);
+    if (path.match(/\/packages\/\d+\/purchase$/) && method === "POST") {
+      const pkgId = Number(path.split("/").filter(Boolean).at(-2));
+      const offer = offerPackagesPayload.find((p) => Number(p.id) === pkgId) || {
+        id: pkgId,
+        name: "Абонемент",
+        visits_count: 5,
+        provider: ORG.provider,
+      };
+      const purchased = {
+        id: 55,
+        provider: offer.provider || ORG.provider,
+        provider_name: ORG.organization_name,
+        package: pkgId,
+        package_name: offer.name || "Абонемент",
+        visits_total: Number(offer.visits_count) || 5,
+        visits_remaining: Number(offer.visits_count) || 5,
+        status: "active",
+        status_label: "Активен",
+      };
+      packagesPayload = [...packagesPayload.filter((p) => Number(p.package) !== pkgId), purchased];
+      return json(purchased, 201);
+    }
+    if (path.includes("/packages")) return json(offerPackagesPayload);
     if (path.match(/\/booking\/\d+\/pay$/) && method === "POST") {
       const id = Number(path.split("/").filter(Boolean).at(-2));
       return json({
@@ -328,10 +370,13 @@ export async function installClientMocks(
 const CLIENT_PACKAGE = {
   id: 55,
   provider: ORG.provider,
+  provider_name: ORG.organization_name,
+  package: 77,
   package_name: "5 стрижек",
   visits_total: 5,
   visits_remaining: 3,
   status: "active",
+  status_label: "Активен",
 };
 
 const CLIENT_BOOKING = (() => {

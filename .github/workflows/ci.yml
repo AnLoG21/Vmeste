@@ -58,6 +58,7 @@ jobs:
           voice.tests
           booking.tests_loyalty
           booking.tests_loyalty_pay
+          booking.tests_loyalty_me_api
           booking.tests_actions
           booking.tests_waitlist
           booking.tests_salon_p2
@@ -68,6 +69,7 @@ jobs:
           inspections.tests_repair_funnel
           inspections.tests_public_approve_api
           reviews.tests_client_reviews_api
+          chat.tests_conversations_api
           payments.tests
           marketplaces.tests
           marketplaces.tests_analytics

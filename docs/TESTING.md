@@ -43,6 +43,8 @@ npx playwright install chromium && npm run test:e2e
 | `client-book.spec.js` | map → book → package / loyalty / pay resume / pay return |
 | `client-cancel.spec.js` | Моё → Все записи → cancel-by-client |
 | `client-review.spec.js` | Моё → Все записи → Отзыв → POST /reviews/ |
+| `client-loyalty.spec.js` | /loyalty → org → buy package → POST purchase |
+| `inspection-public.spec.js` | `/i/:token` → Утвердить ремонт → POST approve |
 | `client-waitlist.spec.js` | empty slots → join waitlist |
 | `provider-waitlist.spec.js` | Записи → Снять waitlist |
 | `provider-bookings.spec.js` | confirm / no-show / arrived / mark-done / cancel-by-org / message + prepay + not-started modals |
@@ -53,7 +55,7 @@ npx playwright install chromium && npm run test:e2e
 | `subscription-promo.spec.js` | Оплатить → apply VSEVMESTE |
 | `subscription-cancel.spec.js` | Отключить подписку → cancel API |
 
-Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers, client reviews API, inspection public approve.
+Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers, client reviews API, inspection public approve, loyalty me/accounts + package purchase, chat conversations smoke.
 
 ## CI
 
