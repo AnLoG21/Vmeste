@@ -164,6 +164,25 @@ export async function installProviderMocks(
   let cafeFloorSeq = 7000;
   let cafeTableSeq = 7100;
   let cafeOrdersPayload = Array.isArray(cafeOrders) ? cafeOrders.map((o) => ({ ...o })) : [];
+  let cafeSettingsPayload = {
+    enable_dine_in: true,
+    enable_takeaway: true,
+    enable_delivery: false,
+    delivery_info: "",
+    delivery_fee: "0",
+    delivery_min_order: "0",
+    delivery_zones: [],
+    accept_online_payment: false,
+    accept_cash: true,
+    accept_card_on_spot: true,
+    payment_provider: "yookassa",
+    yookassa_shop_id: "",
+    has_yookassa: false,
+    has_payment_keys: false,
+    logo_url: "",
+    logo_thumb_url: "",
+    updated_at: new Date().toISOString(),
+  };
   let shopCategoriesPayload = Array.isArray(shopCategories) ? shopCategories.map((c) => ({ ...c })) : [];
   let shopProductsPayload = Array.isArray(shopProducts) ? shopProducts.map((p) => ({ ...p })) : [];
   let shopOrdersPayload = Array.isArray(shopOrders) ? shopOrders.map((o) => ({ ...o })) : [];
@@ -1176,25 +1195,26 @@ export async function installProviderMocks(
     }
     if (path.includes("/health")) return json({ status: "ok", checks: { db: true } });
     if (path.includes("/cafe/settings") && method === "GET") {
-      return json({
-        enable_dine_in: true,
-        enable_takeaway: true,
-        enable_delivery: false,
-        delivery_info: "",
-        delivery_fee: "0",
-        delivery_min_order: "0",
-        delivery_zones: [],
-        accept_online_payment: false,
-        accept_cash: true,
-        accept_card_on_spot: true,
-        payment_provider: "yookassa",
-        yookassa_shop_id: "",
-        has_yookassa: false,
-        has_payment_keys: false,
-        logo_url: "",
-        logo_thumb_url: "",
+      return json(cafeSettingsPayload);
+    }
+    if (path.includes("/cafe/settings") && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      cafeSettingsPayload = {
+        ...cafeSettingsPayload,
+        ...body,
         updated_at: new Date().toISOString(),
-      });
+      };
+      delete cafeSettingsPayload.yookassa_secret_key;
+      delete cafeSettingsPayload.tbank_password;
+      delete cafeSettingsPayload.cloudpayments_api_secret;
+      delete cafeSettingsPayload.robokassa_password1;
+      delete cafeSettingsPayload.robokassa_password2;
+      return json(cafeSettingsPayload);
     }
     if (path.includes("/cafe/floors") && method === "GET" && !path.match(/\/floors\/\d+/)) {
       return json(cafeFloors);

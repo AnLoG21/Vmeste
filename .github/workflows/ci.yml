@@ -124,6 +124,7 @@ jobs:
           cafe.tests_menu_api
           cafe.tests_floors_api
           cafe.tests_orders_status_api
+          cafe.tests_settings_api
           shop.tests_public_order_pay
           shop.tests_menu_api
           shop.tests_orders_status_api
