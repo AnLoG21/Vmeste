@@ -101,6 +101,24 @@ export async function installProviderMocks(
     booking_done_message_default: "",
   };
   let calendarToken = "token-old";
+  let acquiringPayload = {
+    payment_provider: "yookassa",
+    prepay_mode: "off",
+    prepay_percent: 50,
+    yookassa_shop_id: "",
+    has_yookassa: false,
+    tbank_terminal_key: "",
+    has_tbank: false,
+    cloudpayments_public_id: "",
+    has_cloudpayments: false,
+    robokassa_merchant_login: "",
+    has_robokassa: false,
+    has_payment_keys: false,
+    providers: [
+      { key: "yookassa", label: "ЮKassa" },
+      { key: "tbank", label: "Т‑Банк" },
+    ],
+  };
   let moyStatus = moyNalogConnected
     ? {
         connected: true,
@@ -460,6 +478,31 @@ export async function installProviderMocks(
         google_url: `https://calendar.google.com/calendar/r?cid=${ics}`,
         yandex_hint: "Яндекс Календарь → Добавить календарь",
       });
+    }
+    if (path.includes("/booking/acquiring") && method === "GET") {
+      return json(acquiringPayload);
+    }
+    if (path.includes("/booking/acquiring") && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      acquiringPayload = {
+        ...acquiringPayload,
+        ...body,
+        has_yookassa: Boolean(
+          (body.yookassa_shop_id || acquiringPayload.yookassa_shop_id) &&
+            (body.yookassa_secret_key || acquiringPayload.has_yookassa),
+        ),
+        has_payment_keys: Boolean(
+          (body.yookassa_shop_id || acquiringPayload.yookassa_shop_id) &&
+            (body.yookassa_secret_key || acquiringPayload.has_yookassa),
+        ),
+      };
+      delete acquiringPayload.yookassa_secret_key;
+      return json(acquiringPayload);
     }
     if (path.includes("/booking")) return json([]);
     if (path.includes("/moy-nalog/status") && method === "GET") return json(moyStatus);

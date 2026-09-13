@@ -95,7 +95,12 @@ class ProviderStaffViewSet(viewsets.ModelViewSet):
                 .select_related("staff", "provider")
                 .prefetch_related("portfolio_photos")
             )
-        return ProviderStaff.objects.none()
+        # Client (or other): own invite links so accept/reject works from cabinet.
+        return (
+            ProviderStaff.objects.filter(staff=user)
+            .select_related("staff", "provider")
+            .prefetch_related("portfolio_photos")
+        )
 
     def _staff_manager_link(self, user):
         return (

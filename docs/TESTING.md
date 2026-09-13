@@ -52,6 +52,9 @@ npx playwright install chromium && npm run test:e2e
 | `client-telegram-link.spec.js` | /settings → telegram link GET |
 | `client-telegram-unlink.spec.js` | /settings → Отвязать → DELETE |
 | `client-notify-prefs.spec.js` | /settings → save notify prefs PATCH |
+| `client-change-password.spec.js` | /settings → Сменить пароль → POST |
+| `client-staff-invite.spec.js` | /cabinet → accept staff invite |
+| `provider-acquiring.spec.js` | /organization → save prepay acquiring |
 | `provider-chats.spec.js` | /chats → Избранное |
 | `provider-loyalty.spec.js` | /service-catalog → save loyalty PATCH |
 | `provider-create-package.spec.js` | /service-catalog → Создать абонемент → POST |
@@ -71,7 +74,7 @@ npx playwright install chromium && npm run test:e2e
 | `subscription-promo.spec.js` | Оплатить → apply VSEVMESTE |
 | `subscription-cancel.spec.js` | Отключить подписку → cancel API |
 
-Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers + status/enable/disconnect API, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token, client notify prefs, org messaging settings + org telegram link, calendar ICS rotate, booking message templates.
+Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers + status/enable/disconnect API, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token, client notify prefs, org messaging settings + org telegram link, calendar ICS rotate, booking message templates, acquiring settings, staff invite accept/reject, change-password email flow.
 
 ## CI
 

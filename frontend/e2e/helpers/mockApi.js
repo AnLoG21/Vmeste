@@ -59,6 +59,7 @@ export async function installClientMocks(
     activityNotifications = null,
     seedMessages = null,
     telegramLinked = false,
+    pendingStaffInvites = null,
   } = {},
 ) {
   const loyaltyPayload = loyalty || { enabled: false, balance: 0, rub_per_point: 1 };
@@ -87,6 +88,9 @@ export async function installClientMocks(
   let activityNotes = Array.isArray(activityNotifications)
     ? activityNotifications.map((n) => ({ ...n }))
     : [];
+  let pendingInvites = Array.isArray(pendingStaffInvites)
+    ? pendingStaffInvites.map((i) => ({ ...i }))
+    : [];
   let telegramLink = telegramLinked
     ? {
         link_token: "e2e-tg-token",
@@ -102,6 +106,7 @@ export async function installClientMocks(
     notify_booking_reminders: true,
     notify_booking_status: true,
     email_verified: true,
+    has_usable_password: true,
   };
 
   await page.addInitScript(() => {
@@ -302,6 +307,17 @@ export async function installClientMocks(
       return json(created, 201);
     }
     if (path.includes("/reviews")) return json(reviewsStore);
+    if (path.match(/\/booking\/staff\/\d+\/accept-invite$/) && method === "POST") {
+      const id = Number(path.split("/").filter(Boolean).at(-2));
+      pendingInvites = pendingInvites.filter((i) => Number(i.id) !== id);
+      mePayload = { ...mePayload, role: "staff" };
+      return json({ id, invitation_status: "accepted", is_active: true });
+    }
+    if (path.match(/\/booking\/staff\/\d+\/reject-invite$/) && method === "POST") {
+      const id = Number(path.split("/").filter(Boolean).at(-2));
+      pendingInvites = pendingInvites.filter((i) => Number(i.id) !== id);
+      return json({}, 204);
+    }
     if (path.includes("/booking/staff")) return json([]);
     if (path.includes("/available-windows")) {
       return json(emptyWindows ? [] : [WINDOW]);
@@ -432,18 +448,22 @@ export async function installClientMocks(
     }
     if (path.includes("/chat/activity")) {
       return json({
-        pending_staff_invites: [],
+        pending_staff_invites: pendingInvites,
         notifications: activityNotes,
         unread_notification_count: activityNotes.length,
-        pending_invite_count: 0,
+        pending_invite_count: pendingInvites.length,
         unread_chat_messages_count: conversationsPayload.reduce(
           (s, c) => s + (Number(c.unread_message_count) || 0),
           0,
         ),
         badge_count:
           activityNotes.length +
+          pendingInvites.length +
           conversationsPayload.reduce((s, c) => s + (Number(c.unread_message_count) || 0), 0),
       });
+    }
+    if (path.includes("/users/change-password") && method === "POST") {
+      return json({ detail: "Проверьте почту для подтверждения смены пароля." });
     }
     if (path.includes("/notifications/in-app/mark-read") && method === "POST") {
       let body = {};
