@@ -90,6 +90,8 @@ def _telegram_bot_token(msg) -> str:
 
 
 def _send_booking_email(user, subject: str, text: str) -> bool:
+    if getattr(user, "is_demo", False):
+        return False
     email = (getattr(user, "email", None) or "").strip()
     if not email or "@" not in email:
         return False

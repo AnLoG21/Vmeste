@@ -267,6 +267,16 @@ def _ensure_subscription(provider):
         sub.save()
 
 
+def _disable_demo_email(provider):
+    """Demo mailboxes are not real — keep booking email fanout off for demo orgs."""
+    from booking.models import ProviderMessagingSettings
+
+    msg, _ = ProviderMessagingSettings.objects.get_or_create(provider=provider)
+    if msg.enable_email:
+        msg.enable_email = False
+        msg.save(update_fields=["enable_email", "updated_at"])
+
+
 def _activate_catalog(provider):
     from catalog.catalog_seed import seed_provider_catalog
     from catalog.models import Service
@@ -599,6 +609,7 @@ def seed_sphere(sphere: str, *, reset: bool = True) -> User:
             _wipe_visitor_data(provider, cfg)
         _restore_profile(provider, cfg)
         _ensure_subscription(provider)
+        _disable_demo_email(provider)
         services = _activate_catalog(provider)
         staff_links = _ensure_staff(provider, cfg)
         clients = _ensure_clients(cfg)

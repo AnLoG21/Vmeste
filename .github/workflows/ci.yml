@@ -51,9 +51,9 @@ jobs:
         run: pip install -r requirements.txt
       - name: Migrate
         run: python manage.py migrate --noinput
-      - name: Voice + booking + payments tests
+      - name: Voice + booking + payments tests (with coverage)
         run: >
-          python manage.py test
+          coverage run manage.py test
           config.tests.test_health
           voice.tests
           booking.tests_loyalty
@@ -81,6 +81,7 @@ jobs:
           users.test_oauth_find_user
           users.test_oauth_credentials
           users.test_onboarding_p3
+          users.test_email_demo
           vmenu.tests_units
           subscriptions.tests_promos
           subscriptions.tests_trial_voice
@@ -88,7 +89,18 @@ jobs:
           subscriptions.tests_subscribe_pay
           subscriptions.tests_cancel_promo_api
           notifications.tests_channels
+          moy_nalog.tests
           --verbosity=2
+      - name: Coverage report
+        run: |
+          coverage report
+          coverage xml -o coverage.xml
+      - name: Upload coverage XML
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          if-no-files-found: ignore
 
   frontend-build:
     name: Frontend production build
@@ -106,8 +118,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install deps
         run: npm ci
-      - name: Unit tests
-        run: npm test
+      - name: Unit tests with coverage
+        run: npm run test:coverage
       - name: Build
         run: npm run build
       - name: Assert App Links / Universal Links files

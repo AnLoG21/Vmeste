@@ -15,3 +15,4 @@ requests>=2.32
 cryptography>=42
 fpdf2>=2.8
 openpyxl>=3.1
+coverage>=7.6

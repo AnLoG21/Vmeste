@@ -140,4 +140,41 @@ test.describe("Cafe guest checkout", () => {
     });
     await expect(page.getByTestId("cafe-order-status")).toBeVisible({ timeout: 15_000 });
   });
+
+  test("delivery outside zone shows error and does not POST order", async ({ page }) => {
+    await installYmapsStub(page);
+    await installPhotonSuggest(page, { lat: 50.0, lon: 30.0, label: "далеко" });
+    await installCafeMocks(page, {
+      prepay: false,
+      delivery: true,
+      deliveryZones: [ZONE_CENTER],
+    });
+
+    let orderPosted = false;
+    page.on("request", (req) => {
+      if (req.method() === "POST" && req.url().includes("/cafe/guest/order")) {
+        orderPosted = true;
+      }
+    });
+
+    await page.goto(`/m/${SLUG}`);
+    await expect(page.getByRole("heading", { name: "Кафе E2E" })).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: /Доставка/ }).click();
+    await page.locator(".cafe-menu-item").filter({ hasText: "Борщ" }).getByRole("button", { name: "+" }).click();
+    await page.getByRole("button", { name: /Корзина/ }).click();
+
+    await page.getByPlaceholder("Телефон *").fill("+79001234567");
+    await page.getByPlaceholder("Адрес доставки *").fill("далеко");
+    await clickYmapsAt(page, 50.0, 30.0);
+
+    await expect(page.locator(".cafe-delivery-fee-error")).toContainText(
+      /точку на карте|вне зоны/i,
+      { timeout: 10_000 },
+    );
+    await page.locator(".cafe-delivery-house-toggle input[type='checkbox']").check();
+    await page.locator("select").filter({ has: page.locator('option[value="cash"]') }).selectOption("cash");
+    await page.getByRole("button", { name: "Оформить заказ" }).click();
+    await page.waitForTimeout(800);
+    expect(orderPosted).toBe(false);
+  });
 });

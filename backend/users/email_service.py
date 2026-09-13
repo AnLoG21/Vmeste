@@ -17,6 +17,17 @@ def _can_send() -> bool:
     return bool(getattr(settings, "EMAIL_HOST_USER", "") and getattr(settings, "EMAIL_HOST_PASSWORD", ""))
 
 
+def is_demo_mailbox(to: str) -> bool:
+    """Fake demo addresses (demo_* / demo.* @vsevmeste.space) must never hit SMTP."""
+    to = (to or "").strip().lower()
+    if not to or "@" not in to:
+        return False
+    local, _, domain = to.partition("@")
+    if domain != "vsevmeste.space":
+        return False
+    return local.startswith("demo_") or local.startswith("demo.")
+
+
 def _from_email() -> str:
     raw = (getattr(settings, "DEFAULT_FROM_EMAIL", "") or "").strip()
     if raw:
@@ -62,6 +73,10 @@ def _wrap_html(*, title: str, greeting: str, paragraphs: list[str], button_url: 
 
 
 def _send_branded(*, to: str, subject: str, text_body: str, html_body: str) -> bool:
+    to = (to or "").strip()
+    if is_demo_mailbox(to):
+        logger.info("Skip SMTP to demo mailbox %s (%s)", to, subject)
+        return False
     if not _can_send():
         logger.warning("SMTP не настроен. Письмо «%s» для %s:\n%s", subject, to, text_body)
         return False
@@ -80,6 +95,9 @@ def send_booking_notification_email(*, to: str, subject: str, text_body: str) ->
     """Branded email for booking events (reminders, status, new booking)."""
     to = (to or "").strip()
     if not to or "@" not in to:
+        return False
+    if is_demo_mailbox(to):
+        logger.info("Skip booking email to demo mailbox %s", to)
         return False
     paragraphs = [p.strip() for p in (text_body or "").split("\n") if p.strip()]
     if not paragraphs:
@@ -284,6 +302,9 @@ def send_cafe_order_receipt_email(
 ) -> bool:
     email = (email or "").strip().lower()
     if not email:
+        return False
+    if is_demo_mailbox(email):
+        logger.info("Skip cafe receipt to demo mailbox %s", email)
         return False
     title = f"Чек по заказу #{order_id}"
     greeting = f"Спасибо за заказ в «{organization_name or SITE_BRAND}»!"
