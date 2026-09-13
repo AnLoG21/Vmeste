@@ -55,6 +55,27 @@ class ClientCardApiTests(TestCase):
         self.assertEqual(card.tech.get("hair_color"), "7.1 + оксид 3%")
         self.assertEqual(card.preferences_notes, "Любит тишину")
 
+    def test_block_and_field_prefs(self):
+        blocked = self.api.patch(
+            f"/api/booking/client-cards/?client={self.client_user.id}",
+            {"is_blocked": True},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, 200, blocked.data)
+        self.assertTrue(blocked.data.get("is_blocked"))
+        card = ProviderClientCard.objects.get(provider=self.provider, client=self.client_user)
+        self.assertTrue(card.is_blocked)
+
+        prefs = self.api.patch(
+            f"/api/booking/client-cards/?client={self.client_user.id}",
+            {"field_prefs": {"hair_color": False, "technical_notes": True}},
+            format="json",
+        )
+        self.assertEqual(prefs.status_code, 200, prefs.data)
+        field_prefs = prefs.data.get("field_prefs") or {}
+        self.assertFalse(field_prefs.get("hair_color"))
+        self.assertTrue(field_prefs.get("technical_notes"))
+
     def test_client_forbidden(self):
         self.api.force_authenticate(self.client_user)
         res = self.api.get(f"/api/booking/client-cards/?client={self.client_user.id}")

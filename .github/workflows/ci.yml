@@ -77,6 +77,8 @@ jobs:
           booking.tests_visit_confirm_api
           booking.tests_book_for_client_api
           booking.tests_clients_lookup_api
+          booking.tests_clients_import_api
+          booking.tests_clients_migrate_api
           booking.tests_client_card_api
           booking.tests_actions
           booking.tests_waitlist

@@ -149,6 +149,7 @@ export async function installProviderMocks(
   let purchasesPayload = [];
   let slotsPayload = Array.isArray(slots) ? slots.map((s) => ({ ...s })) : [];
   let clientsPayload = Array.isArray(clients) ? clients.map((c) => ({ ...c })) : [];
+  let migrateRequests = [];
   let mePayload = {
     ...ME,
     anonymous_seat_count: 1,
@@ -660,7 +661,40 @@ export async function installProviderMocks(
         normalized_phone: "",
       });
     }
+    if (path.includes("/booking/clients/migrate-request")) {
+      if (method === "GET") {
+        return json({
+          results: migrateRequests,
+          latest: migrateRequests[0] || null,
+        });
+      }
+      if (method === "POST") {
+        const created = {
+          id: 9100 + migrateRequests.length,
+          status: "new",
+          status_label: "Новая",
+          source_note: "migrate",
+          result_detail: "",
+          has_file: false,
+          file_name: "",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        migrateRequests = [created, ...migrateRequests];
+        return json(created, 201);
+      }
+    }
     if (path.match(/\/booking\/clients\/?$/) && method === "POST") {
+      const ct = (req.headers()["content-type"] || "").toLowerCase();
+      if (ct.includes("multipart/form-data")) {
+        return json({
+          ok: true,
+          created: 1,
+          updated: 0,
+          errors: [],
+          detail: "Импортировано: новых 1, обновлено 0.",
+        });
+      }
       let body = {};
       try {
         body = req.postDataJSON() || {};
