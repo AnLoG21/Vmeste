@@ -86,6 +86,8 @@ jobs:
           users.tests_confirm_password_change_api
           users.tests_change_email_api
           users.tests_me_avatar_api
+          users.tests_me_profile_api
+          users.tests_delete_account_api
           payments.tests
           marketplaces.tests
           marketplaces.tests_analytics

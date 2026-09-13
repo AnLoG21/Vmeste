@@ -198,6 +198,9 @@ export async function installClientMocks(
     if (path.endsWith("/users/me") && method === "GET") {
       return json(mePayload);
     }
+    if (path.endsWith("/users/me/delete") && method === "POST") {
+      return json({ detail: "Аккаунт удалён. Данные обезличены." });
+    }
     if (path.endsWith("/users/me") && method === "POST") {
       const raw = req.postData() || "";
       if (raw.includes("clear_avatar")) {
