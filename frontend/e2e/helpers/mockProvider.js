@@ -188,6 +188,17 @@ export async function installProviderMocks(
   let shopProductsPayload = Array.isArray(shopProducts) ? shopProducts.map((p) => ({ ...p })) : [];
   let shopOrdersPayload = Array.isArray(shopOrders) ? shopOrders.map((o) => ({ ...o })) : [];
   let shopReturnsPayload = Array.isArray(shopReturns) ? shopReturns.map((r) => ({ ...r })) : [];
+  let shopSettingsPayload = {
+    enable_pickup: true,
+    enable_delivery: false,
+    delivery_fee: "0",
+    delivery_min_order: "0",
+    delivery_zones: [],
+    accept_online_payment: false,
+    accept_cash: true,
+    bonus_earn_percent: "0",
+    bonus_max_spend_percent: "50",
+  };
   let shopCatSeq = 8100;
   let shopProductSeq = 9200;
   let mePayload = {
@@ -1532,15 +1543,17 @@ export async function installProviderMocks(
       return route.fulfill({ status: 204, body: "" });
     }
     if (path.includes("/shop/settings") && method === "GET") {
-      return json({
-        enable_pickup: true,
-        enable_delivery: false,
-        delivery_fee: "0",
-        delivery_min_order: "0",
-        delivery_zones: [],
-        accept_online_payment: false,
-        accept_cash: true,
-      });
+      return json(shopSettingsPayload);
+    }
+    if (path.includes("/shop/settings") && method === "PATCH") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      shopSettingsPayload = { ...shopSettingsPayload, ...body };
+      return json(shopSettingsPayload);
     }
     if (path.match(/\/shop\/orders\/?$/) && method === "GET") {
       return json(shopOrdersPayload);

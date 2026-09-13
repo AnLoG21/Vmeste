@@ -129,6 +129,7 @@ jobs:
           shop.tests_menu_api
           shop.tests_orders_status_api
           shop.tests_returns_api
+          shop.tests_settings_api
           users.test_working_hours
           users.test_oauth_find_user
           users.test_oauth_credentials
