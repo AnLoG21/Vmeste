@@ -60,6 +60,7 @@ export async function installClientMocks(
     seedMessages = null,
     telegramLinked = false,
     pendingStaffInvites = null,
+    meOverrides = null,
   } = {},
 ) {
   const loyaltyPayload = loyalty || { enabled: false, balance: 0, rub_per_point: 1 };
@@ -107,6 +108,7 @@ export async function installClientMocks(
     notify_booking_status: true,
     email_verified: true,
     has_usable_password: true,
+    ...(meOverrides && typeof meOverrides === "object" ? meOverrides : {}),
   };
 
   await page.addInitScript(() => {
@@ -196,6 +198,22 @@ export async function installClientMocks(
     if (path.endsWith("/users/me") && method === "GET") {
       return json(mePayload);
     }
+    if (path.endsWith("/users/me") && method === "POST") {
+      const raw = req.postData() || "";
+      if (raw.includes("clear_avatar")) {
+        mePayload = { ...mePayload, avatar_url: "", avatar_thumb_url: "" };
+        return json(mePayload);
+      }
+      if (raw.includes("avatar") || raw.includes("filename=")) {
+        mePayload = {
+          ...mePayload,
+          avatar_url: "https://example.com/e2e-avatar-uploaded.png",
+          avatar_thumb_url: "https://example.com/e2e-avatar-uploaded-thumb.png",
+        };
+        return json(mePayload);
+      }
+      return json({ detail: "Выберите файл аватара." }, 400);
+    }
     if (path.endsWith("/users/me") && method === "PATCH") {
       let body = {};
       try {
@@ -205,6 +223,21 @@ export async function installClientMocks(
       }
       mePayload = { ...mePayload, ...body };
       return json(mePayload);
+    }
+    if (path.includes("/users/change-email") && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const email = String(body.new_email || "").trim().toLowerCase();
+      if (email) {
+        mePayload = { ...mePayload, email, email_verified: false };
+      }
+      return json({
+        detail: "Email изменён. Подтвердите новый адрес по ссылке из письма (это письмо о смене почты).",
+      });
     }
     if (path.includes("/users/roles")) return json([{ key: "client", value: "Клиент" }]);
     if (path.includes("/users/spheres")) {

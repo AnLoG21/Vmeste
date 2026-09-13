@@ -53,7 +53,9 @@ npx playwright install chromium && npm run test:e2e
 | `client-telegram-unlink.spec.js` | /settings → Отвязать → DELETE |
 | `client-notify-prefs.spec.js` | /settings → save notify prefs PATCH |
 | `client-change-password.spec.js` | /settings → Сменить пароль → POST |
+| `client-change-email.spec.js` | /settings → Сменить email → POST |
 | `client-confirm-password-change.spec.js` | /confirm-password-change → POST confirm |
+| `client-clear-avatar.spec.js` | /cabinet → Удалить аватар → POST clear_avatar |
 | `client-staff-invite.spec.js` | /cabinet → accept staff invite |
 | `provider-acquiring.spec.js` | /organization → save prepay acquiring |
 | `provider-staff-invite.spec.js` | /staff → create invite → POST /booking/staff/ |
@@ -76,7 +78,7 @@ npx playwright install chromium && npm run test:e2e
 | `subscription-promo.spec.js` | Оплатить → apply VSEVMESTE |
 | `subscription-cancel.spec.js` | Отключить подписку → cancel API |
 
-Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers + status/enable/disconnect API, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token, client notify prefs, org messaging settings + org telegram link, calendar ICS rotate, booking message templates, acquiring settings, staff invite accept/reject + create (Business gate), change-password email flow + confirm-password-change token.
+Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point), subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers + status/enable/disconnect API, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token, client notify prefs, org messaging settings + org telegram link, calendar ICS rotate, booking message templates, acquiring settings, staff invite accept/reject + create (Business gate), change-password email flow + confirm-password-change token, change-email verification flow, me avatar upload/clear.
 
 ## CI
 
