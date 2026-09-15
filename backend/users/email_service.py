@@ -2,7 +2,7 @@ import logging
 from html import escape
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives, send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.core import signing
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,15 @@ def is_demo_mailbox(to: str) -> bool:
     if domain != "vsevmeste.space":
         return False
     return local.startswith("demo_") or local.startswith("demo.")
+
+
+def should_skip_smtp(*, to: str = "", user=None) -> bool:
+    """Demo accounts use fictional mailboxes — never deliver via SMTP."""
+    if user is not None and getattr(user, "is_demo", False):
+        return True
+    if is_demo_mailbox(to or (getattr(user, "email", None) if user is not None else "") or ""):
+        return True
+    return False
 
 
 def _from_email() -> str:
@@ -72,10 +81,10 @@ def _wrap_html(*, title: str, greeting: str, paragraphs: list[str], button_url: 
 </body></html>"""
 
 
-def _send_branded(*, to: str, subject: str, text_body: str, html_body: str) -> bool:
+def _send_branded(*, to: str, subject: str, text_body: str, html_body: str, user=None) -> bool:
     to = (to or "").strip()
-    if is_demo_mailbox(to):
-        logger.info("Skip SMTP to demo mailbox %s (%s)", to, subject)
+    if should_skip_smtp(to=to, user=user):
+        logger.info("Skip SMTP to demo recipient %s (%s)", to or getattr(user, "username", "?"), subject)
         return False
     if not _can_send():
         logger.warning("SMTP не настроен. Письмо «%s» для %s:\n%s", subject, to, text_body)
@@ -96,7 +105,7 @@ def send_booking_notification_email(*, to: str, subject: str, text_body: str) ->
     to = (to or "").strip()
     if not to or "@" not in to:
         return False
-    if is_demo_mailbox(to):
+    if should_skip_smtp(to=to):
         logger.info("Skip booking email to demo mailbox %s", to)
         return False
     paragraphs = [p.strip() for p in (text_body or "").split("\n") if p.strip()]
@@ -111,6 +120,9 @@ def send_booking_notification_email(*, to: str, subject: str, text_body: str) ->
 
 
 def send_verification_email(user) -> bool:
+    if should_skip_smtp(user=user, to=getattr(user, "email", "") or ""):
+        logger.info("Skip verification email for demo user %s", getattr(user, "username", "?"))
+        return False
     if not user.email_verification_token:
         return False
     link = f"{settings.FRONTEND_URL}/verify-email?token={user.email_verification_token}"
@@ -132,11 +144,14 @@ def send_verification_email(user) -> bool:
         button_url=link,
         button_label="Подтвердить почту",
     )
-    return _send_branded(to=user.email, subject=subject, text_body=text, html_body=html)
+    return _send_branded(to=user.email, subject=subject, text_body=text, html_body=html, user=user)
 
 
 def send_email_change_email(user) -> bool:
     """Different letter when user changes email (not registration)."""
+    if should_skip_smtp(user=user, to=getattr(user, "email", "") or ""):
+        logger.info("Skip email-change letter for demo user %s", getattr(user, "username", "?"))
+        return False
     if not user.email_verification_token:
         return False
     link = f"{settings.FRONTEND_URL}/verify-email?token={user.email_verification_token}"
@@ -160,7 +175,7 @@ def send_email_change_email(user) -> bool:
         button_url=link,
         button_label="Подтвердить новую почту",
     )
-    return _send_branded(to=user.email, subject=subject, text_body=text, html_body=html)
+    return _send_branded(to=user.email, subject=subject, text_body=text, html_body=html, user=user)
 
 
 def make_password_change_token(user, new_password: str) -> str:
@@ -176,6 +191,9 @@ def load_password_change_token(token: str, max_age: int = 60 * 60 * 24):
 
 
 def send_password_change_email(user, token: str) -> bool:
+    if should_skip_smtp(user=user, to=getattr(user, "email", "") or ""):
+        logger.info("Skip password-change email for demo user %s", getattr(user, "username", "?"))
+        return False
     link = f"{settings.FRONTEND_URL}/confirm-password-change?token={token}"
     name = user.first_name or user.username
     subject = f"Подтверждение смены пароля — {SITE_BRAND}"
@@ -196,7 +214,7 @@ def send_password_change_email(user, token: str) -> bool:
         button_url=link,
         button_label="Подтвердить смену пароля",
     )
-    return _send_branded(to=user.email, subject=subject, text_body=text, html_body=html)
+    return _send_branded(to=user.email, subject=subject, text_body=text, html_body=html, user=user)
 
 
 def make_password_reset_token(user) -> str:
@@ -208,6 +226,9 @@ def load_password_reset_token(token: str, max_age: int = 60 * 60 * 24):
 
 
 def send_password_reset_email(user, token: str) -> bool:
+    if should_skip_smtp(user=user, to=getattr(user, "email", "") or ""):
+        logger.info("Skip password-reset email for demo user %s", getattr(user, "username", "?"))
+        return False
     link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
     name = user.first_name or user.username
     subject = f"Сброс пароля — {SITE_BRAND}"
@@ -229,7 +250,7 @@ def send_password_reset_email(user, token: str) -> bool:
         button_url=link,
         button_label="Задать новый пароль",
     )
-    return _send_branded(to=user.email, subject=subject, text_body=text, html_body=html)
+    return _send_branded(to=user.email, subject=subject, text_body=text, html_body=html, user=user)
 
 
 def send_automation_request_email(*, name, email, phone="", telegram="", message="", privacy_version="") -> bool:
@@ -268,6 +289,9 @@ def send_automation_request_email(*, name, email, phone="", telegram="", message
     return True
 
 def send_subscription_reminder_email(user, *, days_left: int, period_end, plan_name: str) -> bool:
+    if should_skip_smtp(user=user, to=getattr(user, "email", "") or ""):
+        logger.info("Skip subscription reminder for demo user %s", getattr(user, "username", "?"))
+        return False
     if not user.email:
         return False
     end_label = period_end.strftime("%d.%m.%Y") if period_end else "скоро"
@@ -288,7 +312,7 @@ def send_subscription_reminder_email(user, *, days_left: int, period_end, plan_n
         button_label="Открыть подписки",
     )
     text = "\n".join([greeting, "", *paragraphs, "", button_url])
-    return _send_branded(to=user.email, subject=f"Вместе: {title}", text_body=text, html_body=html)
+    return _send_branded(to=user.email, subject=f"Вместе: {title}", text_body=text, html_body=html, user=user)
 
 
 def send_cafe_order_receipt_email(
@@ -303,7 +327,7 @@ def send_cafe_order_receipt_email(
     email = (email or "").strip().lower()
     if not email:
         return False
-    if is_demo_mailbox(email):
+    if should_skip_smtp(to=email):
         logger.info("Skip cafe receipt to demo mailbox %s", email)
         return False
     title = f"Чек по заказу #{order_id}"

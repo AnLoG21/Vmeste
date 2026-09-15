@@ -1,4 +1,4 @@
-"""Demo mailboxes must never be sent via SMTP."""
+"""Demo mailboxes / is_demo users must never be sent via SMTP."""
 
 from unittest.mock import patch
 
@@ -8,7 +8,10 @@ from users.email_service import (
     is_demo_mailbox,
     send_booking_notification_email,
     send_cafe_order_receipt_email,
+    send_password_reset_email,
     send_subscription_reminder_email,
+    send_verification_email,
+    should_skip_smtp,
 )
 
 
@@ -20,6 +23,14 @@ class DemoMailboxGuardTests(SimpleTestCase):
         self.assertFalse(is_demo_mailbox("owner@vsevmeste.space"))
         self.assertFalse(is_demo_mailbox("client@gmail.com"))
         self.assertFalse(is_demo_mailbox(""))
+
+    def test_should_skip_smtp_for_is_demo_user_even_on_real_looking_email(self):
+        class U:
+            is_demo = True
+            email = "someone@gmail.com"
+            username = "demo_weird"
+
+        self.assertTrue(should_skip_smtp(user=U(), to=U.email))
 
     @override_settings(EMAIL_HOST_USER="smtp-user", EMAIL_HOST_PASSWORD="secret")
     @patch("users.email_service.EmailMultiAlternatives")
@@ -52,6 +63,7 @@ class DemoMailboxGuardTests(SimpleTestCase):
             email = "demo.salon@vsevmeste.space"
             first_name = "Анна"
             username = "demo_salon"
+            is_demo = True
 
         ok = send_subscription_reminder_email(
             U(),
@@ -60,4 +72,29 @@ class DemoMailboxGuardTests(SimpleTestCase):
             plan_name="Бизнес",
         )
         self.assertFalse(ok)
+        msg_cls.assert_not_called()
+
+    @override_settings(EMAIL_HOST_USER="smtp-user", EMAIL_HOST_PASSWORD="secret", FRONTEND_URL="https://vsevmeste.space")
+    @patch("users.email_service.EmailMultiAlternatives")
+    def test_verification_skips_demo_user(self, msg_cls):
+        class U:
+            is_demo = True
+            email = "demo_auto_staff_1@vsevmeste.space"
+            username = "demo_auto_staff_1"
+            first_name = "Игорь"
+            email_verification_token = "tok"
+
+        self.assertFalse(send_verification_email(U()))
+        msg_cls.assert_not_called()
+
+    @override_settings(EMAIL_HOST_USER="smtp-user", EMAIL_HOST_PASSWORD="secret", FRONTEND_URL="https://vsevmeste.space")
+    @patch("users.email_service.EmailMultiAlternatives")
+    def test_password_reset_skips_demo_user(self, msg_cls):
+        class U:
+            is_demo = True
+            email = "demo_auto_staff_1@vsevmeste.space"
+            username = "demo_auto_staff_1"
+            first_name = "Игорь"
+
+        self.assertFalse(send_password_reset_email(U(), "reset-tok"))
         msg_cls.assert_not_called()

@@ -119,6 +119,8 @@ class ResendVerificationView(APIView):
         user = User.objects.filter(email__iexact=email).first()
         if not user:
             return Response({"detail": "Пользователь не найден."}, status=status.HTTP_404_NOT_FOUND)
+        if getattr(user, "is_demo", False):
+            return Response({"detail": "Для демо-аккаунтов письма не отправляются."})
         if user.email_verified:
             return Response({"detail": "Email уже подтверждён."})
         if settings.SKIP_EMAIL_VERIFICATION:

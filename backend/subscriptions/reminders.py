@@ -74,6 +74,10 @@ def send_subscription_expiry_reminders() -> dict:
 
     for sub in qs3:
         user = sub.user
+        if getattr(user, "is_demo", False):
+            sub.reminder_3d_sent = True
+            sub.save(update_fields=["reminder_3d_sent", "updated_at"])
+            continue
         plan_name = sub.plan.name if sub.plan_id else "Подписка"
         title = "Подписка истекает через 3 дня"
         body = f"«{plan_name}» действует до {sub.period_end.strftime('%d.%m.%Y')}. Продлите в разделе «Подписки»."
@@ -104,6 +108,10 @@ def send_subscription_expiry_reminders() -> dict:
 
     for sub in qs1:
         user = sub.user
+        if getattr(user, "is_demo", False):
+            sub.reminder_1d_sent = True
+            sub.save(update_fields=["reminder_1d_sent", "updated_at"])
+            continue
         plan_name = sub.plan.name if sub.plan_id else "Подписка"
         title = "Подписка истекает завтра"
         body = f"«{plan_name}» действует до {sub.period_end.strftime('%d.%m.%Y')}. Продлите сейчас, чтобы не потерять доступ."

@@ -2,6 +2,8 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.core.management.base import BaseCommand, CommandError
 
+from users.email_service import is_demo_mailbox
+
 
 class Command(BaseCommand):
     help = "Проверка отправки почты через SMTP (Gmail)"
@@ -20,6 +22,10 @@ class Command(BaseCommand):
                 "Заполните EMAIL_HOST_USER и EMAIL_HOST_PASSWORD в .env, затем перезапустите: docker compose restart web"
             )
         recipient = options["recipient"]
+        if is_demo_mailbox(recipient):
+            raise CommandError(
+                f"Нельзя слать тест на демо-адрес {recipient} — это выдуманный ящик, SMTP туда не ходит."
+            )
         self.stdout.write(f"SMTP: {settings.EMAIL_HOST}:{settings.EMAIL_PORT}")
         self.stdout.write(f"От: {settings.DEFAULT_FROM_EMAIL}")
         self.stdout.write(f"Кому: {recipient}")
