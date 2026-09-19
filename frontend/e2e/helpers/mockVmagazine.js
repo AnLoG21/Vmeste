@@ -35,15 +35,35 @@ export const VMAG_PRODUCT = {
   provider_reviews_count: 0,
 };
 
+export const VMAG_RETURN = {
+  id: 8801,
+  status: "pending",
+  reason: "Не подошёл цвет",
+  created_at: "2026-03-01T12:00:00Z",
+  order_id: 7701,
+  order_item_id: 7702,
+  product_name: "Кружка E2E",
+  provider_name: "Лавка E2E",
+  shop_url: "/s/lavka-e2e",
+  seller_note: "",
+  refund_id: "",
+  photos: [],
+};
+
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ products?: object[], cart?: object[] }} [options]
+ * @param {{ products?: object[], cart?: object[], likes?: object[], returns?: object[] }} [options]
  */
-export async function installVmagazineMocks(page, { products = null, cart = null } = {}) {
+export async function installVmagazineMocks(
+  page,
+  { products = null, cart = null, likes = null, returns = null } = {},
+) {
   const catalog = Array.isArray(products) ? products.map((p) => ({ ...p })) : [{ ...VMAG_PRODUCT }];
   let cartItems = Array.isArray(cart)
     ? cart.map((c) => ({ ...c }))
     : [];
+  const liked = Array.isArray(likes) ? likes.map((p) => ({ ...p, liked: true })) : [];
+  const returnRows = Array.isArray(returns) ? returns.map((r) => ({ ...r })) : [];
 
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
@@ -119,14 +139,36 @@ export async function installVmagazineMocks(page, { products = null, cart = null
       return json(VMAG_PRODUCT);
     }
     if (path.endsWith("/vmagazine/favorites") && method === "GET") {
-      return json({ items: [] });
+      return json([]);
     }
     if (path.endsWith("/vmagazine/product-likes") && method === "GET") {
-      return json({ items: [] });
+      return json(liked);
+    }
+    if (path.endsWith("/vmagazine/my-orders") && method === "GET") {
+      return json([]);
+    }
+    if (path.endsWith("/vmagazine/addresses") && method === "GET") {
+      return json([]);
+    }
+    if (path.endsWith("/vmagazine/addresses") && method === "POST") {
+      return json({ id: 9101 }, 201);
+    }
+    if (path.endsWith("/vmagazine/returns") && method === "GET") {
+      return json(returnRows);
     }
     if (path.endsWith("/vmagazine/profile") && method === "GET") {
-      return json({ orders: [], addresses: [], bonuses: [] });
+      return json({ active_orders: [], purchases: [], reviewable: [] });
     }
+    if (path.endsWith("/vmagazine/bonuses") && method === "GET") {
+      return json([]);
+    }
+    if (path.endsWith("/vmagazine/payment-cards") && method === "GET") {
+      return json([]);
+    }
+    if (path.endsWith("/vmagazine/recently-viewed") && method === "GET") {
+      return json([]);
+    }
+
     if (path.includes("/vmagazine/") && method === "GET") {
       return json([]);
     }
