@@ -52,11 +52,11 @@ export const VMAG_RETURN = {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ products?: object[], cart?: object[], likes?: object[], returns?: object[] }} [options]
+ * @param {{ products?: object[], cart?: object[], likes?: object[], returns?: object[], bonuses?: object[], cards?: object[] }} [options]
  */
 export async function installVmagazineMocks(
   page,
-  { products = null, cart = null, likes = null, returns = null } = {},
+  { products = null, cart = null, likes = null, returns = null, bonuses = null, cards = null } = {},
 ) {
   const catalog = Array.isArray(products) ? products.map((p) => ({ ...p })) : [{ ...VMAG_PRODUCT }];
   let cartItems = Array.isArray(cart)
@@ -64,6 +64,9 @@ export async function installVmagazineMocks(
     : [];
   const liked = Array.isArray(likes) ? likes.map((p) => ({ ...p, liked: true })) : [];
   const returnRows = Array.isArray(returns) ? returns.map((r) => ({ ...r })) : [];
+  const bonusRows = Array.isArray(bonuses) ? bonuses.map((b) => ({ ...b })) : [];
+  let cardRows = Array.isArray(cards) ? cards.map((c) => ({ ...c })) : [];
+  let cardSeq = 9300;
 
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
@@ -160,10 +163,33 @@ export async function installVmagazineMocks(
       return json({ active_orders: [], purchases: [], reviewable: [] });
     }
     if (path.endsWith("/vmagazine/bonuses") && method === "GET") {
-      return json([]);
+      return json(bonusRows);
     }
     if (path.endsWith("/vmagazine/payment-cards") && method === "GET") {
-      return json([]);
+      return json(cardRows);
+    }
+    if (path.endsWith("/vmagazine/payment-cards") && method === "POST") {
+      let body = {};
+      try {
+        body = JSON.parse(req.postData() || "{}");
+      } catch {
+        body = {};
+      }
+      const pan = String(body.number || "").replace(/\D/g, "");
+      cardSeq += 1;
+      const row = {
+        id: cardSeq,
+        brand: pan.startsWith("4") ? "visa" : "card",
+        last4: pan.slice(-4) || "0000",
+        exp_month: Number(body.exp_month) || 12,
+        exp_year: Number(body.exp_year) || 2030,
+        is_default: cardRows.length === 0,
+        provider_id: null,
+        provider_name: "",
+        has_token: false,
+      };
+      cardRows = [...cardRows, row];
+      return json(row, 201);
     }
     if (path.endsWith("/vmagazine/recently-viewed") && method === "GET") {
       return json([]);
