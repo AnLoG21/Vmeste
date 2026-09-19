@@ -1716,6 +1716,35 @@ export async function installProviderMocks(
     if (path.includes("/marketplaces/") && path.includes("/products/sync-catalog") && method === "POST") {
       return json({ created: 1, updated: 0, skipped: 0 });
     }
+    if (path.includes("/marketplaces/call") && method === "POST") {
+      let body = {};
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
+      const action = String(body.action || "");
+      if (action === "analytics.sales" || action === "analytics.data") {
+        return json([
+          {
+            sa_name: "SKU-E2E",
+            quantity: 3,
+            retail_amount: 1500,
+            ppvz_for_pay: 1200,
+            supplier_oper_name: "Продажа",
+            rr_dt: "2026-03-01",
+            brand_name: "E2E Brand",
+          },
+        ]);
+      }
+      if (action === "analytics.stocks") {
+        return json([]);
+      }
+      if (action === "analytics.nm_report") {
+        return json({ cards: [] });
+      }
+      return json({ ok: true, action });
+    }
     if (path.includes("/marketplaces/")) {
       if (
         path.includes("/history") ||
@@ -1772,6 +1801,21 @@ export async function installProviderMocks(
         },
         201,
       );
+    }
+    const voiceTurnMatch = path.match(/\/voice\/session\/([^/]+)\/turn$/);
+    if (voiceTurnMatch && method === "POST") {
+      let text = "";
+      try {
+        text = String((req.postDataJSON() || {}).text || "");
+      } catch {
+        text = "";
+      }
+      return json({
+        session_id: voiceTurnMatch[1],
+        say: text
+          ? `Понял: ${text}. Могу предложить маникюр завтра.`
+          : "Повторите, пожалуйста.",
+      });
     }
     if (path.includes("/voice/")) return json([]);
     if (path.match(/\/inspections\/reports\/?$/) && method === "GET") {
