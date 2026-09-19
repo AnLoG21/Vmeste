@@ -29,7 +29,7 @@ cd Vmeste/frontend && npm test
 npm run test:coverage
 ```
 
-`bookingDisplay` · `cafeCheckoutMath` · `cafeDeliveryZones` (`findZoneAt`) · `mobileStores` (RuStore/APK/QR) · `staffPermissions` (labels + `applyStaffRolePreset`) · `viewRoutes` (`/services` ↔ `service_apps`) · `bookingWidget` (`buildBookingWidgetSnapshot`)
+`bookingDisplay` · `cafeCheckoutMath` · `cafeDeliveryZones` (`findZoneAt`) · `mobileStores` (RuStore/APK/QR) · `staffPermissions` (labels + `applyStaffRolePreset`) · `viewRoutes` (`/services` ↔ `service_apps`) · `bookingWidget` (`buildBookingWidgetSnapshot`) · `marketplaceAnalytics` (`extractRecords` / aggregate / unit econ / SPP)
 
 ## Frontend E2E (Playwright)
 
@@ -43,15 +43,21 @@ npx playwright install chromium && npm run test:e2e
 | `vmenu-feed.spec.js` | `/vmenu` → лента → открыть рецепт |
 | `vmenu-recipe.spec.js` | `/vmenu` → профиль → опубликовать рецепт |
 | `vmenu-search-social.spec.js` | `/vmenu` → Поиск → открыть → like/save |
+| `vmenu-comments.spec.js` | `/vmenu` → рецепт → комментарий → like |
+| `vmenu-chats.spec.js` | `/vmenu` → Чаты → Подписчики |
 | `vmagazine-home.spec.js` | `/vmagazine` → витрина → карточка товара |
 | `vmagazine-cart.spec.js` | `/vmagazine` → в корзину → вкладка Корзина |
 | `vmagazine-favorites.spec.js` | `/vmagazine` → Избранное + Профиль → Возвраты |
+| `vmagazine-cards.spec.js` | `/vmagazine` → Профиль → карта + Вбонусы |
 | `provider-marketplace-sync.spec.js` | `/marketplaces` → Товары → Подтянуть с площадки |
 | `provider-marketplace-analytics.spec.js` | `/marketplaces` → Аналитика панель |
+| `provider-marketplace-analytics-load.spec.js` | `/marketplaces` → Загрузить аналитику |
 | `services-hub.spec.js` | `/services` → хаб → Вменю / Вмагазине |
 | `provider-voice-simulate.spec.js` | `/organization` → POST `/api/voice/simulate/` |
+| `provider-voice-sim-turn.spec.js` | `/organization` → simulate → turn |
 | `client-cafe-orders-mine.spec.js` | `/cafe-orders-mine` → список заказов |
 | `client-my-reviews.spec.js` | `/my-reviews` → reviews GET (route smoke) |
+| `client-review-supplement.spec.js` | Моё → Дополнить отзыв → PATCH |
 | `landing-auth.spec.js` | лендинг → login JWT mock + register CTA |
 | `client-book.spec.js` | map → book → package / loyalty / pay resume / pay return |
 | `client-cancel.spec.js` | Моё → Все записи → cancel-by-client |
@@ -144,7 +150,7 @@ npx playwright install chromium && npm run test:e2e
 | `subscription-promo.spec.js` | Оплатить → apply VSEVMESTE |
 | `subscription-cancel.spec.js` | Отключить подписку → cancel API |
 
-Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point) + cafe provider menu CRUD + cafe floors/tables CRUD + cafe order status PATCH + cafe settings PATCH + shop provider catalog CRUD + shop order status PATCH + shop returns approve/reject/done (cash) + shop settings PATCH + marketplace settings notify/keys/environment PATCH + voice settings enable/legal_ack gate + voice sessions list/turn + inspection report create draft + add item/send + repair-status funnel, subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers + status/enable/disconnect API, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token, client notify prefs, org messaging settings + org telegram link, calendar ICS rotate, booking message templates, acquiring settings, staff invite accept/reject + create (Business gate) + deactivate + permissions/service assignment, catalog seed + service PATCH activate/price + options CRUD + service photos, booking slots create/delete + manual-hold/release + public widget catalog/book + visit-confirm + book-for-client + clients lookup/create/delete/import + migrate-request + client memory card (block/field_prefs) + booking analytics, change-password email flow + confirm-password-change token, change-email verification flow, me avatar upload/clear, me profile PATCH (+ anonymous_seat_count), delete-account anonymize, password-reset request/confirm, email verify/resend, provider branch locations create/patch/delete, organization-info working hours/contacts, org gallery upload/delete, client reviews + provider reply/mark-seen/unread-count, vmenu feed published recipes + recipe create/get + search/like/save/follow/book, vmagazine home/product detail + cart add/list + favorites/product-likes + my-orders/addresses/returns, payments provider_ready (yookassa/tbank/cloudpayments/robokassa) + mocked create_org_payment (tbank/yookassa/cloudpayments/robokassa), common image_processing + media_urls.photo_urls + ops_alerts.alert_ops.
+Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point) + cafe provider menu CRUD + cafe floors/tables CRUD + cafe order status PATCH + cafe settings PATCH + shop provider catalog CRUD + shop order status PATCH + shop returns approve/reject/done (cash) + shop settings PATCH + marketplace settings notify/keys/environment PATCH + voice settings enable/legal_ack gate + voice sessions list/turn + inspection report create draft + add item/send + repair-status funnel, subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers + status/enable/disconnect API, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token, client notify prefs, org messaging settings + org telegram link, calendar ICS rotate, booking message templates, acquiring settings, staff invite accept/reject + create (Business gate) + deactivate + permissions/service assignment, catalog seed + service PATCH activate/price + options CRUD + service photos, booking slots create/delete + manual-hold/release + public widget catalog/book + visit-confirm + book-for-client + clients lookup/create/delete/import + migrate-request + client memory card (block/field_prefs) + booking analytics, change-password email flow + confirm-password-change token, change-email verification flow, me avatar upload/clear, me profile PATCH (+ anonymous_seat_count), delete-account anonymize, password-reset request/confirm, email verify/resend, provider branch locations create/patch/delete, organization-info working hours/contacts, org gallery upload/delete, client reviews + provider reply/mark-seen/unread-count, vmenu feed published recipes + recipe create/get + search/like/save/follow/book + comments/comment-like + chats/contacts, vmagazine home/product detail + cart add/list + favorites/product-likes + my-orders/addresses/returns + payment-cards/bonuses, payments provider_ready (yookassa/tbank/cloudpayments/robokassa) + mocked create_org_payment (tbank/yookassa/cloudpayments/robokassa), common image_processing + media_urls.photo_urls + ops_alerts.alert_ops.
 
 ## CI
 

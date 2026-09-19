@@ -45,22 +45,25 @@ export const VMENU_RECIPE = {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ feedItems?: object[], recipeDetail?: object|null, searchItems?: object[] }} [options]
+ * @param {{ feedItems?: object[], recipeDetail?: object|null, searchItems?: object[], chatFollowers?: object[] }} [options]
  */
 export async function installVmenuMocks(
   page,
-  { feedItems = null, recipeDetail = null, searchItems = null } = {},
+  { feedItems = null, recipeDetail = null, searchItems = null, chatFollowers = null } = {},
 ) {
   const items = Array.isArray(feedItems) ? feedItems.map((r) => ({ ...r })) : [{ ...VMENU_RECIPE }];
   let detail = recipeDetail ? { ...recipeDetail } : { ...VMENU_RECIPE };
+  if (!Array.isArray(detail.comments)) detail.comments = [];
   const searchHits = Array.isArray(searchItems)
     ? searchItems.map((r) => ({ ...r }))
     : items.map((r) => ({ ...r }));
   let createdSeq = 9100;
+  let commentSeq = 9200;
   let likeCount = Number(detail.like_count) || 0;
   let saveCount = Number(detail.save_count) || 0;
   let liked = Boolean(detail.liked);
   let saved = Boolean(detail.saved);
+  let followers = Array.isArray(chatFollowers) ? chatFollowers.map((f) => ({ ...f })) : [];
 
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
@@ -159,7 +162,54 @@ export async function installVmenuMocks(
       return json(detail);
     }
     if (path.endsWith("/vmenu/chats/contacts") && method === "GET") {
-      return json({ items: [] });
+      return json({ followers });
+    }
+    const commentLikeMatch = path.match(/\/vmenu\/recipes\/(\d+)\/comments\/(\d+)\/like$/);
+    if (commentLikeMatch && (method === "POST" || method === "DELETE")) {
+      const cid = Number(commentLikeMatch[2]);
+      const list = Array.isArray(detail.comments) ? detail.comments : [];
+      const hit = list.find((c) => Number(c.id) === cid);
+      if (hit) {
+        hit.liked = method === "POST";
+        hit.like_count = hit.liked ? Math.max(Number(hit.like_count) || 0, 1) : 0;
+        return json({ liked: hit.liked, like_count: hit.like_count });
+      }
+      return json({ liked: method === "POST", like_count: method === "POST" ? 1 : 0 });
+    }
+    const commentsMatch = path.match(/\/vmenu\/recipes\/(\d+)\/comments$/);
+    if (commentsMatch && method === "POST") {
+      commentSeq += 1;
+      let text = "Комментарий";
+      try {
+        const raw = req.postData() || "";
+        if (raw.includes("name=\"text\"")) {
+          const m = /name="text"[\s\S]*?\r?\n\r?\n([^\r\n]*)/.exec(raw);
+          if (m) text = m[1].trim() || text;
+        } else {
+          const j = JSON.parse(raw);
+          if (j.text) text = String(j.text);
+        }
+      } catch {
+        /* ignore */
+      }
+      const row = {
+        id: commentSeq,
+        text,
+        rating: 0,
+        liked: false,
+        like_count: 0,
+        user: {
+          id: ME.id,
+          username: ME.username,
+          display_name: `${ME.first_name} ${ME.last_name}`,
+          avatar_url: "",
+        },
+        reply_to_user: null,
+        photos: [],
+      };
+      detail.comments = [...(detail.comments || []), row];
+      detail.comment_count = (Number(detail.comment_count) || 0) + 1;
+      return json(row);
     }
     if (path.endsWith("/vmenu/recipes") && method === "POST") {
       createdSeq += 1;

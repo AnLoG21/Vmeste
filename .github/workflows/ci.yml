@@ -147,10 +147,13 @@ jobs:
           vmenu.tests_feed_api
           vmenu.tests_recipe_api
           vmenu.tests_search_social_api
+          vmenu.tests_comments_api
+          vmenu.tests_chats_contacts_api
           vmagazine.tests_home_api
           vmagazine.tests_cart_api
           vmagazine.tests_favorites_api
           vmagazine.tests_orders_returns_api
+          vmagazine.tests_cards_bonuses_api
           subscriptions.tests_promos
           subscriptions.tests_trial_voice
           subscriptions.tests_yookassa_webhook
