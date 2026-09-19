@@ -62,3 +62,65 @@ class PaymentCreateOrgPaymentTests(SimpleTestCase):
         self.assertEqual(out["id"], "tb-1")
         self.assertEqual(out["provider"], "tbank")
         mock_init.assert_called_once()
+
+    @override_settings(FRONTEND_URL="https://vsevmeste.space")
+    @patch("payments.gateway.yookassa_create")
+    def test_create_org_payment_yookassa(self, mock_yk):
+        mock_yk.return_value = {
+            "id": "yk-1",
+            "status": "pending",
+            "confirmation": {"confirmation_url": "https://yookassa.test/pay"},
+        }
+        out = create_org_payment(
+            provider_code="yookassa",
+            creds={"shop_id": "shop", "secret_key": "secret"},
+            amount="150.00",
+            description="Тест ЮKassa",
+            return_url="https://vsevmeste.space/pay/return",
+            order_id="ord-yk-1",
+            metadata={"kind": "booking"},
+        )
+        self.assertIsNotNone(out)
+        self.assertEqual(out["id"], "yk-1")
+        self.assertEqual(out["provider"], "yookassa")
+        self.assertEqual(out["confirmation_url"], "https://yookassa.test/pay")
+        mock_yk.assert_called_once()
+
+    @override_settings(FRONTEND_URL="https://vsevmeste.space")
+    @patch("payments.gateway._cloudpayments_create")
+    def test_create_org_payment_cloudpayments(self, mock_cp):
+        mock_cp.return_value = {
+            "id": "cp-1",
+            "confirmation_url": "https://cloudpayments.test/pay",
+            "provider": "cloudpayments",
+        }
+        out = create_org_payment(
+            provider_code="cloudpayments",
+            creds={"public_id": "pk", "api_secret": "sec"},
+            amount="200.00",
+            description="Тест CP",
+            return_url="https://vsevmeste.space/pay/return",
+            order_id="ord-cp-1",
+            metadata={"kind": "shop"},
+        )
+        self.assertIsNotNone(out)
+        self.assertEqual(out["id"], "cp-1")
+        self.assertEqual(out["provider"], "cloudpayments")
+        mock_cp.assert_called_once()
+
+    @override_settings(FRONTEND_URL="https://vsevmeste.space")
+    def test_create_org_payment_robokassa(self):
+        out = create_org_payment(
+            provider_code="robokassa",
+            creds={"merchant_login": "demo", "password1": "pass1", "password2": "pass2"},
+            amount="99.00",
+            description="Тест Robokassa",
+            return_url="https://vsevmeste.space/pay/return",
+            order_id="42",
+            metadata={"kind": "sub"},
+        )
+        self.assertIsNotNone(out)
+        self.assertEqual(out["provider"], "robokassa")
+        self.assertEqual(out["id"], "42")
+        self.assertIn("auth.robokassa.ru", out["confirmation_url"])
+        self.assertIn("SignatureValue=", out["confirmation_url"])
