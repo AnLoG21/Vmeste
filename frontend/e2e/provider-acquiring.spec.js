@@ -22,6 +22,7 @@ test.describe("Provider acquiring settings", () => {
     });
 
     await page.locator("#org-prepay-mode").selectOption("percent");
+    await expect(page.locator("#org-prepay-percent")).toBeVisible({ timeout: 10_000 });
     await page.locator("#org-prepay-percent").fill("40");
     await page.locator("#org-yk-shop").fill("e2e-shop");
     await page.locator("#org-yk-secret").fill("e2e-secret");
