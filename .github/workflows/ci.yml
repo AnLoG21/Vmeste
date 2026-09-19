@@ -116,6 +116,9 @@ jobs:
           users.tests_organization_info_api
           users.tests_gallery_api
           payments.tests
+          common.tests_image_processing
+          common.tests_media_urls
+          common.tests_ops_alerts
           marketplaces.tests
           marketplaces.tests_analytics
           marketplaces.tests_card_designs
