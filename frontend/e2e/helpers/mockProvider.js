@@ -1713,6 +1713,9 @@ export async function installProviderMocks(
       delete mpSettingsPayload.yandex_disk_token;
       return json(mpSettingsPayload);
     }
+    if (path.includes("/marketplaces/") && path.includes("/products/sync-catalog") && method === "POST") {
+      return json({ created: 1, updated: 0, skipped: 0 });
+    }
     if (path.includes("/marketplaces/")) {
       if (
         path.includes("/history") ||

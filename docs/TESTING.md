@@ -29,7 +29,7 @@ cd Vmeste/frontend && npm test
 npm run test:coverage
 ```
 
-`bookingDisplay` · `cafeCheckoutMath` · `cafeDeliveryZones` (`findZoneAt`)
+`bookingDisplay` · `cafeCheckoutMath` · `cafeDeliveryZones` (`findZoneAt`) · `mobileStores` (RuStore/APK/QR)
 
 ## Frontend E2E (Playwright)
 
@@ -44,6 +44,10 @@ npx playwright install chromium && npm run test:e2e
 | `vmenu-recipe.spec.js` | `/vmenu` → профиль → опубликовать рецепт |
 | `vmagazine-home.spec.js` | `/vmagazine` → витрина → карточка товара |
 | `vmagazine-cart.spec.js` | `/vmagazine` → в корзину → вкладка Корзина |
+| `provider-marketplace-sync.spec.js` | `/marketplaces` → Товары → Подтянуть с площадки |
+| `client-cafe-orders-mine.spec.js` | `/cafe-orders-mine` → список заказов |
+| `client-my-reviews.spec.js` | `/my-reviews` → reviews GET (route smoke) |
+| `landing-auth.spec.js` | лендинг → login JWT mock + register CTA |
 | `client-book.spec.js` | map → book → package / loyalty / pay resume / pay return |
 | `client-cancel.spec.js` | Моё → Все записи → cancel-by-client |
 | `client-review.spec.js` | Моё → Все записи → Отзыв → POST /reviews/ |
@@ -128,13 +132,14 @@ npx playwright install chromium && npm run test:e2e
 | `provider-marketplace-settings.spec.js` | /marketplaces → Настройки → notify toggles PATCH |
 | `provider-marketplace-keys.spec.js` | /marketplaces → Настройки → Ключи → Боевой → Сохранить ключи |
 | `provider-voice-settings.spec.js` | /organization → enable + 152-ФЗ → PATCH voice/settings |
+| `provider-voice-greeting.spec.js` | /organization → enable + greeting → PATCH voice/settings |
 | `shop-public.spec.js` | online / cash / delivery cash / zone map pick / outside zone / `?order=` |
 | `subscription-return.spec.js` | `?payment=success` → Подписки + confirm |
 | `subscription-pay.spec.js` | Оплатить → promo skip → pay redirect |
 | `subscription-promo.spec.js` | Оплатить → apply VSEVMESTE |
 | `subscription-cancel.spec.js` | Отключить подписку → cancel API |
 
-Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point) + cafe provider menu CRUD + cafe floors/tables CRUD + cafe order status PATCH + cafe settings PATCH + shop provider catalog CRUD + shop order status PATCH + shop returns approve/reject/done (cash) + shop settings PATCH + marketplace settings notify/keys/environment PATCH + voice settings enable/legal_ack gate + inspection report create draft + add item/send + repair-status funnel, subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers + status/enable/disconnect API, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token, client notify prefs, org messaging settings + org telegram link, calendar ICS rotate, booking message templates, acquiring settings, staff invite accept/reject + create (Business gate) + deactivate + permissions/service assignment, catalog seed + service PATCH activate/price + options CRUD + service photos, booking slots create/delete + manual-hold/release + public widget catalog/book + visit-confirm + book-for-client + clients lookup/create/delete/import + migrate-request + client memory card (block/field_prefs) + booking analytics, change-password email flow + confirm-password-change token, change-email verification flow, me avatar upload/clear, me profile PATCH (+ anonymous_seat_count), delete-account anonymize, password-reset request/confirm, email verify/resend, provider branch locations create/patch/delete, organization-info working hours/contacts, org gallery upload/delete, client reviews + provider reply/mark-seen/unread-count, vmenu feed published recipes + recipe create/get, vmagazine home/product detail + cart add/list.
+Backend also covers create booking → waitlist `BOOKED`, client cancel → package restore + waitlist notify, org confirm/no-show/arrived/done/cancel-by-org HTTP, cafe/shop delivery zones (in/out/missing point) + cafe provider menu CRUD + cafe floors/tables CRUD + cafe order status PATCH + cafe settings PATCH + shop provider catalog CRUD + shop order status PATCH + shop returns approve/reject/done (cash) + shop settings PATCH + marketplace settings notify/keys/environment PATCH + voice settings enable/legal_ack gate + voice sessions list/turn + inspection report create draft + add item/send + repair-status funnel, subscription promo/cancel, demo mailbox SMTP skip, MoyNalog helpers + status/enable/disconnect API, client reviews API, inspection public approve, loyalty me/accounts + package purchase, loyalty settings + sell package, chat conversations + activity + mark-read, in-app mark-read + push register, telegram link token, client notify prefs, org messaging settings + org telegram link, calendar ICS rotate, booking message templates, acquiring settings, staff invite accept/reject + create (Business gate) + deactivate + permissions/service assignment, catalog seed + service PATCH activate/price + options CRUD + service photos, booking slots create/delete + manual-hold/release + public widget catalog/book + visit-confirm + book-for-client + clients lookup/create/delete/import + migrate-request + client memory card (block/field_prefs) + booking analytics, change-password email flow + confirm-password-change token, change-email verification flow, me avatar upload/clear, me profile PATCH (+ anonymous_seat_count), delete-account anonymize, password-reset request/confirm, email verify/resend, provider branch locations create/patch/delete, organization-info working hours/contacts, org gallery upload/delete, client reviews + provider reply/mark-seen/unread-count, vmenu feed published recipes + recipe create/get, vmagazine home/product detail + cart add/list, payments provider_ready (yookassa/tbank/cloudpayments/robokassa) + mocked tbank create_org_payment.
 
 ## CI
 

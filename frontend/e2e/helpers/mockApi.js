@@ -61,6 +61,7 @@ export async function installClientMocks(
     telegramLinked = false,
     pendingStaffInvites = null,
     meOverrides = null,
+    cafeOrders = null,
   } = {},
 ) {
   const loyaltyPayload = loyalty || { enabled: false, balance: 0, rub_per_point: 1 };
@@ -110,6 +111,7 @@ export async function installClientMocks(
     has_usable_password: true,
     ...(meOverrides && typeof meOverrides === "object" ? meOverrides : {}),
   };
+  let cafeOrdersList = Array.isArray(cafeOrders) ? cafeOrders.map((o) => ({ ...o })) : [];
 
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
@@ -551,7 +553,17 @@ export async function installClientMocks(
       return json({ ok: true, linked: false });
     }
     if (path.includes("/chat/")) return json([]);
-    if (path.includes("/cafe/my-orders")) return json([]);
+    if (path.match(/\/cafe\/my-orders\/\d+$/) && method === "GET") {
+      const id = Number(path.split("/").pop());
+      const hit = cafeOrdersList.find((o) => Number(o.id) === id);
+      return hit ? json(hit) : json({ detail: "not found" }, 404);
+    }
+    if (path.includes("/cafe/my-orders") && method === "GET") {
+      return json(cafeOrdersList);
+    }
+    if (path.includes("/cafe/my-orders") && method === "POST") {
+      return json({ ok: true, claimed: 0 });
+    }
     if (path.includes("/inspections/reports")) return json([]);
     if (path.includes("/notifications")) return json([]);
     if (path.includes("/health")) return json({ status: "ok", checks: { db: true } });
