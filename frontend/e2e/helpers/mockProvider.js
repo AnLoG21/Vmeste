@@ -1764,6 +1764,15 @@ export async function installProviderMocks(
     if (path.includes("/voice/outbound/pending") && method === "GET") {
       return json({ bookings: [], enabled: false });
     }
+    if (path.includes("/voice/simulate") && method === "POST") {
+      return json(
+        {
+          session_id: "e2e-sim-session",
+          say: "Здравствуйте! Это тестовый диалог голосового администратора.",
+        },
+        201,
+      );
+    }
     if (path.includes("/voice/")) return json([]);
     if (path.match(/\/inspections\/reports\/?$/) && method === "GET") {
       return json(inspectionReports);
