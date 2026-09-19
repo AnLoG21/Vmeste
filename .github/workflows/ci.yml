@@ -142,6 +142,8 @@ jobs:
           vmenu.tests_units
           vmenu.tests_feed_api
           vmenu.tests_recipe_api
+          vmagazine.tests_home_api
+          vmagazine.tests_cart_api
           subscriptions.tests_promos
           subscriptions.tests_trial_voice
           subscriptions.tests_yookassa_webhook
