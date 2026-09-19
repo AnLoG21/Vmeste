@@ -54,6 +54,8 @@ export function softwareApplicationJsonLd() {
     operatingSystem: "Web, Android",
     url: SITE_ORIGIN,
     image: OG_IMAGE,
+    downloadUrl: "https://www.rustore.ru/catalog/app/space.vsevmeste.app",
+    installUrl: "https://www.rustore.ru/catalog/app/space.vsevmeste.app",
     description:
       "Платформа для онлайн-записи клиентов, каталога услуг, чатов и карты организаций.",
     offers: [
@@ -125,7 +127,7 @@ export const HOME_FAQ = [
   {
     question: "Можно ли работать со смартфона?",
     answer:
-      "Да. Веб-версия адаптирована под мобильные браузеры, есть мобильное приложение Вместе с push-уведомлениями (Android и iOS). Кабинет мастера и запись клиента удобны с телефона.",
+      "Да. Веб-версия адаптирована под мобильные браузеры; Android-приложение Вместе с push — в RuStore (и на странице /android). Кабинет мастера и запись клиента удобны с телефона.",
   },
   {
     question: "Как работает гео-поиск для клиентов?",

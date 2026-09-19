@@ -14,6 +14,7 @@ import { setPageMeta } from "./seo/setPageMeta.js";
 import LandingDemo from "./LandingDemo.jsx";
 import LandingAutomationRequest, { scrollLandingHash } from "./LandingAutomationRequest.jsx";
 import { SERVICE_UPDATES, formatUpdateDate } from "./serviceUpdates.js";
+import { RUSTORE_APP_URL, rustoreQrUrl } from "./mobileStores.js";
 
 function formatPlanPrice(plan) {
   if (plan?.plan_type === "free" || plan?.slug === "starter") return "Бесплатно";
@@ -65,7 +66,7 @@ const INTEGRATIONS = [
   {
     title: "Push-уведомления",
     status: "now",
-    text: "Android: скачайте APK на /android — это приложение с push и виджетом. Ярлык «На экран Домой» из браузера — только сайт, без системных уведомлений. iOS — после Apple Developer.",
+    text: "Android: приложение в RuStore (и запасной APK на /android) — с push и виджетом. Ярлык «На экран Домой» из браузера — только сайт, без системных уведомлений. iOS — после Apple Developer.",
   },
   {
     title: "Telegram",
@@ -821,6 +822,40 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           ))}
         </section>
 
+        <section className="landing-section landing-app-download" id="app" aria-labelledby="landing-app-title">
+          <div className="landing-app-download-copy">
+            <h2 id="landing-app-title">Приложение Вместе</h2>
+            <p className="landing-section-lead">
+              Android: push о записях и виджет на рабочий стол. Установка из RuStore — без «неизвестных
+              источников».
+            </p>
+            <div className="landing-hero-actions">
+              <a
+                className="landing-btn landing-btn--primary"
+                href={RUSTORE_APP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Скачать в RuStore
+              </a>
+              <a className="landing-btn landing-btn--outline" href="/android">
+                APK и подробности
+              </a>
+            </div>
+          </div>
+          <figure className="landing-app-download-qr">
+            <img
+              src={rustoreQrUrl(148)}
+              width={148}
+              height={148}
+              alt="QR-код приложения Вместе в RuStore"
+              loading="lazy"
+              decoding="async"
+            />
+            <figcaption className="muted small">Наведите камеру телефона</figcaption>
+          </figure>
+        </section>
+
         <section className="landing-section landing-cta" id="start">
           <h2>Готовы начать?</h2>
           <p>
@@ -854,7 +889,11 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           <a href="/#demo">Демо</a>
           <a href="/#cases">Кейсы</a>
           <a href="/apps">Сервисы</a>
+          <a href="/#app">Приложение</a>
           <a href="/android">Android</a>
+          <a href={RUSTORE_APP_URL} target="_blank" rel="noopener noreferrer">
+            RuStore
+          </a>
           <a href="/businesses">Для бизнеса</a>
           <a href="/city/moscow">Москва</a>
           <a href="/city/spb">Санкт-Петербург</a>

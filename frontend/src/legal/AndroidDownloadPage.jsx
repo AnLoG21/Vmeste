@@ -4,22 +4,21 @@ import { SITE_LEGAL } from "./siteLegal.js";
 import JsonLd from "../seo/JsonLd.jsx";
 import { breadcrumbListJsonLd, organizationJsonLd } from "../seo/schema.js";
 import { setPageMeta } from "../seo/setPageMeta.js";
+import { ANDROID_APK_URL, RUSTORE_APP_URL, rustoreQrUrl } from "../mobileStores.js";
 
-const APK_URL = "/downloads/vmeste-android.apk";
-
-/** Public install page: native APK vs browser home-screen shortcut. */
+/** Public install page: RuStore first, APK fallback, vs browser home-screen shortcut. */
 export default function AndroidDownloadPage() {
   const [apkReady, setApkReady] = useState(null);
 
   useEffect(() => {
     setPageMeta({
-      title: "Скачать Android-приложение Вместе — не ярлык браузера",
+      title: "Скачать Android-приложение Вместе — RuStore и APK",
       description:
-        "APK Вместе: системные push и виджет записей. Ярлык «На экран Домой» из Chrome — это сайт, не приложение.",
+        "Приложение Вместе в RuStore: системные push и виджет записей. Ярлык «На экран Домой» из Chrome — это сайт, не приложение.",
       path: "/android",
     });
     let cancelled = false;
-    fetch(APK_URL, { method: "HEAD", cache: "no-store" })
+    fetch(ANDROID_APK_URL, { method: "HEAD", cache: "no-store" })
       .then((r) => {
         if (!cancelled) setApkReady(r.ok);
       })
@@ -49,30 +48,65 @@ export default function AndroidDownloadPage() {
         </a>
         <h1>Приложение для Android</h1>
         <p className="landing-hero-lead">
-          Два разных способа «поставить на телефон». Путают часто: ярлык браузера выглядит как иконка,
-          но это всё ещё сайт.
+          Удобнее всего поставить из RuStore. Ярлык браузера выглядит как иконка, но это всё ещё сайт —
+          без системных push и виджета.
         </p>
       </header>
       <main className="legal-page-body">
+        <section className="android-store-block" aria-labelledby="android-rustore-title">
+          <div className="android-store-copy">
+            <h2 id="android-rustore-title">RuStore</h2>
+            <p>
+              Официальная витрина: обновления через магазин, без «неизвестных источников». Push-уведомления
+              и виджет записей — в приложении.
+            </p>
+            <p>
+              <a
+                className="landing-btn landing-btn--primary"
+                href={RUSTORE_APP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Открыть в RuStore
+              </a>
+            </p>
+            <p className="muted small">
+              На телефоне ссылка откроет карточку приложения. С компьютера — отсканируйте QR.
+            </p>
+          </div>
+          <figure className="android-store-qr">
+            <img
+              src={rustoreQrUrl(168)}
+              width={168}
+              height={168}
+              alt="QR-код: скачать Вместе в RuStore"
+              loading="lazy"
+              decoding="async"
+            />
+            <figcaption className="muted small">QR → RuStore</figcaption>
+          </figure>
+        </section>
+
         <div className="android-compare" role="list">
           <article className="android-compare-card android-compare-card--app" role="listitem">
-            <h2>Приложение (APK)</h2>
+            <h2>Приложение</h2>
             <ul>
               <li>Системные push-уведомления</li>
               <li>Виджет «сегодня / ближайшая запись»</li>
               <li>Отдельный значок Вместе</li>
             </ul>
+            <p className="muted small">Основной способ — RuStore выше. APK — запасной вариант.</p>
             {apkReady === false ? (
               <p className="status">Файл APK на сервере пока недоступен — напишите на {SITE_LEGAL.email}.</p>
             ) : (
               <p>
                 <a
-                  className="landing-btn landing-btn--primary"
-                  href={APK_URL}
+                  className="landing-btn landing-btn--outline"
+                  href={ANDROID_APK_URL}
                   download={apkReady ? "vmeste-android.apk" : undefined}
                   aria-disabled={apkReady === null ? true : undefined}
                 >
-                  {apkReady === null ? "Проверяем файл…" : "Скачать APK"}
+                  {apkReady === null ? "Проверяем файл…" : "Скачать APK напрямую"}
                 </a>
               </p>
             )}
@@ -84,20 +118,20 @@ export default function AndroidDownloadPage() {
               <li>Открывает сайт во весь экран</li>
               <li>Без системных push и без виджета</li>
             </ul>
-            <p className="muted small">Удобно для быстрого входа, но это не приложение из APK.</p>
+            <p className="muted small">Удобно для быстрого входа, но это не приложение из магазина.</p>
           </article>
         </div>
 
-        <h2>Как установить APK</h2>
+        <h2>Как установить из RuStore</h2>
         <ol>
-          <li>Скачайте файл на телефон.</li>
-          <li>Разрешите установку из браузера / «Файлы» (неизвестный источник).</li>
+          <li>Откройте карточку в RuStore (кнопка или QR).</li>
+          <li>Нажмите «Скачать» / «Установить».</li>
           <li>Откройте Вместе, войдите, разрешите уведомления.</li>
           <li>Виджет: долгий тап по рабочему столу → Виджеты → Вместе.</li>
         </ol>
 
         <h2>Google Play</h2>
-        <p className="muted">Пока раздаём APK напрямую. Публикация в Play — после аккаунта разработчика.</p>
+        <p className="muted">Пока приложение в RuStore. Публикация в Play — после аккаунта разработчика.</p>
         <p>
           <a href="/apps">Сервисы платформы</a> · <a href="/businesses">Для бизнеса</a>
         </p>

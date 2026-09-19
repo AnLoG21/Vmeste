@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
+import { RUSTORE_APP_URL } from "./mobileStores.js";
 
 const HIDE_KEY = "vmeste_hide_apk_hint";
 
-/** Android browser/PWA only: remind that home-screen shortcut ≠ native APK. */
+/** Android browser/PWA only: remind that home-screen shortcut ≠ native app. */
 export default function NativeAppHint() {
   const [visible, setVisible] = useState(false);
 
@@ -27,8 +28,16 @@ export default function NativeAppHint() {
         <strong>приложении</strong>.
       </p>
       <div className="native-app-hint-actions">
-        <a className="landing-btn landing-btn--primary native-app-hint-link" href="/android">
-          Скачать APK
+        <a
+          className="landing-btn landing-btn--primary native-app-hint-link"
+          href={RUSTORE_APP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Открыть в RuStore
+        </a>
+        <a className="ghost-btn small native-app-hint-link" href="/android">
+          Подробнее
         </a>
         <button
           type="button"

@@ -165,6 +165,8 @@ cp app-release.apk /opt/vmeste/frontend/public/downloads/vmeste-android.apk
 
 Страница для пользователей: https://vsevmeste.space/android
 
+RuStore (основной канал установки): https://www.rustore.ru/catalog/app/space.vsevmeste.app
+
 ---
 
 ## Backend (CORS)
