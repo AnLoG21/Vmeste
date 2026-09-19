@@ -45,12 +45,22 @@ export const VMENU_RECIPE = {
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ feedItems?: object[], recipeDetail?: object|null }} [options]
+ * @param {{ feedItems?: object[], recipeDetail?: object|null, searchItems?: object[] }} [options]
  */
-export async function installVmenuMocks(page, { feedItems = null, recipeDetail = null } = {}) {
+export async function installVmenuMocks(
+  page,
+  { feedItems = null, recipeDetail = null, searchItems = null } = {},
+) {
   const items = Array.isArray(feedItems) ? feedItems.map((r) => ({ ...r })) : [{ ...VMENU_RECIPE }];
   let detail = recipeDetail ? { ...recipeDetail } : { ...VMENU_RECIPE };
+  const searchHits = Array.isArray(searchItems)
+    ? searchItems.map((r) => ({ ...r }))
+    : items.map((r) => ({ ...r }));
   let createdSeq = 9100;
+  let likeCount = Number(detail.like_count) || 0;
+  let saveCount = Number(detail.save_count) || 0;
+  let liked = Boolean(detail.liked);
+  let saved = Boolean(detail.saved);
 
   await page.addInitScript(() => {
     window.__VMESTE_E2E__ = true;
@@ -94,7 +104,38 @@ export async function installVmenuMocks(page, { feedItems = null, recipeDetail =
       return json([]);
     }
     if (path.endsWith("/vmenu/book") && method === "GET") {
-      return json({ items: [] });
+      return json({ items: saved ? [{ ...detail, status: "published" }] : [] });
+    }
+    if (path.endsWith("/vmenu/search") && method === "GET") {
+      const q = (url.searchParams.get("q") || "").trim().toLowerCase();
+      const filtered = q
+        ? searchHits.filter(
+            (r) =>
+              String(r.title || "")
+                .toLowerCase()
+                .includes(q) ||
+              String(r.description || "")
+                .toLowerCase()
+                .includes(q),
+          )
+        : searchHits;
+      return json({ items: filtered });
+    }
+    const likeMatch = path.match(/\/vmenu\/recipes\/(\d+)\/like$/);
+    if (likeMatch && (method === "POST" || method === "DELETE")) {
+      liked = method === "POST";
+      likeCount = liked ? Math.max(likeCount, 1) : Math.max(0, likeCount - 1);
+      return json({ liked, like_count: likeCount });
+    }
+    const saveMatch = path.match(/\/vmenu\/recipes\/(\d+)\/save$/);
+    if (saveMatch && (method === "POST" || method === "DELETE")) {
+      saved = method === "POST";
+      saveCount = saved ? Math.max(saveCount, 1) : Math.max(0, saveCount - 1);
+      return json({ saved, save_count: saveCount });
+    }
+    const followMatch = path.match(/\/vmenu\/users\/(\d+)\/follow$/);
+    if (followMatch && (method === "POST" || method === "DELETE")) {
+      return json({ following: method === "POST" });
     }
     if (path.endsWith("/vmenu/users/me") && method === "GET") {
       return json({

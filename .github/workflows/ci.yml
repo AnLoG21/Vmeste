@@ -143,6 +143,7 @@ jobs:
           vmenu.tests_units
           vmenu.tests_feed_api
           vmenu.tests_recipe_api
+          vmenu.tests_search_social_api
           vmagazine.tests_home_api
           vmagazine.tests_cart_api
           vmagazine.tests_favorites_api
