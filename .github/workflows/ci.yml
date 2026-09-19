@@ -141,6 +141,7 @@ jobs:
           users.test_email_demo
           vmenu.tests_units
           vmenu.tests_feed_api
+          vmenu.tests_recipe_api
           subscriptions.tests_promos
           subscriptions.tests_trial_voice
           subscriptions.tests_yookassa_webhook

@@ -105,7 +105,17 @@ export async function installVmenuMocks(page, { feedItems = null, recipeDetail =
         interest_tags: [],
         followers_count: 0,
         following_count: 0,
+        profile: { bio: "", allow_messages: "followers", interest_tags: [] },
+        recipes: items.filter((i) => Number(i.author?.id) === ME.id),
+        recent_followers: [],
+        recent_following: [],
       });
+    }
+    if (path.match(/\/vmenu\/recipes\/\d+\/ingredients$/) && method === "PUT") {
+      return json(detail);
+    }
+    if (path.match(/\/vmenu\/recipes\/\d+\/steps$/) && method === "PUT") {
+      return json(detail);
     }
     if (path.endsWith("/vmenu/chats/contacts") && method === "GET") {
       return json({ items: [] });
