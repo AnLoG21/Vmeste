@@ -62,6 +62,7 @@ export async function installClientMocks(
     pendingStaffInvites = null,
     meOverrides = null,
     cafeOrders = null,
+    reviews = null,
   } = {},
 ) {
   const loyaltyPayload = loyalty || { enabled: false, balance: 0, rub_per_point: 1 };
@@ -82,7 +83,9 @@ export async function installClientMocks(
         ]
       : [];
   let bookingsList = Array.isArray(bookings) ? bookings.map((b) => ({ ...b })) : [];
-  let reviewsStore = [];
+  let reviewsStore = Array.isArray(reviews)
+    ? reviews.map((r) => ({ ...r }))
+    : [];
   const conversationsPayload = Array.isArray(conversations)
     ? conversations.map((c) => ({ ...c }))
     : [];
