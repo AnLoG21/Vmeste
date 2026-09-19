@@ -12,7 +12,7 @@ test.describe("Android download page", () => {
 
     await page.goto("/android");
     await expect(page.getByRole("heading", { name: "Приложение для Android" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "RuStore" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "RuStore", exact: true })).toBeVisible();
     const store = page.getByRole("link", { name: "Открыть в RuStore" });
     await expect(store).toBeVisible();
     await expect(store).toHaveAttribute("href", /rustore\.ru\/catalog\/app\/space\.vsevmeste\.app/);
