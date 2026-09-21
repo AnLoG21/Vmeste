@@ -17,15 +17,17 @@ test.describe("Provider acquiring settings", () => {
     });
 
     await page.goto("/organization");
-    await expect(page.getByRole("heading", { name: "Предоплата при записи" })).toBeVisible({
-      timeout: 20_000,
-    });
+    const prepayHeading = page.getByRole("heading", { name: "Предоплата при записи" });
+    await expect(prepayHeading).toBeVisible({ timeout: 20_000 });
+    const prepayBlock = page.locator("section, .card, form, div").filter({ has: prepayHeading }).first();
 
-    await page.locator("#org-prepay-mode").selectOption("percent");
-    await expect(page.locator("#org-prepay-percent")).toBeVisible({ timeout: 10_000 });
-    await page.locator("#org-prepay-percent").fill("40");
-    await page.locator("#org-yk-shop").fill("e2e-shop");
-    await page.locator("#org-yk-secret").fill("e2e-secret");
+    await prepayBlock.locator("#org-prepay-mode").selectOption("percent");
+    await expect(async () => {
+      await expect(prepayBlock.locator("#org-prepay-percent")).toBeVisible();
+    }).toPass({ timeout: 15_000 });
+    await prepayBlock.locator("#org-prepay-percent").fill("40");
+    await prepayBlock.locator("#org-yk-shop").fill("e2e-shop");
+    await prepayBlock.locator("#org-yk-secret").fill("e2e-secret");
     await page.getByRole("button", { name: "Сохранить эквайринг" }).click();
 
     await expect.poll(() => patchBody?.prepay_mode, { timeout: 15_000 }).toBe("percent");

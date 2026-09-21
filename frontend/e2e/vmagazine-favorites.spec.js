@@ -16,7 +16,7 @@ test.describe("Вмагазине favorites / profile", () => {
       timeout: 20_000,
     });
 
-    await page.getByRole("button", { name: /Избранное/i }).click();
+    await page.getByRole("navigation", { name: "Вмагазине" }).getByRole("button", { name: "Избранное", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Избранное", exact: true })).toBeVisible({
       timeout: 15_000,
     });
@@ -35,7 +35,7 @@ test.describe("Вмагазине favorites / profile", () => {
       timeout: 20_000,
     });
 
-    await page.getByRole("button", { name: /Профиль/i }).click();
+    await page.getByRole("navigation", { name: "Вмагазине" }).getByRole("button", { name: "Профиль", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Профиль", exact: true })).toBeVisible({
       timeout: 15_000,
     });

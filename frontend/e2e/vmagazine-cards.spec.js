@@ -26,7 +26,7 @@ test.describe("Вмагазине payment cards", () => {
     await expect(page.getByRole("navigation", { name: "Вмагазине" })).toBeVisible({
       timeout: 20_000,
     });
-    await page.getByRole("button", { name: /Профиль/ }).click();
+    await page.getByRole("navigation", { name: "Вмагазине" }).getByRole("button", { name: "Профиль", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Профиль", exact: true })).toBeVisible({
       timeout: 15_000,
     });

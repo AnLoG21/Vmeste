@@ -37,6 +37,6 @@ test.describe("Provider staff deactivate", () => {
     await page.getByRole("button", { name: "Отключить" }).click();
 
     await expect.poll(() => patchBody?.is_active, { timeout: 15_000 }).toBe(false);
-    await expect(page.getByText(/отключён/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Сотрудник отключён.", { exact: true })).toBeVisible({ timeout: 10_000 });
   });
 });

@@ -23,7 +23,7 @@ const BOOKING_WITH_REVIEW = {
 };
 
 test.describe("Client review supplement", () => {
-  test("Моё → Дополнить отзыв → PATCH /reviews/<id>/", async ({ page }) => {
+  test("История записей → Дополнить отзыв → PATCH /reviews/<id>/", async ({ page }) => {
     await installClientMocks(page, {
       bookings: [BOOKING_WITH_REVIEW],
       reviews: [EXISTING_REVIEW],
@@ -37,15 +37,17 @@ test.describe("Client review supplement", () => {
     });
 
     await page.goto("/activity");
-    await expect(page.getByRole("button", { name: "Все записи" })).toBeVisible({ timeout: 20_000 });
-    await page.getByRole("button", { name: "Все записи" }).click();
+    await expect(page.getByRole("button", { name: "Меню" })).toBeVisible({ timeout: 20_000 });
+    await page.getByRole("button", { name: "Меню" }).click();
+    await page.getByRole("button", { name: "История записей" }).click();
 
-    await expect(page.getByRole("heading", { name: "Мои записи" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator(".calendar-cell--has-items").first()).toBeVisible({ timeout: 15_000 });
-    await page.locator(".calendar-cell--has-items").first().click();
-
-    await expect(page.locator(".calendar-day-sheet")).toBeVisible();
-    await page.locator(".calendar-day-sheet").getByRole("button", { name: "Дополнить отзыв" }).click();
+    await expect(page.getByRole("heading", { name: "История записей", exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByRole("button", { name: "Дополнить отзыв" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: "Дополнить отзыв" }).click();
 
     await expect(page.locator("#review-modal-title")).toHaveText("Дополнить отзыв", { timeout: 10_000 });
     await page.getByPlaceholder("Дополнительный текст к отзыву").fill("Ещё раз спасибо");
