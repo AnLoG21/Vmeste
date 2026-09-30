@@ -208,8 +208,12 @@ button:hover {
 }
 
 .cookie-consent-btn--primary {
-  background: #ff7a00;
+  background: #b84f00;
   color: #fff;
+}
+
+.cookie-consent-btn--primary:hover {
+  background: #a34700;
 }
 
 .auth-switch-text {
