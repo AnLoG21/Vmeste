@@ -13,6 +13,7 @@ import {
 } from "./seo/schema.js";
 import { setPageMeta } from "./seo/setPageMeta.js";
 import LandingDemo from "./LandingDemo.jsx";
+import LandingSectionFold from "./LandingSectionFold.jsx";
 import LandingAutomationRequest, { scrollLandingHash } from "./LandingAutomationRequest.jsx";
 import { SERVICE_UPDATES, formatUpdateDate } from "./serviceUpdates.js";
 import { RUSTORE_APP_URL, rustoreQrUrl } from "./mobileStores.js";
@@ -236,6 +237,15 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           </div>
         </section>
 
+        <nav className="landing-jump" aria-label="Разделы страницы">
+          <a href="#demo">Демо</a>
+          <a href="#businesses">Сферы</a>
+          <a href="#pricing">Тарифы</a>
+          <a href="#automation-request">Заявка</a>
+          <a href="#faq">FAQ</a>
+          <a href="#app">Приложение</a>
+        </nav>
+
         <section className="landing-section" id="quick-start">
           <h2>Быстрый старт за 3 шага</h2>
           <p className="landing-section-lead">
@@ -315,12 +325,11 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           </div>
         </section>
 
-        <section className="landing-section">
-          <h2>Что такое Вместе?</h2>
-          <p className="landing-section-lead">
-            Вместе — современная экосистема для сервисного бизнеса и селлеров: салонов красоты,
-            сервисных центров, кафе, магазинов и кабинетов Ozon/Wildberries.
-          </p>
+        <LandingSectionFold
+          id="about"
+          title="Что такое Вместе?"
+          lead="Вместе — современная экосистема для сервисного бизнеса и селлеров: салонов красоты, сервисных центров, кафе, магазинов и кабинетов Ozon/Wildberries."
+        >
           <div className="landing-features">
             <article className="landing-feature">
               <h3>Для клиентов</h3>
@@ -350,14 +359,13 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </p>
             </article>
           </div>
-        </section>
+        </LandingSectionFold>
 
-        <section className="landing-section" id="cases">
-          <h2>Как бизнес использует Вместе</h2>
-          <p className="landing-section-lead">
-            Типовые сценарии запуска — чтобы было понятно, какую задачу закрывает платформа на
-            практике.
-          </p>
+        <LandingSectionFold
+          id="cases"
+          title="Как бизнес использует Вместе"
+          lead="Типовые сценарии запуска — чтобы было понятно, какую задачу закрывает платформа на практике."
+        >
           <div className="landing-cases">
             {CASES.map((c) => (
               <article key={c.name + c.role} className="landing-case">
@@ -377,14 +385,13 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
             Хотите опубликовать свой кейс с фото? Напишите на{" "}
             <a href={`mailto:${SITE_LEGAL.email}`}>{SITE_LEGAL.email}</a>.
           </p>
-        </section>
+        </LandingSectionFold>
 
-        <section className="landing-section" id="apps">
-          <h2>Сервисы платформы</h2>
-          <p className="landing-section-lead">
-            Отдельные приложения внутри Вместе — один аккаунт, разные задачи. Подробнее о каждом
-            сервисе на отдельной странице.
-          </p>
+        <LandingSectionFold
+          id="apps"
+          title="Сервисы платформы"
+          lead="Отдельные приложения внутри Вместе — один аккаунт, разные задачи. Подробнее о каждом сервисе на отдельной странице."
+        >
           <div className="landing-businesses-grid">
             <a className="landing-biz-card landing-biz-card--app" href="/apps#vmenu">
               <span className="landing-biz-emoji" aria-hidden="true">
@@ -419,7 +426,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               <span className="landing-biz-link">Открыть раздел →</span>
             </a>
           </div>
-        </section>
+        </LandingSectionFold>
 
         <section className="landing-section landing-businesses" id="businesses">
           <h2>Для каких бизнесов уже готово</h2>
@@ -485,12 +492,11 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           </div>
         </section>
 
-        <section className="landing-section" id="value">
-          <h2>Больше, чем просто запись</h2>
-          <p className="landing-section-lead">
-            CRM-ценность — в возврате клиентов, оплатах и цифрах для решений. Ниже — что уже работает
-            и что готовим.
-          </p>
+        <LandingSectionFold
+          id="value"
+          title="Больше, чем просто запись"
+          lead="CRM-ценность — в возврате клиентов, оплатах и цифрах для решений. Ниже — что уже работает и что готовим."
+        >
           <div className="landing-value-grid">
             <article className="landing-value-card">
               <h3>Удержание клиентов</h3>
@@ -539,13 +545,13 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </ul>
             </article>
           </div>
-        </section>
+        </LandingSectionFold>
 
-        <section className="landing-section" id="integrations">
-          <h2>Интеграции, календари и уведомления</h2>
-          <p className="landing-section-lead">
-            Как клиент узнаёт, что сеанс подтверждён, и с чем можно связать календарь.
-          </p>
+        <LandingSectionFold
+          id="integrations"
+          title="Интеграции, календари и уведомления"
+          lead="Как клиент узнаёт, что сеанс подтверждён, и с чем можно связать календарь."
+        >
           <div className="landing-notify-strip">
             <article>
               <h3>Подтверждение записи</h3>
@@ -579,7 +585,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </article>
             ))}
           </div>
-        </section>
+        </LandingSectionFold>
 
         <section className="landing-section landing-pricing" ref={pricingRef} id="pricing">
           <h2>Тарифы и цены</h2>
@@ -654,12 +660,12 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           </p>
         </section>
 
-        <section className="landing-section landing-delivery" id="delivery">
-          <h2>Получение услуги после оплаты</h2>
-          <p className="landing-section-lead">
-            Вместе — облачный онлайн-сервис (SaaS). Физическая доставка товаров не производится:
-            доступ к кабинету открывается сразу после активации подписки.
-          </p>
+        <LandingSectionFold
+          id="delivery"
+          className="landing-delivery"
+          title="Получение услуги после оплаты"
+          lead="Вместе — облачный онлайн-сервис (SaaS). Физическая доставка товаров не производится: доступ к кабинету открывается сразу после активации подписки."
+        >
           <ol className="landing-delivery-grid">
             <li className="landing-delivery-card">
               <span className="landing-delivery-step" aria-hidden="true">
@@ -698,7 +704,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </div>
             </li>
           </ol>
-        </section>
+        </LandingSectionFold>
 
         <section className="landing-section landing-section--automation">
           <div className="landing-automation-text">
@@ -731,11 +737,12 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           <LandingAutomationRequest />
         </div>
 
-        <section className="landing-section landing-updates" id="updates">
-          <h2>Обновления сервиса</h2>
-          <p className="landing-section-lead">
-            Что добавили и что поправили — кратко, по датам.
-          </p>
+        <LandingSectionFold
+          id="updates"
+          className="landing-updates"
+          title="Обновления сервиса"
+          lead="Что добавили и что поправили — кратко, по датам."
+        >
           <div className="landing-updates-list">
             {SERVICE_UPDATES.map((block) => (
               <article key={block.date} className="landing-updates-card">
@@ -753,14 +760,13 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </article>
             ))}
           </div>
-        </section>
+        </LandingSectionFold>
 
-        <section className="landing-section landing-roadmap">
-          <h2>Функционал платформы</h2>
-          <p className="landing-section-lead">
-            Мы развиваем Вместе поэтапно: сначала базовые инструменты для записи и коммуникации,
-            затем — оплата, автоматизация и расширенная аналитика.
-          </p>
+        <LandingSectionFold
+          className="landing-roadmap"
+          title="Функционал платформы"
+          lead="Мы развиваем Вместе поэтапно: сначала базовые инструменты для записи и коммуникации, затем — оплата, автоматизация и расширенная аналитика."
+        >
           <div className="landing-roadmap-grid">
             <article className="landing-roadmap-card landing-roadmap-card--now">
               <h3>Уже доступно</h3>
@@ -805,7 +811,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </ul>
             </article>
           </div>
-        </section>
+        </LandingSectionFold>
 
         <section className="landing-section landing-faq" id="faq">
           <h2>Частые вопросы</h2>
