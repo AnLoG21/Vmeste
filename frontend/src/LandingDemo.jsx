@@ -1,27 +1,28 @@
+import LandingIcon from "./LandingIcon.jsx";
 import { useEffect, useState } from "react";
 
 const SPHERES = [
   {
     id: "hair_salon",
-    emoji: "💇",
+    icon: "scissors",
     title: "Салон красоты",
     text: "Мастера, услуги, календарь записей и отзывы — как у студии маникюра и парикмахерской.",
   },
   {
     id: "service_center",
-    emoji: "🔧",
+    icon: "wrench",
     title: "Автосервис",
     text: "Приёмка, механики, слоты диагностики и записи клиентов.",
   },
   {
     id: "cafe_restaurant",
-    emoji: "🍽️",
+    icon: "utensils",
     title: "Кафе",
     text: "Зал со столами, PIN, меню и заказы — кабинет ресторана.",
   },
   {
     id: "marketplaces",
-    emoji: "📦",
+    icon: "package",
     title: "Маркетплейсы",
     text: "Кабинет продавца Ozon и Wildberries: товары, заказы, аналитика и отзывы.",
   },
@@ -93,7 +94,7 @@ export default function LandingDemo({ open, onClose, onRegister, onStartDemo }) 
               onClick={() => pick(s.id)}
             >
               <span className="landing-demo-sphere-emoji" aria-hidden="true">
-                {s.emoji}
+                <LandingIcon name={s.icon} />
               </span>
               <strong>{s.title}</strong>
               <span>{s.text}</span>

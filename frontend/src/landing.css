@@ -2120,3 +2120,97 @@
 .landing-delivery-step {
   background: linear-gradient(135deg, #bf5500, #a34700);
 }
+
+/* Brand type, heading rhythm, and line icons */
+.page--guest {
+  font-family: Manrope, "Segoe UI", system-ui, sans-serif;
+}
+
+.landing-hero-title,
+.landing-section h2 {
+  letter-spacing: -0.02em;
+  font-weight: 800;
+}
+
+.landing-hero-card-icon,
+.landing-demo-sphere-emoji,
+.landing-biz-emoji {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #fff1e4;
+  color: #b84f00;
+  font-size: 0;
+  flex-shrink: 0;
+}
+
+.landing-biz-card--app .landing-biz-emoji {
+  background: #dff1ea;
+  color: #1d6b52;
+}
+
+.landing-icon {
+  display: block;
+}
+
+@media (max-width: 900px) {
+  .landing-hero-visual {
+    order: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .landing-hero {
+    padding-top: 16px;
+  }
+
+  .landing-hero-visual {
+    gap: 10px;
+  }
+
+  .landing-hero-card {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    column-gap: 14px;
+    align-items: center;
+    padding: 14px 16px;
+  }
+
+  .landing-hero-card-icon {
+    grid-row: span 2;
+    margin: 0;
+  }
+
+  .landing-hero-card p {
+    margin: 2px 0 0;
+    font-size: 0.9rem;
+  }
+
+  .cookie-consent {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+  }
+
+  .cookie-consent-inner {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .cookie-consent-text {
+    font-size: 12px;
+  }
+
+  .cookie-consent-actions {
+    flex-wrap: nowrap;
+  }
+
+  .cookie-consent-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 10px;
+  }
+}

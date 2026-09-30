@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import LandingIcon from "./LandingIcon.jsx";
 import "./landing.css";
 import { SITE_LEGAL } from "./legal/siteLegal.js";
 import { API_URL } from "./config.js";
@@ -218,17 +219,17 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           </div>
           <div className="landing-hero-visual" aria-hidden="true">
             <div className="landing-hero-card">
-              <span className="landing-hero-card-icon">📅</span>
+              <span className="landing-hero-card-icon"><LandingIcon name="calendar" /></span>
               <strong>Онлайн-запись</strong>
               <p>Клиенты записываются сами — вы управляете расписанием</p>
             </div>
             <div className="landing-hero-card">
-              <span className="landing-hero-card-icon">💬</span>
+              <span className="landing-hero-card-icon"><LandingIcon name="chat" /></span>
               <strong>Чаты</strong>
               <p>Общение с клиентами прямо в платформе</p>
             </div>
             <div className="landing-hero-card">
-              <span className="landing-hero-card-icon">🗺️</span>
+              <span className="landing-hero-card-icon"><LandingIcon name="map" /></span>
               <strong>Карта</strong>
               <p>Клиенты находят вас на интерактивной карте</p>
             </div>
@@ -282,31 +283,31 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           </p>
           <div className="landing-demo-spheres landing-demo-spheres--page">
             <button type="button" className="landing-demo-sphere" onClick={() => startFromPage("hair_salon")}>
-              <span className="landing-demo-sphere-emoji" aria-hidden="true">💇</span>
+              <span className="landing-demo-sphere-emoji" aria-hidden="true"><LandingIcon name="scissors" /></span>
               <strong>Салон красоты</strong>
               <span>Мастера, прайс, календарь записей</span>
               <em>Открыть кабинет</em>
             </button>
             <button type="button" className="landing-demo-sphere" onClick={() => startFromPage("service_center")}>
-              <span className="landing-demo-sphere-emoji" aria-hidden="true">🔧</span>
+              <span className="landing-demo-sphere-emoji" aria-hidden="true"><LandingIcon name="wrench" /></span>
               <strong>Автосервис</strong>
               <span>Приёмка, механики, слоты диагностики</span>
               <em>Открыть кабинет</em>
             </button>
             <button type="button" className="landing-demo-sphere" onClick={() => startFromPage("cafe_restaurant")}>
-              <span className="landing-demo-sphere-emoji" aria-hidden="true">🍽️</span>
+              <span className="landing-demo-sphere-emoji" aria-hidden="true"><LandingIcon name="utensils" /></span>
               <strong>Кафе</strong>
               <span>Зал, PIN столов, меню и заказы</span>
               <em>Открыть кабинет</em>
             </button>
             <button type="button" className="landing-demo-sphere" onClick={() => startFromPage("shops")}>
-              <span className="landing-demo-sphere-emoji" aria-hidden="true">🛒</span>
+              <span className="landing-demo-sphere-emoji" aria-hidden="true"><LandingIcon name="cart" /></span>
               <strong>Магазин</strong>
               <span>Каталог, склад, самовывоз и доставка</span>
               <em>Открыть кабинет</em>
             </button>
             <button type="button" className="landing-demo-sphere" onClick={() => startFromPage("marketplaces")}>
-              <span className="landing-demo-sphere-emoji" aria-hidden="true">📦</span>
+              <span className="landing-demo-sphere-emoji" aria-hidden="true"><LandingIcon name="package" /></span>
               <strong>Маркетплейсы</strong>
               <span>Ozon и Wildberries: товары, заказы, аналитика</span>
               <em>Открыть кабинет</em>
@@ -387,7 +388,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           <div className="landing-businesses-grid">
             <a className="landing-biz-card landing-biz-card--app" href="/apps#vmenu">
               <span className="landing-biz-emoji" aria-hidden="true">
-                🍳
+                <LandingIcon name="cook" />
               </span>
               <strong>Вменю</strong>
               <span>Рецепты, лента, книга и чаты</span>
@@ -395,7 +396,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
             </a>
             <a className="landing-biz-card landing-biz-card--app" href="/apps#vmagazine">
               <span className="landing-biz-emoji" aria-hidden="true">
-                🛒
+                <LandingIcon name="cart" />
               </span>
               <strong>Вмагазине</strong>
               <span>Поиск магазинов, избранное и заказы</span>
@@ -403,7 +404,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
             </a>
             <a className="landing-biz-card landing-biz-card--app" href="/apps#voice">
               <span className="landing-biz-emoji" aria-hidden="true">
-                🎙️
+                <LandingIcon name="mic" />
               </span>
               <strong>Голосовой ассистент</strong>
               <span>Звонки и напоминания клиентам</span>
@@ -411,7 +412,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
             </a>
             <a className="landing-biz-card landing-biz-card--more" href="/apps">
               <span className="landing-biz-emoji" aria-hidden="true">
-                📱
+                <LandingIcon name="apps" />
               </span>
               <strong>Все сервисы</strong>
               <span>Описания и возможности</span>
@@ -428,7 +429,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           <div className="landing-businesses-grid">
             <a className="landing-biz-card" href="/businesses#hair_salon">
               <span className="landing-biz-emoji" aria-hidden="true">
-                💇
+                <LandingIcon name="scissors" />
               </span>
               <strong>Салоны красоты</strong>
               <span>Запись, мастера, услуги</span>
@@ -436,7 +437,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
             </a>
             <a className="landing-biz-card" href="/businesses#service_center">
               <span className="landing-biz-emoji" aria-hidden="true">
-                🔧
+                <LandingIcon name="wrench" />
               </span>
               <strong>Автосервисы</strong>
               <span>VIN, приёмка, статусы ремонта</span>
@@ -444,7 +445,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
             </a>
             <a className="landing-biz-card" href="/businesses#cafe_restaurant">
               <span className="landing-biz-emoji" aria-hidden="true">
-                🍽️
+                <LandingIcon name="utensils" />
               </span>
               <strong>Кафе и рестораны</strong>
               <span>Зал, QR, меню, оплата</span>
@@ -452,7 +453,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
             </a>
             <a className="landing-biz-card" href="/businesses#shops">
               <span className="landing-biz-emoji" aria-hidden="true">
-                🛒
+                <LandingIcon name="cart" />
               </span>
               <strong>Магазины</strong>
               <span>Каталог, склад, доставка</span>
@@ -460,7 +461,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
             </a>
             <a className="landing-biz-card" href="/businesses#marketplaces">
               <span className="landing-biz-emoji" aria-hidden="true">
-                📦
+                <LandingIcon name="package" />
               </span>
               <strong>Маркетплейсы</strong>
               <span>Ozon и Wildberries</span>
@@ -475,7 +476,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               }}
             >
               <span className="landing-biz-emoji" aria-hidden="true">
-                ✨
+                <LandingIcon name="sparkles" />
               </span>
               <strong>Другая сфера</strong>
               <span>Индивидуальная автоматизация</span>
@@ -590,9 +591,6 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
             {plans.filter((plan) => plan.product_kind !== "voice").map((plan) => (
               <article key={plan.id} className="subscriptions-plan-card">
                 <h3>
-                  {(plan.plan_type === "trial" || plan.plan_type === "free" || plan.slug === "starter") && "🎁 "}
-                  {plan.slug === "business" && "💼 "}
-                  {plan.plan_type === "custom" && "🛠️ "}
                   {plan.name}
                 </h3>
                 <p className="subscriptions-plan-desc">{plan.description}</p>
@@ -631,7 +629,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
                   .filter((plan) => plan.product_kind === "voice")
                   .map((plan) => (
                     <article key={plan.id} className="subscriptions-plan-card">
-                      <h3>🎙 {plan.name}</h3>
+                      <h3>{plan.name}</h3>
                       <p className="subscriptions-plan-desc">{plan.description}</p>
                       <p className="subscriptions-plan-price">{formatPlanPrice(plan)}</p>
                       {Array.isArray(plan.features) && plan.features.length > 0 && (
