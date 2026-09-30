@@ -1,0 +1,113 @@
+{
+  "title": "Cabinet visual world",
+  "question": "Choose the visual world for the business cabinet redesign (calendar, settings, staff). Re-roll allowed.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Station Clipboard Rack",
+      "kicker": "THE ROLL",
+      "lineage": "salon / workshop station clipboard with metal clip and swap-in shift sheets",
+      "thesis": "The cabinet is a rack of station clipboards: cool quiet canvas, Together orange only as tag and CTA, calendar reads as a shift sheet.",
+      "palette": ["#F4F5F7", "#FFFFFF", "#1C1F24", "#5C6570", "#FF7A00", "#D9DEE5"],
+      "materials": ["matte aluminum clip", "cool blank paper", "graphite rule", "orange tag accent"],
+      "viewport": "Header with logo and monochrome menu; bookmarks as clip tabs; full-width month calendar as the shift sheet with a printed today ring and dense cells without peach gradients.",
+      "risk": "Can feel too B2B-gray if the orange signal is too rare.",
+      "raised": [
+        {"from": "phosphor-terminal", "raise": "Shift status prints as a status line under the header (busy / free / waiting), not rainbow icons."},
+        {"from": "drum-machine-step-row", "raise": "Day grid carries a now chase strip on the current slot, like a step-row playhead."},
+        {"from": "labanotation", "raise": "Booking duration in day-detail is encoded as block length, not only time text."},
+        {"from": "civic-bureau-prospectus", "raise": "Color is spent once: orange only on CTA, today, and active bookmark; everything else bone/graphite."},
+        {"from": "calendar-pinup-pad", "raise": "The date grid is the primary axis; today is a printed ring; past days quiet toward the board."}
+      ]
+    },
+    {
+      "id": "model-pick",
+      "label": "Appointment Ledger Desk",
+      "kicker": "IMPECCABLE'S PICK",
+      "lineage": "paper appointment ledger on a salon or garage counter",
+      "thesis": "The cabinet feels like an open appointment ledger: dense Manrope type, cool desk surface, orange pencil accent on actions.",
+      "palette": ["#EEF1F4", "#FAFBFC", "#14181C", "#FF7A00", "#8A939E"],
+      "materials": ["ruled ledger sheet", "soft desk shadow", "pencil accent"],
+      "viewport": "Calendar as a full-width ledger spread; thin master filter column; settings and staff as calm blank forms without peach-card noise.",
+      "risk": "Most familiar online-booking direction — familiar-default risk."
+    },
+    {
+      "id": "challenger-calendar-pad",
+      "label": "Merchant Calendar Pad",
+      "verdict": "competitive",
+      "lineage": "print-shop advertising tear-off calendar",
+      "thesis": "Quiet Together mark above; tear-off date pad below as the only instrument.",
+      "palette": ["#F7F3EA", "#1A1208", "#FF7A00", "#C4A574"],
+      "materials": ["coated plate", "thin gold rule", "tear-off pad"],
+      "viewport": "Month as pad under the logo; day-detail tears a leaf into a modal.",
+      "case": "Strong owner ID with calendars; weaker clarity vs peach anti-reference (warm board).",
+      "risk": "Easy slide back into cream wallpaper."
+    },
+    {
+      "id": "challenger-step-row",
+      "label": "Shift Step Row",
+      "verdict": "competitive",
+      "lineage": "drum-machine step row / shift console",
+      "thesis": "The day is a step row; chase light is now; slots are armed keys.",
+      "palette": ["#2A2D33", "#FFFFFF", "#FF7A00", "#F0C14A", "#E8E9EC"],
+      "materials": ["charcoal panel", "lit step keys", "segment readout"],
+      "viewport": "Intervals and day as instrument row; month stays overview above the console.",
+      "case": "Excellent time clarity; weaker for settings/staff forms.",
+      "risk": "Dark console may fight light-first cabinet and Capacitor."
+    },
+    {
+      "id": "challenger-labanotation",
+      "label": "Duration Staff Score",
+      "verdict": "competitive",
+      "lineage": "Labanotation duration staff",
+      "thesis": "Bookings are duration blocks on a day staff; staff members are parallel columns.",
+      "palette": ["#FFFFFF", "#111111", "#FF7A00", "#E8E8E8"],
+      "materials": ["white score paper", "level hatching", "marginal beat numerals"],
+      "viewport": "Day as duration staff; month as score index.",
+      "case": "Max duration clarity; weaker audience ID (score literacy).",
+      "risk": "May feel abstract for salon owners."
+    },
+    {
+      "id": "challenger-phosphor",
+      "label": "Ops Phosphor Log",
+      "verdict": "declined",
+      "lineage": "green phosphor terminal",
+      "palette": ["#0A0F0A", "#33FF66"],
+      "materials": ["scanline glass", "monospace bitmap"],
+      "case": "Salon/cafe owners do not identify with a machine-room terminal.",
+      "kept": "States print as a line, icons do not decorate."
+    },
+    {
+      "id": "challenger-ascii",
+      "label": "Glyph Density Scene",
+      "verdict": "declined",
+      "lineage": "ASCII live scene",
+      "palette": ["#000000", "#00FF66"],
+      "materials": ["monospace glyph ramp"],
+      "case": "Zero product clarity for client booking.",
+      "kept": "Density as signal — carried into calendar cell weight."
+    },
+    {
+      "id": "challenger-rain",
+      "label": "Gravity Rain Garden",
+      "verdict": "declined",
+      "lineage": "surreal gravity rain garden",
+      "palette": ["#3A4A3F", "#4A90D9", "#C0392B"],
+      "materials": ["vector-field rain"],
+      "case": "Breaks Operate clarity and brand pins.",
+      "kept": "One dominant force per screen — one primary job."
+    }
+  ],
+  "reroll": { "registers": ["safer", "bolder"] },
+  "buildPath": { "value": "code", "toggle": true },
+  "canon": true,
+  "canonCard": {
+    "label": "Category standard",
+    "thesis": "Quiet booking SaaS cabinet: white canvas, neutral top nav, brand primary — competitor craft executed well.",
+    "palette": ["#FFFFFF", "#F3F4F6", "#111827", "#FF7A00"],
+    "materials": ["soft card", "system sans", "standard table"],
+    "viewport": "Top bar + month calendar card + day side panel.",
+    "risk": "Indistinguishable from competitors by design."
+  },
+  "steer": true
+}

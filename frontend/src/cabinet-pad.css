@@ -1,0 +1,322 @@
+/**
+ * Merchant Calendar Pad — cabinet pilot overrides.
+ * Warmth stays on the calendar pad; chrome stays cool.
+ * Import after styles.css / design-kit.css / mobile.css.
+ */
+
+.page-logged {
+  --bg-page: var(--vm-chrome);
+  --bg-card: var(--vm-surface);
+  --text: var(--vm-ink);
+  --muted: var(--vm-mute);
+  --border: var(--vm-hairline);
+  --accent: var(--vm-accent);
+  --accent-hover: var(--vm-accent-hover);
+  --tg-bubble-own: rgba(255, 122, 0, 0.1);
+  font-family: var(--vm-font);
+  background: var(--vm-chrome);
+  color: var(--vm-ink);
+}
+
+.page-logged .hero.top-row {
+  background: var(--vm-chrome);
+  border-bottom: 1px solid var(--vm-hairline);
+  margin: 0 -24px;
+  padding: 12px 24px;
+  align-items: center;
+}
+
+.page-logged .menu-dropdown {
+  background: var(--vm-surface);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius);
+  box-shadow: 0 12px 28px rgba(26, 18, 8, 0.1);
+}
+
+.page-logged .menu-dropdown button,
+.page-logged .menu-dropdown .menu-dropdown-item {
+  color: var(--vm-ink);
+  border-radius: var(--vm-radius-sheet);
+}
+
+.page-logged .menu-dropdown button:hover,
+.page-logged .menu-dropdown .menu-dropdown-item:hover {
+  background: var(--vm-chrome);
+}
+
+.page-logged .menu-dropdown svg {
+  color: var(--vm-ink);
+  fill: currentColor;
+  opacity: 0.72;
+}
+
+.page-logged .menu-dropdown button[data-menu-id="logout"] svg,
+.page-logged .menu-dropdown .menu-icon--danger {
+  color: var(--vm-danger);
+  opacity: 1;
+}
+
+.page-logged .app-subnav {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 8px 24px 10px;
+  margin: 0 -24px 0;
+  background: var(--vm-chrome);
+  border-bottom: 1px solid var(--vm-gold);
+  overflow-x: auto;
+}
+
+.page-logged .app-subnav button {
+  background: transparent;
+  color: var(--vm-mute);
+  font-family: var(--vm-font);
+  font-weight: 600;
+  font-size: 14px;
+  border: 1px solid transparent;
+  border-radius: var(--vm-radius-sheet);
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+
+.page-logged .app-subnav button:hover {
+  background: var(--vm-surface);
+  color: var(--vm-ink);
+}
+
+.page-logged .app-subnav button.active {
+  background: var(--vm-surface);
+  color: var(--vm-ink);
+  border-color: transparent;
+  box-shadow: inset 0 -2px 0 var(--vm-accent);
+}
+
+[data-theme="dark"] .page-logged .app-subnav button,
+body.theme-dark .page-logged .app-subnav button {
+  color: var(--vm-mute);
+}
+
+[data-theme="dark"] .page-logged .app-subnav button:hover,
+body.theme-dark .page-logged .app-subnav button:hover,
+[data-theme="dark"] .page-logged .app-subnav button.active,
+body.theme-dark .page-logged .app-subnav button.active {
+  background: var(--vm-surface);
+  color: var(--vm-text);
+}
+
+/* Calendar pad */
+.page-logged .booking-calendar.calendar-pad {
+  background: var(--vm-pad);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius);
+  box-shadow: none;
+  color: var(--vm-ink);
+  padding: var(--vm-space-4);
+}
+
+.page-logged .booking-calendar.calendar-pad h2 {
+  font-family: var(--vm-font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--vm-ink);
+  margin: 0 0 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--vm-gold);
+}
+
+.page-logged .booking-calendar.calendar-pad > input[type="month"] {
+  font-family: var(--vm-font);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--vm-ink);
+  background: transparent;
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius-sm);
+  margin: 12px 0 8px;
+}
+
+.page-logged .booking-calendar.calendar-pad .calendar-head {
+  color: var(--vm-mute);
+  font-weight: 600;
+  font-size: 12px;
+  background: transparent;
+  border: none;
+}
+
+.page-logged .booking-calendar.calendar-pad .weekend-head {
+  color: var(--vm-ink);
+  font-weight: 800;
+  background: transparent;
+  border: none;
+}
+
+.page-logged .booking-calendar.calendar-pad .calendar-cell {
+  min-height: 140px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius-sm);
+  color: var(--vm-ink);
+  box-shadow: none;
+}
+
+.page-logged .booking-calendar.calendar-pad .calendar-cell.empty {
+  background: transparent;
+  border-color: transparent;
+}
+
+.page-logged .booking-calendar.calendar-pad .calendar-cell.clickable:hover {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.page-logged .booking-calendar.calendar-pad .weekend-cell {
+  background: rgba(255, 255, 255, 0.35);
+  border-color: var(--vm-hairline);
+  box-shadow: none;
+}
+
+.page-logged .booking-calendar.calendar-pad .weekend-cell .calendar-day {
+  font-weight: 800;
+}
+
+.page-logged .booking-calendar.calendar-pad .calendar-cell--past {
+  background: color-mix(in srgb, var(--vm-past) 35%, transparent);
+  color: var(--vm-mute);
+}
+
+.page-logged .booking-calendar.calendar-pad .calendar-cell--past .calendar-day {
+  color: var(--vm-mute);
+}
+
+.page-logged .booking-calendar.calendar-pad .calendar-cell--today {
+  border-color: var(--vm-accent);
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 0 0 2px rgba(255, 122, 0, 0.35);
+}
+
+.page-logged .booking-calendar.calendar-pad .calendar-cell--today .calendar-day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--vm-accent);
+  color: #fff;
+  font-weight: 800;
+}
+
+[data-theme="dark"] .page-logged .booking-calendar.calendar-pad,
+body.theme-dark .page-logged .booking-calendar.calendar-pad {
+  color: var(--vm-text);
+}
+
+[data-theme="dark"] .page-logged .booking-calendar.calendar-pad .calendar-cell,
+body.theme-dark .page-logged .booking-calendar.calendar-pad .calendar-cell {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--vm-text);
+  border-color: var(--vm-border);
+}
+
+[data-theme="dark"] .page-logged .booking-calendar.calendar-pad .calendar-day,
+body.theme-dark .page-logged .booking-calendar.calendar-pad .calendar-day {
+  color: var(--vm-text);
+}
+
+/* Tear-off day sheet (portal to body) */
+.calendar-day-sheet--tearoff {
+  background: var(--vm-pad, #f7f3ea);
+  border: 1px solid var(--vm-hairline, #e5e0d6);
+  border-radius: var(--vm-radius, 10px) var(--vm-radius, 10px) 0 0;
+  box-shadow: var(--vm-tearoff-shadow, 0 12px 28px rgba(26, 18, 8, 0.12));
+  color: var(--vm-ink, #1a1208);
+  animation: cabinet-tearoff-in 160ms ease-out;
+}
+
+@keyframes cabinet-tearoff-in {
+  from {
+    opacity: 0.86;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calendar-day-sheet--tearoff {
+    animation: none;
+  }
+}
+
+[data-theme="dark"] .calendar-day-sheet--tearoff,
+body.theme-dark .calendar-day-sheet--tearoff {
+  background: var(--vm-pad);
+  color: var(--vm-text);
+  border-color: var(--vm-border);
+}
+
+/* Settings / org / staff sheets */
+.page-logged .profile-card,
+.page-logged .org-settings-card,
+.page-logged .cabinet-sheet {
+  background: var(--vm-surface);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius);
+  box-shadow: none;
+  color: var(--vm-ink);
+}
+
+.page-logged .profile-card > h2,
+.page-logged .org-settings-card > h2 {
+  font-family: var(--vm-font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--vm-ink);
+  margin: 0 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--vm-gold);
+}
+
+.page-logged .profile-card .ghost-btn,
+.page-logged .org-settings-card .ghost-btn,
+.page-logged .staff-deactivate-btn {
+  background: transparent;
+  color: var(--vm-ink);
+  border: 1px solid var(--vm-hairline);
+}
+
+.page-logged .profile-card .ghost-btn:hover,
+.page-logged .org-settings-card .ghost-btn:hover {
+  background: var(--vm-chrome);
+}
+
+.page-logged .staff-list,
+.page-logged .staff-block {
+  border-color: var(--vm-hairline);
+}
+
+.page-logged .staff-block {
+  background: var(--vm-surface);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius-sm);
+  padding: 12px;
+}
+
+.page-logged .staff-row {
+  color: var(--vm-ink);
+}
+
+.page-logged button.primary,
+.page-logged .vm-btn--primary {
+  background: var(--vm-accent);
+  border-color: transparent;
+  color: #fff;
+}
+
+.page-logged button.primary:hover,
+.page-logged .vm-btn--primary:hover {
+  background: var(--vm-accent-hover);
+}

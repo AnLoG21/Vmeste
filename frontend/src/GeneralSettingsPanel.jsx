@@ -38,7 +38,7 @@ export default function GeneralSettingsPanel({
     (b) => role && b.roles.includes(role) && isBookmarkAvailable(b.id),
   );
   return (
-    <section className="card profile-card">
+    <section className="card profile-card cabinet-sheet">
       <h2>Настройки</h2>
       <div className="form">
         <h3>Оформление</h3>

@@ -35,8 +35,11 @@ export default function BookingCalendar({
   for (let i = 0; i < offset; i += 1) cells.push(null);
   for (let day = 1; day <= daysInMonth; day += 1) cells.push(day);
 
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
   return (
-    <section className="card full-width booking-calendar">
+    <section className="card full-width booking-calendar calendar-pad">
       <h2>{title}</h2>
       <input type="month" value={bookingsMonth} onChange={(e) => setBookingsMonth(e.target.value)} />
       <p className="muted small calendar-mobile-hint">На телефоне нажмите на день, чтобы открыть записи</p>
@@ -51,13 +54,14 @@ export default function BookingCalendar({
           const dayItems = day ? byDay[day] || [] : [];
           const isToday =
             day != null &&
-            year === new Date().getFullYear() &&
-            month === new Date().getMonth() + 1 &&
-            day === new Date().getDate();
+            year === today.getFullYear() &&
+            month === today.getMonth() + 1 &&
+            day === today.getDate();
+          const isPast = day != null && new Date(year, month - 1, day) < todayStart && !isToday;
           return (
           <div
             key={`${day ?? "empty"}-${idx}`}
-            className={`calendar-cell ${day ? "clickable calendar-cell--bookings" : "empty"} ${weekend ? "weekend-cell" : ""} ${dayItems.length ? "calendar-cell--has-items" : ""} ${isToday ? "calendar-cell--today" : ""}`}
+            className={`calendar-cell ${day ? "clickable calendar-cell--bookings" : "empty"} ${weekend ? "weekend-cell" : ""} ${dayItems.length ? "calendar-cell--has-items" : ""} ${isToday ? "calendar-cell--today" : ""} ${isPast ? "calendar-cell--past" : ""}`}
             onClick={() => {
               if (!day) return;
               setCalendarDayDetail({

@@ -24,7 +24,7 @@ export default function CalendarDayDetailModal({
       className="modal-backdrop modal-backdrop--app-overlay modal-backdrop--bottom-sheet"
       onClick={() => setCalendarDayDetail(null)}
     >
-      <div className="modal-card calendar-day-sheet" onClick={(e) => e.stopPropagation()} role="dialog">
+      <div className="modal-card calendar-day-sheet calendar-day-sheet--tearoff" onClick={(e) => e.stopPropagation()} role="dialog">
         <div className="sheet-grab" aria-hidden />
         <div className="calendar-day-sheet-head">
           <h3>

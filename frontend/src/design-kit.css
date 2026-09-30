@@ -5,50 +5,68 @@
  */
 :root,
 [data-theme="light"] {
-  --vm-bg: var(--bg-page, #fff8f2);
-  --vm-surface: var(--bg-card, #ffffff);
-  --vm-surface-2: #fff3e8;
-  --vm-text: var(--text, #1a1a1a);
-  --vm-text-muted: var(--muted, #8d8d8d);
-  --vm-border: var(--border, #ffd9bd);
-  --vm-accent: var(--accent, #ff7a00);
-  --vm-accent-hover: var(--accent-hover, #eb6f00);
+  /* Merchant Calendar Pad tokens (cabinet); landing may still use peach elsewhere */
+  --vm-chrome: #f3f4f6;
+  --vm-pad: #f7f3ea;
+  --vm-ink: #1a1208;
+  --vm-mute: #6b6560;
+  --vm-gold: #c4a574;
+  --vm-hairline: #e5e0d6;
+  --vm-past: #d9d2c5;
+  --vm-bg: var(--vm-chrome);
+  --vm-surface: #ffffff;
+  --vm-surface-2: #f3f4f6;
+  --vm-text: var(--vm-ink);
+  --vm-text-muted: var(--vm-mute);
+  --vm-border: var(--vm-hairline);
+  --vm-accent: #ff7a00;
+  --vm-accent-hover: #eb6f00;
   --vm-accent-soft: rgba(255, 122, 0, 0.12);
   --vm-danger: #c62828;
   --vm-success: #2e7d32;
   --vm-warning: #e67e00;
   --vm-info: #1a73e8;
-  --vm-shadow: 0 8px 24px var(--shadow, rgba(0, 0, 0, 0.08));
-  --vm-radius-sm: 8px;
-  --vm-radius: 12px;
-  --vm-radius-lg: 18px;
+  --vm-shadow: 0 8px 24px rgba(26, 18, 8, 0.08);
+  --vm-tearoff-shadow: 0 12px 28px rgba(26, 18, 8, 0.12);
+  --vm-radius-sm: 6px;
+  --vm-radius: 10px;
+  --vm-radius-lg: 14px;
+  --vm-radius-sheet: 4px;
   --vm-space-1: 4px;
   --vm-space-2: 8px;
   --vm-space-3: 12px;
   --vm-space-4: 16px;
   --vm-space-5: 24px;
   --vm-space-6: 32px;
-  --vm-font: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  --vm-font-display: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --vm-font: Manrope, Segoe UI, system-ui, sans-serif;
+  --vm-font-display: Manrope, Segoe UI, system-ui, sans-serif;
   --vm-focus-ring: 0 0 0 3px rgba(255, 122, 0, 0.35);
 }
 
 [data-theme="dark"],
 body.theme-dark {
-  --vm-bg: var(--bg-page, #0f0f10);
-  --vm-surface: var(--bg-card, #1a1b1e);
+  --vm-chrome: #121316;
+  --vm-pad: #1e1c18;
+  --vm-ink: #ececec;
+  --vm-mute: #9a9aa3;
+  --vm-gold: #8a7350;
+  --vm-hairline: #2e3038;
+  --vm-past: #3a3630;
+  --vm-bg: var(--vm-chrome);
+  --vm-surface: #1a1b1e;
   --vm-surface-2: #25262c;
-  --vm-text: var(--text, #ececec);
-  --vm-text-muted: var(--muted, #9a9aa3);
-  --vm-border: var(--border, #2e3038);
-  --vm-accent: var(--accent, #ff8c33);
-  --vm-accent-hover: var(--accent-hover, #ff9f55);
+  --vm-text: #ececec;
+  --vm-text-muted: #9a9aa3;
+  --vm-border: #2e3038;
+  --vm-accent: #ff8c33;
+  --vm-accent-hover: #ff9f55;
   --vm-accent-soft: rgba(255, 140, 51, 0.16);
   --vm-danger: #ef5350;
   --vm-success: #66bb6a;
   --vm-warning: #ffb74d;
   --vm-info: #64b5f6;
-  --vm-shadow: 0 10px 28px var(--shadow, rgba(0, 0, 0, 0.35));
+  --vm-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  --vm-tearoff-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
   --vm-focus-ring: 0 0 0 3px rgba(255, 140, 51, 0.4);
 }
 

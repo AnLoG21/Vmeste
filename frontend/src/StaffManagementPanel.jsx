@@ -53,7 +53,7 @@ export default function StaffManagementPanel({
   const showServiceAssignment = sphereUsesServiceAssignment(orgSphere);
 
   return (
-    <section className="card profile-card">
+    <section className="card profile-card cabinet-sheet staff-roster-sheet">
       <h2>Сотрудники</h2>
       {me?.role === "staff" && staffEffectivePerms.can_delegate_permissions && (
         <p className="muted">

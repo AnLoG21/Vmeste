@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-30T14:30:00.000Z",
+  "title": "Design System: Вместе — Business Cabinet (target)",
+  "extensions": {
+    "narrative": {
+      "northStar": "Merchant Calendar Pad",
+      "status": "target-locked",
+      "lockedOptionId": "challenger-calendar-pad",
+      "buildPath": "code",
+      "incumbentArchive": "DESIGN.incumbent.md",
+      "brandPins": ["Вместе", "#FF7A00", "existing logo assets"]
+    },
+    "shadows": [
+      {
+        "name": "tearoff-sheet",
+        "value": "0 12px 28px rgba(26, 18, 8, 0.12)",
+        "purpose": "Day-detail tear-off sheet only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "tearoff",
+        "value": "160ms ease-out",
+        "purpose": "Day sheet enter; skipped when prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      { "name": "cabinet-stack", "value": "860px" }
+    ]
+  }
+}

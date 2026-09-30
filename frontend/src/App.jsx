@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import "./styles.css";
 import "./design-kit.css";
 import "./mobile.css";
+import "./cabinet-pad.css";
 import LandingPage from "./LandingPage.jsx";
 import SubscriptionsPage from "./SubscriptionsPage.jsx";
 import AnalyticsPage from "./AnalyticsPage.jsx";

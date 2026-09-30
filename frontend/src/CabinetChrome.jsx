@@ -108,8 +108,16 @@ function bookmarkMenuIcon(id) {
     },
   };
   const icon = icons[id] || icons.bookings;
+  const fill = id === "logout" ? "#c62828" : "currentColor";
   return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill={icon.color} aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill={fill}
+      aria-hidden="true"
+      className={id === "logout" ? "menu-icon--danger" : undefined}
+    >
       <path d={icon.d} />
     </svg>
   );

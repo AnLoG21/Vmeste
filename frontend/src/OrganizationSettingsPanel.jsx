@@ -83,7 +83,7 @@ export default function OrganizationSettingsPanel({
 }) {
   if (!canManageOrgSettings) return null;
   return (
-    <section className="card profile-card org-settings-card">
+    <section className="card profile-card org-settings-card cabinet-sheet">
       <h2>Организация</h2>
       {cabinetLoadError ? (
         <LoadErrorBanner message={cabinetLoadError} onRetry={() => void loadSellerData()} />
