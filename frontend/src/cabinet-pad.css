@@ -1,6 +1,5 @@
 /**
- * Merchant Calendar Pad — cabinet pilot overrides.
- * Warmth stays on the calendar pad; chrome stays cool.
+ * Merchant Calendar Pad — cabinet pilot overrides in the Вместе orange palette.
  * Import after styles.css / design-kit.css / mobile.css.
  */
 
@@ -45,9 +44,8 @@
 }
 
 .page-logged .menu-dropdown svg {
-  color: var(--vm-ink);
+  color: #c85a00;
   fill: currentColor;
-  opacity: 0.72;
 }
 
 .page-logged .menu-dropdown button[data-menu-id="logout"] svg,
@@ -80,13 +78,13 @@
 }
 
 .page-logged .app-subnav button:hover {
-  background: var(--vm-surface);
+  background: var(--vm-pad);
   color: var(--vm-ink);
 }
 
 .page-logged .app-subnav button.active {
-  background: var(--vm-surface);
-  color: var(--vm-ink);
+  background: #ffe8d5;
+  color: #5a2800;
   border-color: transparent;
   box-shadow: inset 0 -2px 0 var(--vm-accent);
 }
@@ -171,7 +169,7 @@ body.theme-dark .page-logged .app-subnav button.active {
 }
 
 .page-logged .booking-calendar.calendar-pad .weekend-cell {
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 122, 0, 0.07);
   border-color: var(--vm-hairline);
   box-shadow: none;
 }

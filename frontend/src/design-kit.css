@@ -5,17 +5,16 @@
  */
 :root,
 [data-theme="light"] {
-  /* Merchant Calendar Pad tokens (cabinet); landing may still use peach elsewhere */
-  --vm-chrome: #f3f4f6;
-  --vm-pad: #f7f3ea;
+  --vm-chrome: #fff8f2;
+  --vm-pad: #fff3e8;
   --vm-ink: #1a1208;
-  --vm-mute: #6b6560;
-  --vm-gold: #c4a574;
-  --vm-hairline: #e5e0d6;
-  --vm-past: #d9d2c5;
+  --vm-mute: #8d5a2b;
+  --vm-gold: #ffbf8a;
+  --vm-hairline: #ffe0c7;
+  --vm-past: #f3dcc8;
   --vm-bg: var(--vm-chrome);
   --vm-surface: #ffffff;
-  --vm-surface-2: #f3f4f6;
+  --vm-surface-2: #fff3e8;
   --vm-text: var(--vm-ink);
   --vm-text-muted: var(--vm-mute);
   --vm-border: var(--vm-hairline);
@@ -46,12 +45,12 @@
 [data-theme="dark"],
 body.theme-dark {
   --vm-chrome: #121316;
-  --vm-pad: #1e1c18;
+  --vm-pad: #231a13;
   --vm-ink: #ececec;
-  --vm-mute: #9a9aa3;
-  --vm-gold: #8a7350;
-  --vm-hairline: #2e3038;
-  --vm-past: #3a3630;
+  --vm-mute: #b89a80;
+  --vm-gold: #7a4a1f;
+  --vm-hairline: #33291f;
+  --vm-past: #2e2620;
   --vm-bg: var(--vm-chrome);
   --vm-surface: #1a1b1e;
   --vm-surface-2: #25262c;

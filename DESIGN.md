@@ -6,16 +6,16 @@ lockedOptionId: challenger-calendar-pad
 buildPath: code
 scope: business-cabinet
 colors:
-  pad-board: "#F7F3EA"
+  pad-board: "#FFF3E8"
   ink-brown: "#1A1208"
   brand-orange: "#FF7A00"
-  gold-rule: "#C4A574"
-  cool-chrome: "#F3F4F6"
+  orange-rule: "#FFBF8A"
+  warm-chrome: "#FFF8F2"
   surface-white: "#FFFFFF"
-  mute-stone: "#6B6560"
-  hairline: "#E5E0D6"
+  mute-copper: "#8D5A2B"
+  hairline: "#FFE0C7"
   today-ring: "#FF7A00"
-  past-quiet: "#D9D2C5"
+  past-quiet: "#F3DCC8"
 typography:
   ui:
     fontFamily: "Manrope, Segoe UI, system-ui, sans-serif"
@@ -63,12 +63,12 @@ components:
     rounded: "{rounded.md}"
     padding: "16px"
   chrome-bar:
-    backgroundColor: "{colors.cool-chrome}"
+    backgroundColor: "{colors.warm-chrome}"
     textColor: "{colors.ink-brown}"
     padding: "12px 24px"
   subnav-tab:
     backgroundColor: "transparent"
-    textColor: "{colors.mute-stone}"
+    textColor: "{colors.mute-copper}"
     rounded: "{rounded.sheet}"
     padding: "8px 12px"
   subnav-tab-active:
@@ -87,13 +87,13 @@ components:
 
 **Creative North Star: "Merchant Calendar Pad"**
 
-The cabinet is a print-shop wall calendar brought into ops software: a quiet Together mark sits above a tear-off date pad that is the primary instrument. The pad carries warm board tone; the surrounding chrome stays cool and spare so the product does not drown in cream. Gold is a thin rule, not a wash. Orange is the merchant stamp — today ring, primary actions, active tab — spent rarely.
+The cabinet is a print-shop wall calendar brought into ops software: a quiet Together mark sits above a tear-off date pad that is the primary instrument. The whole cabinet stays in the Вместе orange family: warm peach chrome, a slightly deeper peach pad, and thin orange rules instead of heavy borders. Orange is the merchant stamp — today ring, primary actions, active tab — spent rarely.
 
 Key characteristics:
 
 - Calendar pad is the hero surface; chrome is subordinate
 - Manrope unifies cabinet with brand/landing type
-- Cool gray chrome + warm pad board (deliberate split against incumbent peach-everything)
+- Warm peach chrome + deeper peach pad, in the brand orange family
 - Tear-off metaphor for day-detail (modal/sheet), not decorative motion
 - Monochrome icons; status as text line, not rainbow
 
@@ -105,21 +105,21 @@ Key characteristics:
 
 ### Neutral
 
-- **Pad Board** (`#F7F3EA`): calendar plate only — not full page wallpaper.
-- **Cool Chrome** (`#F3F4F6`): header, subnav track, page outside the pad.
+- **Pad Board** (`#FFF3E8`): calendar plate, a step deeper than the chrome.
+- **Warm Chrome** (`#FFF8F2`): header, subnav track, page outside the pad.
 - **Surface White** (`#FFFFFF`): settings/staff forms, modals.
 - **Ink Brown** (`#1A1208`): primary text (matches logo ink).
-- **Gold Rule** (`#C4A574`): 1px separators between mark and pad, section rules.
-- **Mute Stone** (`#6B6560`): secondary labels.
-- **Past Quiet** (`#D9D2C5`): past days on the pad.
+- **Orange Rule** (`#FFBF8A`): 1px separators under titles and the subnav.
+- **Mute Copper** (`#8D5A2B`): secondary labels.
+- **Past Quiet** (`#F3DCC8`): past days on the pad.
 
 ### Named Rules
 
-**The Pad Not Wallpaper Rule.** Warm board tone lives on the calendar pad component. Page chrome stays cool gray/white.
+**The Orange Family Rule.** Chrome, pad, and rules all come from the brand orange ramp; no cool grays or gold.
 
 **The One Stamp Rule.** Orange appears on ≤3 roles per screen: primary button, today, active nav. Never borders-of-everything.
 
-**The Thin Gold Rule.** Gold is a hairline, never a fill.
+**The Thin Rule Rule.** Orange rules are 1px hairlines, never heavy borders.
 
 ## Typography
 
@@ -135,13 +135,13 @@ Key characteristics:
 ## Layout
 
 - Header: logo left, overflow menu right, optional status line under mark.
-- Subnav: clip/tab row on cool chrome — not peach pills.
+- Subnav: tab row on warm chrome; active tab is soft peach with an orange underline.
 - Bookings: pad owns the main column full width; day-detail as tear-off sheet/modal.
-- Settings / staff: centered white forms (max ~920px), gold hairline under titles, no peach card borders.
+- Settings / staff: centered white forms (max ~920px), orange hairline under titles.
 
 ## Elevation & Depth
 
-Flat pad with hairline gold rule; soft shadow only on tear-off day sheet. No multi-layer SaaS card stack.
+Flat pad with hairline orange rule; soft shadow only on tear-off day sheet. No multi-layer SaaS card stack.
 
 ## Shapes
 
@@ -151,7 +151,7 @@ Tighter radii (6–10px). Prefer sheet corners on the pad over 999px pills. Subn
 
 ### Chrome
 
-Cool bar, monochrome icons, status line for shift state.
+Warm bar, single-color copper icons, status line for shift state.
 
 ### Calendar pad
 
@@ -170,7 +170,7 @@ Day detail enters as a sheet torn from the pad (short transform optional, 150–
 **Do**
 
 - Keep `#FF7A00` and logo.
-- Put warmth on the pad; keep chrome cool.
+- Keep chrome and pad in the orange family.
 - Prefer tokens in `design-kit.css` / CSS vars; migrate hard-coded peach hex away on touched files.
 - Preserve E2E-facing labels and roles.
 
