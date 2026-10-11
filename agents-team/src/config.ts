@@ -26,6 +26,7 @@ const allowedUserIds = allowedRaw
 
 export const config = {
   telegramToken: required("TELEGRAM_TEAM_BOT_TOKEN"),
+  telegramApiRoot: optional("TELEGRAM_API_BASE", "https://api.telegram.org").replace(/\/+$/, ""),
   allowedUserIds,
   geminiApiKey: optional("GEMINI_API_KEY"),
   geminiModel: optional("GEMINI_MODEL", "gemini-2.0-flash"),

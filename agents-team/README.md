@@ -27,3 +27,5 @@ npm start
 - `DEV_AUTO=1` — разработчик без кнопки подтверждения
 
 Задачи живут в памяти процесса: после рестарта бота старые id пропадут.
+
+Если `getMe` зависает с `ETIMEDOUT` до `api.telegram.org`, поднимите Worker из `scripts/telegram-cloudflare-worker.js` и укажите `TELEGRAM_API_BASE` в `.env`.

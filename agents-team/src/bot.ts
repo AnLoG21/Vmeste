@@ -13,7 +13,11 @@ async function progress(ctx: { reply: (t: string) => Promise<unknown> }, text: s
 }
 
 export function createBot(): Bot {
-  const bot = new Bot(config.telegramToken);
+  const bot = new Bot(config.telegramToken, {
+    client: {
+      apiRoot: config.telegramApiRoot,
+    },
+  });
 
   bot.use(async (ctx, next) => {
     if (!isAllowed(ctx.from?.id)) {
