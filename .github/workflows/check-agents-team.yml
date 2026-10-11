@@ -15,13 +15,25 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           command_timeout: 3m
           script: |
-            set -euo pipefail
-            echo "== host curl via socks5h =="
-            curl -sS -m 20 -x socks5h://127.0.0.1:1080 https://api.telegram.org/ | head -c 220; echo
-            echo "== main .env telegram proxy keys =="
-            grep -E '^(TELEGRAM_HTTP_PROXY|TELEGRAM_API_BASE)=' /opt/vmeste/.env 2>/dev/null | sed 's/=.*/=***/' || true
-            echo "== agents .env keys =="
-            grep -E '^[A-Z_]+=' /opt/vmeste/agents-team/.env 2>/dev/null | cut -d= -f1 || true
+            set -uo pipefail
+            echo "== listeners near 1080/7890/2080 =="
+            ss -lntup 2>/dev/null | grep -E '1080|7890|2080|10808|20170|socks|xray|sing' || ss -lntup 2>/dev/null | head -40
+            echo "== main .env telegram/proxy lines (masked) =="
+            grep -E '^(TELEGRAM_|OPENROUTER_HTTP_PROXY|HTTP_PROXY|ALL_PROXY|HTTPS_PROXY)' /opt/vmeste/.env 2>/dev/null | sed -E 's#(socks5h?://|https?://)[^@/]+@#\1***@#; s#(TOKEN|KEY|SECRET)=.*#\1=***#' || true
+            echo "== agents-team .env proxy =="
+            grep -E '^TELEGRAM_' /opt/vmeste/agents-team/.env 2>/dev/null | sed -E 's#(TOKEN|KEY)=.*#\1=***#' || true
+            PROXY="$(grep -E '^TELEGRAM_HTTP_PROXY=' /opt/vmeste/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
+            if [ -z "$PROXY" ]; then PROXY="$(grep -E '^TELEGRAM_HTTP_PROXY=' /opt/vmeste/agents-team/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"; fi
+            echo "using PROXY=${PROXY:-none}"
+            if [ -n "${PROXY:-}" ]; then
+              echo "== curl via PROXY =="
+              curl -sS -m 20 -x "$PROXY" https://api.telegram.org/ | head -c 220; echo || true
+            fi
+            echo "== curl via socks5h://127.0.0.1:1080 =="
+            curl -sS -m 10 -x socks5h://127.0.0.1:1080 https://api.telegram.org/ | head -c 120; echo || true
             cd /opt/vmeste
-            docker compose -f docker-compose.prod.yml --profile agents ps agents_team
-            docker compose -f docker-compose.prod.yml --profile agents logs --tail=80 agents_team
+            docker compose -f docker-compose.prod.yml --profile agents ps agents_team || true
+            docker compose -f docker-compose.prod.yml --profile agents logs --tail=40 agents_team || true
+            # xray/sing-box processes
+            echo "== proxy processes =="
+            ps aux | grep -E 'xray|sing-box|v2ray|mihomo|clash' | grep -v grep || true
