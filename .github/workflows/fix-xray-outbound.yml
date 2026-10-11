@@ -2,20 +2,22 @@ name: Fix xray outbound
 
 on:
   workflow_dispatch:
-    inputs:
-      vless_url:
-        description: "Full vless:// URL"
-        required: true
-        type: string
 
 jobs:
   fix:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      VLESS_URL: ${{ secrets.VLESS_URL }}
     steps:
+      - name: Preflight
+        run: |
+          if [ -z "${VLESS_URL}" ]; then
+            echo "::error::Set repository secret VLESS_URL to a full vless:// link"
+            exit 1
+          fi
+
       - uses: appleboy/ssh-action@v1.2.0
-        env:
-          VLESS_URL: ${{ inputs.vless_url }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
@@ -27,12 +29,15 @@ jobs:
             set -euo pipefail
             CFG=/usr/local/etc/xray/config.json
             test -f "$CFG"
+            test -n "${VLESS_URL:-}"
             sudo cp -a "$CFG" "${CFG}.bak.$(date +%Y%m%d%H%M%S)"
             sudo -E python3 - <<'PY'
-            import json, os, urllib.parse, tempfile
+            import json, os, urllib.parse
             from pathlib import Path
 
-            raw = os.environ["VLESS_URL"].strip()
+            raw = os.environ.get("VLESS_URL", "").strip()
+            if not raw:
+                raise SystemExit("VLESS_URL empty on remote")
             if raw.startswith("vless://"):
                 raw = raw[len("vless://"):]
             userinfo, rest = raw.split("@", 1)
