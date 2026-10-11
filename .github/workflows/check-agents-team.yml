@@ -13,48 +13,30 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          command_timeout: 4m
+          command_timeout: 3m
           script: |
             set -uo pipefail
             echo "== xray inbounds =="
-            python3 - <<'PY' || true
+            sudo python3 - <<'PY' || python3 - <<'PY'
             import json
-            p="/usr/local/etc/xray/config.json"
-            try:
-              cfg=json.load(open(p))
-              for i,ib in enumerate(cfg.get("inbounds",[])):
-                print(i, ib.get("tag"), ib.get("protocol"), ib.get("port"), ib.get("listen"))
-            except Exception as e:
-              print("xray cfg err", e)
+            for p in ["/usr/local/etc/xray/config.json","/etc/xray/config.json"]:
+              try:
+                cfg=json.load(open(p))
+                print("file", p)
+                for i,ib in enumerate(cfg.get("inbounds",[])):
+                  print(i, ib.get("tag"), ib.get("protocol"), ib.get("port"), ib.get("listen"), list((ib.get("settings") or {}).keys()))
+                break
+              except Exception as e:
+                print("skip", p, e)
             PY
-            echo "== django web container telegram getMe =="
+            echo "== direct telegram (no proxy) =="
+            curl -sS -m 8 https://api.telegram.org/ | head -c 80; echo || true
+            echo "== via 127.0.0.1:10809 http =="
+            curl -sS -m 15 -x http://127.0.0.1:10809 https://api.telegram.org/ | head -c 120; echo || true
+            echo "== via 172.18.0.1:10809 http =="
+            curl -sS -m 15 -x http://172.18.0.1:10809 https://api.telegram.org/ | head -c 120; echo || true
+            echo "== TELEGRAM_API_BASE =="
+            grep -E '^TELEGRAM_API_BASE=' /opt/vmeste/.env 2>/dev/null | sed 's/=.*/=***/' || echo none
             cd /opt/vmeste
-            TOKEN=$(grep -E '^TELEGRAM_BOT_TOKEN=' .env | cut -d= -f2- | tr -d '\r')
-            docker compose -f docker-compose.prod.yml exec -T web python - <<PY
-            import os, requests
-            proxy=os.environ.get("TELEGRAM_HTTP_PROXY") or ""
-            print("proxy", proxy)
-            proxies={"http": proxy, "https": proxy} if proxy else None
-            try:
-              r=requests.get(f"https://api.telegram.org/bot{os.environ.get('TELEGRAM_BOT_TOKEN','')}/getMe", proxies=proxies, timeout=20)
-              print("status", r.status_code, r.text[:200])
-            except Exception as e:
-              print("ERR", type(e), e)
-            PY
-            echo "== agents container node fetch =="
-            docker compose -f docker-compose.prod.yml --profile agents exec -T agents_team node --input-type=module - <<'JS' || true
-            import nodeFetch from 'node-fetch';
-            import { HttpsProxyAgent } from 'https-proxy-agent';
-            const proxy = process.env.TELEGRAM_HTTP_PROXY;
-            const token = process.env.TELEGRAM_TEAM_BOT_TOKEN;
-            console.log('proxy', proxy);
-            const agent = new HttpsProxyAgent(proxy);
-            try {
-              const r = await nodeFetch('https://api.telegram.org/bot' + token + '/getMe', { agent, timeout: 25000 });
-              console.log('status', r.status);
-              console.log((await r.text()).slice(0, 300));
-            } catch (e) {
-              console.log('ERR', e.message);
-            }
-            JS
-            docker compose -f docker-compose.prod.yml --profile agents logs --tail=20 agents_team || true
+            docker compose -f docker-compose.prod.yml --profile agents ps agents_team || true
+            docker compose -f docker-compose.prod.yml --profile agents logs --tail=15 agents_team || true
