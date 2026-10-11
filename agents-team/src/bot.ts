@@ -1,4 +1,5 @@
 import { Bot, InlineKeyboard } from "grammy";
+import nodeFetch from "node-fetch";
 import { SocksProxyAgent } from "socks-proxy-agent";
 import { config } from "./config.js";
 import { runPendingDeveloper, runTeamTask } from "./orchestrator.js";
@@ -14,21 +15,23 @@ async function progress(ctx: { reply: (t: string) => Promise<unknown> }, text: s
 }
 
 export function createBot(): Bot {
-  const client: {
-    apiRoot: string;
-    baseFetchConfig?: { agent: SocksProxyAgent; compress: boolean };
-  } = {
+  // Native fetch ignores SOCKS agents; force node-fetch through VLESS proxy.
+  const client: Record<string, unknown> = {
     apiRoot: config.telegramApiRoot,
   };
   if (config.telegramHttpProxy) {
-    client.baseFetchConfig = {
-      agent: new SocksProxyAgent(config.telegramHttpProxy),
-      compress: true,
+    const agent = new SocksProxyAgent(config.telegramHttpProxy);
+    client.fetch = (input: unknown, init?: Record<string, unknown>) => {
+      const url =
+        typeof input === "string" || input instanceof URL
+          ? String(input)
+          : String((input as { url: string }).url);
+      return nodeFetch(url, { ...init, agent });
     };
     console.log(`[agents-team] Telegram via proxy ${config.telegramHttpProxy}`);
   }
 
-  const bot = new Bot(config.telegramToken, { client });
+  const bot = new Bot(config.telegramToken, { client: client as never });
 
   bot.use(async (ctx, next) => {
     if (!isAllowed(ctx.from?.id)) {
