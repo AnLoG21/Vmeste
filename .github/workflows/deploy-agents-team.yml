@@ -1,0 +1,78 @@
+name: Deploy agents-team
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "agents-team/**"
+      - "scripts/write-agents-team-env.sh"
+      - "scripts/deploy-prod.sh"
+      - "docker-compose.prod.yml"
+      - ".github/workflows/deploy-agents-team.yml"
+
+concurrency:
+  group: agents-team-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy agents-team to VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TELEGRAM_TEAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TEAM_BOT_TOKEN }}
+      TELEGRAM_ALLOWED_USER_IDS: ${{ secrets.TELEGRAM_ALLOWED_USER_IDS }}
+      TELEGRAM_HTTP_PROXY: ${{ secrets.TELEGRAM_HTTP_PROXY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+    steps:
+      - name: Preflight
+        run: |
+          if [ -z "${{ secrets.VPS_HOST }}" ] || [ -z "${{ secrets.VPS_USER }}" ] || [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
+            echo "::error::Missing VPS SSH secrets"
+            exit 1
+          fi
+          if [ -z "${TELEGRAM_TEAM_BOT_TOKEN}" ]; then
+            echo "::error::Missing TELEGRAM_TEAM_BOT_TOKEN secret"
+            exit 1
+          fi
+
+      - name: Deploy agents-team over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          protocol: tcp
+          timeout: 60s
+          script_stop: true
+          command_timeout: 20m
+          envs: TELEGRAM_TEAM_BOT_TOKEN,TELEGRAM_ALLOWED_USER_IDS,TELEGRAM_HTTP_PROXY,GEMINI_API_KEY,CURSOR_API_KEY
+          script: |
+            set -euo pipefail
+            echo "[agents] connected as $(whoami)@$(hostname)"
+            cd /opt/vmeste
+            git fetch --prune origin
+            git checkout main
+            git reset --hard origin/main
+            chmod +x scripts/write-agents-team-env.sh
+            ./scripts/write-agents-team-env.sh
+            # Ensure SOCKS proxy is reachable on host
+            if ss -lntu 2>/dev/null | grep -q ':1080'; then
+              echo "[agents] port 1080 is listening"
+            else
+              echo "[agents] WARN: nothing listening on :1080 — check VLESS/xray"
+            fi
+            HUB_MIRROR="${DOCKER_HUB_MIRROR:-dockerhub.timeweb.cloud}"
+            if ! docker image inspect node:22-bookworm-slim >/dev/null 2>&1; then
+              docker pull "${HUB_MIRROR}/library/node:22-bookworm-slim"
+              docker tag "${HUB_MIRROR}/library/node:22-bookworm-slim" node:22-bookworm-slim
+            fi
+            export COMPOSE_BAKE=false DOCKER_BUILDKIT=0 COMPOSE_PARALLEL_LIMIT=1
+            docker compose -f docker-compose.prod.yml --profile agents build agents_team
+            docker compose -f docker-compose.prod.yml --profile agents up -d --force-recreate agents_team
+            sleep 5
+            docker compose -f docker-compose.prod.yml --profile agents ps
+            docker compose -f docker-compose.prod.yml --profile agents logs --tail=80 agents_team
