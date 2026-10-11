@@ -8,14 +8,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      VLESS_URL: ${{ secrets.VLESS_URL }}
+      VLESS_URL_B64: ${{ secrets.VLESS_URL_B64 }}
     steps:
       - name: Preflight
         run: |
-          if [ -z "${VLESS_URL}" ]; then
-            echo "::error::Set repository secret VLESS_URL to a full vless:// link"
+          if [ -z "${VLESS_URL_B64}" ]; then
+            echo "::error::Set repository secret VLESS_URL_B64 (base64 of vless:// link)"
             exit 1
           fi
+          echo "VLESS_URL_B64 present (len=${#VLESS_URL_B64})"
 
       - uses: appleboy/ssh-action@v1.2.0
         with:
@@ -24,12 +25,15 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
           command_timeout: 8m
-          envs: VLESS_URL
+          envs: VLESS_URL_B64
           script: |
             set -euo pipefail
             CFG=/usr/local/etc/xray/config.json
             test -f "$CFG"
-            test -n "${VLESS_URL:-}"
+            test -n "${VLESS_URL_B64:-}"
+            export VLESS_URL="$(printf '%s' "$VLESS_URL_B64" | base64 -d)"
+            test -n "$VLESS_URL"
+            echo "[xray] decoded vless host=$(printf '%s' "$VLESS_URL" | sed -E 's#^vless://[^@]+@([^:?]+).*#\1#')"
             sudo cp -a "$CFG" "${CFG}.bak.$(date +%Y%m%d%H%M%S)"
             sudo -E python3 - <<'PY'
             import json, os, urllib.parse
