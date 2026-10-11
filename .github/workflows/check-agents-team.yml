@@ -1,5 +1,8 @@
 ﻿name: Check agents-team
-on: workflow_dispatch
+
+on:
+  workflow_dispatch:
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -10,8 +13,15 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
+          command_timeout: 3m
           script: |
             set -euo pipefail
+            echo "== host curl via socks5h =="
+            curl -sS -m 20 -x socks5h://127.0.0.1:1080 https://api.telegram.org/ | head -c 220; echo
+            echo "== main .env telegram proxy keys =="
+            grep -E '^(TELEGRAM_HTTP_PROXY|TELEGRAM_API_BASE)=' /opt/vmeste/.env 2>/dev/null | sed 's/=.*/=***/' || true
+            echo "== agents .env keys =="
+            grep -E '^[A-Z_]+=' /opt/vmeste/agents-team/.env 2>/dev/null | cut -d= -f1 || true
             cd /opt/vmeste
             docker compose -f docker-compose.prod.yml --profile agents ps agents_team
-            docker compose -f docker-compose.prod.yml --profile agents logs --tail=50 agents_team
+            docker compose -f docker-compose.prod.yml --profile agents logs --tail=80 agents_team
