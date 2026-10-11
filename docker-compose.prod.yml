@@ -172,6 +172,24 @@ services:
     depends_on:
       - web
 
+  # Telegram agent team (PM/analyst/SEO/developer). Uses host network for VLESS SOCKS on :1080.
+  agents_team:
+    build:
+      context: ./agents-team
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - ./agents-team/.env
+    environment:
+      TELEGRAM_HTTP_PROXY: ${TELEGRAM_HTTP_PROXY:-socks5h://127.0.0.1:1080}
+      CURSOR_RUNTIME: ${AGENTS_CURSOR_RUNTIME:-cloud}
+      CURSOR_WORKSPACE: /opt/vmeste
+    volumes:
+      - /opt/vmeste:/opt/vmeste:rw
+    profiles:
+      - agents
+
 volumes:
   vmeste_pgdata:
   vmeste_media:

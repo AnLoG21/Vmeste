@@ -19,6 +19,12 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      TELEGRAM_TEAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TEAM_BOT_TOKEN }}
+      TELEGRAM_ALLOWED_USER_IDS: ${{ secrets.TELEGRAM_ALLOWED_USER_IDS }}
+      TELEGRAM_HTTP_PROXY: ${{ secrets.TELEGRAM_HTTP_PROXY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
     steps:
       - name: Preflight secrets
         run: |
@@ -27,7 +33,11 @@ jobs:
             exit 1
           fi
           echo "Deploy target host configured (length=${#HOST})"
-          echo "If this job fails in ~5s, open TCP 22 on the VPS security group and set VPS_HOST to the direct IP (not Cloudflare)."
+          if [ -n "${TELEGRAM_TEAM_BOT_TOKEN}" ]; then
+            echo "agents-team secrets: present"
+          else
+            echo "agents-team secrets: missing (bot will be skipped until TELEGRAM_TEAM_BOT_TOKEN is set)"
+          fi
         env:
           HOST: ${{ secrets.VPS_HOST }}
 
@@ -44,6 +54,7 @@ jobs:
           timeout: 60s
           script_stop: true
           command_timeout: 40m
+          envs: TELEGRAM_TEAM_BOT_TOKEN,TELEGRAM_ALLOWED_USER_IDS,TELEGRAM_HTTP_PROXY,GEMINI_API_KEY,CURSOR_API_KEY
           script: |
             set -euo pipefail
             echo "[deploy] connected as $(whoami)@$(hostname)"
@@ -51,7 +62,8 @@ jobs:
             git fetch --prune origin
             git checkout main
             git reset --hard origin/main
-            chmod +x scripts/deploy-prod.sh
+            chmod +x scripts/deploy-prod.sh scripts/write-agents-team-env.sh
+            ./scripts/write-agents-team-env.sh
             ./scripts/deploy-prod.sh
 
       - name: Deploy over SSH (retry 1)
@@ -68,6 +80,7 @@ jobs:
           timeout: 60s
           script_stop: true
           command_timeout: 40m
+          envs: TELEGRAM_TEAM_BOT_TOKEN,TELEGRAM_ALLOWED_USER_IDS,TELEGRAM_HTTP_PROXY,GEMINI_API_KEY,CURSOR_API_KEY
           script: |
             set -euo pipefail
             echo "[deploy] retry 1 connected as $(whoami)@$(hostname)"
@@ -75,7 +88,8 @@ jobs:
             git fetch --prune origin
             git checkout main
             git reset --hard origin/main
-            chmod +x scripts/deploy-prod.sh
+            chmod +x scripts/deploy-prod.sh scripts/write-agents-team-env.sh
+            ./scripts/write-agents-team-env.sh
             ./scripts/deploy-prod.sh
 
       - name: Deploy over SSH (retry 2)
@@ -90,6 +104,7 @@ jobs:
           timeout: 60s
           script_stop: true
           command_timeout: 40m
+          envs: TELEGRAM_TEAM_BOT_TOKEN,TELEGRAM_ALLOWED_USER_IDS,TELEGRAM_HTTP_PROXY,GEMINI_API_KEY,CURSOR_API_KEY
           script: |
             set -euo pipefail
             echo "[deploy] retry 2 connected as $(whoami)@$(hostname)"
@@ -97,7 +112,8 @@ jobs:
             git fetch --prune origin
             git checkout main
             git reset --hard origin/main
-            chmod +x scripts/deploy-prod.sh
+            chmod +x scripts/deploy-prod.sh scripts/write-agents-team-env.sh
+            ./scripts/write-agents-team-env.sh
             ./scripts/deploy-prod.sh
 
   notify-failure:

@@ -1,4 +1,5 @@
 import { Bot, InlineKeyboard } from "grammy";
+import { SocksProxyAgent } from "socks-proxy-agent";
 import { config } from "./config.js";
 import { runPendingDeveloper, runTeamTask } from "./orchestrator.js";
 import { createJob, getJob, listJobsForUser, updateJob } from "./store.js";
@@ -13,11 +14,21 @@ async function progress(ctx: { reply: (t: string) => Promise<unknown> }, text: s
 }
 
 export function createBot(): Bot {
-  const bot = new Bot(config.telegramToken, {
-    client: {
-      apiRoot: config.telegramApiRoot,
-    },
-  });
+  const client: {
+    apiRoot: string;
+    baseFetchConfig?: { agent: SocksProxyAgent; compress: boolean };
+  } = {
+    apiRoot: config.telegramApiRoot,
+  };
+  if (config.telegramHttpProxy) {
+    client.baseFetchConfig = {
+      agent: new SocksProxyAgent(config.telegramHttpProxy),
+      compress: true,
+    };
+    console.log(`[agents-team] Telegram via proxy ${config.telegramHttpProxy}`);
+  }
+
+  const bot = new Bot(config.telegramToken, { client });
 
   bot.use(async (ctx, next) => {
     if (!isAllowed(ctx.from?.id)) {

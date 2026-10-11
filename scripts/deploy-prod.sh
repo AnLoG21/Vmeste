@@ -138,6 +138,17 @@ echo "[deploy] critical migrations OK"
 echo "[deploy] pruning dangling images (safe)..."
 docker image prune -f >/dev/null 2>&1 || true
 
+if [[ -f agents-team/.env ]] && grep -qE '^TELEGRAM_TEAM_BOT_TOKEN=.+' agents-team/.env; then
+  echo "[deploy] agents-team bot (host network + Telegram SOCKS)…"
+  ensure_base_image node:22-bookworm-slim
+  docker compose -f "$COMPOSE_FILE" --profile agents build agents_team
+  docker compose -f "$COMPOSE_FILE" --profile agents up -d --force-recreate agents_team
+  docker compose -f "$COMPOSE_FILE" --profile agents logs --tail=40 agents_team || true
+else
+  echo "[deploy] skip agents-team (no agents-team/.env with TELEGRAM_TEAM_BOT_TOKEN)"
+fi
+
 echo "[deploy] done"
 df -h / || true
 docker compose -f "$COMPOSE_FILE" ps
+docker compose -f "$COMPOSE_FILE" --profile agents ps 2>/dev/null || true

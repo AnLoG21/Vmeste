@@ -27,12 +27,18 @@ const allowedUserIds = allowedRaw
 export const config = {
   telegramToken: required("TELEGRAM_TEAM_BOT_TOKEN"),
   telegramApiRoot: optional("TELEGRAM_API_BASE", "https://api.telegram.org").replace(/\/+$/, ""),
+  telegramHttpProxy: optional("TELEGRAM_HTTP_PROXY"),
   allowedUserIds,
   geminiApiKey: optional("GEMINI_API_KEY"),
   geminiModel: optional("GEMINI_MODEL", "gemini-2.0-flash"),
   cursorApiKey: optional("CURSOR_API_KEY"),
   cursorWorkspace: path.resolve(optional("CURSOR_WORKSPACE", process.cwd())),
   cursorModel: optional("CURSOR_MODEL", "composer-2.5"),
+  /** local = edit mounted workspace; cloud = Cursor-hosted VM + GitHub repo */
+  cursorRuntime: optional("CURSOR_RUNTIME", "cloud") === "local" ? "local" : "cloud",
+  cursorRepoUrl: optional("CURSOR_REPO_URL", "https://github.com/AnLoG21/Vmeste.git"),
+  cursorRepoRef: optional("CURSOR_REPO_REF", "main"),
+  cursorAutoPr: optional("CURSOR_AUTO_PR", "0") === "1",
   devAuto: optional("DEV_AUTO", "0") === "1",
 };
 

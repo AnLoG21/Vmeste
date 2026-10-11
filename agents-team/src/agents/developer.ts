@@ -3,14 +3,8 @@ import { config } from "../config.js";
 
 export async function runDeveloper(brief: string): Promise<string> {
   if (!config.cursorApiKey) {
-    return "Разработчик недоступен: нет CURSOR_API_KEY в agents-team/.env";
+    return "Разработчик недоступен: нет CURSOR_API_KEY";
   }
-
-  await using agent = await Agent.create({
-    apiKey: config.cursorApiKey,
-    model: { id: config.cursorModel },
-    local: { cwd: config.cursorWorkspace },
-  });
 
   const prompt = [
     "Ты разработчик в репозитории Vmeste.",
@@ -22,17 +16,41 @@ export async function runDeveloper(brief: string): Promise<string> {
   ].join("\n");
 
   try {
-    const run = await agent.send(prompt);
-    const result = await run.wait();
-    if (result.status === "error") {
-      return `Разработчик завершился с ошибкой (run ${result.id}). Смотри логи Cursor.`;
+    if (config.cursorRuntime === "local") {
+      await using agent = await Agent.create({
+        apiKey: config.cursorApiKey,
+        model: { id: config.cursorModel },
+        local: { cwd: config.cursorWorkspace },
+      });
+      return waitResult(agent, prompt);
     }
-    const text = typeof result.result === "string" ? result.result : JSON.stringify(result.result ?? "");
-    return text?.trim() || `Готово (run ${result.id}, agent ${agent.agentId}).`;
+
+    await using agent = await Agent.create({
+      apiKey: config.cursorApiKey,
+      model: { id: config.cursorModel },
+      cloud: {
+        repos: [{ url: config.cursorRepoUrl, startingRef: config.cursorRepoRef }],
+        autoCreatePR: config.cursorAutoPr,
+      },
+    });
+    return waitResult(agent, prompt);
   } catch (err) {
     if (err instanceof CursorAgentError) {
       return `Не удалось запустить Cursor SDK: ${err.message}`;
     }
     throw err;
   }
+}
+
+async function waitResult(
+  agent: { send: (p: string) => Promise<{ wait: () => Promise<{ status: string; id: string; result?: unknown }>; }>; agentId: string },
+  prompt: string
+): Promise<string> {
+  const run = await agent.send(prompt);
+  const result = await run.wait();
+  if (result.status === "error") {
+    return `Разработчик завершился с ошибкой (run ${result.id}, agent ${agent.agentId}).`;
+  }
+  const text = typeof result.result === "string" ? result.result : JSON.stringify(result.result ?? "");
+  return text?.trim() || `Готово (run ${result.id}, agent ${agent.agentId}).`;
 }

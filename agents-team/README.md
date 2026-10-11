@@ -2,18 +2,20 @@
 
 Команда в Telegram: PM → аналитик + SEO (Gemini) → разработчик (Cursor SDK).
 
-## Быстрый старт
+## Прод (VPS)
 
-1. Создайте бота у [@BotFather](https://t.me/BotFather), скопируйте токен.
-2. Узнайте свой id: напишите боту `/whoami` после временного ослабления ACL, либо через `@userinfobot`.
-3. Ключи:
-   - [Gemini API key](https://aistudio.google.com/apikey)
-   - [Cursor API key](https://cursor.com/dashboard/integrations)
-4. Скопируйте env и заполните:
+Сервис `agents_team` в `docker-compose.prod.yml` (profile `agents`), `network_mode: host`,
+прокси `TELEGRAM_HTTP_PROXY=socks5h://127.0.0.1:1080` (ваш VLESS/xray).
+
+Секреты пишутся на сервер из GitHub Actions (`scripts/write-agents-team-env.sh`) при деплое.
+Нужны secrets: `TELEGRAM_TEAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, `GEMINI_API_KEY`, `CURSOR_API_KEY`
+(опционально `TELEGRAM_HTTP_PROXY`).
+
+## Локальный старт
 
 ```bash
 cd agents-team
-copy .env.example .env
+cp .env.example .env   # Windows: copy .env.example .env
 npm install
 npm start
 ```
