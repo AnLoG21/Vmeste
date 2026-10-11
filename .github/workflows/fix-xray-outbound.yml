@@ -1,0 +1,141 @@
+name: Fix xray outbound
+
+on:
+  workflow_dispatch:
+    inputs:
+      vless_url:
+        description: "Full vless:// URL"
+        required: true
+        type: string
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        env:
+          VLESS_URL: ${{ inputs.vless_url }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          command_timeout: 8m
+          envs: VLESS_URL
+          script: |
+            set -euo pipefail
+            CFG=/usr/local/etc/xray/config.json
+            test -f "$CFG"
+            sudo cp -a "$CFG" "${CFG}.bak.$(date +%Y%m%d%H%M%S)"
+            sudo -E python3 - <<'PY'
+            import json, os, urllib.parse, tempfile
+            from pathlib import Path
+
+            raw = os.environ["VLESS_URL"].strip()
+            if raw.startswith("vless://"):
+                raw = raw[len("vless://"):]
+            userinfo, rest = raw.split("@", 1)
+            hostport, _, query_hash = rest.partition("?")
+            query, _, _frag = query_hash.partition("#")
+            host, _, port = hostport.partition(":")
+            uuid = userinfo
+            q = urllib.parse.parse_qs(query)
+            def one(k, default=""):
+                return (q.get(k) or [default])[0]
+
+            security = one("security", "none")
+            network = one("type", "tcp")
+            flow = one("flow", "")
+            sni = one("sni") or one("host") or host
+            fp = one("fp", "chrome")
+            pbk = one("pbk")
+            sid = one("sid")
+            spx = urllib.parse.unquote(one("spx", ""))
+            path = urllib.parse.unquote(one("path", "/"))
+            alpn = one("alpn")
+
+            cfg_path = Path("/usr/local/etc/xray/config.json")
+            cfg = json.loads(cfg_path.read_text())
+
+            user = {"id": uuid, "encryption": one("encryption", "none")}
+            if flow:
+                user["flow"] = flow
+
+            outbound = {
+                "tag": "proxy",
+                "protocol": "vless",
+                "settings": {
+                    "vnext": [{
+                        "address": host,
+                        "port": int(port or "443"),
+                        "users": [user],
+                    }]
+                },
+                "streamSettings": {
+                    "network": network,
+                    "security": security,
+                },
+            }
+            ss = outbound["streamSettings"]
+            if network == "tcp":
+                ss["tcpSettings"] = {"header": {"type": one("headerType", "none")}}
+            elif network == "ws":
+                ss["wsSettings"] = {"path": path, "headers": {"Host": one("host", sni)}}
+            elif network == "grpc":
+                ss["grpcSettings"] = {"serviceName": one("serviceName", path.strip("/"))}
+
+            if security == "reality":
+                reality = {
+                    "show": False,
+                    "fingerprint": fp,
+                    "serverName": sni,
+                    "publicKey": pbk,
+                    "shortId": sid,
+                }
+                if spx:
+                    reality["spiderX"] = spx
+                ss["realitySettings"] = reality
+            elif security == "tls":
+                tls = {"serverName": sni, "fingerprint": fp, "allowInsecure": False}
+                if alpn:
+                    tls["alpn"] = alpn.split(",")
+                ss["tlsSettings"] = tls
+
+            # Replace existing proxy-like outbound tags; keep inbound HTTP :10809 untouched.
+            others = [o for o in cfg.get("outbounds", []) if o.get("tag") not in ("proxy", "vless-out", "proxy-out")]
+            # Preserve original first-outbound semantics: put proxy first.
+            cfg["outbounds"] = [outbound] + others
+
+            if not any(o.get("tag") == "direct" for o in cfg["outbounds"]):
+                cfg["outbounds"].append({"tag": "direct", "protocol": "freedom", "settings": {}})
+
+            if not cfg.get("routing"):
+                cfg["routing"] = {
+                    "domainStrategy": "AsIs",
+                    "rules": [
+                        {"type": "field", "ip": ["geoip:private"], "outboundTag": "direct"},
+                        {"type": "field", "network": "tcp,udp", "outboundTag": "proxy"},
+                    ],
+                }
+            else:
+                for r in cfg["routing"].setdefault("rules", []):
+                    if r.get("outboundTag") in ("vless-out", "proxy-out", "proxy"):
+                        r["outboundTag"] = "proxy"
+
+            text = json.dumps(cfg, ensure_ascii=False, indent=2) + "\n"
+            cfg_path.write_text(text)
+            print("updated outbound ->", host, port, "security=", security, "network=", network, "flow=", flow or "-")
+            PY
+            echo "[xray] validating…"
+            sudo /usr/local/bin/xray run -test -config "$CFG"
+            echo "[xray] restart…"
+            sudo systemctl restart xray || sudo service xray restart
+            sleep 2
+            systemctl is-active xray || true
+            echo "[xray] probe telegram via http://127.0.0.1:10809"
+            curl -sS -m 25 -x http://127.0.0.1:10809 https://api.telegram.org/ | head -c 160; echo
+            cd /opt/vmeste
+            docker compose -f docker-compose.prod.yml --profile agents up -d --force-recreate agents_team
+            sleep 8
+            docker compose -f docker-compose.prod.yml --profile agents logs --tail=30 agents_team
