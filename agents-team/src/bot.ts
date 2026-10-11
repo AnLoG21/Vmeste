@@ -1,4 +1,5 @@
 import { Bot, InlineKeyboard } from "grammy";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import nodeFetch from "node-fetch";
 import { SocksProxyAgent } from "socks-proxy-agent";
 import { config } from "./config.js";
@@ -10,17 +11,21 @@ function isAllowed(userId: number | undefined): boolean {
   return Boolean(userId && config.allowedUserIds.includes(userId));
 }
 
+function proxyAgent(proxyUrl: string) {
+  if (/^socks/i.test(proxyUrl)) return new SocksProxyAgent(proxyUrl);
+  return new HttpsProxyAgent(proxyUrl);
+}
+
 async function progress(ctx: { reply: (t: string) => Promise<unknown> }, text: string) {
   await ctx.reply(text);
 }
 
 export function createBot(): Bot {
-  // Native fetch ignores SOCKS agents; force node-fetch through VLESS proxy.
   const client: Record<string, unknown> = {
     apiRoot: config.telegramApiRoot,
   };
   if (config.telegramHttpProxy) {
-    const agent = new SocksProxyAgent(config.telegramHttpProxy);
+    const agent = proxyAgent(config.telegramHttpProxy);
     client.fetch = (input: unknown, init?: Record<string, unknown>) => {
       const url =
         typeof input === "string" || input instanceof URL
@@ -121,7 +126,6 @@ export function createBot(): Bot {
   bot.on("message:text", async (ctx) => {
     const text = ctx.message.text.trim();
     if (text.startsWith("/")) return;
-    // Plain text = short task
     await ctx.reply(`Воспринял как задачу. Запускаю… (или используйте /task)`);
     const job = createJob({
       chatId: ctx.chat.id,

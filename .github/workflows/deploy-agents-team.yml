@@ -58,13 +58,17 @@ jobs:
             git checkout main
             git reset --hard origin/main
             chmod +x scripts/write-agents-team-env.sh
-            ./scripts/write-agents-team-env.sh
-            # Ensure SOCKS proxy is reachable on host
-            if ss -lntu 2>/dev/null | grep -q ':1080'; then
-              echo "[agents] port 1080 is listening"
+            if ss -lntu 2>/dev/null | grep -q ':10809'; then
+              echo "[agents] xray HTTP inbound :10809 is listening"
             else
-              echo "[agents] WARN: nothing listening on :1080 — check VLESS/xray"
+              echo "[agents] WARN: nothing on :10809 — check xray"
             fi
+            # Prefer the same proxy Django uses
+            if grep -qE '^TELEGRAM_HTTP_PROXY=' /opt/vmeste/.env 2>/dev/null; then
+              export TELEGRAM_HTTP_PROXY="$(grep -E '^TELEGRAM_HTTP_PROXY=' /opt/vmeste/.env | head -1 | cut -d= -f2- | tr -d '\r')"
+              echo "[agents] using platform TELEGRAM_HTTP_PROXY"
+            fi
+            ./scripts/write-agents-team-env.sh
             HUB_MIRROR="${DOCKER_HUB_MIRROR:-dockerhub.timeweb.cloud}"
             if ! docker image inspect node:22-bookworm-slim >/dev/null 2>&1; then
               docker pull "${HUB_MIRROR}/library/node:22-bookworm-slim"
