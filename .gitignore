@@ -29,6 +29,9 @@ media/
 # Node / frontend
 frontend/node_modules/
 frontend/dist/
+agents-team/node_modules/
+agents-team/dist/
+agents-team/.env
 frontend/android/.gradle/
 frontend/android/app/build/
 frontend/android/build/

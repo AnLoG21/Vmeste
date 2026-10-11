@@ -1,0 +1,26 @@
+{
+  "name": "agents-team",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Telegram multi-agent team for Vmeste (PM, analyst, SEO, developer via Cursor SDK)",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@cursor/sdk": "^1.0.37",
+    "@google/generative-ai": "^0.24.1",
+    "dotenv": "^16.4.7",
+    "grammy": "^1.46.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}
