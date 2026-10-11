@@ -35,11 +35,14 @@ jobs:
             test -n "$VLESS_URL"
             echo "[xray] decoded vless host=$(printf '%s' "$VLESS_URL" | sed -E 's#^vless://[^@]+@([^:?]+).*#\1#')"
             sudo cp -a "$CFG" "${CFG}.bak.$(date +%Y%m%d%H%M%S)"
-            sudo -E python3 - <<'PY'
-            import json, os, urllib.parse
+            TMP_VLESS="$(mktemp)"
+            printf '%s' "$VLESS_URL" > "$TMP_VLESS"
+            chmod 600 "$TMP_VLESS"
+            sudo python3 - "$TMP_VLESS" <<'PY'
+            import json, os, sys, urllib.parse
             from pathlib import Path
 
-            raw = os.environ.get("VLESS_URL", "").strip()
+            raw = Path(sys.argv[1]).read_text().strip()
             if not raw:
                 raise SystemExit("VLESS_URL empty on remote")
             if raw.startswith("vless://"):
@@ -136,6 +139,7 @@ jobs:
             cfg_path.write_text(text)
             print("updated outbound ->", host, port, "security=", security, "network=", network, "flow=", flow or "-")
             PY
+            rm -f "$TMP_VLESS"
             echo "[xray] validating…"
             sudo /usr/local/bin/xray run -test -config "$CFG"
             echo "[xray] restart…"
