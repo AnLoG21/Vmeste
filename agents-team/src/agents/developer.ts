@@ -1,5 +1,9 @@
-import { Agent, CursorAgentError } from "@cursor/sdk";
 import { config } from "../config.js";
+import {
+  createCursorAgent,
+  isCursorStartupError,
+  runCursorPrompt,
+} from "../llm/cursorAgent.js";
 
 export async function runDeveloper(brief: string): Promise<string> {
   if (!config.cursorApiKey) {
@@ -15,42 +19,22 @@ export async function runDeveloper(brief: string): Promise<string> {
     brief,
   ].join("\n");
 
+  let agent: Awaited<ReturnType<typeof createCursorAgent>> | undefined;
   try {
-    if (config.cursorRuntime === "local") {
-      await using agent = await Agent.create({
-        apiKey: config.cursorApiKey,
-        model: { id: config.cursorModel },
-        local: { cwd: config.cursorWorkspace },
-      });
-      return waitResult(agent, prompt);
-    }
-
-    await using agent = await Agent.create({
-      apiKey: config.cursorApiKey,
-      model: { id: config.cursorModel },
-      cloud: {
-        repos: [{ url: config.cursorRepoUrl, startingRef: config.cursorRepoRef }],
-        autoCreatePR: config.cursorAutoPr,
-      },
-    });
-    return waitResult(agent, prompt);
+    agent = await createCursorAgent();
+    return await runCursorPrompt(agent, prompt);
   } catch (err) {
-    if (err instanceof CursorAgentError) {
+    if (isCursorStartupError(err)) {
       return `Не удалось запустить Cursor SDK: ${err.message}`;
     }
     throw err;
+  } finally {
+    if (agent) {
+      try {
+        await agent[Symbol.asyncDispose]();
+      } catch {
+        /* ignore */
+      }
+    }
   }
-}
-
-async function waitResult(
-  agent: { send: (p: string) => Promise<{ wait: () => Promise<{ status: string; id: string; result?: unknown }>; }>; agentId: string },
-  prompt: string
-): Promise<string> {
-  const run = await agent.send(prompt);
-  const result = await run.wait();
-  if (result.status === "error") {
-    return `Разработчик завершился с ошибкой (run ${result.id}, agent ${agent.agentId}).`;
-  }
-  const text = typeof result.result === "string" ? result.result : JSON.stringify(result.result ?? "");
-  return text?.trim() || `Готово (run ${result.id}, agent ${agent.agentId}).`;
 }

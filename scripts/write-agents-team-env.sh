@@ -15,7 +15,7 @@ fi
 #   123456789
 #   GROQ:gsk_...
 #   MISTRAL:mstrl_...
-#   LLM:groq
+#   LLM:cursor
 ALLOWED_RAW="${TELEGRAM_ALLOWED_USER_IDS:-}"
 ALLOWED_IDS=""
 BRIDGE_GROQ=""
@@ -43,7 +43,7 @@ fi
 
 GROQ_API_KEY="${GROQ_API_KEY:-${BRIDGE_GROQ:-}}"
 MISTRAL_API_KEY="${MISTRAL_API_KEY:-${BRIDGE_MISTRAL:-}}"
-LLM_PROVIDER="${LLM_PROVIDER:-${BRIDGE_LLM:-groq}}"
+LLM_PROVIDER="${LLM_PROVIDER:-${BRIDGE_LLM:-cursor}}"
 
 umask 077
 mkdir -p agents-team

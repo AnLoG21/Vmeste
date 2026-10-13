@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { askCursor } from "./cursor.js";
 import { askGemini } from "./gemini.js";
 import { askGroq } from "./groq.js";
 import { askMistral } from "./mistral.js";
@@ -31,6 +32,7 @@ export async function askLlm(system: string, user: string): Promise<string> {
   };
 
   return enqueueLlm(async () => {
+    if (config.llmProvider === "cursor") return askCursor(system, user);
     if (config.llmProvider === "groq") return askGroq(system, user, hooks);
     if (config.llmProvider === "mistral") return askMistral(system, user, hooks);
     return askGemini(system, user);

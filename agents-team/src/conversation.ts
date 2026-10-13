@@ -13,6 +13,8 @@ export type Conversation = {
   pendingQuestions?: string[];
   /** How many clarify rounds already asked for current draft (max 1) */
   clarifyRounds: number;
+  /** Cursor SDK agent id for this Telegram chat (resume = same context) */
+  cursorAgentId?: string;
   lastJobId?: string;
   busy: boolean;
   updatedAt: number;

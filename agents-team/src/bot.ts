@@ -3,6 +3,7 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 import nodeFetch from "node-fetch";
 import { SocksProxyAgent } from "socks-proxy-agent";
 import { intakeMessage } from "./agents/pm.js";
+import { runWithChatContext } from "./chatContext.js";
 import { config } from "./config.js";
 import {
   clearPendingClarification,
@@ -156,65 +157,77 @@ async function handleUserText(
     await ctx.reply(msg);
   });
 
-  try {
-    const answering = Boolean(conv.pendingQuestions?.length && conv.draftTask);
-    const draftTask = conv.draftTask;
-    const clarifyRoundsAlready = conv.clarifyRounds || 0;
+  await runWithChatContext(
+    {
+      chatId: ctx.chat.id,
+      userId,
+      history: formatHistory(conv, 16),
+    },
+    async () => {
+      try {
+        const answering = Boolean(conv.pendingQuestions?.length && conv.draftTask);
+        const draftTask = conv.draftTask;
+        const clarifyRoundsAlready = conv.clarifyRounds || 0;
 
-    if (options.forceExecute) {
-      clearPendingClarification(conv);
-      await ctx.reply("Принял. Запускаю команду.");
-      pushMessage(conv, "assistant", "Принял. Запускаю команду.");
-      await executeTask(ctx, conv, text);
-      return;
+        if (options.forceExecute) {
+          clearPendingClarification(conv);
+          await ctx.reply("Принял. Запускаю команду.");
+          pushMessage(conv, "assistant", "Принял. Запускаю команду.");
+          await executeTask(ctx, conv, text);
+          return;
+        }
+
+        // After any answer to clarifications — skip LLM intake churn, just run
+        if (answering && draftTask) {
+          const task = `${draftTask}\n\nУточнения от заказчика:\n${text}`.trim();
+          clearPendingClarification(conv);
+          await ctx.reply("Достаточно, больше не спрашиваю. Запускаю команду…");
+          pushMessage(conv, "assistant", "Достаточно, больше не спрашиваю. Запускаю команду…");
+          await executeTask(ctx, conv, task);
+          return;
+        }
+
+        await ctx.reply(
+          config.llmProvider === "cursor"
+            ? "Смотрю (Cursor + история чата)…"
+            : "Смотрю…"
+        );
+        const intake = await intakeMessage({
+          message: text,
+          history: formatHistory(conv, 16),
+          answeringClarification: false,
+          clarifyRoundsAlready,
+          ...(draftTask ? { draftTask } : {}),
+        });
+
+        if (intake.mode === "chat") {
+          clearPendingClarification(conv);
+          await ctx.reply(intake.reply);
+          pushMessage(conv, "assistant", intake.reply);
+          return;
+        }
+
+        if (intake.mode === "clarify" && clarifyRoundsAlready < 1) {
+          setPendingClarification(conv, text, intake.questions);
+          await ctx.reply(intake.reply);
+          pushMessage(conv, "assistant", intake.reply);
+          return;
+        }
+
+        clearPendingClarification(conv);
+        await ctx.reply(intake.reply || "Принял. Запускаю команду.");
+        pushMessage(conv, "assistant", intake.reply || "Принял. Запускаю команду.");
+        await executeTask(ctx, conv, intake.task || text, intake.plan);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await ctx.reply(`Ошибка: ${message}`);
+        pushMessage(conv, "assistant", `Ошибка: ${message}`);
+      } finally {
+        setLlmWaitNotifier(null);
+        conv.busy = false;
+      }
     }
-
-    // After any answer to clarifications — skip LLM intake churn, just run
-    if (answering && draftTask) {
-      const task = `${draftTask}\n\nУточнения от заказчика:\n${text}`.trim();
-      clearPendingClarification(conv);
-      await ctx.reply("Достаточно, больше не спрашиваю. Запускаю команду…");
-      pushMessage(conv, "assistant", "Достаточно, больше не спрашиваю. Запускаю команду…");
-      await executeTask(ctx, conv, task);
-      return;
-    }
-
-    await ctx.reply("Смотрю…");
-    const intake = await intakeMessage({
-      message: text,
-      history: formatHistory(conv),
-      answeringClarification: false,
-      clarifyRoundsAlready,
-      ...(draftTask ? { draftTask } : {}),
-    });
-
-    if (intake.mode === "chat") {
-      clearPendingClarification(conv);
-      await ctx.reply(intake.reply);
-      pushMessage(conv, "assistant", intake.reply);
-      return;
-    }
-
-    if (intake.mode === "clarify" && clarifyRoundsAlready < 1) {
-      setPendingClarification(conv, text, intake.questions);
-      await ctx.reply(intake.reply);
-      pushMessage(conv, "assistant", intake.reply);
-      return;
-    }
-
-    // clarify blocked by round limit or execute
-    clearPendingClarification(conv);
-    await ctx.reply(intake.reply || "Принял. Запускаю команду.");
-    pushMessage(conv, "assistant", intake.reply || "Принял. Запускаю команду.");
-    await executeTask(ctx, conv, intake.task || text, intake.plan);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await ctx.reply(`Ошибка: ${message}`);
-    pushMessage(conv, "assistant", `Ошибка: ${message}`);
-  } finally {
-    setLlmWaitNotifier(null);
-    conv.busy = false;
-  }
+  );
 }
 
 async function executeTask(
