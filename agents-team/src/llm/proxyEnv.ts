@@ -21,3 +21,7 @@ export function isCursorRegionError(message: string): boolean {
     message
   );
 }
+
+/** Prefer not pasting raw vless:// in chat — use GitHub secret VLESS_URL_B64. */
+export const VLESS_UPDATE_HINT =
+  "Обновить прокси: GitHub → Settings → Secrets → VLESS_URL_B64 = base64(vless://…) → Actions → «Fix xray outbound» → Run workflow.";

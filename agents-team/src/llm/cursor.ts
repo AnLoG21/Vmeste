@@ -42,26 +42,47 @@ export async function askCursor(system: string, user: string): Promise<string> {
     .filter(Boolean)
     .join("\n");
 
-  let agent: Awaited<ReturnType<typeof resumeOrCreateCursorAgent>> | undefined;
-  try {
-    agent = await resumeOrCreateCursorAgent(conv?.cursorAgentId);
-    if (conv) {
-      conv.cursorAgentId = agent.agentId;
-      conv.updatedAt = Date.now();
-    }
-    return await runCursorPrompt(agent, prompt);
-  } catch (err) {
-    if (isCursorStartupError(err)) {
-      throw new Error(`Cursor HTTP/startup: ${err.message}`);
-    }
-    throw err;
-  } finally {
-    if (agent) {
-      try {
-        await agent[Symbol.asyncDispose]();
-      } catch {
-        /* ignore */
+  const attempt = async (agentId?: string) => {
+    let agent: Awaited<ReturnType<typeof resumeOrCreateCursorAgent>> | undefined;
+    try {
+      agent = await resumeOrCreateCursorAgent(agentId);
+      if (conv) {
+        conv.cursorAgentId = agent.agentId;
+        conv.updatedAt = Date.now();
+      }
+      return await runCursorPrompt(agent, prompt);
+    } finally {
+      if (agent) {
+        try {
+          await agent[Symbol.asyncDispose]();
+        } catch {
+          /* ignore */
+        }
       }
     }
+  };
+
+  try {
+    return await attempt(conv?.cursorAgentId);
+  } catch (firstErr) {
+    // Stale/broken local agent after proxy blip — retry once with a fresh agent
+    if (conv?.cursorAgentId) {
+      console.warn(
+        `[agents-team] Cursor attempt failed, clearing agent ${conv.cursorAgentId} and retrying once`
+      );
+      conv.cursorAgentId = undefined;
+      try {
+        return await attempt(undefined);
+      } catch (secondErr) {
+        if (isCursorStartupError(secondErr)) {
+          throw new Error(`Cursor HTTP/startup: ${secondErr.message}`);
+        }
+        throw secondErr;
+      }
+    }
+    if (isCursorStartupError(firstErr)) {
+      throw new Error(`Cursor HTTP/startup: ${firstErr.message}`);
+    }
+    throw firstErr;
   }
 }

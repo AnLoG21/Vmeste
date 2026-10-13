@@ -1,9 +1,9 @@
 import { config } from "../config.js";
 import { askCursor } from "./cursor.js";
+import { isCursorBrainFallbackError } from "./cursorAgent.js";
 import { askGemini } from "./gemini.js";
 import { askGroq } from "./groq.js";
 import { askMistral } from "./mistral.js";
-import { isCursorRegionError } from "./proxyEnv.js";
 import { enqueueLlm, setLlmMaxConcurrent } from "./queue.js";
 import type { RetryHooks } from "./retry.js";
 
@@ -12,7 +12,7 @@ setLlmMaxConcurrent(config.llmMaxConcurrent);
 type WaitNotifier = (message: string) => void | Promise<void>;
 
 let waitNotifier: WaitNotifier | null = null;
-/** After region block, keep using fallback for this process */
+/** After Cursor brain failures, keep using fallback for this process */
 let cursorBrainBlocked = false;
 let fellBackOnce = false;
 
@@ -30,7 +30,7 @@ async function fallbackBrain(
   if (config.mistralApiKey) return askMistral(system, user, hooks);
   if (config.geminiApiKey) return askGemini(system, user);
   throw new Error(
-    "Cursor недоступен в регионе, а запасной LLM (GROQ/MISTRAL/GEMINI) не настроен"
+    "Cursor недоступен, а запасной LLM (GROQ/MISTRAL/GEMINI) не настроен"
   );
 }
 
@@ -54,14 +54,14 @@ export async function askLlm(system: string, user: string): Promise<string> {
         return await askCursor(system, user);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        if (isCursorRegionError(message)) {
+        if (isCursorBrainFallbackError(message)) {
           cursorBrainBlocked = true;
-          console.warn(`[agents-team] Cursor brain blocked by region: ${message}`);
+          console.warn(`[agents-team] Cursor brain fallback: ${message}`);
           if (!fellBackOnce) {
             fellBackOnce = true;
             try {
               await waitNotifier?.(
-                "⚠️ Cursor API недоступен с этого VPS (регион). Мозг команды переключаю на Groq/запасной LLM; разработчик Cursor тоже может не стартовать, пока прокси не пускает api2.cursor.sh."
+                "⚠️ Cursor run/API сбоит с VPS (часто прокси/регион). Мозг переключаю на Groq. Для разработчика Cursor нужен рабочий VLESS → секрет VLESS_URL_B64 и workflow «Fix xray outbound»."
               );
             } catch {
               /* ignore */
