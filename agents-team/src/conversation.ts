@@ -11,6 +11,8 @@ export type Conversation = {
   /** Original request while waiting for answers */
   draftTask?: string;
   pendingQuestions?: string[];
+  /** How many clarify rounds already asked for current draft (max 1) */
+  clarifyRounds: number;
   lastJobId?: string;
   busy: boolean;
   updatedAt: number;
@@ -26,6 +28,7 @@ export function getConversation(chatId: number, userId: number): Conversation {
       chatId,
       userId,
       history: [],
+      clarifyRounds: 0,
       busy: false,
       updatedAt: Date.now(),
     };
@@ -45,12 +48,14 @@ export function pushMessage(conv: Conversation, role: "user" | "assistant", text
 export function setPendingClarification(conv: Conversation, draftTask: string, questions: string[]) {
   conv.draftTask = draftTask;
   conv.pendingQuestions = questions;
+  conv.clarifyRounds = (conv.clarifyRounds || 0) + 1;
   conv.updatedAt = Date.now();
 }
 
 export function clearPendingClarification(conv: Conversation) {
   conv.draftTask = undefined;
   conv.pendingQuestions = undefined;
+  conv.clarifyRounds = 0;
   conv.updatedAt = Date.now();
 }
 

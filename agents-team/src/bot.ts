@@ -159,6 +159,7 @@ async function handleUserText(
   try {
     const answering = Boolean(conv.pendingQuestions?.length && conv.draftTask);
     const draftTask = conv.draftTask;
+    const clarifyRoundsAlready = conv.clarifyRounds || 0;
 
     if (options.forceExecute) {
       clearPendingClarification(conv);
@@ -168,11 +169,22 @@ async function handleUserText(
       return;
     }
 
-    await ctx.reply(answering ? "Смотрю уточнения…" : "Смотрю…");
+    // After any answer to clarifications — skip LLM intake churn, just run
+    if (answering && draftTask) {
+      const task = `${draftTask}\n\nУточнения от заказчика:\n${text}`.trim();
+      clearPendingClarification(conv);
+      await ctx.reply("Достаточно, больше не спрашиваю. Запускаю команду…");
+      pushMessage(conv, "assistant", "Достаточно, больше не спрашиваю. Запускаю команду…");
+      await executeTask(ctx, conv, task);
+      return;
+    }
+
+    await ctx.reply("Смотрю…");
     const intake = await intakeMessage({
       message: text,
       history: formatHistory(conv),
-      answeringClarification: answering,
+      answeringClarification: false,
+      clarifyRoundsAlready,
       ...(draftTask ? { draftTask } : {}),
     });
 
@@ -183,13 +195,14 @@ async function handleUserText(
       return;
     }
 
-    if (intake.mode === "clarify") {
-      setPendingClarification(conv, answering && draftTask ? draftTask : text, intake.questions);
+    if (intake.mode === "clarify" && clarifyRoundsAlready < 1) {
+      setPendingClarification(conv, text, intake.questions);
       await ctx.reply(intake.reply);
       pushMessage(conv, "assistant", intake.reply);
       return;
     }
 
+    // clarify blocked by round limit or execute
     clearPendingClarification(conv);
     await ctx.reply(intake.reply || "Принял. Запускаю команду.");
     pushMessage(conv, "assistant", intake.reply || "Принял. Запускаю команду.");

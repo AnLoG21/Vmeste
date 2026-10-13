@@ -34,25 +34,46 @@ function looksLikeDesign(task: string): boolean {
   );
 }
 
-function looksLikeAction(task: string): boolean {
-  return /сделай|улучши|поправ|исправ|внедри|добав|проверь.*(и|и сразу)|аудит.*(и|сразу)|реализу|почини|фик|баг/.test(
+function looksLikeAuditOnly(task: string): boolean {
+  return /аудит|рекомендац|сначала аудит|только аудит|посмотрим|без внедр|не внедр/.test(
     task.toLowerCase()
+  );
+}
+
+function looksLikeImplement(task: string): boolean {
+  return /сделай|улучши|поправ|исправ|внедри|добав|реализу|почини|фик|баг|сразу правк/.test(
+    task.toLowerCase()
+  );
+}
+
+function userDefersToTeam(text: string): boolean {
+  return /на ваше усмотрение|доверяю|как считаете|сколько потребуется|на ваше|сами решите|все страниц|все модул|^все$|^всё$/i.test(
+    text.trim()
   );
 }
 
 function fallbackPlan(task: string): TeamPlan {
   const lower = task.toLowerCase();
   const design = looksLikeDesign(task);
+  const auditOnly = looksLikeAuditOnly(task) && !looksLikeImplement(task);
   const needBackend = /бэк|backend|api|django|миграц|celery|postgres|endpoint/.test(lower);
   const needFrontend =
     design || /фронт|frontend|ui|react|вёрст|верст|css|кнопк|страниц|анимац|календар/.test(lower);
   const needDeveloper =
-    needBackend ||
-    needFrontend ||
-    looksLikeAction(task) ||
-    /код|баг|фикс|рефактор|деплой|commit|pr|тест e2e|playwright|внедр/.test(lower);
+    !auditOnly &&
+    (needBackend ||
+      looksLikeImplement(task) ||
+      /код|баг|фикс|рефактор|деплой|commit|pr|тест e2e|playwright|внедр/.test(lower) ||
+      (needFrontend && !design));
   const needSeo = /seo|сео|мета|сниппет|поисков|ранжир/.test(lower);
-  const needTester = needDeveloper || design || /тест|qa|регресс|баг/.test(lower);
+  const needTester = needDeveloper || design || /тест|qa|регресс|баг|аудит/.test(lower);
+
+  const frontendBrief = needFrontend
+    ? auditOnly
+      ? `UX/UI-аудит платформы Vmeste по коду frontend/: лендинг/главная, кабинеты, календарь и ключевые модули. Критерии: современные стандарты, красота, лаконичность, анимации где уместно, удобство. Дай конкретный список находок по экранам/файлам и топ приоритетных улучшений. Без внедрения кода.\n${task}`
+      : `Frontend/UX-план по задаче (конкретные экраны и правки):\n${task}`
+    : "";
+
   return {
     summary: task.slice(0, 240),
     needAnalyst: true,
@@ -61,14 +82,17 @@ function fallbackPlan(task: string): TeamPlan {
     needFrontend: needFrontend || needDeveloper,
     needTester,
     needDeveloper,
-    analystBrief: `Проанализируй задачу и предложи лучший путь:\n${task}`,
+    analystBrief: auditOnly
+      ? `Продуктовый UX-аудит: цели, критерии красоты/лаконичности, приоритеты модулей (главная → календарь → остальные), метрики успеха. Без внедрения.\n${task}`
+      : `Проанализируй задачу и предложи лучший путь:\n${task}`,
     seoBrief: needSeo ? `SEO-взгляд на задачу:\n${task}` : "",
     backendBrief: needBackend || (needDeveloper && !design) ? `Backend-план по задаче:\n${task}` : "",
-    frontendBrief:
-      needFrontend || needDeveloper
-        ? `Frontend/UX-план по задаче (конкретные экраны и правки):\n${task}`
-        : "",
-    testerBrief: needTester ? `Тест-план по задаче:\n${task}` : "",
+    frontendBrief,
+    testerBrief: needTester
+      ? auditOnly
+        ? `Чеклист визуального/UX ревью: доступность, мобилка, иерархия, календарь. Без автотестов кода.\n${task}`
+        : `Тест-план по задаче:\n${task}`
+      : "",
     developerBrief: needDeveloper
       ? `В репозитории Vmeste выполни:\n${task}\nНе коммить без явной просьбы. Кратко опиши изменения.`
       : "",
@@ -96,7 +120,7 @@ function parseJsonObject(raw: string): Record<string, unknown> | null {
 
 function planFromParsed(parsed: Partial<TeamPlan>, task: string): TeamPlan {
   const base = fallbackPlan(task);
-  return {
+  const plan = {
     summary: String(parsed.summary || base.summary),
     needAnalyst: asBool(parsed.needAnalyst, base.needAnalyst),
     needSeo: asBool(parsed.needSeo, base.needSeo),
@@ -112,9 +136,29 @@ function planFromParsed(parsed: Partial<TeamPlan>, task: string): TeamPlan {
     developerBrief: String(parsed.developerBrief || base.developerBrief),
     risks: Array.isArray(parsed.risks) ? parsed.risks.map(String) : [],
   };
+  // Audit-first never needs Cursor unless user also asked to implement
+  if (looksLikeAuditOnly(task) && !looksLikeImplement(task)) {
+    plan.needDeveloper = false;
+    plan.developerBrief = "";
+  }
+  return plan;
 }
 
-function fallbackIntake(message: string, answeringClarification: boolean): IntakeResult {
+function buildExecute(task: string, reply = "Принял. Запускаю команду — без лишних вопросов."): IntakeResult {
+  return {
+    mode: "execute",
+    reply,
+    questions: [],
+    task,
+    plan: fallbackPlan(task),
+  };
+}
+
+function fallbackIntake(
+  message: string,
+  answeringClarification: boolean,
+  clarifyRoundsAlready = 0
+): IntakeResult {
   const lower = message.toLowerCase().trim();
   if (
     !answeringClarification &&
@@ -123,7 +167,7 @@ function fallbackIntake(message: string, answeringClarification: boolean): Intak
     return {
       mode: "chat",
       reply:
-        "Привет. Пишите обычным текстом — разберём, при необходимости уточним и сразу подключим нужные роли (аналитик, SEO, backend, frontend, tester, разработчик).",
+        "Привет. Пишите задачу обычным текстом — один раз уточню при необходимости и сразу работаю.",
       questions: [],
       task: "",
       plan: fallbackPlan(message),
@@ -133,45 +177,44 @@ function fallbackIntake(message: string, answeringClarification: boolean): Intak
     return {
       mode: "chat",
       reply:
-        "Просто опишите задачу своими словами. Если чего-то не хватает — спрошу. Потом команда сама разберёт и сделает: план, UX/код при необходимости, отчёт в чат.",
+        "Опишите задачу. Спрошу максимум один раз, потом команда сделает аудит/план/код по смыслу.",
       questions: [],
       task: "",
       plan: fallbackPlan(message),
     };
   }
 
-  const design = looksLikeDesign(message);
-  const vague =
-    !answeringClarification &&
-    design &&
-    !/(лендинг|главн|календар|кабинет|провайдер|клиент|конкретн|внедр|сделай|улучши)/.test(lower);
+  if (answeringClarification || clarifyRoundsAlready >= 1 || userDefersToTeam(message)) {
+    return buildExecute(message);
+  }
 
-  if (vague) {
+  const design = looksLikeDesign(message);
+  const hasScope =
+    /лендинг|главн|календар|кабинет|провайдер|клиент|все|всё|платформ|модул|аудит|внедр|сделай|улучши/.test(
+      lower
+    );
+
+  // Design with no scope at all — one short clarify; otherwise execute
+  if (design && !hasScope && !looksLikeAuditOnly(message)) {
     const questions = [
-      "С чего начать: главная (лендинг), кабинет клиента, кабинет провайдера или календарь?",
-      "Нужен только аудит с рекомендациями или сразу правки в коде?",
-      "Важно в первую очередь десктоп или мобилка?",
+      "Смотрим всю платформу или сначала главную + календарь?",
+      "Сейчас только аудит в чат или сразу правки в коде?",
     ];
     return {
       mode: "clarify",
-      reply: ["Уточню коротко, чтобы не делать лишнего:", ...questions.map((q, i) => `${i + 1}) ${q}`)].join(
-        "\n"
-      ),
+      reply: ["Ок, один уточняющий раунд:", ...questions.map((q, i) => `${i + 1}) ${q}`)].join("\n"),
       questions,
       task: "",
       plan: fallbackPlan(message),
     };
   }
 
-  const task = message;
-  const plan = fallbackPlan(task);
-  return {
-    mode: "execute",
-    reply: "Принял. Запускаю команду.",
-    questions: [],
-    task,
-    plan,
-  };
+  return buildExecute(message);
+}
+
+function forceExecuteFromAnswer(draftTask: string | undefined, message: string): IntakeResult {
+  const task = `${draftTask || ""}\n\nУточнения от заказчика:\n${message}`.trim();
+  return buildExecute(task, "Достаточно. Запускаю аудит/работу команды.");
 }
 
 export async function intakeMessage(input: {
@@ -179,63 +222,92 @@ export async function intakeMessage(input: {
   history: string;
   answeringClarification: boolean;
   draftTask?: string;
+  /** Already asked clarify N times for this draft — if >=1, must execute */
+  clarifyRoundsAlready?: number;
 }): Promise<IntakeResult> {
+  const rounds = input.clarifyRoundsAlready ?? 0;
+
+  // Hard stop: never clarify twice; answers always execute
+  if (input.answeringClarification || rounds >= 1) {
+    return forceExecuteFromAnswer(
+      input.draftTask,
+      input.answeringClarification ? input.message : `${input.draftTask || ""}\n${input.message}`
+    );
+  }
+
+  if (userDefersToTeam(input.message) && looksLikeDesign(input.history + "\n" + input.message)) {
+    const task = input.draftTask
+      ? `${input.draftTask}\n\nУточнения:\n${input.message}`
+      : input.message;
+    return buildExecute(task);
+  }
+
   const userPayload = [
     input.history ? `История:\n${input.history}` : "История: пусто",
-    input.answeringClarification
-      ? `Сейчас пользователь отвечает на уточнения. Черновик задачи:\n${input.draftTask || ""}`
-      : "Это новое сообщение (не ответ на уточнения).",
+    "Это новое сообщение. Уточнять можно только если совсем нельзя начать. Сроки/формат/бренд-гайд НЕ спрашивать.",
     `Сообщение:\n${input.message}`,
   ].join("\n\n");
 
   const raw = await askLlm(ROLE_INTAKE, userPayload);
   const parsed = parseJsonObject(raw);
   if (!parsed) {
-    const merged = input.answeringClarification
-      ? `${input.draftTask || ""}\n\nУточнения от заказчика:\n${input.message}`.trim()
-      : input.message;
-    return fallbackIntake(merged, input.answeringClarification);
+    return fallbackIntake(input.message, false, rounds);
   }
 
-  const modeRaw = String(parsed.mode || "").toLowerCase();
-  const mode: IntakeMode =
+  let modeRaw = String(parsed.mode || "").toLowerCase();
+  let mode: IntakeMode =
     modeRaw === "chat" || modeRaw === "clarify" || modeRaw === "execute"
       ? modeRaw
       : "execute";
 
+  // Soft work request + deferral language → execute
+  if (mode === "clarify" && (userDefersToTeam(input.message) || looksLikeAuditOnly(input.message))) {
+    mode = "execute";
+  }
+
   const questions = Array.isArray(parsed.questions)
-    ? parsed.questions.map(String).filter(Boolean).slice(0, 3)
+    ? parsed.questions.map(String).filter(Boolean).slice(0, 2)
     : [];
 
   let task = String(parsed.task || "").trim();
   if (mode === "execute" && !task) {
-    task = input.answeringClarification
-      ? `${input.draftTask || ""}\n\nУточнения от заказчика:\n${input.message}`.trim()
-      : input.message;
-  }
-
-  const plan = planFromParsed(parsed as Partial<TeamPlan>, task || input.message);
-  let reply = String(parsed.reply || "").trim();
-  if (!reply) {
-    if (mode === "clarify") {
-      reply = ["Уточню:", ...questions.map((q, i) => `${i + 1}) ${q}`)].join("\n");
-    } else if (mode === "execute") {
-      reply = "Принял. Запускаю команду.";
-    } else {
-      reply = "Слушаю — опишите, что нужно по «Вместе».";
-    }
+    task = input.message;
   }
 
   if (mode === "clarify" && !questions.length) {
-    return fallbackIntake(
-      input.answeringClarification
-        ? `${input.draftTask || ""}\n\n${input.message}`
-        : input.message,
-      input.answeringClarification
-    );
+    return fallbackIntake(input.message, false, rounds);
   }
 
-  return { mode, reply, questions, task, plan };
+  if (mode === "execute") {
+    const plan = planFromParsed(parsed as Partial<TeamPlan>, task);
+    return {
+      mode: "execute",
+      reply: String(parsed.reply || "Принял. Запускаю команду.").trim() || "Принял. Запускаю команду.",
+      questions: [],
+      task,
+      plan,
+    };
+  }
+
+  if (mode === "chat") {
+    return {
+      mode: "chat",
+      reply: String(parsed.reply || "Слушаю.").trim(),
+      questions: [],
+      task: "",
+      plan: fallbackPlan(input.message),
+    };
+  }
+
+  return {
+    mode: "clarify",
+    reply:
+      String(parsed.reply || "").trim() ||
+      ["Уточню один раз:", ...questions.map((q, i) => `${i + 1}) ${q}`)].join("\n"),
+    questions,
+    task: "",
+    plan: planFromParsed(parsed as Partial<TeamPlan>, input.message),
+  };
 }
 
 export async function planTask(task: string): Promise<TeamPlan> {
