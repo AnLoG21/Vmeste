@@ -1,11 +1,12 @@
 import { config } from "../config.js";
 import { llmFetch } from "./http.js";
+import { parseRetryAfterMs, withRateLimitRetry, type RetryHooks } from "./retry.js";
 
 type GroqChatResponse = {
   choices?: Array<{ message?: { content?: string } }>;
 };
 
-export async function askGroq(system: string, user: string): Promise<string> {
+async function askGroqOnce(system: string, user: string): Promise<string> {
   if (!config.groqApiKey) {
     return [
       "[stub — нет GROQ_API_KEY]",
@@ -33,11 +34,28 @@ export async function askGroq(system: string, user: string): Promise<string> {
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Groq HTTP ${res.status}: ${body.slice(0, 400)}`);
+    const retryHeader =
+      res.headers.get("retry-after") ||
+      res.headers.get("x-ratelimit-reset-tokens") ||
+      res.headers.get("x-ratelimit-reset-requests");
+    const hintMs = parseRetryAfterMs(body, retryHeader);
+    const hint = hintMs != null ? ` (retry_after_ms=${hintMs})` : "";
+    throw new Error(`Groq HTTP ${res.status}: ${body.slice(0, 500)}${hint}`);
   }
 
   const data = (await res.json()) as GroqChatResponse;
   const text = data.choices?.[0]?.message?.content?.trim();
   if (!text) throw new Error("Empty Groq response");
   return text;
+}
+
+export async function askGroq(
+  system: string,
+  user: string,
+  hooks?: RetryHooks
+): Promise<string> {
+  return withRateLimitRetry("Groq", () => askGroqOnce(system, user), {
+    maxAttempts: config.llmRateLimitRetries,
+    hooks,
+  });
 }

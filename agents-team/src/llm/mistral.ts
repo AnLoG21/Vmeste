@@ -1,11 +1,12 @@
 import { config } from "../config.js";
 import { llmFetch } from "./http.js";
+import { parseRetryAfterMs, withRateLimitRetry, type RetryHooks } from "./retry.js";
 
 type MistralChatResponse = {
   choices?: Array<{ message?: { content?: string } }>;
 };
 
-export async function askMistral(system: string, user: string): Promise<string> {
+async function askMistralOnce(system: string, user: string): Promise<string> {
   if (!config.mistralApiKey) {
     return [
       "[stub — нет MISTRAL_API_KEY]",
@@ -33,11 +34,25 @@ export async function askMistral(system: string, user: string): Promise<string> 
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Mistral HTTP ${res.status}: ${body.slice(0, 400)}`);
+    const retryHeader = res.headers.get("retry-after");
+    const hintMs = parseRetryAfterMs(body, retryHeader);
+    const hint = hintMs != null ? ` (retry_after_ms=${hintMs})` : "";
+    throw new Error(`Mistral HTTP ${res.status}: ${body.slice(0, 500)}${hint}`);
   }
 
   const data = (await res.json()) as MistralChatResponse;
   const text = data.choices?.[0]?.message?.content?.trim();
   if (!text) throw new Error("Empty Mistral response");
   return text;
+}
+
+export async function askMistral(
+  system: string,
+  user: string,
+  hooks?: RetryHooks
+): Promise<string> {
+  return withRateLimitRetry("Mistral", () => askMistralOnce(system, user), {
+    maxAttempts: config.llmRateLimitRetries,
+    hooks,
+  });
 }

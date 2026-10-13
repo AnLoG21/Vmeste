@@ -53,6 +53,10 @@ export const config = {
   cursorAutoPr: optional("CURSOR_AUTO_PR", "0") === "1",
   /** Default on: conversational mode runs Cursor developer without a confirm button */
   devAuto: optional("DEV_AUTO", "1") !== "0",
+  /** Parallel LLM calls (1 = safer for Groq free TPM) */
+  llmMaxConcurrent: Math.max(1, Number(optional("LLM_MAX_CONCURRENT", "1")) || 1),
+  /** How many times to retry after HTTP 429 */
+  llmRateLimitRetries: Math.max(1, Number(optional("LLM_RATE_LIMIT_RETRIES", "8")) || 8),
 };
 
 export function assertConfig() {

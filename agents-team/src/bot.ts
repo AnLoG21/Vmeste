@@ -11,6 +11,7 @@ import {
   pushMessage,
   setPendingClarification,
 } from "./conversation.js";
+import { setLlmWaitNotifier } from "./llm/client.js";
 import { runPendingDeveloper, runTeamTask } from "./orchestrator.js";
 import { createJob, getJob, listJobsForUser, updateJob } from "./store.js";
 import { replyChunks } from "./telegram.js";
@@ -151,6 +152,9 @@ async function handleUserText(
 
   conv.busy = true;
   pushMessage(conv, "user", text);
+  setLlmWaitNotifier(async (msg) => {
+    await ctx.reply(msg);
+  });
 
   try {
     const answering = Boolean(conv.pendingQuestions?.length && conv.draftTask);
@@ -195,6 +199,7 @@ async function handleUserText(
     await ctx.reply(`Ошибка: ${message}`);
     pushMessage(conv, "assistant", `Ошибка: ${message}`);
   } finally {
+    setLlmWaitNotifier(null);
     conv.busy = false;
   }
 }
