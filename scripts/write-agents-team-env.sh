@@ -43,7 +43,15 @@ fi
 
 GROQ_API_KEY="${GROQ_API_KEY:-${BRIDGE_GROQ:-}}"
 MISTRAL_API_KEY="${MISTRAL_API_KEY:-${BRIDGE_MISTRAL:-}}"
-LLM_PROVIDER="${LLM_PROVIDER:-${BRIDGE_LLM:-cursor}}"
+# Prefer Cursor brain when API key exists (Telegram chat resume + repo).
+# Explicit LLM_PROVIDER / bridge LLM:* still wins if already set.
+if [[ -z "${LLM_PROVIDER:-}" ]]; then
+  if [[ -n "${CURSOR_API_KEY:-}" ]]; then
+    LLM_PROVIDER=cursor
+  else
+    LLM_PROVIDER="${BRIDGE_LLM:-groq}"
+  fi
+fi
 
 umask 077
 mkdir -p agents-team
