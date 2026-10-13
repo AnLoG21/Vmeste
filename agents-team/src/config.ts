@@ -32,6 +32,8 @@ export const config = {
   telegramToken: required("TELEGRAM_TEAM_BOT_TOKEN"),
   telegramApiRoot: optional("TELEGRAM_API_BASE", "https://api.telegram.org").replace(/\/+$/, ""),
   telegramHttpProxy: optional("TELEGRAM_HTTP_PROXY"),
+  /** Optional dedicated proxy for Groq/Mistral; falls back to TELEGRAM_HTTP_PROXY */
+  llmHttpProxy: optional("LLM_HTTP_PROXY"),
   allowedUserIds,
   llmProvider: llmProvider as "gemini" | "mistral" | "groq",
   geminiApiKey: optional("GEMINI_API_KEY"),
@@ -68,5 +70,6 @@ export function assertConfig() {
   if (!config.cursorApiKey) {
     console.warn("[agents-team] CURSOR_API_KEY missing — developer agent disabled (brain can still run free)");
   }
-  console.log(`[agents-team] LLM provider: ${config.llmProvider}`);
+  const proxy = config.llmHttpProxy || config.telegramHttpProxy || "direct";
+  console.log(`[agents-team] LLM provider: ${config.llmProvider} (${proxy === "direct" ? "direct" : "via proxy"})`);
 }

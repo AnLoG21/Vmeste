@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { llmFetch } from "./http.js";
 
 type MistralChatResponse = {
   choices?: Array<{ message?: { content?: string } }>;
@@ -14,7 +15,7 @@ export async function askMistral(system: string, user: string): Promise<string> 
     ].join("\n");
   }
 
-  const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+  const res = await llmFetch("https://api.mistral.ai/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.mistralApiKey}`,
