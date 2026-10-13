@@ -4,8 +4,8 @@
 
 **PM → аналитик + SEO → backend + frontend → tester → обсуждение → разработчик (Cursor SDK)**
 
-Мозг ролей (кроме кода): Gemini или Mistral (`LLM_PROVIDER`).  
-Код: Cursor SDK (`CURSOR_API_KEY`).
+Мозг ролей (кроме кода): Gemini / Mistral / **Groq** (`LLM_PROVIDER`).  
+Код: Cursor SDK (`CURSOR_API_KEY`) — это уже платный/лимитный сервис Cursor; без него команда всё равно планирует и обсуждает бесплатно.
 
 ## Прод (VPS)
 
@@ -25,20 +25,31 @@ npm install
 npm start
 ```
 
-## Бесплатный Mistral API
+## Бесплатно и без оплаты (реалистично)
 
-1. Зайди на [console.mistral.ai](https://console.mistral.ai)
-2. Войди / зарегистрируйся
-3. Слева **API Keys** → **Create new key**
-4. Скопируй ключ сразу (показывается один раз)
-5. В `.env`:
+| Вариант | Деньги | Минус |
+|--------|--------|--------|
+| **Groq free** | $0 при лимитах | лимиты RPM/TPM, условия могут меняться |
+| **Gemini free** | $0 при квоте | квоты Google |
+| **Mistral Free mode** | $0 в included usage | лимиты org |
+| **Ollama локально** | $0 всегда | нужен CPU/RAM/GPU на VPS |
+
+Для «не хочу никому платить» лучший практичный вариант сейчас: **Groq** для мозга команды + **не включать** авто-разработчика Cursor (`DEV_AUTO=0`, без обязательного `CURSOR_API_KEY`).
+
+### Groq
+
+1. [console.groq.com](https://console.groq.com) → API Keys  
+2. В `.env`:
    ```env
-   LLM_PROVIDER=mistral
-   MISTRAL_API_KEY=...
-   MISTRAL_MODEL=mistral-small-latest
+   LLM_PROVIDER=groq
+   GROQ_API_KEY=...
+   GROQ_MODEL=openai/gpt-oss-20b
    ```
+3. Если ключ светился в чате — **сразу revoke** и сделай новый.
 
-Free mode по умолчанию, карта не нужна, но есть лимиты (RPS / tokens). Подробнее: [Mistral docs](https://docs.mistral.ai/getting-started/quickstarts/studio/activate-and-generate-api-key).
+### Mistral Free mode
+
+[console.mistral.ai](https://console.mistral.ai) → API Keys, карта не обязательна в Free mode.
 
 ## Команды бота
 
