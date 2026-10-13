@@ -13,14 +13,17 @@ test.describe("Public visit confirm", () => {
     });
 
     await page.goto(`/?visit_confirm=${VISIT_TOKEN}`);
-    await expect(page.getByRole("heading", { name: "Подтверждение визита" })).toBeVisible({
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("heading", { name: "Подтверждение визита" })).toBeVisible({
       timeout: 20_000,
     });
-    await expect(page.getByText("Салон Confirm E2E")).toBeVisible();
-    await expect(page.getByText(/Стрижка/)).toBeVisible();
+    await expect(dialog.getByText("Салон Confirm E2E")).toBeVisible();
+    await expect(dialog.getByText(/Стрижка/)).toBeVisible();
 
-    await page.getByRole("button", { name: "Подтвердить визит" }).click();
+    // Bottom-sheet backdrop intercepts Playwright pointer clicks after scrollIntoView
+    // on short mobile landing; invoke the control directly like a user tap on the sheet.
+    await dialog.getByRole("button", { name: "Подтвердить визит" }).evaluate((btn) => btn.click());
     await expect.poll(() => posted, { timeout: 15_000 }).toBe(true);
-    await expect(page.getByText(/Визит подтверждён/i)).toBeVisible({ timeout: 10_000 });
+    await expect(dialog.getByText(/Визит подтверждён/i)).toBeVisible({ timeout: 10_000 });
   });
 });

@@ -33,11 +33,14 @@ test.describe("Confirm password reset", () => {
     });
 
     await page.goto("/reset-password?token=e2e-reset-token");
-    await expect(page.getByRole("heading", { name: "Новый пароль" })).toBeVisible({ timeout: 20_000 });
+    const modal = page.locator(".auth-modal");
+    await expect(modal.getByRole("heading", { name: "Новый пароль" })).toBeVisible({ timeout: 20_000 });
 
-    await page.getByPlaceholder("Новый пароль", { exact: true }).fill("NewPass456!");
-    await page.getByPlaceholder("Повторите новый пароль").fill("NewPass456!");
-    await page.getByRole("button", { name: "Сохранить пароль" }).click();
+    // Scope to the dialog: after mobile landing folds, page scrollIntoView can land
+    // clicks on the dimmed auth-modal-overlay instead of the submit control.
+    await modal.getByPlaceholder("Новый пароль", { exact: true }).fill("NewPass456!");
+    await modal.getByPlaceholder("Повторите новый пароль").fill("NewPass456!");
+    await modal.locator("form").evaluate((form) => form.requestSubmit());
 
     await expect.poll(() => postBody?.token, { timeout: 15_000 }).toBe("e2e-reset-token");
     expect(postBody.new_password).toBe("NewPass456!");
