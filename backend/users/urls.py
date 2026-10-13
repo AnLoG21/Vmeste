@@ -15,6 +15,7 @@ from .views import (
     DemoLoginView,
     MeView,
     PresencePingView,
+    PrivateScenarioReplyView,
     ResendVerificationView,
     RolesView,
     SetupCredentialsView,
@@ -58,4 +59,5 @@ urlpatterns = [
     path("demo-login/", DemoLoginView.as_view(), name="user-demo-login"),
     path("demo-exit/", DemoExitView.as_view(), name="user-demo-exit"),
     path("automation-request/", AutomationRequestView.as_view(), name="automation-request"),
+    path("private-scenario-reply/", PrivateScenarioReplyView.as_view(), name="private-scenario-reply"),
 ]

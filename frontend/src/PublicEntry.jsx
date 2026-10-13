@@ -13,6 +13,7 @@ import OfferPage from "./legal/OfferPage.jsx";
 import PrivacyPage from "./legal/PrivacyPage.jsx";
 import PublicOrgPage from "./legal/PublicOrgPage.jsx";
 import PublicShopPage from "./PublicShopPage.jsx";
+import LubimayaPage from "./LubimayaPage.jsx";
 import HomeFallback from "./HomeFallback.jsx";
 import { shouldLoadApp } from "./viewRoutes.js";
 import "./landing.css";
@@ -84,6 +85,7 @@ const LEGAL_ROUTES = {
   "/businesses": BusinessesPage,
   "/apps": PlatformAppsPage,
   "/android": AndroidDownloadPage,
+  "/lubimaya_arinochka": LubimayaPage,
 };
 
 function normalizePath(pathname) {
@@ -128,10 +130,12 @@ export default function PublicEntry() {
   else if (cityMatch) content = <CityPage cityKey={decodeURIComponent(cityMatch[1]).toLowerCase()} />;
   else content = <NotFoundPage />;
 
+  const hideCookie = path === "/lubimaya_arinochka";
+
   return (
     <>
       {content}
-      <CookieConsentBanner />
+      {hideCookie ? null : <CookieConsentBanner />}
     </>
   );
 }

@@ -26,6 +26,7 @@ from .serializers import (
     ChangeEmailSerializer,
     ChangePasswordSerializer,
     PasswordResetConfirmSerializer,
+    PrivateScenarioReplySerializer,
     SetupCredentialsSerializer,
     UserRegisterSerializer,
     UserSerializer,
@@ -158,6 +159,41 @@ class AutomationRequestView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         return Response({"detail": "Заявка отправлена. Мы свяжемся с вами в ближайшее время."})
+
+
+class PrivateScenarioReplyView(APIView):
+    """Public endpoint for a private one-off page → Telegram log lines."""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        ser = PrivateScenarioReplySerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+        token = (getattr(settings, "TELEGRAM_BOT_TOKEN", None) or "").strip()
+        chat_id = (getattr(settings, "TELEGRAM_PRIVATE_NOTIFY_CHAT_ID", None) or "").strip()
+        if not token or not chat_id:
+            return Response({"ok": False, "detail": "notify_unconfigured"}, status=status.HTTP_200_OK)
+
+        page = (data.get("page") or "private").strip() or "private"
+        step = (data.get("step") or "").strip()
+        scenario = (data.get("scenario") or "").strip()
+        answer = (data.get("answer") or "").strip()
+        lines = [
+            f"[{page}] log",
+            f"step: {step or '—'}",
+            f"scenario: {scenario}",
+            f"answer: {answer}",
+        ]
+        text = "\n".join(lines)
+        try:
+            from notifications.channels import send_telegram
+
+            ok = send_telegram(bot_token=token, chat_id=chat_id, text=text)
+        except Exception:
+            return Response({"ok": False, "detail": "notify_failed"}, status=status.HTTP_200_OK)
+        return Response({"ok": bool(ok)})
 
 
 class PresencePingView(APIView):

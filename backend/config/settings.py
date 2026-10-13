@@ -252,6 +252,8 @@ SMSRU_API_ID = os.environ.get("SMSRU_API_ID", "")
 # Platform Telegram bot: username for deep-links; token used by all orgs unless they set their own
 TELEGRAM_BOT_USERNAME = os.environ.get("TELEGRAM_BOT_USERNAME", "")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+# Personal chat_id for private one-off pages (e.g. /lubimaya_arinochka). Get via /chatid in the bot.
+TELEGRAM_PRIVATE_NOTIFY_CHAT_ID = os.environ.get("TELEGRAM_PRIVATE_NOTIFY_CHAT_ID", "302708576").strip()
 # Selectel/RU VPS often block api.telegram.org — use Cloudflare Worker URL or HTTP/SOCKS proxy
 TELEGRAM_API_BASE = os.environ.get("TELEGRAM_API_BASE", "https://api.telegram.org")
 TELEGRAM_HTTP_PROXY = os.environ.get("TELEGRAM_HTTP_PROXY", "")

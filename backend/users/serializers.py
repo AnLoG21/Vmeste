@@ -366,6 +366,13 @@ class ChangeEmailSerializer(serializers.Serializer):
     new_email = serializers.EmailField()
 
 
+class PrivateScenarioReplySerializer(serializers.Serializer):
+    page = serializers.CharField(max_length=80, required=False, allow_blank=True, default="")
+    scenario = serializers.CharField(max_length=240)
+    answer = serializers.CharField(max_length=2000)
+    step = serializers.CharField(max_length=80, required=False, allow_blank=True, default="")
+
+
 class AutomationRequestSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=150)
     email = serializers.EmailField()
