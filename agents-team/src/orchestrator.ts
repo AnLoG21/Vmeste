@@ -17,12 +17,15 @@ export type OrchestratorResult = {
   awaitingDev: boolean;
 };
 
-function buildCursorBrief(plan: TeamPlan, parts: {
-  debate?: string;
-  backend?: string;
-  frontend?: string;
-  tester?: string;
-}): string {
+function buildCursorBrief(
+  plan: TeamPlan,
+  parts: {
+    debate?: string;
+    backend?: string;
+    frontend?: string;
+    tester?: string;
+  }
+): string {
   return [
     plan.developerBrief || "Выполни задачу в репозитории Vmeste.",
     parts.debate ? `\n## Итог обсуждения команды\n${parts.debate}` : "",
@@ -38,14 +41,14 @@ function buildCursorBrief(plan: TeamPlan, parts: {
 export async function runTeamTask(
   jobId: string,
   onProgress: ProgressFn,
-  options: { runDeveloperNow?: boolean } = {}
+  options: { runDeveloperNow?: boolean; plan?: TeamPlan } = {}
 ): Promise<OrchestratorResult> {
   const job = getJob(jobId);
   if (!job) throw new Error(`Unknown job ${jobId}`);
 
   updateJob(jobId, { status: "running" });
-  await onProgress("🧭 PM разбирает задачу…");
-  const plan = await planTask(job.task);
+  await onProgress("🧭 PM собирает план…");
+  const plan = options.plan ?? (await planTask(job.task));
   updateJob(jobId, {
     planSummary: plan.summary,
     developerBrief: plan.developerBrief || undefined,
@@ -102,7 +105,7 @@ export async function runTeamTask(
     await onProgress("🧪 Tester готов");
   }
 
-  await onProgress("🗣️ Команда обсуждает лучший путь…");
+  await onProgress("🗣️ Команда обсуждает…");
   const debateNotes = await debate({
     task: job.task,
     plan,
@@ -124,10 +127,10 @@ export async function runTeamTask(
 
   let developer: string | undefined;
   const wantDev = plan.needDeveloper && Boolean(plan.developerBrief || cursorBrief);
-  const canAuto = options.runDeveloperNow || config.devAuto;
+  const canAuto = options.runDeveloperNow ?? config.devAuto;
 
   if (wantDev && canAuto) {
-    await onProgress("💻 Разработчик (Cursor SDK)…");
+    await onProgress("💻 Разработчик уже делает…");
     developer = await runDeveloper(cursorBrief);
     await onProgress("💻 Разработчик закончил");
   } else if (wantDev) {
@@ -148,14 +151,12 @@ export async function runTeamTask(
       plan,
       report:
         report +
-        "\n\n—\nНужен исполнитель кода. Нажмите «Запустить разработчика» или `/dev " +
-        jobId +
-        "`",
+        "\n\n—\nНужен исполнитель кода. Напишите «да, запускай разработчика» или нажмите кнопку.",
       awaitingDev: true,
     };
   }
 
-  await onProgress("🧾 Собираю итоговый отчёт…");
+  await onProgress("🧾 Собираю ответ…");
   const report = await synthesize({
     task: job.task,
     plan,
@@ -175,7 +176,7 @@ export async function runPendingDeveloper(jobId: string, onProgress: ProgressFn)
   const job = getJob(jobId);
   if (!job?.developerBrief) throw new Error("Нет ТЗ разработчика для этой задачи");
   updateJob(jobId, { status: "running" });
-  await onProgress("💻 Разработчик (Cursor SDK)…");
+  await onProgress("💻 Разработчик уже делает…");
   const developer = await runDeveloper(job.developerBrief);
   const report = await synthesize({
     task: job.task,

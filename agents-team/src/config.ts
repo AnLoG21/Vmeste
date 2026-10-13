@@ -51,7 +51,8 @@ export const config = {
   cursorRepoUrl: optional("CURSOR_REPO_URL", "https://github.com/AnLoG21/Vmeste.git"),
   cursorRepoRef: optional("CURSOR_REPO_REF", "main"),
   cursorAutoPr: optional("CURSOR_AUTO_PR", "0") === "1",
-  devAuto: optional("DEV_AUTO", "0") === "1",
+  /** Default on: conversational mode runs Cursor developer without a confirm button */
+  devAuto: optional("DEV_AUTO", "1") !== "0",
 };
 
 export function assertConfig() {

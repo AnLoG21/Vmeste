@@ -65,7 +65,7 @@ CURSOR_REPO_REF=${CURSOR_REPO_REF:-main}
 CURSOR_MODEL=${CURSOR_MODEL:-composer-2.5}
 CURSOR_AUTO_PR=${CURSOR_AUTO_PR:-0}
 CURSOR_WORKSPACE=${CURSOR_WORKSPACE:-/opt/vmeste}
-DEV_AUTO=${DEV_AUTO:-0}
+DEV_AUTO=${DEV_AUTO:-1}
 EOF
 chmod 600 agents-team/.env
 echo "[agents-env] wrote agents-team/.env (provider=${LLM_PROVIDER}, groq=$([ -n "$GROQ_API_KEY" ] && echo set || echo missing), $(wc -c < agents-team/.env) bytes)"
