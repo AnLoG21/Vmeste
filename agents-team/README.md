@@ -66,8 +66,8 @@ npm start
 - `/whoami` — ваш Telegram id
 - `/task …` и `/dev …` — ещё работают, но не обязательны
 - `DEV_AUTO=0` — разработчик только после «да» / кнопки (по умолчанию `1`)
-- `LLM_PROVIDER=cursor` — мозг на Cursor: один агент на Telegram-чат (`resume`) + история чата в каждом запросе; роли просят только текст (без правок кода). Разработчик — отдельный агент.
-- для скорости на VPS удобнее `CURSOR_RUNTIME=local` (репозиторий уже смонтирован в `/opt/vmeste`)
+- `LLM_PROVIDER=cursor` — мозг на Cursor: один агент на Telegram-чат (`resume`) + история чата. На RU VPS обязателен `HTTPS_PROXY` / `TELEGRAM_HTTP_PROXY` (иначе `permission_denied` / region). Если Cursor всё равно режет регион — мозг сам падает на Groq.
+- `CURSOR_RUNTIME=local` по умолчанию на проде (репозиторий в `/opt/vmeste`)
 - при HTTP 429 (Groq/Mistral) бот **ждёт** и повторяет; `LLM_MAX_CONCURRENT=1`
 
 Задачи и уточнения живут в памяти процесса: после рестарта бота история сессии сбросится.

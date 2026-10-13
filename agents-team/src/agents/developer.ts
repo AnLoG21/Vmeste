@@ -25,7 +25,15 @@ export async function runDeveloper(brief: string): Promise<string> {
     return await runCursorPrompt(agent, prompt);
   } catch (err) {
     if (isCursorStartupError(err)) {
-      return `Не удалось запустить Cursor SDK: ${err.message}`;
+      const msg = err.message;
+      if (/permission_denied|not available in your region/i.test(msg)) {
+        return [
+          "Разработчик Cursor недоступен: API блокирует регион VPS.",
+          "Нужен рабочий HTTPS_PROXY (TELEGRAM_HTTP_PROXY) с выходом в разрешённую страну, либо запускать агентов не с RU IP.",
+          `Детали: ${msg}`,
+        ].join("\n");
+      }
+      return `Не удалось запустить Cursor SDK: ${msg}`;
     }
     throw err;
   } finally {

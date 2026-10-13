@@ -182,7 +182,10 @@ services:
       - ./agents-team/.env
     environment:
       TELEGRAM_HTTP_PROXY: ${TELEGRAM_HTTP_PROXY:-http://172.18.0.1:10809}
-      CURSOR_RUNTIME: ${AGENTS_CURSOR_RUNTIME:-cloud}
+      HTTPS_PROXY: ${TELEGRAM_HTTP_PROXY:-http://172.18.0.1:10809}
+      HTTP_PROXY: ${TELEGRAM_HTTP_PROXY:-http://172.18.0.1:10809}
+      NODE_USE_ENV_PROXY: "1"
+      CURSOR_RUNTIME: ${AGENTS_CURSOR_RUNTIME:-local}
       CURSOR_WORKSPACE: /opt/vmeste
     volumes:
       - /opt/vmeste:/opt/vmeste:rw

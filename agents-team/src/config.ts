@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { applyCursorProxyEnv } from "./llm/proxyEnv.js";
 
 dotenv.config({
   path: path.join(path.dirname(fileURLToPath(import.meta.url)), "../.env"),
@@ -52,7 +53,7 @@ export const config = {
   cursorWorkspace: path.resolve(optional("CURSOR_WORKSPACE", process.cwd())),
   cursorModel: optional("CURSOR_MODEL", "composer-2.5"),
   /** local = edit mounted workspace; cloud = Cursor-hosted VM + GitHub repo */
-  cursorRuntime: optional("CURSOR_RUNTIME", "cloud") === "local" ? "local" : "cloud",
+  cursorRuntime: optional("CURSOR_RUNTIME", "local") === "cloud" ? "cloud" : "local",
   cursorRepoUrl: optional("CURSOR_REPO_URL", "https://github.com/AnLoG21/Vmeste.git"),
   cursorRepoRef: optional("CURSOR_REPO_REF", "main"),
   cursorAutoPr: optional("CURSOR_AUTO_PR", "0") === "1",
@@ -68,6 +69,16 @@ export function assertConfig() {
   if (!config.allowedUserIds.length) {
     throw new Error("Set TELEGRAM_ALLOWED_USER_IDS to at least one numeric Telegram user id");
   }
+
+  const cursorProxy = applyCursorProxyEnv(config.llmHttpProxy || config.telegramHttpProxy);
+  if (cursorProxy) {
+    console.log(`[agents-team] Cursor/Node HTTPS_PROXY=${cursorProxy} NODE_USE_ENV_PROXY=1`);
+  } else if (config.llmProvider === "cursor" || config.cursorApiKey) {
+    console.warn(
+      "[agents-team] No TELEGRAM_HTTP_PROXY/LLM_HTTP_PROXY — Cursor API may fail with region/permission_denied on RU VPS"
+    );
+  }
+
   if (config.llmProvider === "mistral" && !config.mistralApiKey) {
     console.warn("[agents-team] LLM_PROVIDER=mistral but MISTRAL_API_KEY missing — roles will stub");
   }
