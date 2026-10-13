@@ -57,6 +57,11 @@ export const config = {
   cursorRepoUrl: optional("CURSOR_REPO_URL", "https://github.com/AnLoG21/Vmeste.git"),
   cursorRepoRef: optional("CURSOR_REPO_REF", "main"),
   cursorAutoPr: optional("CURSOR_AUTO_PR", "0") === "1",
+  /**
+   * Force HTTP/1.1+SSE for local Cursor agent streams (default on).
+   * Matches IDE «HTTP Compatibility Mode → HTTP/1.1» for VLESS/xray proxies.
+   */
+  cursorUseHttp1: optional("CURSOR_USE_HTTP1", "1") !== "0",
   /** Default on: conversational mode runs Cursor developer without a confirm button */
   devAuto: optional("DEV_AUTO", "1") !== "0",
   /** Parallel LLM calls (1 = safer for Groq free TPM) */
@@ -78,7 +83,6 @@ export function assertConfig() {
       "[agents-team] No TELEGRAM_HTTP_PROXY/LLM_HTTP_PROXY — Cursor API may fail with region/permission_denied on RU VPS"
     );
   }
-
   if (config.llmProvider === "mistral" && !config.mistralApiKey) {
     console.warn("[agents-team] LLM_PROVIDER=mistral but MISTRAL_API_KEY missing — roles will stub");
   }

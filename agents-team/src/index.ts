@@ -1,7 +1,11 @@
 import { assertConfig, config } from "./config.js";
 import { createBot } from "./bot.js";
+import { ensureCursorHttp1 } from "./llm/cursorAgent.js";
 
 assertConfig();
+if (config.cursorApiKey) {
+  ensureCursorHttp1();
+}
 const bot = createBot();
 
 bot.catch((err) => {

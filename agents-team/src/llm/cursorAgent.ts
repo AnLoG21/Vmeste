@@ -1,12 +1,26 @@
-import { Agent, CursorAgentError } from "@cursor/sdk";
+import { Agent, CursorAgentError, configureCursorSdk } from "@cursor/sdk";
 import { config } from "../config.js";
 
 type AgentHandle = Awaited<ReturnType<typeof Agent.create>>;
+
+let http1Configured = false;
+
+/**
+ * Same idea as Cursor IDE «Network → HTTP Compatibility Mode → HTTP/1.1»:
+ * many VLESS/xray proxies break HTTP/2 agent streams.
+ */
+export function ensureCursorHttp1(): void {
+  if (http1Configured || !config.cursorUseHttp1) return;
+  configureCursorSdk({ local: { useHttp1ForAgent: true } });
+  http1Configured = true;
+  console.log("[agents-team] Cursor SDK: useHttp1ForAgent=true (HTTP/1.1 + SSE)");
+}
 
 export async function createCursorAgent(): Promise<AgentHandle> {
   if (!config.cursorApiKey) {
     throw new Error("CURSOR_API_KEY missing");
   }
+  ensureCursorHttp1();
 
   if (config.cursorRuntime === "local") {
     return Agent.create({
@@ -30,6 +44,7 @@ export async function resumeOrCreateCursorAgent(agentId?: string): Promise<Agent
   if (!config.cursorApiKey) {
     throw new Error("CURSOR_API_KEY missing");
   }
+  ensureCursorHttp1();
 
   if (agentId) {
     try {

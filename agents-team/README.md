@@ -66,7 +66,7 @@ npm start
 - `/whoami` — ваш Telegram id
 - `/task …` и `/dev …` — ещё работают, но не обязательны
 - `DEV_AUTO=0` — разработчик только после «да» / кнопки (по умолчанию `1`)
-- `LLM_PROVIDER=cursor` — мозг на Cursor: один агент на Telegram-чат (`resume`) + история чата. На RU VPS обязателен `HTTPS_PROXY` / `TELEGRAM_HTTP_PROXY` (иначе `permission_denied` / region). Если Cursor всё равно режет регион — мозг сам падает на Groq.
+- `LLM_PROVIDER=cursor` — мозг на Cursor + история чата. На RU VPS: `HTTPS_PROXY` + **`CURSOR_USE_HTTP1=1`** (аналог IDE HTTP/1.1 — VLESS часто ломает HTTP/2). Если Cursor всё равно падает — мозг уходит на Groq.
 - `CURSOR_RUNTIME=local` по умолчанию на проде (репозиторий в `/opt/vmeste`)
 - при HTTP 429 (Groq/Mistral) бот **ждёт** и повторяет; `LLM_MAX_CONCURRENT=1`
 
