@@ -24,13 +24,19 @@ const allowedUserIds = allowedRaw
   .map((s) => Number(s))
   .filter((n) => Number.isFinite(n));
 
+const llmProviderRaw = optional("LLM_PROVIDER", "gemini").toLowerCase();
+const llmProvider = llmProviderRaw === "mistral" ? "mistral" : "gemini";
+
 export const config = {
   telegramToken: required("TELEGRAM_TEAM_BOT_TOKEN"),
   telegramApiRoot: optional("TELEGRAM_API_BASE", "https://api.telegram.org").replace(/\/+$/, ""),
   telegramHttpProxy: optional("TELEGRAM_HTTP_PROXY"),
   allowedUserIds,
+  llmProvider: llmProvider as "gemini" | "mistral",
   geminiApiKey: optional("GEMINI_API_KEY"),
   geminiModel: optional("GEMINI_MODEL", "gemini-2.0-flash"),
+  mistralApiKey: optional("MISTRAL_API_KEY"),
+  mistralModel: optional("MISTRAL_MODEL", "mistral-small-latest"),
   cursorApiKey: optional("CURSOR_API_KEY"),
   cursorWorkspace: path.resolve(optional("CURSOR_WORKSPACE", process.cwd())),
   cursorModel: optional("CURSOR_MODEL", "composer-2.5"),
@@ -46,10 +52,14 @@ export function assertConfig() {
   if (!config.allowedUserIds.length) {
     throw new Error("Set TELEGRAM_ALLOWED_USER_IDS to at least one numeric Telegram user id");
   }
-  if (!config.geminiApiKey) {
-    console.warn("[agents-team] GEMINI_API_KEY missing — PM/analyst/SEO will use a stub planner");
+  if (config.llmProvider === "mistral" && !config.mistralApiKey) {
+    console.warn("[agents-team] LLM_PROVIDER=mistral but MISTRAL_API_KEY missing — roles will stub");
+  }
+  if (config.llmProvider === "gemini" && !config.geminiApiKey) {
+    console.warn("[agents-team] GEMINI_API_KEY missing — team brain will use stubs");
   }
   if (!config.cursorApiKey) {
     console.warn("[agents-team] CURSOR_API_KEY missing — developer agent disabled");
   }
+  console.log(`[agents-team] LLM provider: ${config.llmProvider}`);
 }

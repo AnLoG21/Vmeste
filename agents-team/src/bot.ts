@@ -58,7 +58,7 @@ export function createBot(): Bot {
         "/dev <id> — запустить разработчика по задаче",
         "/whoami — ваш Telegram id",
         "",
-        "Роли: PM → аналитик + SEO → (опционально) разработчик Cursor SDK.",
+        "Роли: PM → аналитик + SEO → backend + frontend → tester → обсуждение → (опционально) Cursor SDK.",
       ].join("\n")
     );
   });

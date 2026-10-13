@@ -1,7 +1,10 @@
 import { runAnalyst } from "./agents/analyst.js";
+import { runBackend } from "./agents/backend.js";
 import { runDeveloper } from "./agents/developer.js";
-import { planTask, synthesize, type TeamPlan } from "./agents/pm.js";
+import { runFrontend } from "./agents/frontend.js";
+import { debate, planTask, synthesize, type TeamPlan } from "./agents/pm.js";
 import { runSeo } from "./agents/seo.js";
+import { runTester } from "./agents/tester.js";
 import { config } from "./config.js";
 import { getJob, updateJob, type Job } from "./store.js";
 
@@ -14,6 +17,24 @@ export type OrchestratorResult = {
   awaitingDev: boolean;
 };
 
+function buildCursorBrief(plan: TeamPlan, parts: {
+  debate?: string;
+  backend?: string;
+  frontend?: string;
+  tester?: string;
+}): string {
+  return [
+    plan.developerBrief || "Выполни задачу в репозитории Vmeste.",
+    parts.debate ? `\n## Итог обсуждения команды\n${parts.debate}` : "",
+    parts.backend ? `\n## Backend-план\n${parts.backend}` : "",
+    parts.frontend ? `\n## Frontend-план\n${parts.frontend}` : "",
+    parts.tester ? `\n## Тест-план\n${parts.tester}` : "",
+    "\nНе коммить и не пушь без явной просьбы. В конце: файлы, как проверить.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 export async function runTeamTask(
   jobId: string,
   onProgress: ProgressFn,
@@ -25,15 +46,15 @@ export async function runTeamTask(
   updateJob(jobId, { status: "running" });
   await onProgress("🧭 PM разбирает задачу…");
   const plan = await planTask(job.task);
-  const planPatch: { planSummary: string; developerBrief?: string } = {
+  updateJob(jobId, {
     planSummary: plan.summary,
-  };
-  if (plan.developerBrief) planPatch.developerBrief = plan.developerBrief;
-  updateJob(jobId, planPatch);
+    developerBrief: plan.developerBrief || undefined,
+  });
   await onProgress(
     [
       `План: ${plan.summary}`,
-      `Аналитик: ${plan.needAnalyst ? "да" : "нет"} · SEO: ${plan.needSeo ? "да" : "нет"} · Dev: ${plan.needDeveloper ? "да" : "нет"}`,
+      `Аналитик: ${plan.needAnalyst ? "да" : "нет"} · SEO: ${plan.needSeo ? "да" : "нет"}`,
+      `Backend: ${plan.needBackend ? "да" : "нет"} · Frontend: ${plan.needFrontend ? "да" : "нет"} · Tester: ${plan.needTester ? "да" : "нет"} · Dev: ${plan.needDeveloper ? "да" : "нет"}`,
       plan.risks.length ? `Риски: ${plan.risks.join("; ")}` : "",
     ]
       .filter(Boolean)
@@ -54,43 +75,98 @@ export async function runTeamTask(
         })()
       : Promise.resolve(undefined),
   ]);
-
   if (analyst) await onProgress("📊 Аналитик готов");
   if (seo) await onProgress("🔎 SEO готов");
 
+  const [backend, frontend] = await Promise.all([
+    plan.needBackend && plan.backendBrief
+      ? (async () => {
+          await onProgress("🧩 Backend думает…");
+          return runBackend(plan.backendBrief);
+        })()
+      : Promise.resolve(undefined),
+    plan.needFrontend && plan.frontendBrief
+      ? (async () => {
+          await onProgress("🎨 Frontend думает…");
+          return runFrontend(plan.frontendBrief);
+        })()
+      : Promise.resolve(undefined),
+  ]);
+  if (backend) await onProgress("🧩 Backend готов");
+  if (frontend) await onProgress("🎨 Frontend готов");
+
+  let tester: string | undefined;
+  if (plan.needTester && plan.testerBrief) {
+    await onProgress("🧪 Tester готовит план…");
+    tester = await runTester(plan.testerBrief);
+    await onProgress("🧪 Tester готов");
+  }
+
+  await onProgress("🗣️ Команда обсуждает лучший путь…");
+  const debateNotes = await debate({
+    task: job.task,
+    plan,
+    ...(analyst ? { analyst } : {}),
+    ...(seo ? { seo } : {}),
+    ...(backend ? { backend } : {}),
+    ...(frontend ? { frontend } : {}),
+    ...(tester ? { tester } : {}),
+  });
+  await onProgress("🗣️ Обсуждение завершено");
+
+  const cursorBrief = buildCursorBrief(plan, {
+    ...(debateNotes ? { debate: debateNotes } : {}),
+    ...(backend ? { backend } : {}),
+    ...(frontend ? { frontend } : {}),
+    ...(tester ? { tester } : {}),
+  });
+  updateJob(jobId, { developerBrief: cursorBrief });
+
   let developer: string | undefined;
-  const wantDev = plan.needDeveloper && Boolean(plan.developerBrief);
+  const wantDev = plan.needDeveloper && Boolean(plan.developerBrief || cursorBrief);
   const canAuto = options.runDeveloperNow || config.devAuto;
 
   if (wantDev && canAuto) {
     await onProgress("💻 Разработчик (Cursor SDK)…");
-    developer = await runDeveloper(plan.developerBrief);
+    developer = await runDeveloper(cursorBrief);
     await onProgress("💻 Разработчик закончил");
   } else if (wantDev) {
     updateJob(jobId, { status: "awaiting_dev" });
-    const synthInput: Parameters<typeof synthesize>[0] = { task: job.task, plan };
-    if (analyst) synthInput.analyst = analyst;
-    if (seo) synthInput.seo = seo;
-    const report = await synthesize(synthInput);
+    const report = await synthesize({
+      task: job.task,
+      plan,
+      ...(analyst ? { analyst } : {}),
+      ...(seo ? { seo } : {}),
+      ...(backend ? { backend } : {}),
+      ...(frontend ? { frontend } : {}),
+      ...(tester ? { tester } : {}),
+      debate: debateNotes,
+    });
     updateJob(jobId, { report });
     return {
       job: getJob(jobId)!,
       plan,
       report:
         report +
-        "\n\n—\nНужен разработчик. Нажмите «Запустить разработчика» или `/dev " +
+        "\n\n—\nНужен исполнитель кода. Нажмите «Запустить разработчика» или `/dev " +
         jobId +
         "`",
       awaitingDev: true,
     };
   }
 
-  await onProgress("🧩 Собираю итоговый отчёт…");
-  const synthInput: Parameters<typeof synthesize>[0] = { task: job.task, plan };
-  if (analyst) synthInput.analyst = analyst;
-  if (seo) synthInput.seo = seo;
-  if (developer) synthInput.developer = developer;
-  const report = await synthesize(synthInput);
+  await onProgress("🧾 Собираю итоговый отчёт…");
+  const report = await synthesize({
+    task: job.task,
+    plan,
+    ...(analyst ? { analyst } : {}),
+    ...(seo ? { seo } : {}),
+    ...(backend ? { backend } : {}),
+    ...(frontend ? { frontend } : {}),
+    ...(tester ? { tester } : {}),
+    debate: debateNotes,
+    ...(developer ? { developer } : {}),
+  });
   updateJob(jobId, { status: "done", report });
   return { job: getJob(jobId)!, plan, report, awaitingDev: false };
 }
@@ -107,9 +183,15 @@ export async function runPendingDeveloper(jobId: string, onProgress: ProgressFn)
       summary: job.planSummary || job.task,
       needAnalyst: false,
       needSeo: false,
+      needBackend: false,
+      needFrontend: false,
+      needTester: false,
       needDeveloper: true,
       analystBrief: "",
       seoBrief: "",
+      backendBrief: "",
+      frontendBrief: "",
+      testerBrief: "",
       developerBrief: job.developerBrief,
       risks: [],
     },

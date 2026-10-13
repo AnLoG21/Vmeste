@@ -2,7 +2,7 @@
   "name": "agents-team",
   "version": "1.0.0",
   "private": true,
-  "description": "Telegram multi-agent team for Vmeste (PM, analyst, SEO, developer via Cursor SDK)",
+  "description": "Telegram multi-agent team for Vmeste (PM, analyst, SEO, backend, frontend, tester, Cursor SDK)",
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
