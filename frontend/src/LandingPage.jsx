@@ -899,6 +899,10 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
             RuStore
           </a>
           <a href="/businesses">Для бизнеса</a>
+          <a href="/blog">Блог</a>
+          <a href="/salon">Салон</a>
+          <a href="/avtoservis">Автосервис</a>
+          <a href="/kafe">Кафе</a>
           <a href="/city/moscow">Москва</a>
           <a href="/city/spb">Санкт-Петербург</a>
           <a href="/#pricing">Тарифы</a>
