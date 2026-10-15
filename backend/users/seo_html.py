@@ -11,7 +11,6 @@ from django.utils import timezone
 from django.views import View
 
 from .city_seo import get_city_seo
-from .city_seo import get_city_seo
 from .map_visibility import providers_visible_on_map
 from .models import User
 from .org_profile import default_working_hours
@@ -350,11 +349,12 @@ class SeoCityHtmlView(View):
             )
         city_seo = get_city_seo(city_key) or {}
         aliases = city_seo.get("aliases") or CITY_ALIASES.get(city_key, [city_title.lower()])
+        # Do not slice before providers_visible_on_map — Django forbids filter-after-slice.
         qs = providers_visible_on_map(
             User.objects.filter(role=User.Role.PROVIDER, is_active=True, is_demo=False)
             .exclude(organization_name="")
-            .order_by("id")[:800]
-        )
+            .order_by("id")
+        )[:800]
         orgs = []
         for u in qs:
             addr = (u.organization_address or "").lower()
