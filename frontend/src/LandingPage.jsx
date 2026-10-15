@@ -905,6 +905,10 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           <a href="/kafe">Кафе</a>
           <a href="/city/moscow">Москва</a>
           <a href="/city/spb">Санкт-Петербург</a>
+          <a href="/city/ekaterinburg">Екатеринбург</a>
+          <a href="/city/kazan">Казань</a>
+          <a href="/city/novosibirsk">Новосибирск</a>
+          <a href="/city/nizhny">Нижний Новгород</a>
           <a href="/#pricing">Тарифы</a>
           <a href="/#updates">Обновления</a>
           <a href="/#faq">Вопросы</a>

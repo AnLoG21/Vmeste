@@ -82,7 +82,11 @@ export default function LegalLayout({ title, path, description, children }) {
           <a href="/businesses">Для бизнеса</a>
           <a href="/blog">Блог</a>
           <a href="/city/moscow">Москва</a>
-          <a href="/city/spb">Санкт-Петербург</a>
+          <a href="/city/spb">СПб</a>
+          <a href="/city/ekaterinburg">Екатеринбург</a>
+          <a href="/city/kazan">Казань</a>
+          <a href="/city/novosibirsk">Новосибирск</a>
+          <a href="/city/nizhny">Н. Новгород</a>
           <a href="/#pricing">Тарифы</a>
           <a href="/contacts">Контакты</a>
           <a href="/offer">Публичная оферта</a>

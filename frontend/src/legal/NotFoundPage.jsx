@@ -25,7 +25,9 @@ export default function NotFoundPage() {
       <article className="legal-page-body">
         <p>
           <a href="/">На главную</a> · <a href="/businesses">Для бизнеса</a> · <a href="/contacts">Контакты</a> ·{" "}
-          <a href="/city/moscow">Москва</a> · <a href="/city/spb">Санкт-Петербург</a>
+          <a href="/city/moscow">Москва</a> · <a href="/city/spb">СПб</a> ·{" "}
+          <a href="/city/ekaterinburg">Екатеринбург</a> · <a href="/city/kazan">Казань</a> ·{" "}
+          <a href="/blog">Блог</a>
         </p>
       </article>
     </div>

@@ -53,9 +53,11 @@
   {% endif %}
 
   <p>
-    <a href="/city/moscow">Москва</a> ·
-    <a href="/city/spb">Санкт-Петербург</a> ·
-    <a href="/businesses">Все сферы</a>
+    <a href="/businesses">Все сферы</a> ·
+    <a href="/blog">Блог</a>
+    {% for key, title in cities %}
+    · <a href="/city/{{ key }}">{{ title }}</a>
+    {% endfor %}
   </p>
 </article>
 {% endblock %}

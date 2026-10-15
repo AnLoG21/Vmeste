@@ -429,6 +429,7 @@ class SeoCityHtmlView(View):
                 city_bullets=city_seo.get("bullets") or [],
                 city_faqs=city_faqs,
                 orgs=orgs,
+                cities=CITY_SITEMAP,
                 json_ld=json.dumps(json_ld, ensure_ascii=False),
             ),
         )

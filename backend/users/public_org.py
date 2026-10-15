@@ -19,6 +19,10 @@ SITE_ORIGIN = "https://vsevmeste.space"
 CITY_SITEMAP = (
     ("moscow", "Москва"),
     ("spb", "Санкт-Петербург"),
+    ("ekaterinburg", "Екатеринбург"),
+    ("kazan", "Казань"),
+    ("novosibirsk", "Новосибирск"),
+    ("nizhny", "Нижний Новгород"),
 )
 
 

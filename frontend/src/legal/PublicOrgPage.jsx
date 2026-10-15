@@ -232,7 +232,9 @@ export default function PublicOrgPage({ slug }) {
           </a>
         </div>
         <p className="muted" style={{ marginTop: 16 }}>
-          <a href="/city/moscow">Москва</a> · <a href="/city/spb">Санкт-Петербург</a> ·{" "}
+          <a href="/city/moscow">Москва</a> · <a href="/city/spb">СПб</a> ·{" "}
+          <a href="/city/ekaterinburg">Екатеринбург</a> · <a href="/city/kazan">Казань</a> ·{" "}
+          <a href="/blog">Блог</a> ·{" "}
           <a href="/businesses">Для бизнеса</a> · <a href="/android">Android</a>
         </p>
       </article>

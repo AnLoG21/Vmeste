@@ -316,6 +316,10 @@ export function useClientMap({
             const cityCenters = {
               moscow: { center: [55.751244, 37.618423], zoom: 11, name: "Москва" },
               spb: { center: [59.9342802, 30.3350986], zoom: 11, name: "Санкт-Петербург" },
+              ekaterinburg: { center: [56.838011, 60.597465], zoom: 11, name: "Екатеринбург" },
+              kazan: { center: [55.796127, 49.106414], zoom: 11, name: "Казань" },
+              novosibirsk: { center: [55.030204, 82.92043], zoom: 11, name: "Новосибирск" },
+              nizhny: { center: [56.326887, 44.005986], zoom: 11, name: "Нижний Новгород" },
             };
             const city = cityCenters[cityKey];
             if (city?.name) setDetectedCity(city.name);

@@ -41,7 +41,7 @@ www.{$DOMAIN} {
 		header_regexp ua User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
 	}
 	@seo_city {
-		path_regexp seo_city ^/city/(moscow|spb)/?$
+		path_regexp seo_city ^/city/(moscow|spb|ekaterinburg|kazan|novosibirsk|nizhny)/?$
 		header_regexp ua User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
 	}
 	handle @seo_org {

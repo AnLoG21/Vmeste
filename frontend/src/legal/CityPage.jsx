@@ -3,7 +3,7 @@ import { API_URL } from "../config.js";
 import JsonLd from "../seo/JsonLd.jsx";
 import { breadcrumbListJsonLd, organizationJsonLd, SITE_ORIGIN } from "../seo/schema.js";
 import { setPageMeta } from "../seo/setPageMeta.js";
-import { getCitySeo } from "../seo/citySeo.js";
+import { CITY_LIST, getCitySeo } from "../seo/citySeo.js";
 import NotFoundPage from "./NotFoundPage.jsx";
 import "../landing.css";
 
@@ -129,8 +129,13 @@ export default function CityPage({ cityKey }) {
         ) : null}
 
         <p>
-          <a href="/businesses">Все сферы</a> · <a href="/city/moscow">Москва</a> ·{" "}
-          <a href="/city/spb">Санкт-Петербург</a>
+          <a href="/businesses">Все сферы</a> · <a href="/blog">Блог</a>
+          {CITY_LIST.map((c) => (
+            <span key={c.key}>
+              {" "}
+              · <a href={`/city/${c.key}`}>{c.title}</a>
+            </span>
+          ))}
         </p>
       </article>
     </div>
