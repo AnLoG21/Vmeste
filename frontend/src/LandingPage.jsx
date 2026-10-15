@@ -434,7 +434,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
             Подключайте готовую сферу с каталогом услуг — или закажите индивидуальную настройку.
           </p>
           <div className="landing-businesses-grid">
-            <a className="landing-biz-card" href="/businesses#hair_salon">
+            <a className="landing-biz-card" href="/salon">
               <span className="landing-biz-emoji" aria-hidden="true">
                 <LandingIcon name="scissors" />
               </span>
@@ -442,7 +442,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               <span>Запись, мастера, услуги</span>
               <span className="landing-biz-link">Подробнее →</span>
             </a>
-            <a className="landing-biz-card" href="/businesses#service_center">
+            <a className="landing-biz-card" href="/avtoservis">
               <span className="landing-biz-emoji" aria-hidden="true">
                 <LandingIcon name="wrench" />
               </span>
@@ -450,7 +450,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               <span>VIN, приёмка, статусы ремонта</span>
               <span className="landing-biz-link">Подробнее →</span>
             </a>
-            <a className="landing-biz-card" href="/businesses#cafe_restaurant">
+            <a className="landing-biz-card" href="/kafe">
               <span className="landing-biz-emoji" aria-hidden="true">
                 <LandingIcon name="utensils" />
               </span>

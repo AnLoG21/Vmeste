@@ -194,6 +194,9 @@ class SitemapXmlView(APIView):
         urls = [
             ("/", "1.0", "weekly", today),
             ("/businesses", "0.95", "weekly", today),
+            ("/salon", "0.9", "weekly", today),
+            ("/avtoservis", "0.9", "weekly", today),
+            ("/kafe", "0.9", "weekly", today),
             ("/apps", "0.85", "weekly", today),
             ("/android", "0.8", "weekly", today),
             ("/contacts", "0.9", "monthly", today),

@@ -4,6 +4,9 @@ Allow: /contacts
 Allow: /offer
 Allow: /privacy
 Allow: /businesses
+Allow: /salon
+Allow: /avtoservis
+Allow: /kafe
 Allow: /apps
 Allow: /o/
 Allow: /m/
