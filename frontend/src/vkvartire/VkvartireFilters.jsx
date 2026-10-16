@@ -248,7 +248,7 @@ export default function VkvartireFilters({
           </p>
         ) : (
           <p className="vkvartire-commute-note">
-            Главный фильтр: адрес / метро / гео + минуты. С ключом Router — точный ETA, иначе приближение по прямой.
+            Главный фильтр: адрес / метро / гео + минуты. Удалённость — по прямой (без платного Яндекс Router).
           </p>
         )}
 

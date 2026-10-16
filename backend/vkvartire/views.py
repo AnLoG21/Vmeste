@@ -110,7 +110,7 @@ def _filtered_listings(request):
     if None not in (lat_min, lat_max, lon_min, lon_max):
         qs = qs.filter(lat__gte=lat_min, lat__lte=lat_max, lon__gte=lon_min, lon__lte=lon_max)
 
-    # Anchor + commute minutes (routing when key set, else haversine)
+    # Anchor + commute minutes (haversine only — no paid Yandex Router)
     anchor_lat = _parse_float(request.query_params.get("anchor_lat"))
     anchor_lon = _parse_float(request.query_params.get("anchor_lon"))
     max_commute_min = _parse_float(request.query_params.get("max_commute_min"))
@@ -119,11 +119,8 @@ def _filtered_listings(request):
         commute_mode = "walk"
 
     radius_m = _parse_float(request.query_params.get("radius_m"))
-    # Prefilter bbox uses generous transit radius so routing can still drop outliers
     if radius_m is None and anchor_lat is not None and anchor_lon is not None and max_commute_min:
         radius_m = commute_radius_m(max_commute_min, "transit" if commute_mode == "transit" else "walk")
-        if commute_mode == "transit":
-            radius_m = max(radius_m, commute_radius_m(max_commute_min, "walk") * 1.4)
 
     commute_method = None
     if anchor_lat is not None and anchor_lon is not None and radius_m and max_commute_min:
@@ -137,11 +134,10 @@ def _filtered_listings(request):
             lon__lte=b_lon_max,
         )
         candidates = []
-        for row in qs.only("id", "lat", "lon")[:200]:
+        for row in qs.only("id", "lat", "lon")[:400]:
             if row.lat is None or row.lon is None:
                 continue
-            # Soft prefilter: keep anything within 1.5× walk radius for routing refine
-            if haversine_m(anchor_lat, anchor_lon, row.lat, row.lon) <= radius_m * 1.5:
+            if haversine_m(anchor_lat, anchor_lon, row.lat, row.lon) <= radius_m:
                 candidates.append((row.id, row.lat, row.lon))
         from .routing import filter_ids_by_commute
 
@@ -186,10 +182,8 @@ class VkvartireFeedView(APIView):
                 "meta": {
                     "commute_note": (
                         (
-                            "Удалённость по Яндекс.Маршрутизации (пешком/транспорт)."
-                            if meta.get("commute_method") == "routing"
-                            else "Удалённость — приближение по прямой (~80 м/мин пешком). "
-                            "Задайте YANDEX_ROUTING_API_KEY для точного ETA."
+                            "Удалённость — по прямой: пешком ~80 м/мин, транспорт ~220 м/мин "
+                            "(без платного Яндекс Router)."
                         )
                         if meta.get("radius_m")
                         else None
