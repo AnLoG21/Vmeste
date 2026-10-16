@@ -41,8 +41,12 @@ www.{$DOMAIN} {
 		path_regexp seo_menu ^/m/([^/]+)/?$
 		header_regexp ua User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
 	}
+	# Города — SSR для всех UA (не только ботов), иначе /city/* = shell главной.
 	@seo_city {
 		path_regexp seo_city ^/city/(moscow|spb|ekaterinburg|kazan|novosibirsk|nizhny)/?$
+	}
+	@seo_shop {
+		path_regexp seo_shop ^/s/([^/]+)/?$
 		header_regexp ua User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
 	}
 	handle @seo_org {
@@ -63,6 +67,14 @@ www.{$DOMAIN} {
 	}
 	handle @seo_city {
 		rewrite * /api/users/seo/city/{re.seo_city.1}/
+		reverse_proxy web:8000 {
+			header_up Host {host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+	handle @seo_shop {
+		rewrite * /api/users/seo/s/{re.seo_shop.1}/
 		reverse_proxy web:8000 {
 			header_up Host {host}
 			header_up X-Forwarded-Proto {scheme}

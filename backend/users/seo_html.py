@@ -329,6 +329,101 @@ class SeoMenuHtmlView(View):
         )
 
 
+class SeoShopHtmlView(View):
+    """SSR витрины магазина /s/:slug для поисковых ботов."""
+
+    def get(self, request, slug):
+        from shop.access import provider_sphere_allows_shop
+        from shop.models import Product
+
+        slug = (slug or "").strip().lower()
+        provider = (
+            User.objects.filter(
+                role=User.Role.PROVIDER,
+                is_active=True,
+                map_hidden=False,
+                organization_slug__iexact=slug,
+            ).first()
+            if slug
+            else None
+        )
+        if not provider or not provider_sphere_allows_shop(provider):
+            return render(
+                request,
+                "seo/not_found.html",
+                _base_ctx(
+                    title="Магазин не найден — Вместе",
+                    description="Такой витрины нет на платформе Вместе.",
+                    canonical=f"{SITE_ORIGIN}/s/{_esc(slug)}",
+                    robots="noindex,nofollow",
+                    heading="Магазин не найден",
+                ),
+                status=404,
+            )
+        ensure_organization_slug(provider)
+        name = provider.organization_name or provider.username
+        addr = provider.organization_address or ""
+        products = list(
+            Product.objects.filter(provider=provider, is_active=True)
+            .order_by("category__sort_order", "name", "id")[:40]
+            .values("name", "price", "description")
+        )
+        desc = f"Витрина «{name}»{', ' + addr if addr else ''}. Заказ онлайн через Вместе."
+        store_ld = {
+            "@context": "https://schema.org",
+            "@type": "Store",
+            "name": name,
+            "url": f"{SITE_ORIGIN}/s/{provider.organization_slug}",
+            "description": desc,
+            "address": {"@type": "PostalAddress", "streetAddress": addr, "addressCountry": "RU"}
+            if addr
+            else None,
+        }
+        if provider.organization_latitude is not None and provider.organization_longitude is not None:
+            store_ld["geo"] = {
+                "@type": "GeoCoordinates",
+                "latitude": float(provider.organization_latitude),
+                "longitude": float(provider.organization_longitude),
+            }
+        crumbs = {
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+                {"@type": "ListItem", "position": 1, "name": "Главная", "item": f"{SITE_ORIGIN}/"},
+                {
+                    "@type": "ListItem",
+                    "position": 2,
+                    "name": name,
+                    "item": f"{SITE_ORIGIN}/o/{provider.organization_slug}",
+                },
+                {
+                    "@type": "ListItem",
+                    "position": 3,
+                    "name": "Магазин",
+                    "item": f"{SITE_ORIGIN}/s/{provider.organization_slug}",
+                },
+            ],
+        }
+        return render(
+            request,
+            "seo/shop.html",
+            _base_ctx(
+                title=f"{name} — магазин онлайн | Вместе",
+                description=desc[:320],
+                canonical=f"{SITE_ORIGIN}/s/{provider.organization_slug}",
+                robots="index,follow",
+                shop_name=name,
+                shop_slug=provider.organization_slug,
+                address=addr,
+                products=products,
+                json_ld=json.dumps(
+                    [{k: v for k, v in store_ld.items() if v is not None}, crumbs],
+                    ensure_ascii=False,
+                ),
+            ),
+        )
+
+
 class SeoCityHtmlView(View):
     def get(self, request, city_key):
         city_key = (city_key or "").strip().lower()

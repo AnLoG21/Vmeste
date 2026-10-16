@@ -1,4 +1,7 @@
-/** City SEO copy — keep in sync with backend/users/city_seo.py */
+/**
+ * City SEO fallback for SPA (offline / API fail).
+ * Source of truth: backend/users/city_seo.py — CityPage loads /api/users/city-seo/:key/
+ */
 
 export const CITY_SEO = {
   moscow: {

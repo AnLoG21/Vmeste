@@ -1,0 +1,34 @@
+{% extends "seo/base.html" %}
+{% block content %}
+<header>
+  <nav aria-label="Хлебные крошки">
+    <a href="/">Главная</a>
+    <span class="muted">/</span>
+    <a href="/o/{{ shop_slug }}">{{ shop_name }}</a>
+    <span class="muted">/</span>
+    <span>Магазин</span>
+  </nav>
+  <h1>{{ shop_name }} — магазин</h1>
+  {% if address %}<p class="muted">{{ address }}</p>{% endif %}
+  <p>
+    <a class="cta cta-primary" href="/s/{{ shop_slug }}">Открыть витрину</a>
+    <a class="cta cta-outline" href="/o/{{ shop_slug }}">Страница организации</a>
+  </p>
+</header>
+<article>
+  <h2>Товары</h2>
+  {% if not products %}
+  <p class="muted">Каталог пока пуст.</p>
+  {% else %}
+  <ul class="orgs">
+    {% for p in products %}
+    <li>
+      <strong>{{ p.name }}</strong>
+      {% if p.price %} · {{ p.price }} ₽{% endif %}
+      {% if p.description %}<div class="muted">{{ p.description|truncatechars:140 }}</div>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</article>
+{% endblock %}

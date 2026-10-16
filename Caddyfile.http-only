@@ -25,6 +25,9 @@ http://{$DOMAIN}, http://www.{$DOMAIN} {
 	}
 	@seo_city {
 		path_regexp seo_city ^/city/(moscow|spb|ekaterinburg|kazan|novosibirsk|nizhny)/?$
+	}
+	@seo_shop {
+		path_regexp seo_shop ^/s/([^/]+)/?$
 		header_regexp User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
 	}
 	handle @seo_org {
@@ -37,6 +40,10 @@ http://{$DOMAIN}, http://www.{$DOMAIN} {
 	}
 	handle @seo_city {
 		uri path_regexp seo_city ^/city/(moscow|spb|ekaterinburg|kazan|novosibirsk|nizhny)/?$ /api/users/seo/city/{re.seo_city.1}/
+		reverse_proxy web:8000
+	}
+	handle @seo_shop {
+		uri path_regexp seo_shop ^/s/([^/]+)/?$ /api/users/seo/s/{re.seo_shop.1}/
 		reverse_proxy web:8000
 	}
 

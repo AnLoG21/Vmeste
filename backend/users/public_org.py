@@ -12,6 +12,7 @@ from reviews.models import Review, ReviewPhoto
 
 from common.media_urls import photo_urls
 
+from .city_seo import CITY_SEO, get_city_seo
 from .map_visibility import providers_visible_on_map
 from .models import User
 from .org_profile import default_working_hours
@@ -213,6 +214,39 @@ class PublicOrganizationBySlugView(APIView):
         return Response(build_public_org_payload(provider, request))
 
 
+class CitySeoJsonView(APIView):
+    """Единый источник city SEO для SPA (backend/users/city_seo.py)."""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request, city_key=None):
+        if city_key:
+            raw = get_city_seo(city_key)
+            if not raw:
+                return Response({"detail": "Город не найден."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"key": city_key.strip().lower(), **_city_seo_public(raw)})
+        items = []
+        for key, raw in CITY_SEO.items():
+            items.append({"key": key, **_city_seo_public(raw)})
+        return Response({"cities": items})
+
+
+def _city_seo_public(raw: dict) -> dict:
+    """snake_case API → поля, удобные и для SPA (camel + snake)."""
+    return {
+        "title": raw.get("title") or "",
+        "aliases": list(raw.get("aliases") or []),
+        "meta_title": raw.get("meta_title") or "",
+        "meta_description": raw.get("meta_description") or "",
+        "metaTitle": raw.get("meta_title") or "",
+        "metaDescription": raw.get("meta_description") or "",
+        "intro": raw.get("intro") or "",
+        "bullets": list(raw.get("bullets") or []),
+        "faqs": list(raw.get("faqs") or []),
+    }
+
+
 class PublicOrganizationSitemapView(APIView):
     """Список slug для sitemap (только активные провайдеры с адресом/именем)."""
 
@@ -276,8 +310,13 @@ class SitemapXmlView(APIView):
                 urls.append((f"/o/{slug}", "0.8", "weekly", lastmod))
                 if u.provider_sphere == User.ProviderSphere.CAFE_RESTAURANT:
                     urls.append((f"/m/{slug}", "0.7", "weekly", lastmod))
-                if u.provider_sphere == User.ProviderSphere.SHOPS:
-                    urls.append((f"/s/{slug}", "0.7", "weekly", lastmod))
+                try:
+                    from shop.access import provider_sphere_allows_shop
+
+                    if provider_sphere_allows_shop(u):
+                        urls.append((f"/s/{slug}", "0.7", "weekly", lastmod))
+                except Exception:
+                    pass
         except Exception:
             logger.exception("sitemap: provider listing failed; returning static URLs only")
 

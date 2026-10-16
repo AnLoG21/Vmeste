@@ -7,10 +7,56 @@ import { CITY_LIST, getCitySeo } from "../seo/citySeo.js";
 import NotFoundPage from "./NotFoundPage.jsx";
 import "../landing.css";
 
+function normalizeCitySeo(raw, fallbackKey) {
+  if (!raw) return null;
+  return {
+    title: raw.title || "",
+    aliases: raw.aliases || [],
+    metaTitle: raw.metaTitle || raw.meta_title || "",
+    metaDescription: raw.metaDescription || raw.meta_description || "",
+    intro: raw.intro || "",
+    bullets: raw.bullets || [],
+    faqs: raw.faqs || [],
+    key: raw.key || fallbackKey,
+  };
+}
+
 export default function CityPage({ cityKey }) {
-  const seo = getCitySeo(cityKey);
+  const localFallback = getCitySeo(cityKey);
+  const [seo, setSeo] = useState(() => normalizeCitySeo(localFallback, cityKey));
   const [orgs, setOrgs] = useState([]);
   const [status, setStatus] = useState("Загрузка…");
+  const [seoReady, setSeoReady] = useState(Boolean(localFallback));
+
+  useEffect(() => {
+    let cancelled = false;
+    setSeoReady(false);
+    setSeo(normalizeCitySeo(getCitySeo(cityKey), cityKey));
+
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/users/city-seo/${encodeURIComponent(cityKey)}/`);
+        const data = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (res.ok && data) {
+          setSeo(normalizeCitySeo(data, cityKey));
+          setSeoReady(true);
+          return;
+        }
+      } catch {
+        /* fallback below */
+      }
+      if (!cancelled) {
+        const fb = getCitySeo(cityKey);
+        setSeo(normalizeCitySeo(fb, cityKey));
+        setSeoReady(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cityKey]);
 
   useEffect(() => {
     if (!seo) return;
@@ -20,14 +66,21 @@ export default function CityPage({ cityKey }) {
       path: `/city/${cityKey}`,
       robots: "index,follow",
     });
+    let cancelled = false;
     fetch(`${API_URL}/users/public-orgs/`)
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
         const list = Array.isArray(data.organizations) ? data.organizations : [];
         setOrgs(list);
         setStatus(list.length ? "" : "Пока нет опубликованных организаций.");
       })
-      .catch(() => setStatus("Не удалось загрузить список."));
+      .catch(() => {
+        if (!cancelled) setStatus("Не удалось загрузить список.");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [cityKey, seo]);
 
   const filtered = useMemo(() => {
@@ -69,8 +122,18 @@ export default function CityPage({ cityKey }) {
     ];
   }, [seo, cityKey]);
 
-  if (!seo) {
+  if (seoReady && !seo) {
     return <NotFoundPage />;
+  }
+
+  if (!seo) {
+    return (
+      <div className="landing legal-page">
+        <main className="legal-page-body">
+          <p className="muted">Загрузка…</p>
+        </main>
+      </div>
+    );
   }
 
   return (
