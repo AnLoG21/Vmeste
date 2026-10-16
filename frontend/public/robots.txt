@@ -10,8 +10,10 @@ Allow: /kafe
 Allow: /blog
 Allow: /blog/
 Allow: /apps
+Allow: /android
 Allow: /o/
 Allow: /m/
+Allow: /s/
 Allow: /city/
 Allow: /legal/
 
@@ -38,6 +40,16 @@ Disallow: /my-reviews
 Disallow: /inspections
 Disallow: /i/
 Disallow: /t/
+Disallow: /w/
+Disallow: /vmenu
+Disallow: /vmagazine
+Disallow: /vkvartire
+Disallow: /shop
+Disallow: /service-apps
+Disallow: /marketplaces
+Disallow: /loyalty
+Disallow: /activity
+Disallow: /profile
 Disallow: /api/
 Disallow: /admin
 Disallow: /admin/

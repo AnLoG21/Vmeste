@@ -4,8 +4,32 @@ import { API_URL } from "./config.js";
 import CafeGuestDeliveryMap from "./CafeGuestDeliveryMap.jsx";
 import ServicePhotoCarousel from "./ServicePhotoCarousel.jsx";
 import { ReviewListItem } from "./ProviderReviewsPanel.jsx";
+import JsonLd from "./seo/JsonLd.jsx";
+import { SITE_ORIGIN, breadcrumbListJsonLd, organizationJsonLd } from "./seo/schema.js";
+import { setPageMeta } from "./seo/setPageMeta.js";
 import "./landing.css";
 import "./cafeGuest.css";
+
+function storeJsonLd(provider, slug) {
+  const name = provider?.organization_name || "Магазин";
+  const node = {
+    "@context": "https://schema.org",
+    "@type": "Store",
+    name,
+    url: `${SITE_ORIGIN}/s/${slug}`,
+    description: `Интернет-витрина «${name}» на платформе Вместе.`,
+  };
+  if (provider?.address) node.address = provider.address;
+  if (provider?.latitude != null && provider?.longitude != null) {
+    node.geo = {
+      "@type": "GeoCoordinates",
+      latitude: Number(provider.latitude),
+      longitude: Number(provider.longitude),
+    };
+  }
+  if (provider?.logo_url) node.image = provider.logo_url;
+  return node;
+}
 
 function CartIcon() {
   return (
@@ -68,9 +92,27 @@ export default function PublicShopPage({
           else if (settings.enable_delivery) setMode("delivery");
           const opts = Array.isArray(settings.delivery_options) ? settings.delivery_options : [];
           if (opts.length) setDeliveryMethod(opts[0].id);
+          const name = json.provider?.organization_name || "Магазин";
+          const addr = json.provider?.address || "";
+          setPageMeta({
+            title: `${name} — магазин онлайн | Вместе`,
+            description: `Витрина «${name}»${addr ? `, ${addr}` : ""}. Заказ онлайн через Вместе.`,
+            path: `/s/${slug}`,
+            robots: embedded ? "noindex,nofollow" : "index,follow",
+            image: json.provider?.logo_url || undefined,
+            imageAlt: name,
+          });
         }
       } catch (e) {
-        if (!cancelled) setError(e.message || "Ошибка загрузки");
+        if (!cancelled) {
+          setError(e.message || "Ошибка загрузки");
+          setPageMeta({
+            title: "Магазин не найден | Вместе",
+            description: "Публичная витрина магазина на платформе Вместе.",
+            path: `/s/${slug}`,
+            robots: "noindex,follow",
+          });
+        }
       }
     })();
     return () => {
@@ -293,6 +335,19 @@ export default function PublicShopPage({
     }
   }
 
+  const shopJsonLd = useMemo(() => {
+    if (!data?.provider) return null;
+    return [
+      organizationJsonLd(),
+      breadcrumbListJsonLd([
+        { name: "Главная", path: "/" },
+        { name: "Магазин", path: `/s/${slug}` },
+        { name: data.provider.organization_name || "Витрина", path: `/s/${slug}` },
+      ]),
+      storeJsonLd(data.provider, slug),
+    ];
+  }, [data, slug]);
+
   if (error && !data) {
     return (
       <div className="cafe-guest">
@@ -325,6 +380,7 @@ export default function PublicShopPage({
 
   return (
     <div className={`cafe-guest shop-public-page${product ? " is-product-open" : ""}${embedded ? " is-embedded" : ""}`}>
+      {!embedded && shopJsonLd ? <JsonLd id="vmeste-public-shop-jsonld" data={shopJsonLd} /> : null}
       {!product ? (
         <header className="cafe-guest-header">
           {!(embedded && !onBack) ? (

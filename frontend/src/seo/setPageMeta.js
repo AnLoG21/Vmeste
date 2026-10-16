@@ -82,7 +82,8 @@ export function setPageMeta({
   upsertMeta("name", "twitter:image", image);
   upsertLink("canonical", url);
   upsertLink("alternate", url, { hreflang: "ru" });
-  upsertLink("alternate", "https://vsevmeste.space/", { hreflang: "x-default" });
+  // ru-only сайт: x-default = canonical текущей страницы (не всегда home)
+  upsertLink("alternate", url, { hreflang: "x-default" });
 }
 
 export function setNoIndexAppMeta() {

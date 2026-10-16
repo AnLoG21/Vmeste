@@ -1,3 +1,5 @@
+import logging
+
 from django.db.models import Avg, Count
 from django.http import HttpResponse
 from django.utils import timezone
@@ -15,6 +17,8 @@ from .models import User
 from .org_profile import default_working_hours
 from .slug_utils import ensure_organization_slug
 
+logger = logging.getLogger(__name__)
+
 SITE_ORIGIN = "https://vsevmeste.space"
 CITY_SITEMAP = (
     ("moscow", "Москва"),
@@ -24,6 +28,57 @@ CITY_SITEMAP = (
     ("novosibirsk", "Новосибирск"),
     ("nizhny", "Нижний Новгород"),
 )
+
+# Статический каркас sitemap — всегда отдаём хотя бы его (никогда не 500).
+SITEMAP_STATIC_URLS = (
+    ("/", "1.0", "weekly"),
+    ("/businesses", "0.95", "weekly"),
+    ("/salon", "0.9", "weekly"),
+    ("/avtoservis", "0.9", "weekly"),
+    ("/kafe", "0.9", "weekly"),
+    ("/blog", "0.85", "weekly"),
+    ("/blog/kak-nastroit-online-zapis-v-salone", "0.8", "monthly"),
+    ("/blog/programma-dlya-avtoservisa-chto-vybrat", "0.8", "monthly"),
+    ("/blog/qr-menyu-dlya-kafe-kak-zapustit", "0.8", "monthly"),
+    ("/blog/chem-vmeste-otlichaetsya-ot-aggregatorov", "0.8", "monthly"),
+    ("/blog/kak-privlech-klientov-cherez-kartu", "0.8", "monthly"),
+    ("/apps", "0.85", "weekly"),
+    ("/android", "0.8", "weekly"),
+    ("/contacts", "0.9", "monthly"),
+    ("/offer", "0.8", "monthly"),
+    ("/privacy", "0.6", "monthly"),
+)
+
+
+def _sitemap_lastmod(value, fallback: str) -> str:
+    if not value:
+        return fallback
+    try:
+        from datetime import date, datetime
+
+        if isinstance(value, datetime):
+            return timezone.localdate(value).isoformat()
+        if isinstance(value, date):
+            return value.isoformat()
+    except Exception:
+        pass
+    return fallback
+
+
+def _render_sitemap_xml(urls) -> str:
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for path, priority, freq, lastmod in urls:
+        lines.append("  <url>")
+        lines.append(f"    <loc>{SITE_ORIGIN}{path}</loc>")
+        lines.append(f"    <lastmod>{lastmod}</lastmod>")
+        lines.append(f"    <changefreq>{freq}</changefreq>")
+        lines.append(f"    <priority>{priority}</priority>")
+        lines.append("  </url>")
+    lines.append("</urlset>")
+    return "\n".join(lines) + "\n"
 
 
 def build_public_org_payload(provider, request):
@@ -188,68 +243,47 @@ class PublicOrganizationSitemapView(APIView):
 
 
 class SitemapXmlView(APIView):
-    """Динамический sitemap.xml для Яндекса/Google: главные + города + /o/ и /m/."""
+    """Динамический sitemap.xml для Яндекса/Google: главные + города + /o/, /m/, /s/."""
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
 
     def get(self, request):
         today = timezone.localdate().isoformat()
-        urls = [
-            ("/", "1.0", "weekly", today),
-            ("/businesses", "0.95", "weekly", today),
-            ("/salon", "0.9", "weekly", today),
-            ("/avtoservis", "0.9", "weekly", today),
-            ("/kafe", "0.9", "weekly", today),
-            ("/blog", "0.85", "weekly", today),
-            ("/blog/kak-nastroit-online-zapis-v-salone", "0.8", "monthly", today),
-            ("/blog/programma-dlya-avtoservisa-chto-vybrat", "0.8", "monthly", today),
-            ("/blog/qr-menyu-dlya-kafe-kak-zapustit", "0.8", "monthly", today),
-            ("/blog/chem-vmeste-otlichaetsya-ot-aggregatorov", "0.8", "monthly", today),
-            ("/blog/kak-privlech-klientov-cherez-kartu", "0.8", "monthly", today),
-            ("/apps", "0.85", "weekly", today),
-            ("/android", "0.8", "weekly", today),
-            ("/contacts", "0.9", "monthly", today),
-            ("/offer", "0.8", "monthly", today),
-            ("/privacy", "0.6", "monthly", today),
-        ]
+        urls = [(path, pri, freq, today) for path, pri, freq in SITEMAP_STATIC_URLS]
         for key, _title in CITY_SITEMAP:
             urls.append((f"/city/{key}", "0.85", "weekly", today))
 
-        qs = providers_visible_on_map(
-            User.objects.filter(role=User.Role.PROVIDER, is_active=True, is_demo=False)
-            .exclude(organization_name="")
-            .exclude(organization_slug="")
-            .exclude(provider_sphere=User.ProviderSphere.MARKETPLACES)
-            .order_by("id")
-        )[:1000]
-        for u in qs:
-            slug = ensure_organization_slug(u)
-            if not slug:
-                continue
-            lastmod = today
-            for attr in ("date_joined", "last_login"):
-                val = getattr(u, attr, None)
-                if val:
-                    try:
-                        lastmod = timezone.localdate(val).isoformat()
-                    except Exception:
-                        lastmod = val.date().isoformat() if hasattr(val, "date") else today
-            urls.append((f"/o/{slug}", "0.8", "weekly", lastmod))
-            if u.provider_sphere == User.ProviderSphere.CAFE_RESTAURANT:
-                urls.append((f"/m/{slug}", "0.7", "weekly", lastmod))
+        try:
+            # Не исключаем пустой slug — ensure_organization_slug заполнит его
+            # (раньше .exclude(organization_slug="") выкидывал все орг. без slug).
+            qs = providers_visible_on_map(
+                User.objects.filter(role=User.Role.PROVIDER, is_active=True, is_demo=False)
+                .exclude(organization_name="")
+                .exclude(provider_sphere=User.ProviderSphere.MARKETPLACES)
+                .order_by("id")
+            )[:1000]
+            for u in qs:
+                try:
+                    slug = (u.organization_slug or "").strip() or ensure_organization_slug(u)
+                except Exception:
+                    logger.exception("sitemap: slug failed for user_id=%s", getattr(u, "pk", None))
+                    continue
+                if not slug:
+                    continue
+                lastmod = _sitemap_lastmod(getattr(u, "date_joined", None), today)
+                lastmod = _sitemap_lastmod(getattr(u, "last_login", None), lastmod)
+                urls.append((f"/o/{slug}", "0.8", "weekly", lastmod))
+                if u.provider_sphere == User.ProviderSphere.CAFE_RESTAURANT:
+                    urls.append((f"/m/{slug}", "0.7", "weekly", lastmod))
+                if u.provider_sphere == User.ProviderSphere.SHOPS:
+                    urls.append((f"/s/{slug}", "0.7", "weekly", lastmod))
+        except Exception:
+            logger.exception("sitemap: provider listing failed; returning static URLs only")
 
-        lines = [
-            '<?xml version="1.0" encoding="UTF-8"?>',
-            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-        ]
-        for path, priority, freq, lastmod in urls:
-            lines.append("  <url>")
-            lines.append(f"    <loc>{SITE_ORIGIN}{path}</loc>")
-            lines.append(f"    <lastmod>{lastmod}</lastmod>")
-            lines.append(f"    <changefreq>{freq}</changefreq>")
-            lines.append(f"    <priority>{priority}</priority>")
-            lines.append("  </url>")
-        lines.append("</urlset>")
-        xml = "\n".join(lines) + "\n"
+        try:
+            xml = _render_sitemap_xml(urls)
+        except Exception:
+            logger.exception("sitemap: render failed; minimal fallback")
+            xml = _render_sitemap_xml([(path, pri, freq, today) for path, pri, freq in SITEMAP_STATIC_URLS[:3]])
         return HttpResponse(xml, content_type="application/xml; charset=utf-8")

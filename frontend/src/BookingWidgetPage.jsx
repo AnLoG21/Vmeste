@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { API_URL } from "./config.js";
 import MiniDatePicker from "./MiniDatePicker.jsx";
+import { setPageMeta } from "./seo/setPageMeta.js";
 import "./bookingWidget.css";
 import "./styles.css";
 
@@ -56,10 +57,24 @@ export default function BookingWidgetPage({ slug }) {
         const data = await res.json();
         if (!cancelled) {
           setCatalog(data);
-          document.title = `Запись · ${data.organization_name || "Вместе"}`;
+          const name = data.organization_name || "Вместе";
+          setPageMeta({
+            title: `Запись · ${name}`,
+            description: `Онлайн-запись в «${name}» через виджет Вместе.`,
+            path: `/w/${slug}`,
+            robots: "noindex,nofollow",
+          });
         }
       } catch {
-        if (!cancelled) setError("Организация не найдена.");
+        if (!cancelled) {
+          setError("Организация не найдена.");
+          setPageMeta({
+            title: "Запись | Вместе",
+            description: "Виджет онлайн-записи Вместе.",
+            path: `/w/${slug}`,
+            robots: "noindex,nofollow",
+          });
+        }
       }
     })();
     return () => {
