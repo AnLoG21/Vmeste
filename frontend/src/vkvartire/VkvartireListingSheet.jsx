@@ -11,6 +11,7 @@ export default function VkvartireListingSheet({
   onCollapse,
   onClose,
   onToggleFavorite,
+  onChatRealtor,
 }) {
   const touchY = useRef(null);
 
@@ -85,13 +86,31 @@ export default function VkvartireListingSheet({
                 {listing.description}
               </p>
             ) : null}
-            {listing.external_url ? (
-              <p style={{ marginTop: "0.5rem" }}>
-                <a href={listing.external_url} target="_blank" rel="noopener noreferrer">
-                  Открыть источник
-                </a>
+            {(listing.realtor_name || listing.realtor_phone) && (
+              <p style={{ marginTop: "0.65rem", fontSize: "0.9rem", color: "#516578" }}>
+                {listing.realtor_name ? <strong>{listing.realtor_name}</strong> : "Контакт"}
+                {listing.realtor_phone ? (
+                  <>
+                    {" · "}
+                    <a href={`tel:${String(listing.realtor_phone).replace(/\s/g, "")}`}>
+                      {listing.realtor_phone}
+                    </a>
+                  </>
+                ) : null}
               </p>
-            ) : null}
+            )}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.75rem" }}>
+              {listing.can_chat ? (
+                <button type="button" className="vkvartire-chip is-active" onClick={() => onChatRealtor?.(listing)}>
+                  Написать риелтору
+                </button>
+              ) : null}
+              {listing.external_url ? (
+                <a className="vkvartire-chip" href={listing.external_url} target="_blank" rel="noopener noreferrer">
+                  Источник
+                </a>
+              ) : null}
+            </div>
           </div>
         </>
       )}

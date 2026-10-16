@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Prefetch, Q
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -7,6 +9,8 @@ from rest_framework.views import APIView
 
 from .geo import bbox_around, commute_radius_m, haversine_m
 from .models import Favorite, Listing, ListingPhoto, SavedSearch
+
+User = get_user_model()
 from .serializers import (
     FavoriteSerializer,
     ListingDetailSerializer,
@@ -332,3 +336,104 @@ class VkvartireSavedSearchDetailView(APIView):
             return Response({"detail": "Не найдено."}, status=status.HTTP_404_NOT_FOUND)
         row.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class VkvartireListingChatView(APIView):
+    """Открыть чат с риелтором объявления (user-direct) + intro-сообщение."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, listing_id: int):
+        try:
+            listing = Listing.objects.select_related("realtor").get(pk=listing_id, is_active=True)
+        except Listing.DoesNotExist:
+            return Response({"detail": "Объявление не найдено."}, status=status.HTTP_404_NOT_FOUND)
+
+        contact = {
+            "realtor_name": listing.realtor_name or "",
+            "realtor_phone": listing.realtor_phone or "",
+            "realtor_email": listing.realtor_email or "",
+            "external_url": listing.external_url or "",
+        }
+
+        realtor = listing.realtor
+        if not realtor or not realtor.is_active:
+            return Response(
+                {
+                    "can_chat": False,
+                    "detail": "Чат недоступен — нет аккаунта риелтора во Вместе. Используйте телефон или источник.",
+                    "contact": contact,
+                },
+                status=status.HTTP_200_OK,
+            )
+        if realtor.id == request.user.id:
+            return Response({"detail": "Это ваше объявление."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from chat.models import Conversation, ConversationMember, Message
+        from chat.serializers import ConversationSerializer
+
+        candidates = (
+            Conversation.objects.filter(
+                is_group=False,
+                is_saved_messages=False,
+                is_client_correspondence=False,
+                is_user_direct=True,
+                organization__isnull=True,
+            )
+            .prefetch_related("members")
+        )
+        conv = None
+        created = False
+        for c in candidates:
+            user_ids = {m.user_id for m in c.members.all()}
+            if user_ids == {request.user.id, realtor.id}:
+                conv = c
+                break
+        if conv is None:
+            with transaction.atomic():
+                conv = Conversation.objects.create(
+                    title="",
+                    is_group=False,
+                    is_saved_messages=False,
+                    is_client_correspondence=False,
+                    is_user_direct=True,
+                    organization=None,
+                )
+                ConversationMember.objects.create(conversation=conv, user=request.user)
+                ConversationMember.objects.create(conversation=conv, user=realtor)
+                created = True
+
+        rooms = "студия" if listing.rooms == 0 else f"{listing.rooms}-комн."
+        price = f"{listing.price:,}".replace(",", " ")
+        intro = (
+            f"Здравствуйте! Интересует объявление во Вместе (Вквартире) "
+            f"№{listing.id}: {rooms}, {price} ₽ — {listing.address or listing.metro_name or 'без адреса'}."
+        )
+        if listing.external_url:
+            intro += f"\n{listing.external_url}"
+        # Avoid spam: only auto-intro on brand-new conversation
+        if created:
+            Message.objects.create(
+                conversation=conv,
+                sender=request.user,
+                kind=Message.Kind.TEXT,
+                text=intro,
+                payload={"vkvartire_listing_id": listing.id},
+            )
+
+        conv = (
+            Conversation.objects.filter(pk=conv.pk)
+            .prefetch_related("members", "members__user")
+            .first()
+        )
+        data = ConversationSerializer(conv, context={"request": request}).data
+        return Response(
+            {
+                "can_chat": True,
+                "created": created,
+                "conversation": data,
+                "conversation_id": conv.id,
+                "contact": contact,
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )

@@ -17,6 +17,7 @@ export default function VkvartireMap({
   filters,
   onPickAnchor,
   onToggleFavorite,
+  onChatRealtor,
   showToast,
 }) {
   const mapRef = useRef(null);
@@ -236,6 +237,7 @@ export default function VkvartireMap({
             cur && cur.id === listing.id ? { ...cur, is_favorite: !cur.is_favorite } : cur
           );
         }}
+        onChatRealtor={onChatRealtor}
       />
     </div>
   );

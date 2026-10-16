@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Ads formatVersion="3" target="Avito.ru">
+  <Ad>
+    <Id>agency-flat-1001</Id>
+    <Category>Квартиры</Category>
+    <OperationType>Сдам</OperationType>
+    <Price>70000</Price>
+    <Address>Москва, Тверская улица, 7</Address>
+    <Latitude>55.7579</Latitude>
+    <Longitude>37.6136</Longitude>
+    <Rooms>1</Rooms>
+    <Square>36</Square>
+    <Floor>4</Floor>
+    <Floors>9</Floors>
+    <Metro>Тверская</Metro>
+    <Description>Демо Autoload XML для fetch_vkvartire_feeds.</Description>
+    <ContactPhone>+79001112233</ContactPhone>
+    <ManagerName>Ирина</ManagerName>
+    <Images>
+      <Image url="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&amp;q=80"/>
+    </Images>
+  </Ad>
+</Ads>

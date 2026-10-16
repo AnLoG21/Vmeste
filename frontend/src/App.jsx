@@ -3177,7 +3177,15 @@ export default function App() {
           />
         )}
         {accessToken && currentView === "vkvartire" && (
-          <VkvartireApp authFetch={authFetch} API_URL={API_URL} onTabChange={() => {}} />
+          <VkvartireApp
+            authFetch={authFetch}
+            API_URL={API_URL}
+            onTabChange={() => {}}
+            onOpenConversation={(conversationId) => {
+              setSelectedChatId(Number(conversationId));
+              setCurrentView("chats");
+            }}
+          />
         )}
         {accessToken &&
           currentView === "marketplaces" &&

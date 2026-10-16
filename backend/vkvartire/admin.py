@@ -18,11 +18,21 @@ class ListingAdmin(admin.ModelAdmin):
         "address",
         "metro_name",
         "source",
+        "realtor",
         "is_active",
         "updated_at",
     )
     list_filter = ("deal_type", "source", "is_active", "is_agent", "rooms")
-    search_fields = ("address", "metro_name", "external_id", "fingerprint", "description")
+    search_fields = (
+        "address",
+        "metro_name",
+        "external_id",
+        "fingerprint",
+        "description",
+        "realtor_name",
+        "realtor_phone",
+    )
+    raw_id_fields = ("realtor",)
     inlines = [ListingPhotoInline]
     readonly_fields = ("fingerprint", "created_at", "updated_at")
 

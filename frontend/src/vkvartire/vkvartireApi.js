@@ -51,6 +51,14 @@ export function loadListing(authFetch, API_URL, id) {
   return vkvartireFetch(authFetch, API_URL, `/listings/${id}/`);
 }
 
+export function startListingChat(authFetch, API_URL, listingId) {
+  return vkvartireFetch(authFetch, API_URL, `/listings/${listingId}/chat/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+}
+
 export function loadFavorites(authFetch, API_URL) {
   return vkvartireFetch(authFetch, API_URL, "/favorites/");
 }

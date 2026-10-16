@@ -20,6 +20,7 @@ class ListingListSerializer(serializers.ModelSerializer):
     is_favorite = serializers.SerializerMethodField()
     rooms_label = serializers.SerializerMethodField()
     price_label = serializers.SerializerMethodField()
+    can_chat = serializers.SerializerMethodField()
 
     class Meta:
         model = Listing
@@ -42,6 +43,10 @@ class ListingListSerializer(serializers.ModelSerializer):
             "source",
             "external_url",
             "is_agent",
+            "realtor_id",
+            "realtor_name",
+            "realtor_phone",
+            "can_chat",
             "cover_url",
             "photos",
             "is_favorite",
@@ -73,10 +78,19 @@ class ListingListSerializer(serializers.ModelSerializer):
             return f"{formatted} ₽/мес"
         return f"{formatted} ₽"
 
+    def get_can_chat(self, obj: Listing) -> bool:
+        return bool(obj.realtor_id)
+
 
 class ListingDetailSerializer(ListingListSerializer):
     class Meta(ListingListSerializer.Meta):
-        fields = ListingListSerializer.Meta.fields + ("description", "external_id", "fingerprint", "created_at")
+        fields = ListingListSerializer.Meta.fields + (
+            "description",
+            "external_id",
+            "fingerprint",
+            "created_at",
+            "realtor_email",
+        )
 
 
 class MapPinSerializer(serializers.ModelSerializer):

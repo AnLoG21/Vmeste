@@ -42,6 +42,17 @@ class Listing(models.Model):
     fingerprint = models.CharField(max_length=64, blank=True, default="", db_index=True)
     is_agent = models.BooleanField(default=False, help_text="Объявление от посредника")
     is_active = models.BooleanField(default=True, db_index=True)
+    realtor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="vkvartire_listings",
+        help_text="Пользователь Вместе для чата по объявлению",
+    )
+    realtor_name = models.CharField(max_length=160, blank=True, default="")
+    realtor_phone = models.CharField(max_length=32, blank=True, default="")
+    realtor_email = models.EmailField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

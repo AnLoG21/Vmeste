@@ -14,6 +14,7 @@ import {
   loadListing,
   loadSavedSearches,
   removeFavorite,
+  startListingChat,
 } from "./vkvartireApi.js";
 import "./vkvartire.css";
 
@@ -22,7 +23,7 @@ const TABS = [
   { id: "favorites", label: "Избранное", icon: "♥" },
 ];
 
-export default function VkvartireApp({ authFetch, API_URL, onTabChange }) {
+export default function VkvartireApp({ authFetch, API_URL, onTabChange, onOpenConversation }) {
   const [tab, setTab] = useState("feed");
   const [viewMode, setViewMode] = useState("list"); // list | map
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
@@ -118,6 +119,26 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange }) {
     }
   }
 
+  async function chatRealtor(listing) {
+    try {
+      const data = await startListingChat(authFetch, API_URL, listing.id);
+      if (data?.can_chat && data?.conversation_id) {
+        onOpenConversation?.(Number(data.conversation_id));
+        showToast("Чат с риелтором открыт");
+        setDetail(null);
+        return;
+      }
+      const phone = data?.contact?.realtor_phone;
+      if (phone) {
+        showToast(`Чат недоступен. Телефон: ${phone}`);
+      } else {
+        showToast(data?.detail || "Чат недоступен — нет риелтора во Вместе", { tone: "error" });
+      }
+    } catch (e) {
+      showToast(e.message || "Не удалось открыть чат", { tone: "error" });
+    }
+  }
+
   const list = tab === "favorites" ? favItems : items;
 
   return (
@@ -187,6 +208,7 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange }) {
                   }))
                 }
                 onToggleFavorite={toggleFavorite}
+                onChatRealtor={chatRealtor}
               />
             ) : (
               <div className="vkvartire-feed">
@@ -255,13 +277,24 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange }) {
             {detail.description ? (
               <p style={{ marginTop: "0.75rem", color: "#516578" }}>{detail.description}</p>
             ) : null}
-            {detail.external_url ? (
-              <p>
-                <a href={detail.external_url} target="_blank" rel="noopener noreferrer">
-                  Открыть источник
-                </a>
+            {(detail.realtor_name || detail.realtor_phone) && (
+              <p style={{ marginTop: "0.5rem", color: "#516578" }}>
+                {detail.realtor_name || "Контакт"}
+                {detail.realtor_phone ? ` · ${detail.realtor_phone}` : ""}
               </p>
-            ) : null}
+            )}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.75rem" }}>
+              {detail.can_chat ? (
+                <button type="button" className="vkvartire-chip is-active" onClick={() => chatRealtor(detail)}>
+                  Написать риелтору
+                </button>
+              ) : null}
+              {detail.external_url ? (
+                <a className="vkvartire-chip" href={detail.external_url} target="_blank" rel="noopener noreferrer">
+                  Источник
+                </a>
+              ) : null}
+            </div>
           </div>
         </div>
       ) : null}

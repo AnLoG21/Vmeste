@@ -32,6 +32,8 @@ SEED = [
         "description": "Светлая однушка у Тверской. Мебель, техника, интернет.",
         "source": "manual",
         "is_agent": False,
+        "realtor_name": "Анна (демо)",
+        "realtor_phone": "+7 900 000-00-01",
     },
     {
         "deal_type": "rent",
