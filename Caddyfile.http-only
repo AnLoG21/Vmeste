@@ -15,35 +15,66 @@ http://{$DOMAIN}, http://www.{$DOMAIN} {
 		reverse_proxy web:8000
 	}
 
+	@city_slash {
+		path_regexp city_slash ^/city/(moscow|spb|ekaterinburg|kazan|novosibirsk|nizhny|rostov|krasnodar|samara|chelyabinsk)/$
+	}
+	redir @city_slash /city/{re.city_slash.1} permanent
+	@org_slash path_regexp org_slash ^/o/([^/]+)/$
+	redir @org_slash /o/{re.org_slash.1} permanent
+	@menu_slash path_regexp menu_slash ^/m/([^/]+)/$
+	redir @menu_slash /m/{re.menu_slash.1} permanent
+	@shop_slash path_regexp shop_slash ^/s/([^/]+)/$
+	redir @shop_slash /s/{re.shop_slash.1} permanent
+
 	@seo_org {
 		path_regexp seo_org ^/o/([^/]+)/?$
-		header_regexp User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
 	}
-	@seo_menu {
+	@seo_menu_bot {
 		path_regexp seo_menu ^/m/([^/]+)/?$
 		header_regexp User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
+	}
+	@seo_shop_bot {
+		path_regexp seo_shop ^/s/([^/]+)/?$
+		header_regexp User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
+	}
+	@seo_menu_human {
+		path_regexp seo_menu_h ^/m/([^/]+)/?$
+		not header_regexp User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
+	}
+	@seo_shop_human {
+		path_regexp seo_shop_h ^/s/([^/]+)/?$
+		not header_regexp User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
 	}
 	@seo_city {
 		path_regexp seo_city ^/city/(moscow|spb|ekaterinburg|kazan|novosibirsk|nizhny|rostov|krasnodar|samara|chelyabinsk)/?$
 	}
-	@seo_shop {
-		path_regexp seo_shop ^/s/([^/]+)/?$
-		header_regexp User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
-	}
+
 	handle @seo_org {
 		uri path_regexp seo_org ^/o/([^/]+)/?$ /api/users/seo/o/{re.seo_org.1}/
 		reverse_proxy web:8000
 	}
-	handle @seo_menu {
+	handle @seo_menu_bot {
 		uri path_regexp seo_menu ^/m/([^/]+)/?$ /api/users/seo/m/{re.seo_menu.1}/
 		reverse_proxy web:8000
 	}
-	handle @seo_city {
-		uri path_regexp seo_city ^/city/(moscow|spb|ekaterinburg|kazan|novosibirsk|nizhny|rostov|krasnodar|samara|chelyabinsk)/?$ /api/users/seo/city/{re.seo_city.1}/
+	handle @seo_shop_bot {
+		uri path_regexp seo_shop ^/s/([^/]+)/?$ /api/users/seo/s/{re.seo_shop.1}/
 		reverse_proxy web:8000
 	}
-	handle @seo_shop {
-		uri path_regexp seo_shop ^/s/([^/]+)/?$ /api/users/seo/s/{re.seo_shop.1}/
+	handle @seo_menu_human {
+		forward_auth web:8000 {
+			uri /api/users/seo-presence/m/{re.seo_menu_h.1}/
+		}
+		reverse_proxy frontend:80
+	}
+	handle @seo_shop_human {
+		forward_auth web:8000 {
+			uri /api/users/seo-presence/s/{re.seo_shop_h.1}/
+		}
+		reverse_proxy frontend:80
+	}
+	handle @seo_city {
+		uri path_regexp seo_city ^/city/(moscow|spb|ekaterinburg|kazan|novosibirsk|nizhny|rostov|krasnodar|samara|chelyabinsk)/?$ /api/users/seo/city/{re.seo_city.1}/
 		reverse_proxy web:8000
 	}
 

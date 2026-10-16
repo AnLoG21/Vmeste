@@ -7,7 +7,7 @@ from .public_org import (
     PublicOrganizationSitemapView,
     SitemapXmlView,
 )
-from .seo_html import SeoCityHtmlView, SeoMenuHtmlView, SeoOrgHtmlView, SeoShopHtmlView
+from .seo_html import SeoCityHtmlView, SeoMenuHtmlView, SeoOrgHtmlView, SeoPresenceView, SeoShopHtmlView
 from .views import (
     AutomationRequestView,
     ChangeEmailView,
@@ -54,6 +54,11 @@ urlpatterns = [
     path("seo/m/<slug:slug>/", SeoMenuHtmlView.as_view(), name="seo-menu-html"),
     path("seo/s/<slug:slug>/", SeoShopHtmlView.as_view(), name="seo-shop-html"),
     path("seo/city/<slug:city_key>/", SeoCityHtmlView.as_view(), name="seo-city-html"),
+    path(
+        "seo-presence/<slug:kind>/<slug:slug>/",
+        SeoPresenceView.as_view(),
+        name="seo-presence",
+    ),
     path("city-seo/", CitySeoJsonView.as_view(), name="city-seo-list"),
     path("city-seo/<slug:city_key>/", CitySeoJsonView.as_view(), name="city-seo-detail"),
     path("organization-info/", ProviderOrganizationInfoView.as_view(), name="organization-info"),

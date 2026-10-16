@@ -32,23 +32,44 @@ www.{$DOMAIN} {
 		}
 	}
 
-	# SEO HTML для роботов (Google/Yandex/соцсети) — без soft-404 и с реальным контентом
+	# Trailing slash → канон без слэша (города и публичные сущности)
+	@city_slash {
+		path_regexp city_slash ^/city/(moscow|spb|ekaterinburg|kazan|novosibirsk|nizhny|rostov|krasnodar|samara|chelyabinsk)/$
+	}
+	redir @city_slash /city/{re.city_slash.1} permanent
+	@org_slash path_regexp org_slash ^/o/([^/]+)/$
+	redir @org_slash /o/{re.org_slash.1} permanent
+	@menu_slash path_regexp menu_slash ^/m/([^/]+)/$
+	redir @menu_slash /m/{re.menu_slash.1} permanent
+	@shop_slash path_regexp shop_slash ^/s/([^/]+)/$
+	redir @shop_slash /s/{re.shop_slash.1} permanent
+
+	# /o/* — SSR для всех UA (как /city): жёсткий 404 вместо soft-404 SPA-shell
 	@seo_org {
 		path_regexp seo_org ^/o/([^/]+)/?$
-		header_regexp ua User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
 	}
-	@seo_menu {
+	# /m|/s — SSR только ботам; людям — forward_auth presence → SPA или 404 HTML
+	@seo_menu_bot {
 		path_regexp seo_menu ^/m/([^/]+)/?$
 		header_regexp ua User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
 	}
-	# Города — SSR для всех UA (не только ботов), иначе /city/* = shell главной.
-	@seo_city {
-		path_regexp seo_city ^/city/(moscow|spb|ekaterinburg|kazan|novosibirsk|nizhny|rostov|krasnodar|samara|chelyabinsk)/?$
-	}
-	@seo_shop {
+	@seo_shop_bot {
 		path_regexp seo_shop ^/s/([^/]+)/?$
 		header_regexp ua User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
 	}
+	@seo_menu_human {
+		path_regexp seo_menu_h ^/m/([^/]+)/?$
+		not header_regexp User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
+	}
+	@seo_shop_human {
+		path_regexp seo_shop_h ^/s/([^/]+)/?$
+		not header_regexp User-Agent (?i)(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|BingPreview|Yandex(Bot|RenderResourcesBot|Images|Webmaster|Metrika)|DuckDuckBot|Baiduspider|facebookexternalhit|Facebot|Twitterbot|TelegramBot|Slackbot|LinkedInBot|WhatsApp|Applebot|SemrushBot|AhrefsBot|DotBot|PetalBot|Discordbot)
+	}
+	# Города — SSR для всех UA
+	@seo_city {
+		path_regexp seo_city ^/city/(moscow|spb|ekaterinburg|kazan|novosibirsk|nizhny|rostov|krasnodar|samara|chelyabinsk)/?$
+	}
+
 	handle @seo_org {
 		rewrite * /api/users/seo/o/{re.seo_org.1}/
 		reverse_proxy web:8000 {
@@ -57,9 +78,43 @@ www.{$DOMAIN} {
 			header_up X-Forwarded-Host {host}
 		}
 	}
-	handle @seo_menu {
+	handle @seo_menu_bot {
 		rewrite * /api/users/seo/m/{re.seo_menu.1}/
 		reverse_proxy web:8000 {
+			header_up Host {host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+	handle @seo_shop_bot {
+		rewrite * /api/users/seo/s/{re.seo_shop.1}/
+		reverse_proxy web:8000 {
+			header_up Host {host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+	handle @seo_menu_human {
+		forward_auth web:8000 {
+			uri /api/users/seo-presence/m/{re.seo_menu_h.1}/
+			header_up Host {host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+		reverse_proxy frontend:80 {
+			header_up Host {host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+	handle @seo_shop_human {
+		forward_auth web:8000 {
+			uri /api/users/seo-presence/s/{re.seo_shop_h.1}/
+			header_up Host {host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+		reverse_proxy frontend:80 {
 			header_up Host {host}
 			header_up X-Forwarded-Proto {scheme}
 			header_up X-Forwarded-Host {host}
@@ -73,16 +128,8 @@ www.{$DOMAIN} {
 			header_up X-Forwarded-Host {host}
 		}
 	}
-	handle @seo_shop {
-		rewrite * /api/users/seo/s/{re.seo_shop.1}/
-		reverse_proxy web:8000 {
-			header_up Host {host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Forwarded-Host {host}
-		}
-	}
 
-	@backend path /api/* /admin* /static/*
+	@backend path /api/* /admin* /static*
 	handle @backend {
 		reverse_proxy web:8000 {
 			header_up Host {host}

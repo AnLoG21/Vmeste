@@ -1,4 +1,4 @@
-"""Server-rendered HTML for search/social bots (Caddy routes User-Agent → these views)."""
+"""Server-rendered HTML for SEO (Caddy routes /city and often /o|/m|/s → these views)."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import html
 import json
 import re
 
+from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.views import View
@@ -43,6 +44,18 @@ CITY_ALIASES = {
 
 def _esc(value) -> str:
     return html.escape(str(value or ""), quote=True)
+
+
+def _provider_by_slug(slug: str):
+    slug = (slug or "").strip().lower()
+    if not slug:
+        return None
+    return User.objects.filter(
+        role=User.Role.PROVIDER,
+        is_active=True,
+        map_hidden=False,
+        organization_slug__iexact=slug,
+    ).first()
 
 
 def _hours_spec(hours: dict) -> list:
@@ -145,6 +158,70 @@ def _base_ctx(**kwargs):
     }
     ctx.update(kwargs)
     return ctx
+
+
+class SeoPresenceView(View):
+    """
+    Existence probe for Caddy forward_auth on human /m|/s|/o.
+    204 → slug exists (continue to SPA); 404 HTML → soft-404 avoided.
+    """
+
+    def get(self, request, kind, slug):
+        kind = (kind or "").strip().lower()
+        slug = (slug or "").strip().lower()
+        provider = _provider_by_slug(slug)
+        ok = False
+        title = "Страница не найдена — Вместе"
+        description = "Такой страницы нет на платформе Вместе."
+        heading = "Страница не найдена"
+        path = f"/{kind}/{_esc(slug)}" if kind and slug else "/"
+
+        if kind == "o":
+            ok = provider is not None
+            title, description, heading = (
+                "Организация не найдена — Вместе",
+                "Такой организации нет на платформе Вместе.",
+                "Организация не найдена",
+            )
+        elif kind == "m":
+            ok = bool(
+                provider and provider.provider_sphere == User.ProviderSphere.CAFE_RESTAURANT
+            )
+            title, description, heading = (
+                "Меню не найдено — Вместе",
+                "Такого меню нет на платформе Вместе.",
+                "Меню не найдено",
+            )
+        elif kind == "s":
+            try:
+                from shop.access import provider_sphere_allows_shop
+
+                ok = bool(provider and provider_sphere_allows_shop(provider))
+            except Exception:
+                ok = False
+            title, description, heading = (
+                "Магазин не найден — Вместе",
+                "Такой витрины нет на платформе Вместе.",
+                "Магазин не найден",
+            )
+        else:
+            return HttpResponse(status=404)
+
+        if ok:
+            return HttpResponse(status=204)
+
+        return render(
+            request,
+            "seo/not_found.html",
+            _base_ctx(
+                title=title,
+                description=description,
+                canonical=f"{SITE_ORIGIN}{path}",
+                robots="noindex,nofollow",
+                heading=heading,
+            ),
+            status=404,
+        )
 
 
 class SeoOrgHtmlView(View):
