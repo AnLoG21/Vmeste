@@ -43,7 +43,7 @@ www.{$DOMAIN} {
 	}
 	# Города — SSR для всех UA (не только ботов), иначе /city/* = shell главной.
 	@seo_city {
-		path_regexp seo_city ^/city/(moscow|spb|ekaterinburg|kazan|novosibirsk|nizhny)/?$
+		path_regexp seo_city ^/city/(moscow|spb|ekaterinburg|kazan|novosibirsk|nizhny|rostov|krasnodar|samara|chelyabinsk)/?$
 	}
 	@seo_shop {
 		path_regexp seo_shop ^/s/([^/]+)/?$

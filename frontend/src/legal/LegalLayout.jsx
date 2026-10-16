@@ -87,6 +87,10 @@ export default function LegalLayout({ title, path, description, children }) {
           <a href="/city/kazan">Казань</a>
           <a href="/city/novosibirsk">Новосибирск</a>
           <a href="/city/nizhny">Н. Новгород</a>
+          <a href="/city/rostov">Ростов</a>
+          <a href="/city/krasnodar">Краснодар</a>
+          <a href="/city/samara">Самара</a>
+          <a href="/city/chelyabinsk">Челябинск</a>
           <a href="/#pricing">Тарифы</a>
           <a href="/contacts">Контакты</a>
           <a href="/offer">Публичная оферта</a>
