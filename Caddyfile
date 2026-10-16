@@ -22,18 +22,13 @@ www.{$DOMAIN} {
 	}
 
 	# Динамический sitemap (организации + города) — для Яндекс.Вебмастера / Google.
-	# При 5xx бэкенда отдаём статический fallback с frontend.
+	# rewrite должен быть снаружи reverse_proxy (иначе Caddy падает / отдаёт 5xx).
 	handle /sitemap.xml {
+		rewrite * /api/users/sitemap.xml
 		reverse_proxy web:8000 {
-			rewrite * /api/users/sitemap.xml
 			header_up Host {host}
 			header_up X-Forwarded-Proto {scheme}
 			header_up X-Forwarded-Host {host}
-			@sitemap_fail status 500 502 503 504
-			handle_response @sitemap_fail {
-				rewrite * /sitemap.xml
-				reverse_proxy frontend:80
-			}
 		}
 	}
 

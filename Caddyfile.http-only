@@ -11,14 +11,8 @@ http://{$DOMAIN}, http://www.{$DOMAIN} {
 		file_server
 	}
 	handle /sitemap.xml {
-		reverse_proxy web:8000 {
-			rewrite * /api/users/sitemap.xml
-			@sitemap_fail status 500 502 503 504
-			handle_response @sitemap_fail {
-				rewrite * /sitemap.xml
-				reverse_proxy frontend:80
-			}
-		}
+		rewrite * /api/users/sitemap.xml
+		reverse_proxy web:8000
 	}
 
 	@seo_org {
