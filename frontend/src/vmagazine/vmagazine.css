@@ -403,6 +403,10 @@ body:has(.page-logged:has(.vmenu-app)) {
   display: none;
 }
 
+.services-hub-card--flat {
+  border-color: rgba(31, 110, 165, 0.35);
+}
+
 .services-hub-card--shop {
   align-items: center;
 }

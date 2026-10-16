@@ -409,6 +409,14 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               <span>Поиск магазинов, избранное и заказы</span>
               <span className="landing-biz-link">Подробнее →</span>
             </a>
+            <a className="landing-biz-card landing-biz-card--app" href="/apps#vkvartire">
+              <span className="landing-biz-emoji" aria-hidden="true">
+                <LandingIcon name="apps" />
+              </span>
+              <strong>Вквартире</strong>
+              <span>Аренда и покупка: лента и карта</span>
+              <span className="landing-biz-link">Подробнее →</span>
+            </a>
             <a className="landing-biz-card landing-biz-card--app" href="/apps#voice">
               <span className="landing-biz-emoji" aria-hidden="true">
                 <LandingIcon name="mic" />

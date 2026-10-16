@@ -18,7 +18,9 @@ import MarketplaceWorkspace from "./MarketplaceWorkspace.jsx";
 import ShopWorkspace from "./ShopWorkspace.jsx";
 import VmenuApp, { ServicesHub } from "./vmenu/VmenuApp.jsx";
 import VmagazineApp from "./vmagazine/VmagazineApp.jsx";
+import VkvartireApp from "./vkvartire/VkvartireApp.jsx";
 import "./vmagazine/vmagazine.css";
+import "./vkvartire/vkvartire.css";
 import { CabinetErrorBoundary } from "./CabinetErrorBoundary.jsx";
 import CabinetChrome from "./CabinetChrome.jsx";
 import InspectionWorkspace from "./InspectionWorkspace.jsx";
@@ -2940,7 +2942,7 @@ export default function App() {
     me?.role === "staff";
   const chatsPortalTarget =
     currentView === "vmenu" || currentView === "vmagazine" ? vmenuChatsHostEl : mainChatsHostEl;
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "service_apps", "vmenu", "vmagazine"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "service_apps", "vmenu", "vmagazine", "vkvartire"].includes(currentView);
   const profileWide = accessToken && ["profile", "subscriptions"].includes(currentView);
 
   return (
@@ -3145,6 +3147,7 @@ export default function App() {
           <ServicesHub
             onOpenVmenu={() => setCurrentView("vmenu")}
             onOpenVmagazine={() => setCurrentView("vmagazine")}
+            onOpenVkvartire={() => setCurrentView("vkvartire")}
           />
         )}
         {accessToken && currentView === "vmenu" && (
@@ -3172,6 +3175,9 @@ export default function App() {
               vmagazineBackRef.current = fn;
             }}
           />
+        )}
+        {accessToken && currentView === "vkvartire" && (
+          <VkvartireApp authFetch={authFetch} API_URL={API_URL} onTabChange={() => {}} />
         )}
         {accessToken &&
           currentView === "marketplaces" &&

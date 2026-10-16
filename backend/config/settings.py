@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     "voice",
     "vmenu",
     "vmagazine",
+    "vkvartire",
     "moy_nalog",
     "shop",
 ]

@@ -1,6 +1,7 @@
 import logoMain from "./assets/logo-main.png";
 import VmenuLogo from "./vmenu/VmenuLogo.jsx";
 import VmagazineLogo from "./vmagazine/VmagazineLogo.jsx";
+import VkvartireLogo from "./vkvartire/VkvartireLogo.jsx";
 import { bookmarkLabel } from "./subnavBookmarks.js";
 import { formatDistanceKm, sphereMapIconHref } from "./clientOrgFeatures.js";
 
@@ -269,7 +270,7 @@ export default function CabinetChrome({
           type="button"
           className="brand-link brand-btn"
           onClick={() => {
-            if (currentView === "vmenu" || currentView === "vmagazine") {
+            if (currentView === "vmenu" || currentView === "vmagazine" || currentView === "vkvartire") {
               if (typeof onMicroserviceBack === "function" && onMicroserviceBack()) return;
               setCurrentView("service_apps");
               return;
@@ -282,7 +283,7 @@ export default function CabinetChrome({
             else setCurrentView("bookings");
           }}
         >
-          {currentView === "vmenu" || currentView === "vmagazine" ? (
+          {currentView === "vmenu" || currentView === "vmagazine" || currentView === "vkvartire" ? (
             <span className="vmenu-app-header-brand">
               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
                 <path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
@@ -291,6 +292,11 @@ export default function CabinetChrome({
                 <>
                   <VmagazineLogo size={56} />
                   <strong className="vmagazine-header-title">Вмагазине</strong>
+                </>
+              ) : currentView === "vkvartire" ? (
+                <>
+                  <VkvartireLogo size={56} />
+                  <strong className="vkvartire-header-title">Вквартире</strong>
                 </>
               ) : (
                 <>
@@ -315,7 +321,7 @@ export default function CabinetChrome({
           )}
         </button>
         <div>{verifyStatus && <p className="verify-note">{verifyStatus}</p>}</div>
-        {accessToken && currentView !== "vmenu" && currentView !== "vmagazine" && (me?.role === "client" || (me?.role === "provider" && currentView === "client_map")) && (
+        {accessToken && currentView !== "vmenu" && currentView !== "vmagazine" && currentView !== "vkvartire" && (me?.role === "client" || (me?.role === "provider" && currentView === "client_map")) && (
           <div className="client-header-search">
             <div className="client-header-search-input-wrap" ref={clientHeaderSearchWrapRef}>
               <input
@@ -577,7 +583,7 @@ export default function CabinetChrome({
         </div>
       )}
 
-      {accessToken && me?.role && currentView !== "vmenu" && currentView !== "vmagazine" && (
+      {accessToken && me?.role && currentView !== "vmenu" && currentView !== "vmagazine" && currentView !== "vkvartire" && (
         <nav
           className={[
             "app-subnav",

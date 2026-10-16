@@ -21,6 +21,7 @@ export const VIEW_PATHS = {
   service_apps: "/services",
   vmenu: "/vmenu",
   vmagazine: "/vmagazine",
+  vkvartire: "/vkvartire",
   client_map: "/map",
   activity: "/activity",
   client_book: "/book",

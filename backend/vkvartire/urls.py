@@ -1,0 +1,15 @@
+from django.urls import path
+
+from .views import (
+    VkvartireFavoritesView,
+    VkvartireFeedView,
+    VkvartireListingDetailView,
+    VkvartireMapView,
+)
+
+urlpatterns = [
+    path("feed/", VkvartireFeedView.as_view()),
+    path("map/", VkvartireMapView.as_view()),
+    path("listings/<int:listing_id>/", VkvartireListingDetailView.as_view()),
+    path("favorites/", VkvartireFavoritesView.as_view()),
+]

@@ -139,7 +139,8 @@ export function useCabinetNavigation({
       }
       return false;
     }
-    if (id === "service_apps" || id === "vmenu" || id === "vmagazine") return Boolean(accessToken);
+    if (id === "service_apps" || id === "vmenu" || id === "vmagazine" || id === "vkvartire")
+      return Boolean(accessToken);
     if (id === "shop") {
       const sphere = me?.provider_sphere || me?.employer_sphere;
       if (sphere !== "hair_salon" && sphere !== "service_center" && sphere !== "shops") return false;

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./vmenu.css";
 import VmenuLogo from "./VmenuLogo.jsx";
 import VmagazineLogo from "../vmagazine/VmagazineLogo.jsx";
+import VkvartireLogo from "../vkvartire/VkvartireLogo.jsx";
 import { vmenuFetch, VMENU_DRAFT_KEY } from "./vmenuApi.js";
 import { VmenuErrorBoundary } from "./VmenuErrorBoundary.jsx";
 import { readVmenuUrlState, writeVmenuUrlState } from "./vmenuUrl.js";
@@ -297,7 +298,7 @@ export default function VmenuApp({
   );
 }
 
-export function ServicesHub({ onOpenVmenu, onOpenVmagazine }) {
+export function ServicesHub({ onOpenVmenu, onOpenVmagazine, onOpenVkvartire }) {
   return (
     <section className="card services-hub">
       <h2>Сервисы</h2>
@@ -314,6 +315,13 @@ export function ServicesHub({ onOpenVmenu, onOpenVmagazine }) {
         <div>
           <strong>Вмагазине</strong>
           <p className="muted small">Маркетплейс Вместе: поиск, избранное, корзина, заказы и Вбонусы.</p>
+        </div>
+      </button>
+      <button type="button" className="services-hub-card services-hub-card--flat" onClick={onOpenVkvartire}>
+        <VkvartireLogo size={48} />
+        <div>
+          <strong>Вквартире</strong>
+          <p className="muted small">Подбор квартир: лента, карта, фильтр по удалённости и избранное.</p>
         </div>
       </button>
     </section>
