@@ -256,15 +256,26 @@ class PublicOrganizationSitemapView(APIView):
     authentication_classes = []
 
     def get(self, request):
-        qs = providers_visible_on_map(
-            User.objects.filter(role=User.Role.PROVIDER, is_active=True, is_demo=False)
-            .exclude(organization_name="")
-            .exclude(provider_sphere=User.ProviderSphere.MARKETPLACES)
-            .order_by("id")[:500]
-        )
+        # Нельзя slice до providers_visible_on_map — Django запрещает filter после [:N].
+        try:
+            qs = providers_visible_on_map(
+                User.objects.filter(role=User.Role.PROVIDER, is_active=True, is_demo=False)
+                .exclude(organization_name="")
+                .exclude(provider_sphere=User.ProviderSphere.MARKETPLACES)
+                .order_by("id")
+            )[:500]
+        except Exception:
+            logger.exception("public-orgs: query failed")
+            return Response({"organizations": []})
         items = []
         for u in qs:
-            slug = ensure_organization_slug(u)
+            try:
+                slug = (u.organization_slug or "").strip() or ensure_organization_slug(u)
+            except Exception:
+                logger.exception("public-orgs: slug failed for user_id=%s", getattr(u, "pk", None))
+                continue
+            if not slug:
+                continue
             items.append(
                 {
                     "slug": slug,
@@ -273,6 +284,14 @@ class PublicOrganizationSitemapView(APIView):
                     "address": u.organization_address or "",
                     "url": f"/o/{slug}",
                     "menu_url": f"/m/{slug}" if u.provider_sphere == User.ProviderSphere.CAFE_RESTAURANT else "",
+                    "shop_url": f"/s/{slug}"
+                    if u.provider_sphere
+                    in (
+                        User.ProviderSphere.SHOPS,
+                        User.ProviderSphere.HAIR_SALON,
+                        User.ProviderSphere.SERVICE_CENTER,
+                    )
+                    else "",
                 }
             )
         return Response({"organizations": items})
