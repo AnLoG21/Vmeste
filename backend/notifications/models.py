@@ -13,6 +13,7 @@ class InAppNotification(models.Model):
         VMENU = "vmenu", "Вменю"
         SHOP_ORDER = "shop_order", "Заказ магазина"
         LOYALTY_PACKAGE = "loyalty_package", "Абонемент"
+        VKVARTIRE = "vkvartire", "Вквартире"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

@@ -197,12 +197,28 @@ export default function VkvartireFilters({
             type="number"
             inputMode="numeric"
             placeholder="мин"
-            title="Максимум минут пешком (примерно)"
+            title="Максимум минут в пути"
             value={filters.max_commute_min}
             onChange={(e) => onChange({ ...filters, max_commute_min: e.target.value })}
             style={{ width: "4.2rem" }}
             aria-label="Минут до точки"
           />
+          <button
+            type="button"
+            className={`vkvartire-chip${filters.commute_mode === "walk" ? " is-active" : ""}`}
+            onClick={() => onChange({ ...filters, commute_mode: "walk" })}
+            title="Пешком"
+          >
+            Пешком
+          </button>
+          <button
+            type="button"
+            className={`vkvartire-chip${filters.commute_mode === "transit" ? " is-active" : ""}`}
+            onClick={() => onChange({ ...filters, commute_mode: "transit" })}
+            title="На транспорте"
+          >
+            Транспорт
+          </button>
           <button type="button" className="vkvartire-chip" onClick={pickMyLocation}>
             Гео
           </button>
@@ -227,11 +243,12 @@ export default function VkvartireFilters({
         {commuteNote ? <p className="vkvartire-commute-note">{commuteNote}</p> : null}
         {filters.anchor_lat != null && filters.max_commute_min ? (
           <p className="vkvartire-commute-note">
-            Радиус ≈ {filters.max_commute_min} мин пешком от «{filters.anchor_label || "точки"}».
+            До {filters.max_commute_min} мин ({filters.commute_mode === "transit" ? "транспорт" : "пешком"}) от «
+            {filters.anchor_label || "точки"}».
           </p>
         ) : (
           <p className="vkvartire-commute-note">
-            Главный фильтр: адрес / метро / гео + минуты. Пока приближение по прямой (~80 м/мин).
+            Главный фильтр: адрес / метро / гео + минуты. С ключом Router — точный ETA, иначе приближение по прямой.
           </p>
         )}
 

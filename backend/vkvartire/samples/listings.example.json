@@ -1,0 +1,42 @@
+[
+  {
+    "deal_type": "rent",
+    "rooms": 2,
+    "price": 82000,
+    "area_m2": 52,
+    "floor": 7,
+    "floors_total": 16,
+    "address": "Москва, ул. Примерная, 1",
+    "lat": 55.76,
+    "lon": 37.62,
+    "metro_name": "Маяковская",
+    "metro_walk_min": 8,
+    "description": "Пример объявления для легального импорта.",
+    "source": "other",
+    "external_id": "partner-demo-1",
+    "external_url": "https://example.com/listing/1",
+    "is_agent": false,
+    "photos": [
+      "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&q=80"
+    ]
+  },
+  {
+    "deal_type": "sale",
+    "rooms": 1,
+    "price": 12500000,
+    "area_m2": 39,
+    "floor": 3,
+    "floors_total": 9,
+    "address": "Москва, ул. Другая, 5",
+    "lat": 55.74,
+    "lon": 37.60,
+    "metro_name": "Парк культуры",
+    "metro_walk_min": 6,
+    "description": "Продажа, дубликат с тем же fingerprint не создаётся.",
+    "source": "cian",
+    "external_id": "cian-demo-99",
+    "external_url": "https://www.cian.ru/example",
+    "is_agent": true,
+    "photos": []
+  }
+]

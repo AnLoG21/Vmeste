@@ -106,19 +106,23 @@ def _filtered_listings(request):
     if None not in (lat_min, lat_max, lon_min, lon_max):
         qs = qs.filter(lat__gte=lat_min, lat__lte=lat_max, lon__gte=lon_min, lon__lte=lon_max)
 
-    # Anchor + commute minutes (haversine proxy)
+    # Anchor + commute minutes (routing when key set, else haversine)
     anchor_lat = _parse_float(request.query_params.get("anchor_lat"))
     anchor_lon = _parse_float(request.query_params.get("anchor_lon"))
     max_commute_min = _parse_float(request.query_params.get("max_commute_min"))
     commute_mode = (request.query_params.get("commute_mode") or "walk").strip().lower()
-    if commute_mode not in ("walk", "transit"):
+    if commute_mode not in ("walk", "transit", "driving"):
         commute_mode = "walk"
 
     radius_m = _parse_float(request.query_params.get("radius_m"))
+    # Prefilter bbox uses generous transit radius so routing can still drop outliers
     if radius_m is None and anchor_lat is not None and anchor_lon is not None and max_commute_min:
-        radius_m = commute_radius_m(max_commute_min, commute_mode)
+        radius_m = commute_radius_m(max_commute_min, "transit" if commute_mode == "transit" else "walk")
+        if commute_mode == "transit":
+            radius_m = max(radius_m, commute_radius_m(max_commute_min, "walk") * 1.4)
 
-    if anchor_lat is not None and anchor_lon is not None and radius_m:
+    commute_method = None
+    if anchor_lat is not None and anchor_lon is not None and radius_m and max_commute_min:
         b_lat_min, b_lat_max, b_lon_min, b_lon_max = bbox_around(anchor_lat, anchor_lon, radius_m)
         qs = qs.filter(
             lat__isnull=False,
@@ -128,13 +132,22 @@ def _filtered_listings(request):
             lon__gte=b_lon_min,
             lon__lte=b_lon_max,
         )
-        # Precise circle filter in Python for MVP (feed size limited)
-        keep_ids = []
-        for row in qs.only("id", "lat", "lon")[:800]:
+        candidates = []
+        for row in qs.only("id", "lat", "lon")[:200]:
             if row.lat is None or row.lon is None:
                 continue
-            if haversine_m(anchor_lat, anchor_lon, row.lat, row.lon) <= radius_m:
-                keep_ids.append(row.id)
+            # Soft prefilter: keep anything within 1.5× walk radius for routing refine
+            if haversine_m(anchor_lat, anchor_lon, row.lat, row.lon) <= radius_m * 1.5:
+                candidates.append((row.id, row.lat, row.lon))
+        from .routing import filter_ids_by_commute
+
+        keep_ids, commute_method = filter_ids_by_commute(
+            anchor_lat=anchor_lat,
+            anchor_lon=anchor_lon,
+            candidates=candidates,
+            max_commute_min=max_commute_min,
+            commute_mode=commute_mode,
+        )
         qs = qs.filter(id__in=keep_ids)
 
     return qs, {
@@ -143,6 +156,7 @@ def _filtered_listings(request):
         "radius_m": radius_m,
         "commute_mode": commute_mode,
         "max_commute_min": max_commute_min,
+        "commute_method": commute_method,
     }
 
 
@@ -167,8 +181,12 @@ class VkvartireFeedView(APIView):
                 "has_more": start + page_size < total,
                 "meta": {
                     "commute_note": (
-                        "Удалённость — приближение по прямой (пешком ~80 м/мин). "
-                        "Точный ETA Яндекс.Карт — в следующей версии."
+                        (
+                            "Удалённость по Яндекс.Маршрутизации (пешком/транспорт)."
+                            if meta.get("commute_method") == "routing"
+                            else "Удалённость — приближение по прямой (~80 м/мин пешком). "
+                            "Задайте YANDEX_ROUTING_API_KEY для точного ETA."
+                        )
                         if meta.get("radius_m")
                         else None
                     ),

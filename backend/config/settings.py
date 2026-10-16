@@ -264,6 +264,9 @@ YANDEX_OAUTH_CLIENT_SECRET = os.environ.get("YANDEX_OAUTH_CLIENT_SECRET", "").st
 YANDEX_CLOUD_FOLDER_ID = os.environ.get("YANDEX_CLOUD_FOLDER_ID", "").strip()
 YANDEX_GPT_API_KEY = os.environ.get("YANDEX_GPT_API_KEY", "").strip()
 YANDEX_SPEECHKIT_API_KEY = os.environ.get("YANDEX_SPEECHKIT_API_KEY", "").strip()
+# Router / Distance Matrix for Вквартире commute filter (optional)
+YANDEX_MAPS_API_KEY = os.environ.get("YANDEX_MAPS_API_KEY", os.environ.get("VITE_YANDEX_MAPS_API_KEY", "")).strip()
+YANDEX_ROUTING_API_KEY = os.environ.get("YANDEX_ROUTING_API_KEY", "").strip() or YANDEX_MAPS_API_KEY
 # Optional: Slack/Telegram webhook for SpeechKit / Asterisk / deploy ops alerts
 OPS_ALERT_WEBHOOK_URL = os.environ.get("OPS_ALERT_WEBHOOK_URL", "").strip()
 ASTERISK_INTERNAL_SECRET = os.environ.get("ASTERISK_INTERNAL_SECRET", "").strip()
