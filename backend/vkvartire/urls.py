@@ -5,6 +5,8 @@ from .views import (
     VkvartireFeedView,
     VkvartireListingDetailView,
     VkvartireMapView,
+    VkvartireSavedSearchDetailView,
+    VkvartireSavedSearchListView,
 )
 
 urlpatterns = [
@@ -12,4 +14,6 @@ urlpatterns = [
     path("map/", VkvartireMapView.as_view()),
     path("listings/<int:listing_id>/", VkvartireListingDetailView.as_view()),
     path("favorites/", VkvartireFavoritesView.as_view()),
+    path("saved-searches/", VkvartireSavedSearchListView.as_view()),
+    path("saved-searches/<int:search_id>/", VkvartireSavedSearchDetailView.as_view()),
 ]

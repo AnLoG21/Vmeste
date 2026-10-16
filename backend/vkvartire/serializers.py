@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Favorite, Listing, ListingPhoto
+from .models import Favorite, Listing, ListingPhoto, SavedSearch
 
 
 class ListingPhotoSerializer(serializers.ModelSerializer):
@@ -106,3 +106,10 @@ class FavoriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Favorite
         fields = ("id", "listing", "created_at")
+
+
+class SavedSearchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SavedSearch
+        fields = ("id", "name", "filters", "notify", "created_at", "updated_at")
+        read_only_fields = ("id", "created_at", "updated_at")

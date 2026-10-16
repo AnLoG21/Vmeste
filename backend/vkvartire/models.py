@@ -149,3 +149,24 @@ class Favorite(models.Model):
 
     def __str__(self) -> str:
         return f"Favorite(user={self.user_id}, listing={self.listing_id})"
+
+
+class SavedSearch(models.Model):
+    """Сохранённый набор фильтров; notify — задел под пуши новых объявлений."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="vkvartire_saved_searches",
+    )
+    name = models.CharField(max_length=120)
+    filters = models.JSONField(default=dict, blank=True)
+    notify = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"SavedSearch({self.user_id}, {self.name})"

@@ -6,12 +6,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .geo import bbox_around, commute_radius_m, haversine_m
-from .models import Favorite, Listing, ListingPhoto
+from .models import Favorite, Listing, ListingPhoto, SavedSearch
 from .serializers import (
     FavoriteSerializer,
     ListingDetailSerializer,
     ListingListSerializer,
     MapPinSerializer,
+    SavedSearchSerializer,
 )
 
 
@@ -235,3 +236,81 @@ class VkvartireFavoritesView(APIView):
             return Response({"detail": "listing_id обязателен."}, status=status.HTTP_400_BAD_REQUEST)
         deleted, _ = Favorite.objects.filter(user=request.user, listing_id=listing_id).delete()
         return Response({"ok": True, "deleted": deleted > 0})
+
+
+def _sanitize_filters(raw) -> dict:
+    if not isinstance(raw, dict):
+        return {}
+    allowed = {
+        "deal_type",
+        "rooms",
+        "price_min",
+        "price_max",
+        "area_min",
+        "area_max",
+        "floor_min",
+        "floor_max",
+        "no_agents",
+        "q",
+        "anchor_lat",
+        "anchor_lon",
+        "anchor_label",
+        "max_commute_min",
+        "commute_mode",
+    }
+    out = {}
+    for key in allowed:
+        if key in raw:
+            out[key] = raw[key]
+    return out
+
+
+class VkvartireSavedSearchListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        rows = SavedSearch.objects.filter(user=request.user)[:50]
+        return Response({"results": SavedSearchSerializer(rows, many=True).data})
+
+    def post(self, request):
+        name = (request.data.get("name") or "").strip()[:120]
+        if not name:
+            return Response({"detail": "name обязателен."}, status=status.HTTP_400_BAD_REQUEST)
+        filters = _sanitize_filters(request.data.get("filters") or {})
+        notify = bool(request.data.get("notify", False))
+        row = SavedSearch.objects.create(
+            user=request.user, name=name, filters=filters, notify=notify
+        )
+        return Response(SavedSearchSerializer(row).data, status=status.HTTP_201_CREATED)
+
+
+class VkvartireSavedSearchDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get(self, request, search_id: int):
+        try:
+            return SavedSearch.objects.get(pk=search_id, user=request.user)
+        except SavedSearch.DoesNotExist:
+            return None
+
+    def patch(self, request, search_id: int):
+        row = self._get(request, search_id)
+        if not row:
+            return Response({"detail": "Не найдено."}, status=status.HTTP_404_NOT_FOUND)
+        if "name" in request.data:
+            name = (request.data.get("name") or "").strip()[:120]
+            if name:
+                row.name = name
+        if "filters" in request.data:
+            row.filters = _sanitize_filters(request.data.get("filters") or {})
+        if "notify" in request.data:
+            row.notify = bool(request.data.get("notify"))
+        row.save()
+        return Response(SavedSearchSerializer(row).data)
+
+    def delete(self, request, search_id: int):
+        row = self._get(request, search_id)
+        if not row:
+            return Response({"detail": "Не найдено."}, status=status.HTTP_404_NOT_FOUND)
+        row.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

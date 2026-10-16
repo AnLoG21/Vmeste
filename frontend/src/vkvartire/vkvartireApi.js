@@ -69,6 +69,37 @@ export function removeFavorite(authFetch, API_URL, listingId) {
   });
 }
 
+export function loadSavedSearches(authFetch, API_URL) {
+  return vkvartireFetch(authFetch, API_URL, "/saved-searches/");
+}
+
+export function createSavedSearch(authFetch, API_URL, { name, filters, notify }) {
+  return vkvartireFetch(authFetch, API_URL, "/saved-searches/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, filters, notify: Boolean(notify) }),
+  });
+}
+
+export function deleteSavedSearch(authFetch, API_URL, id) {
+  return vkvartireFetch(authFetch, API_URL, `/saved-searches/${id}/`, {
+    method: "DELETE",
+  });
+}
+
+/** Merge saved filters into DEFAULT_FILTERS shape. */
+export function filtersFromSaved(savedFilters, defaults) {
+  const base = { ...defaults };
+  const src = savedFilters && typeof savedFilters === "object" ? savedFilters : {};
+  for (const key of Object.keys(base)) {
+    if (src[key] !== undefined) base[key] = src[key];
+  }
+  if (!Array.isArray(base.rooms)) {
+    base.rooms = base.rooms === "" || base.rooms == null ? [] : [Number(base.rooms)].filter((n) => !Number.isNaN(n));
+  }
+  return base;
+}
+
 export const DEFAULT_FILTERS = {
   deal_type: "rent",
   rooms: [],

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Favorite, Listing, ListingPhoto
+from .models import Favorite, Listing, ListingPhoto, SavedSearch
 
 
 class ListingPhotoInline(admin.TabularInline):
@@ -31,3 +31,11 @@ class ListingAdmin(admin.ModelAdmin):
 class FavoriteAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "listing", "created_at")
     raw_id_fields = ("user", "listing")
+
+
+@admin.register(SavedSearch)
+class SavedSearchAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "name", "notify", "updated_at")
+    list_filter = ("notify",)
+    raw_id_fields = ("user",)
+    search_fields = ("name",)

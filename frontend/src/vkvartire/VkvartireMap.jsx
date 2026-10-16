@@ -20,12 +20,22 @@ export default function VkvartireMap({
   showToast,
 }) {
   const mapRef = useRef(null);
-  const objectManagerRef = useRef(null);
+  const clustererRef = useRef(null);
+  const priceLayoutRef = useRef(null);
+  const activeLayoutRef = useRef(null);
+  const placemarksRef = useRef(new Map());
+  const onPickAnchorRef = useRef(onPickAnchor);
+  const showToastRef = useRef(showToast);
   const [pins, setPins] = useState([]);
   const [sheetListing, setSheetListing] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
   const [busy, setBusy] = useState(false);
   const activeIdRef = useRef(null);
+
+  useEffect(() => {
+    onPickAnchorRef.current = onPickAnchor;
+    showToastRef.current = showToast;
+  }, [onPickAnchor, showToast]);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,7 +45,7 @@ export default function VkvartireMap({
         if (!cancelled) setPins(Array.isArray(data?.pins) ? data.pins : []);
       })
       .catch((e) => {
-        if (!cancelled) showToast?.(e.message || "Не удалось загрузить карту", { tone: "error" });
+        if (!cancelled) showToastRef.current?.(e.message || "Не удалось загрузить карту", { tone: "error" });
       })
       .finally(() => {
         if (!cancelled) setBusy(false);
@@ -43,7 +53,7 @@ export default function VkvartireMap({
     return () => {
       cancelled = true;
     };
-  }, [API_URL, authFetch, filters, showToast]);
+  }, [API_URL, authFetch, filters]);
 
   useEffect(() => {
     let destroyed = false;
@@ -61,37 +71,50 @@ export default function VkvartireMap({
         });
         mapRef.current = map;
 
+        priceLayoutRef.current = ymaps.templateLayoutFactory.createClass(
+          '<div class="vkvartire-price-pin-wrap"><div class="vkvartire-price-pin">$[properties.iconContent]</div></div>'
+        );
+        activeLayoutRef.current = ymaps.templateLayoutFactory.createClass(
+          '<div class="vkvartire-price-pin-wrap"><div class="vkvartire-price-pin is-active">$[properties.iconContent]</div></div>'
+        );
+
+        const clusterer = new ymaps.Clusterer({
+          preset: "islands#invertedBlueClusterIcons",
+          groupByCoordinates: false,
+          clusterDisableClickZoom: false,
+          clusterHideIconOnBalloonOpen: false,
+          geoObjectHideIconOnBalloonOpen: false,
+          minClusterSize: 3,
+        });
+        clustererRef.current = clusterer;
+        map.geoObjects.add(clusterer);
+
         map.events.add("click", (e) => {
-          if (sheetListing || activeIdRef.current) {
+          if (activeIdRef.current) {
             activeIdRef.current = null;
             setSheetListing(null);
+            refreshPinStyles();
             return;
           }
           const coords = e.get("coords");
-          if (coords && onPickAnchor) {
-            onPickAnchor({
+          if (coords && onPickAnchorRef.current) {
+            onPickAnchorRef.current({
               lat: coords[0],
               lon: coords[1],
               label: "Точка на карте",
             });
-            showToast?.("Точка для фильтра удалённости установлена");
+            showToastRef.current?.("Точка для фильтра удалённости установлена");
           }
         });
 
-        const om = new ymaps.ObjectManager({
-          clusterize: true,
-          gridSize: 64,
-        });
-        objectManagerRef.current = om;
-        map.geoObjects.add(om);
-
-        om.objects.events.add("click", (e) => {
-          const id = e.get("objectId");
-          void openPin(Number(id));
+        // Show price labels more clearly when zoomed in (reduce clustering pressure)
+        map.events.add("boundschange", () => {
+          const z = map.getZoom();
+          clusterer.options.set("minClusterSize", z >= 13 ? 99 : 3);
         });
       })
       .catch(() => {
-        showToast?.("Не удалось загрузить Яндекс.Карты", { tone: "error" });
+        showToastRef.current?.("Не удалось загрузить Яндекс.Карты", { tone: "error" });
       });
 
     return () => {
@@ -102,45 +125,79 @@ export default function VkvartireMap({
         /* ignore */
       }
       mapRef.current = null;
-      objectManagerRef.current = null;
+      clustererRef.current = null;
+      placemarksRef.current = new Map();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- map init once
   }, []);
 
+  function refreshPinStyles() {
+    const ymaps = window.ymaps;
+    if (!ymaps || !priceLayoutRef.current) return;
+    for (const [id, pm] of placemarksRef.current.entries()) {
+      const active = Number(id) === Number(activeIdRef.current);
+      pm.options.set(
+        "iconLayout",
+        active ? activeLayoutRef.current : priceLayoutRef.current
+      );
+    }
+  }
+
   useEffect(() => {
     const map = mapRef.current;
-    const om = objectManagerRef.current;
-    if (!map || !om || !window.ymaps) return;
+    const clusterer = clustererRef.current;
+    const ymaps = window.ymaps;
+    if (!map || !clusterer || !ymaps || !priceLayoutRef.current) return;
 
-    const features = pins
-      .filter((p) => p.lat != null && p.lon != null)
-      .map((p) => ({
-        type: "Feature",
-        id: p.id,
-        geometry: { type: "Point", coordinates: [p.lat, p.lon] },
-        properties: {
-          hintContent: formatPinPrice(p),
-          iconContent: formatPinPrice(p),
+    const marks = [];
+    const nextMap = new Map();
+    for (const p of pins) {
+      if (p.lat == null || p.lon == null) continue;
+      const label = formatPinPrice(p);
+      const active = Number(p.id) === Number(activeIdRef.current);
+      const pm = new ymaps.Placemark(
+        [p.lat, p.lon],
+        {
+          iconContent: label,
+          hintContent: `${label} · ${p.rooms != null ? p.rooms + "к" : ""}`.trim(),
+          listingId: p.id,
         },
-        options: {
-          preset: "islands#blueStretchyIcon",
-        },
-      }));
-
-    om.removeAll();
-    om.add({ type: "FeatureCollection", features });
-
-    // At higher zoom show price-like stretchy icons (Avito-style labels)
-    const zoom = map.getZoom();
-    if (zoom >= 13 && features.length && features.length <= 80) {
-      // ObjectManager already uses stretchy icons with iconContent = price
+        {
+          iconLayout: active ? activeLayoutRef.current : priceLayoutRef.current,
+          iconShape: {
+            type: "Rectangle",
+            coordinates: [
+              [-36, -28],
+              [36, 4],
+            ],
+          },
+          zIndex: active ? 700 : 100,
+          cursor: "pointer",
+        }
+      );
+      pm.events.add("click", (e) => {
+        e.stopPropagation();
+        void openPin(Number(p.id));
+      });
+      marks.push(pm);
+      nextMap.set(p.id, pm);
     }
-  }, [pins]);
+    clusterer.removeAll();
+    clusterer.add(marks);
+    placemarksRef.current = nextMap;
+
+    if (filters.anchor_lat != null && filters.anchor_lon != null) {
+      map.setCenter([filters.anchor_lat, filters.anchor_lon], Math.max(map.getZoom(), 12), {
+        duration: 200,
+      });
+    }
+  }, [pins, filters.anchor_lat, filters.anchor_lon]);
 
   async function openPin(id) {
     if (!id) return;
     activeIdRef.current = id;
     setCollapsed(false);
+    refreshPinStyles();
     try {
       const detail = await loadListing(authFetch, API_URL, id);
       setSheetListing(detail);
@@ -149,8 +206,9 @@ export default function VkvartireMap({
           duration: 200,
         });
       }
+      refreshPinStyles();
     } catch (e) {
-      showToast?.(e.message || "Не удалось открыть объявление", { tone: "error" });
+      showToastRef.current?.(e.message || "Не удалось открыть объявление", { tone: "error" });
     }
   }
 
@@ -170,6 +228,7 @@ export default function VkvartireMap({
         onClose={() => {
           activeIdRef.current = null;
           setSheetListing(null);
+          refreshPinStyles();
         }}
         onToggleFavorite={async (listing) => {
           await onToggleFavorite?.(listing);

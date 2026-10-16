@@ -6,9 +6,13 @@ import VkvartireMap from "./VkvartireMap.jsx";
 import {
   DEFAULT_FILTERS,
   addFavorite,
+  createSavedSearch,
+  deleteSavedSearch,
+  filtersFromSaved,
   loadFavorites,
   loadFeed,
   loadListing,
+  loadSavedSearches,
   removeFavorite,
 } from "./vkvartireApi.js";
 import "./vkvartire.css";
@@ -24,6 +28,7 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange }) {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [items, setItems] = useState([]);
   const [favItems, setFavItems] = useState([]);
+  const [savedSearches, setSavedSearches] = useState([]);
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState(null);
@@ -62,6 +67,19 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange }) {
       setLoading(false);
     }
   }, [API_URL, authFetch]);
+
+  const refreshSaved = useCallback(async () => {
+    try {
+      const data = await loadSavedSearches(authFetch, API_URL);
+      setSavedSearches(Array.isArray(data?.results) ? data.results : []);
+    } catch {
+      /* ignore */
+    }
+  }, [API_URL, authFetch]);
+
+  useEffect(() => {
+    void refreshSaved();
+  }, [refreshSaved]);
 
   useEffect(() => {
     if (tab === "feed" && viewMode === "list") void refreshFeed();
@@ -130,6 +148,28 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange }) {
               filters={filters}
               onChange={setFilters}
               commuteNote={meta?.commute_note}
+              savedSearches={savedSearches}
+              onSaveSearch={async ({ name, notify }) => {
+                try {
+                  await createSavedSearch(authFetch, API_URL, { name, filters, notify });
+                  showToast("Поиск сохранён");
+                  void refreshSaved();
+                } catch (e) {
+                  showToast(e.message || "Не удалось сохранить", { tone: "error" });
+                }
+              }}
+              onApplySaved={(s) => {
+                setFilters(filtersFromSaved(s.filters, DEFAULT_FILTERS));
+                showToast(`Применён: ${s.name}`);
+              }}
+              onDeleteSaved={async (s) => {
+                try {
+                  await deleteSavedSearch(authFetch, API_URL, s.id);
+                  void refreshSaved();
+                } catch (e) {
+                  showToast(e.message || "Не удалось удалить", { tone: "error" });
+                }
+              }}
             />
             {viewMode === "map" ? (
               <VkvartireMap

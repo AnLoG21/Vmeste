@@ -1,9 +1,26 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { fetchAddressSuggestions } from "../addressSuggest.js";
 import { ROOM_OPTIONS } from "./vkvartireApi.js";
 
-export default function VkvartireFilters({ filters, onChange, commuteNote }) {
+export default function VkvartireFilters({
+  filters,
+  onChange,
+  commuteNote,
+  savedSearches = [],
+  onSaveSearch,
+  onApplySaved,
+  onDeleteSaved,
+}) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [draft, setDraft] = useState(filters);
+  const [suggests, setSuggests] = useState([]);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestBusy, setSuggestBusy] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [saveNotify, setSaveNotify] = useState(false);
+  const timerRef = useRef(null);
+  const wrapRef = useRef(null);
 
   function toggleRoom(value) {
     const cur = Array.isArray(filters.rooms) ? [...filters.rooms] : [];
@@ -38,6 +55,57 @@ export default function VkvartireFilters({ filters, onChange, commuteNote }) {
       () => {},
       { enableHighAccuracy: true, timeout: 12000 }
     );
+  }
+
+  useEffect(() => {
+    function onDoc(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setSuggestOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  function onAnchorInput(value) {
+    onChange({ ...filters, anchor_label: value });
+    clearTimeout(timerRef.current);
+    if (!value || value.trim().length < 2) {
+      setSuggests([]);
+      setSuggestOpen(false);
+      return;
+    }
+    timerRef.current = setTimeout(async () => {
+      setSuggestBusy(true);
+      try {
+        const q = value.trim();
+        const looksMetro = /метро|м\.\s/i.test(q) || q.length <= 24;
+        const queries = looksMetro
+          ? [q, `метро ${q}, Москва`, `${q}, Москва`]
+          : [q, `${q}, Москва`];
+        let items = [];
+        for (const query of queries) {
+          items = await fetchAddressSuggestions(query, { cityHint: "Москва" });
+          if (items.length) break;
+        }
+        setSuggests(items.slice(0, 8));
+        setSuggestOpen(items.length > 0);
+      } catch {
+        setSuggests([]);
+      } finally {
+        setSuggestBusy(false);
+      }
+    }, 320);
+  }
+
+  function pickSuggest(item) {
+    onChange({
+      ...filters,
+      anchor_lat: item.lat,
+      anchor_lon: item.lon,
+      anchor_label: item.value || item.full || "",
+      max_commute_min: filters.max_commute_min || 20,
+    });
+    setSuggestOpen(false);
+    setSuggests([]);
   }
 
   return (
@@ -96,16 +164,35 @@ export default function VkvartireFilters({ filters, onChange, commuteNote }) {
           <button type="button" className="vkvartire-chip" onClick={openMore}>
             Ещё
           </button>
+          <button type="button" className="vkvartire-chip" onClick={() => setSaveOpen(true)}>
+            Сохранить поиск
+          </button>
         </div>
 
-        <div className="vkvartire-anchor-row">
-          <input
-            type="text"
-            placeholder="Точка / адрес / метро"
-            value={filters.anchor_label || ""}
-            onChange={(e) => onChange({ ...filters, anchor_label: e.target.value })}
-            aria-label="Якорь удалённости"
-          />
+        <div className="vkvartire-anchor-row" ref={wrapRef}>
+          <div className="vkvartire-anchor-suggest-wrap">
+            <input
+              type="text"
+              placeholder="Адрес, метро или точка"
+              value={filters.anchor_label || ""}
+              onChange={(e) => onAnchorInput(e.target.value)}
+              onFocus={() => suggests.length && setSuggestOpen(true)}
+              aria-label="Якорь удалённости"
+              autoComplete="off"
+            />
+            {suggestBusy ? <span className="vkvartire-suggest-busy">…</span> : null}
+            {suggestOpen && suggests.length > 0 ? (
+              <ul className="vkvartire-suggest-list" role="listbox">
+                {suggests.map((item) => (
+                  <li key={`${item.value}-${item.lat}-${item.lon}`}>
+                    <button type="button" onClick={() => pickSuggest(item)}>
+                      {item.value}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
           <input
             type="number"
             inputMode="numeric"
@@ -141,13 +228,33 @@ export default function VkvartireFilters({ filters, onChange, commuteNote }) {
         {filters.anchor_lat != null && filters.max_commute_min ? (
           <p className="vkvartire-commute-note">
             Радиус ≈ {filters.max_commute_min} мин пешком от «{filters.anchor_label || "точки"}».
-            Укажите координаты через «Гео» или клик на карте.
           </p>
         ) : (
           <p className="vkvartire-commute-note">
-            Главный фильтр: точка + минуты. Пока — приближение по прямой (~80 м/мин).
+            Главный фильтр: адрес / метро / гео + минуты. Пока приближение по прямой (~80 м/мин).
           </p>
         )}
+
+        {savedSearches.length ? (
+          <div className="vkvartire-filter-row vkvartire-saved-row" aria-label="Сохранённые поиски">
+            {savedSearches.map((s) => (
+              <span key={s.id} className="vkvartire-saved-chip">
+                <button type="button" className="vkvartire-chip is-active" onClick={() => onApplySaved?.(s)}>
+                  {s.name}
+                  {s.notify ? " 🔔" : ""}
+                </button>
+                <button
+                  type="button"
+                  className="vkvartire-saved-del"
+                  aria-label={`Удалить ${s.name}`}
+                  onClick={() => onDeleteSaved?.(s)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {moreOpen ? (
@@ -192,7 +299,9 @@ export default function VkvartireFilters({ filters, onChange, commuteNote }) {
                   onChange={(e) => setDraft({ ...draft, floor_max: e.target.value })}
                 />
               </label>
-              <label style={{ gridColumn: "1 / -1", flexDirection: "row", alignItems: "center", gap: "0.5rem" }}>
+              <label
+                style={{ gridColumn: "1 / -1", flexDirection: "row", alignItems: "center", gap: "0.5rem" }}
+              >
                 <input
                   type="checkbox"
                   checked={Boolean(draft.no_agents)}
@@ -216,6 +325,59 @@ export default function VkvartireFilters({ filters, onChange, commuteNote }) {
               </button>
               <button type="button" className="primary" onClick={applyMore}>
                 Применить
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {saveOpen ? (
+        <div className="vkvartire-more-backdrop" role="presentation" onClick={() => setSaveOpen(false)}>
+          <div
+            className="vkvartire-more-sheet"
+            role="dialog"
+            aria-label="Сохранить поиск"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>Сохранить поиск</h3>
+            <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+              Название
+              <input
+                type="text"
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                placeholder="Например: 2к у Тверской"
+                style={{ width: "100%", padding: "0.5rem", borderRadius: 10, border: "1px solid #c9d6e3" }}
+              />
+            </label>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                marginTop: "0.75rem",
+                fontSize: "0.9rem",
+              }}
+            >
+              <input type="checkbox" checked={saveNotify} onChange={(e) => setSaveNotify(e.target.checked)} />
+              Уведомлять о новых (скоро)
+            </label>
+            <div className="vkvartire-more-actions">
+              <button type="button" className="ghost" onClick={() => setSaveOpen(false)}>
+                Отмена
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={async () => {
+                  const name = saveName.trim() || "Мой поиск";
+                  await onSaveSearch?.({ name, notify: saveNotify });
+                  setSaveOpen(false);
+                  setSaveName("");
+                  setSaveNotify(false);
+                }}
+              >
+                Сохранить
               </button>
             </div>
           </div>
