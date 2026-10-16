@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { reverseGeocodeByCoords } from "../addressGeocode.js";
+import { buildShortAddress, simplifyCommaAddressLine } from "../addressFormat.js";
+import { reverseGeocodeLatLon } from "../addressSuggest.js";
 import { loadYandexMaps } from "../yandexMapsLoader.js";
 import { loadListing, loadMapPins } from "./vkvartireApi.js";
 import VkvartireListingSheet from "./VkvartireListingSheet.jsx";
@@ -9,6 +12,26 @@ function formatPinPrice(pin) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")} млн`;
   if (n >= 1000) return `${Math.round(n / 1000)} тыс`;
   return String(n);
+}
+
+async function resolveAddressLabel(lat, lon) {
+  try {
+    const result = await reverseGeocodeByCoords(lat, lon);
+    if (result) {
+      const short = buildShortAddress(result?.address);
+      const line = simplifyCommaAddressLine(short || result?.display_name || "");
+      if (line) return line;
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
+    const photon = await reverseGeocodeLatLon(lat, lon);
+    if (photon) return photon;
+  } catch {
+    /* ignore */
+  }
+  return "Точка на карте";
 }
 
 export default function VkvartireMap({
@@ -25,12 +48,14 @@ export default function VkvartireMap({
   const priceLayoutRef = useRef(null);
   const activeLayoutRef = useRef(null);
   const placemarksRef = useRef(new Map());
+  const anchorPmRef = useRef(null);
   const onPickAnchorRef = useRef(onPickAnchor);
   const showToastRef = useRef(showToast);
   const [pins, setPins] = useState([]);
   const [sheetListing, setSheetListing] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
   const activeIdRef = useRef(null);
 
   useEffect(() => {
@@ -56,6 +81,46 @@ export default function VkvartireMap({
     };
   }, [API_URL, authFetch, filters]);
 
+  function ensureAnchorPlacemark(ymaps, map, lat, lon) {
+    if (!ymaps || !map || lat == null || lon == null) return;
+    const coords = [lat, lon];
+    if (!anchorPmRef.current) {
+      const pm = new ymaps.Placemark(
+        coords,
+        { hintContent: "Точка поиска" },
+        {
+          preset: "islands#redDotIcon",
+          draggable: true,
+          zIndex: 1200,
+          zIndexHover: 1201,
+        }
+      );
+      pm.events.add("dragend", () => {
+        const c = pm.geometry.getCoordinates();
+        void (async () => {
+          const label = await resolveAddressLabel(c[0], c[1]);
+          onPickAnchorRef.current?.({ lat: c[0], lon: c[1], label });
+        })();
+      });
+      map.geoObjects.add(pm);
+      anchorPmRef.current = pm;
+    } else {
+      anchorPmRef.current.geometry.setCoordinates(coords);
+    }
+  }
+
+  function clearAnchorPlacemark() {
+    const map = mapRef.current;
+    if (map && anchorPmRef.current) {
+      try {
+        map.geoObjects.remove(anchorPmRef.current);
+      } catch {
+        /* ignore */
+      }
+    }
+    anchorPmRef.current = null;
+  }
+
   useEffect(() => {
     let destroyed = false;
     void loadYandexMaps()
@@ -67,7 +132,7 @@ export default function VkvartireMap({
             : [55.751244, 37.618423];
         const map = new ymaps.Map("vkvartire-map", {
           center,
-          zoom: 11,
+          zoom: filters.anchor_lat != null ? 13 : 11,
           controls: ["zoomControl", "geolocationControl"],
         });
         mapRef.current = map;
@@ -90,6 +155,10 @@ export default function VkvartireMap({
         clustererRef.current = clusterer;
         map.geoObjects.add(clusterer);
 
+        if (filters.anchor_lat != null && filters.anchor_lon != null) {
+          ensureAnchorPlacemark(ymaps, map, filters.anchor_lat, filters.anchor_lon);
+        }
+
         map.events.add("click", (e) => {
           if (activeIdRef.current) {
             activeIdRef.current = null;
@@ -98,21 +167,25 @@ export default function VkvartireMap({
             return;
           }
           const coords = e.get("coords");
-          if (coords && onPickAnchorRef.current) {
+          if (!coords || !onPickAnchorRef.current) return;
+          ensureAnchorPlacemark(ymaps, map, coords[0], coords[1]);
+          void (async () => {
+            const label = await resolveAddressLabel(coords[0], coords[1]);
             onPickAnchorRef.current({
               lat: coords[0],
               lon: coords[1],
-              label: "Точка на карте",
+              label,
             });
-            showToastRef.current?.("Точка для фильтра удалённости установлена");
-          }
+            showToastRef.current?.(`Точка: ${label}`);
+          })();
         });
 
-        // Show price labels more clearly when zoomed in (reduce clustering pressure)
         map.events.add("boundschange", () => {
           const z = map.getZoom();
           clusterer.options.set("minClusterSize", z >= 13 ? 99 : 3);
         });
+
+        setMapReady(true);
       })
       .catch(() => {
         showToastRef.current?.("Не удалось загрузить Яндекс.Карты", { tone: "error" });
@@ -120,6 +193,7 @@ export default function VkvartireMap({
 
     return () => {
       destroyed = true;
+      setMapReady(false);
       try {
         mapRef.current?.destroy();
       } catch {
@@ -127,6 +201,7 @@ export default function VkvartireMap({
       }
       mapRef.current = null;
       clustererRef.current = null;
+      anchorPmRef.current = null;
       placemarksRef.current = new Map();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- map init once
@@ -137,18 +212,31 @@ export default function VkvartireMap({
     if (!ymaps || !priceLayoutRef.current) return;
     for (const [id, pm] of placemarksRef.current.entries()) {
       const active = Number(id) === Number(activeIdRef.current);
-      pm.options.set(
-        "iconLayout",
-        active ? activeLayoutRef.current : priceLayoutRef.current
-      );
+      pm.options.set("iconLayout", active ? activeLayoutRef.current : priceLayoutRef.current);
     }
   }
+
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    const ymaps = window.ymaps;
+    if (!map || !ymaps) return;
+
+    if (filters.anchor_lat != null && filters.anchor_lon != null) {
+      ensureAnchorPlacemark(ymaps, map, filters.anchor_lat, filters.anchor_lon);
+      map.setCenter([filters.anchor_lat, filters.anchor_lon], Math.max(map.getZoom(), 13), {
+        duration: 200,
+      });
+    } else {
+      clearAnchorPlacemark();
+    }
+  }, [mapReady, filters.anchor_lat, filters.anchor_lon]);
 
   useEffect(() => {
     const map = mapRef.current;
     const clusterer = clustererRef.current;
     const ymaps = window.ymaps;
-    if (!map || !clusterer || !ymaps || !priceLayoutRef.current) return;
+    if (!map || !clusterer || !ymaps || !priceLayoutRef.current || !mapReady) return;
 
     const marks = [];
     const nextMap = new Map();
@@ -186,13 +274,7 @@ export default function VkvartireMap({
     clusterer.removeAll();
     clusterer.add(marks);
     placemarksRef.current = nextMap;
-
-    if (filters.anchor_lat != null && filters.anchor_lon != null) {
-      map.setCenter([filters.anchor_lat, filters.anchor_lon], Math.max(map.getZoom(), 12), {
-        duration: 200,
-      });
-    }
-  }, [pins, filters.anchor_lat, filters.anchor_lon]);
+  }, [pins, mapReady]);
 
   async function openPin(id) {
     if (!id) return;
@@ -215,11 +297,8 @@ export default function VkvartireMap({
 
   return (
     <div className={`vkvartire-map-wrap${sheetListing ? " vkvartire-map-wrap--sheet" : ""}`}>
-      {busy ? (
-        <p className="muted" style={{ position: "absolute", zIndex: 2, left: 12, top: 12, margin: 0 }}>
-          Загрузка…
-        </p>
-      ) : null}
+      {busy ? <p className="vkvartire-map-busy">Загрузка…</p> : null}
+      <p className="vkvartire-map-hint">Нажмите на карту, чтобы выбрать точку поиска</p>
       <div id="vkvartire-map" />
       <VkvartireListingSheet
         listing={sheetListing}

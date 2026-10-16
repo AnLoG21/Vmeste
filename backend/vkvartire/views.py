@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Prefetch, Q
+from django.db.models import F, Prefetch, Q
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -160,11 +160,23 @@ def _filtered_listings(request):
     }
 
 
+def _apply_listing_sort(qs, request):
+    sort = (request.query_params.get("sort") or "newest").strip().lower()
+    if sort == "price_asc":
+        return qs.order_by("price", "id")
+    if sort == "price_desc":
+        return qs.order_by("-price", "id")
+    if sort == "area_desc":
+        return qs.order_by(F("area_m2").desc(nulls_last=True), "-id")
+    return qs.order_by("-updated_at", "-id")
+
+
 class VkvartireFeedView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         qs, meta = _filtered_listings(request)
+        qs = _apply_listing_sort(qs, request)
         page = max(1, _parse_int(request.query_params.get("page"), 1) or 1)
         page_size = min(50, max(1, _parse_int(request.query_params.get("page_size"), 20) or 20))
         total = qs.count()

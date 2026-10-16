@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { SOURCE_LABELS } from "./vkvartireApi.js";
 
-export default function VkvartireListingCard({ listing, onOpen, onToggleFavorite }) {
+export default function VkvartireListingCard({ listing, onOpen, onToggleFavorite, compact }) {
   const photos = Array.isArray(listing?.photos) ? listing.photos.filter((p) => p?.url) : [];
   const urls = photos.length
     ? photos.map((p) => p.url)
@@ -28,10 +28,19 @@ export default function VkvartireListingCard({ listing, onOpen, onToggleFavorite
     });
   }
 
+  function step(dir) {
+    if (urls.length < 2) return;
+    setIdx((cur) => {
+      if (dir > 0) return Math.min(urls.length - 1, cur + 1);
+      return Math.max(0, cur - 1);
+    });
+  }
+
   const safeIdx = Math.min(idx, Math.max(0, urls.length - 1));
+  const dealLabel = listing.deal_type === "sale" ? "Продажа" : "Аренда";
 
   return (
-    <article className="vkvartire-card">
+    <article className={`vkvartire-card${compact ? " vkvartire-card--compact" : ""}`}>
       <div
         className="vkvartire-card-photos"
         onTouchStart={onTouchStart}
@@ -42,10 +51,12 @@ export default function VkvartireListingCard({ listing, onOpen, onToggleFavorite
         {urls[safeIdx] ? (
           <img src={urls[safeIdx]} alt="" draggable={false} />
         ) : (
-          <div style={{ height: "100%", display: "grid", placeItems: "center", color: "#6a7f94" }}>
-            Нет фото
-          </div>
+          <div className="vkvartire-card-no-photo">Нет фото</div>
         )}
+        <div className="vkvartire-card-photo-badges">
+          <span className="vkvartire-card-deal">{dealLabel}</span>
+          {listing.is_agent ? <span className="vkvartire-card-agent">Агент</span> : null}
+        </div>
         <button
           type="button"
           className={`vkvartire-card-fav${listing.is_favorite ? " is-on" : ""}`}
@@ -58,28 +69,67 @@ export default function VkvartireListingCard({ listing, onOpen, onToggleFavorite
           {listing.is_favorite ? "♥" : "♡"}
         </button>
         {urls.length > 1 ? (
-          <div className="vkvartire-card-dots" aria-hidden="true">
-            {urls.map((_, i) => (
-              <span key={i} className={i === safeIdx ? "is-on" : ""} />
-            ))}
-          </div>
+          <>
+            <button
+              type="button"
+              className="vkvartire-card-nav vkvartire-card-nav--prev"
+              aria-label="Предыдущее фото"
+              onClick={(e) => {
+                e.stopPropagation();
+                step(-1);
+              }}
+              disabled={safeIdx === 0}
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              className="vkvartire-card-nav vkvartire-card-nav--next"
+              aria-label="Следующее фото"
+              onClick={(e) => {
+                e.stopPropagation();
+                step(1);
+              }}
+              disabled={safeIdx >= urls.length - 1}
+            >
+              ›
+            </button>
+            <div className="vkvartire-card-dots" aria-hidden="true">
+              {urls.map((_, i) => (
+                <span key={i} className={i === safeIdx ? "is-on" : ""} />
+              ))}
+            </div>
+            <span className="vkvartire-card-photo-count">
+              {safeIdx + 1}/{urls.length}
+            </span>
+          </>
         ) : null}
       </div>
       <div className="vkvartire-card-body" onClick={() => onOpen?.(listing)} role="presentation">
         <p className="vkvartire-card-price">{listing.price_label || `${listing.price} ₽`}</p>
         <p className="vkvartire-card-meta">
-          {listing.rooms_label}
-          {listing.area_m2 ? ` · ${listing.area_m2} м²` : ""}
-          {listing.floor != null ? ` · ${listing.floor}/${listing.floors_total || "—"} эт.` : ""}
+          <span>{listing.rooms_label}</span>
+          {listing.area_m2 ? <span>{listing.area_m2} м²</span> : null}
+          {listing.floor != null ? (
+            <span>
+              {listing.floor}/{listing.floors_total || "—"} эт.
+            </span>
+          ) : null}
         </p>
         {listing.metro_name ? (
-          <p className="vkvartire-card-addr">
-            м. {listing.metro_name}
-            {listing.metro_walk_min != null ? ` · ${listing.metro_walk_min} мин` : ""}
+          <p className="vkvartire-card-addr vkvartire-card-metro">
+            <span className="vkvartire-metro-dot" aria-hidden="true" />
+            {listing.metro_name}
+            {listing.metro_walk_min != null ? ` · ${listing.metro_walk_min} мин пешком` : ""}
           </p>
         ) : null}
         {listing.address ? <p className="vkvartire-card-addr">{listing.address}</p> : null}
-        <span className="vkvartire-badge">{SOURCE_LABELS[listing.source] || listing.source}</span>
+        <div className="vkvartire-card-footer">
+          <span className="vkvartire-badge">{SOURCE_LABELS[listing.source] || listing.source}</span>
+          {listing.realtor_name ? (
+            <span className="vkvartire-card-realtor">{listing.realtor_name}</span>
+          ) : null}
+        </div>
       </div>
     </article>
   );

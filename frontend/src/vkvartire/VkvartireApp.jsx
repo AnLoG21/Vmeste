@@ -31,6 +31,7 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange, onOpenCo
   const [favItems, setFavItems] = useState([]);
   const [savedSearches, setSavedSearches] = useState([]);
   const [meta, setMeta] = useState(null);
+  const [total, setTotal] = useState(null);
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState(null);
 
@@ -50,6 +51,7 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange, onOpenCo
       const data = await loadFeed(authFetch, API_URL, { ...filters, page: 1, page_size: 40 });
       setItems(Array.isArray(data?.results) ? data.results : []);
       setMeta(data?.meta || null);
+      setTotal(typeof data?.total === "number" ? data.total : null);
     } catch (e) {
       showToast(e.message || "Не удалось загрузить ленту", { tone: "error" });
     } finally {
@@ -83,8 +85,8 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange, onOpenCo
   }, [refreshSaved]);
 
   useEffect(() => {
-    if (tab === "feed" && viewMode === "list") void refreshFeed();
-  }, [tab, viewMode, filterKey, refreshFeed]);
+    if (tab === "feed") void refreshFeed();
+  }, [tab, filterKey, refreshFeed]);
 
   useEffect(() => {
     if (tab === "favorites") void refreshFavorites();
@@ -143,11 +145,14 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange, onOpenCo
 
   return (
     <section className="card vkvartire-app full-width">
-      <div className="vkvartire-app-body">
+      <div className={`vkvartire-app-body${tab === "feed" && viewMode === "map" ? " vkvartire-app-body--map" : ""}`}>
         {tab === "feed" ? (
           <>
             <div className="vkvartire-toolbar">
-              <strong>Вквартире</strong>
+              <div className="vkvartire-toolbar-titles">
+                <strong>Подбор квартир</strong>
+                <span className="vkvartire-toolbar-sub">Аренда и продажа</span>
+              </div>
               <div className="vkvartire-view-toggle" role="group" aria-label="Вид">
                 <button
                   type="button"
@@ -169,10 +174,13 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange, onOpenCo
               filters={filters}
               onChange={setFilters}
               commuteNote={meta?.commute_note}
+              resultTotal={total}
               savedSearches={savedSearches}
-              onSaveSearch={async ({ name, notify }) => {
+              onSaveSearch={async ({ name, notify, filters: draftFilters }) => {
                 try {
-                  await createSavedSearch(authFetch, API_URL, { name, filters, notify });
+                  const payload = draftFilters || filters;
+                  await createSavedSearch(authFetch, API_URL, { name, filters: payload, notify });
+                  if (draftFilters) setFilters(draftFilters);
                   showToast("Поиск сохранён");
                   void refreshSaved();
                 } catch (e) {
@@ -212,11 +220,21 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange, onOpenCo
               />
             ) : (
               <div className="vkvartire-feed">
-                {loading && !list.length ? <p className="vkvartire-empty">Загрузка…</p> : null}
+                {loading && !list.length ? (
+                  <p className="vkvartire-empty">Ищем объявления…</p>
+                ) : null}
                 {!loading && !list.length ? (
-                  <p className="vkvartire-empty">
-                    Пока нет объявлений. Запустите seed на бэкенде или смягчите фильтры.
-                  </p>
+                  <div className="vkvartire-empty">
+                    <strong>Ничего не найдено</strong>
+                    <p>Попробуйте снять фильтр по времени в пути или расширить цену и комнаты.</p>
+                    <button
+                      type="button"
+                      className="vkvartire-chip is-active"
+                      onClick={() => setFilters({ ...DEFAULT_FILTERS, deal_type: filters.deal_type })}
+                    >
+                      Сбросить фильтры
+                    </button>
+                  </div>
                 ) : null}
                 {list.map((row) => (
                   <VkvartireListingCard
@@ -232,11 +250,17 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange, onOpenCo
         ) : (
           <div className="vkvartire-feed">
             <div className="vkvartire-toolbar">
-              <strong>Избранное</strong>
+              <div className="vkvartire-toolbar-titles">
+                <strong>Избранное</strong>
+                <span className="vkvartire-toolbar-sub">Сохранённые объявления</span>
+              </div>
             </div>
             {loading && !favItems.length ? <p className="vkvartire-empty">Загрузка…</p> : null}
             {!loading && !favItems.length ? (
-              <p className="vkvartire-empty">Пока пусто — сохраняйте ♥ в ленте.</p>
+              <div className="vkvartire-empty">
+                <strong>Пока пусто</strong>
+                <p>Нажмите ♥ на карточке в ленте — объявление появится здесь.</p>
+              </div>
             ) : null}
             {favItems.map((row) => (
               <VkvartireListingCard
@@ -253,7 +277,7 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange, onOpenCo
       {detail ? (
         <div className="vkvartire-more-backdrop" role="presentation" onClick={() => setDetail(null)}>
           <div
-            className="vkvartire-more-sheet"
+            className="vkvartire-more-sheet vkvartire-detail-sheet"
             role="dialog"
             aria-label="Объявление"
             onClick={(e) => e.stopPropagation()}
@@ -261,7 +285,6 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange, onOpenCo
             <button
               type="button"
               className="vkvartire-listing-sheet-close"
-              style={{ position: "relative", float: "right" }}
               onClick={() => setDetail(null)}
               aria-label="Закрыть"
             >
@@ -274,16 +297,21 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange, onOpenCo
                 setDetail((d) => (d ? { ...d, is_favorite: !d.is_favorite } : d));
               }}
             />
-            {detail.description ? (
-              <p style={{ marginTop: "0.75rem", color: "#516578" }}>{detail.description}</p>
-            ) : null}
+            {detail.description ? <p className="vkvartire-detail-desc">{detail.description}</p> : null}
             {(detail.realtor_name || detail.realtor_phone) && (
-              <p style={{ marginTop: "0.5rem", color: "#516578" }}>
+              <p className="vkvartire-detail-contact">
                 {detail.realtor_name || "Контакт"}
-                {detail.realtor_phone ? ` · ${detail.realtor_phone}` : ""}
+                {detail.realtor_phone ? (
+                  <>
+                    {" · "}
+                    <a href={`tel:${String(detail.realtor_phone).replace(/\s/g, "")}`}>
+                      {detail.realtor_phone}
+                    </a>
+                  </>
+                ) : null}
               </p>
             )}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.75rem" }}>
+            <div className="vkvartire-detail-actions">
               {detail.can_chat ? (
                 <button type="button" className="vkvartire-chip is-active" onClick={() => chatRealtor(detail)}>
                   Написать риелтору

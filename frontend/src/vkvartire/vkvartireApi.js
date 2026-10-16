@@ -32,6 +32,7 @@ export function filtersToQuery(filters = {}) {
   }
   if (filters.max_commute_min) q.set("max_commute_min", String(filters.max_commute_min));
   if (filters.commute_mode) q.set("commute_mode", filters.commute_mode);
+  if (filters.sort) q.set("sort", filters.sort);
   if (filters.page) q.set("page", String(filters.page));
   if (filters.page_size) q.set("page_size", String(filters.page_size));
   return q.toString();
@@ -124,7 +125,15 @@ export const DEFAULT_FILTERS = {
   anchor_label: "",
   max_commute_min: "",
   commute_mode: "walk",
+  sort: "newest",
 };
+
+export const SORT_OPTIONS = [
+  { value: "newest", label: "Сначала новые" },
+  { value: "price_asc", label: "Дешевле" },
+  { value: "price_desc", label: "Дороже" },
+  { value: "area_desc", label: "Больше площадь" },
+];
 
 export const ROOM_OPTIONS = [
   { value: 0, label: "Студия" },
