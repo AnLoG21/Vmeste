@@ -43,6 +43,8 @@ SITEMAP_STATIC_URLS = (
     ("/blog/qr-menyu-dlya-kafe-kak-zapustit", "0.8", "monthly"),
     ("/blog/chem-vmeste-otlichaetsya-ot-aggregatorov", "0.8", "monthly"),
     ("/blog/kak-privlech-klientov-cherez-kartu", "0.8", "monthly"),
+    ("/blog/kak-zapustit-vitrinu-magazina", "0.8", "monthly"),
+    ("/blog/kak-nastroit-zapis-neskolkih-masterov", "0.8", "monthly"),
     ("/apps", "0.85", "weekly"),
     ("/android", "0.8", "weekly"),
     ("/contacts", "0.9", "monthly"),
