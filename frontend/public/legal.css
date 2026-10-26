@@ -548,6 +548,25 @@ a.btn-primary-link:hover {
   object-fit: cover;
 }
 
+.article-figure.is-shot img {
+  aspect-ratio: auto;
+  object-fit: contain;
+  background: #fff8f0;
+}
+
+.article-shot-where {
+  display: inline-block;
+  margin: 0 0 0.55rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--accent-deep);
+  background: rgba(255, 188, 122, 0.28);
+  border: 1px solid var(--line);
+}
+
 .article-figure figcaption,
 .article-chart figcaption,
 .article-flow figcaption {
