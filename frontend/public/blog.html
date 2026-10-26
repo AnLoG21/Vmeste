@@ -21,6 +21,12 @@
     <meta property="og:locale" content="ru_RU" />
     <meta property="og:image" content="https://vsevmeste.space/og-cover.png" />
     <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/legal.css" />
     <script type="application/ld+json">
       {
@@ -38,28 +44,38 @@
     </script>
   </head>
   <body>
-    <main class="legal-page">
-      <nav class="legal-nav" aria-label="Разделы сайта">
-        <a href="/">Главная</a>
+    <header class="article-topbar">
+      <a class="article-brand" href="/" aria-label="Вместе — на главную">
+        <span class="article-brand-mark" aria-hidden="true">В</span>
+        <span>Вместе</span>
+      </a>
+      <nav class="article-topnav" aria-label="Разделы">
+        <a href="/blog">Блог</a>
         <a href="/businesses">Для бизнеса</a>
         <a href="/salon">Салон</a>
-        <a href="/avtoservis">Автосервис</a>
         <a href="/kafe">Кафе</a>
-        <a href="/contacts">Контакты</a>
+        <a class="is-cta" href="/?register=1&amp;from=blog">Создать организацию</a>
       </nav>
+    </header>
+
+    <main class="article-page legal-page">
+      <p class="article-meta">Гайды · чек-листы · сравнения</p>
       <h1>Блог для бизнеса</h1>
-      <p>
+      <p class="lead">
         Материалы для владельцев салонов, автосервисов и кафе: как запустить запись или меню, чем
-        Вместе отличается от привычных CRM и агрегаторов, как встроить виджет на сайт.
-      </p>
-      <p>
-        <a href="/?register=1&amp;from=blog"><strong>Создать организацию бесплатно</strong></a>
-        ·
-        <a href="/businesses">Все сценарии</a>
+        Вместе отличается от привычных CRM и как встроить виджет на сайт.
       </p>
 
-      <h2>Старт</h2>
-      <ul>
+      <aside class="article-cta">
+        <p>
+          <a href="/?register=1&amp;from=blog"><strong>Создать организацию бесплатно</strong></a>
+          ·
+          <a href="/businesses">Все сценарии</a>
+        </p>
+      </aside>
+
+      <h2 class="blog-section-title">Старт</h2>
+      <ul class="blog-list">
         <li>
           <a href="/blog/kak-zapustit-biznes-na-vmeste-za-15-minut"
             >Как запустить бизнес на Вместе за 15 минут</a
@@ -75,17 +91,15 @@
         </li>
       </ul>
 
-      <h2>По сферам</h2>
-      <ul>
+      <h2 class="blog-section-title">По сферам</h2>
+      <ul class="blog-list">
         <li>
           <a href="/blog/kak-nastroit-online-zapis-v-salone"
             >Онлайн-запись в салоне красоты за один вечер</a
           >
         </li>
         <li>
-          <a href="/blog/kak-nastroit-zapis-neskolkih-masterov"
-            >Запись к нескольким мастерам</a
-          >
+          <a href="/blog/kak-nastroit-zapis-neskolkih-masterov">Запись к нескольким мастерам</a>
         </li>
         <li>
           <a href="/blog/programma-dlya-avtoservisa-chto-vybrat"
@@ -102,27 +116,21 @@
         </li>
       </ul>
 
-      <h2>Сравнение подходов</h2>
-      <ul>
+      <h2 class="blog-section-title">Сравнение подходов</h2>
+      <ul class="blog-list">
         <li>
           <a href="/blog/chem-vmeste-otlichaetsya-ot-aggregatorov"
             >Чем Вместе отличается от агрегаторов</a
           >
         </li>
         <li>
-          <a href="/blog/kak-privlech-klientov-cherez-kartu"
-            >Клиенты через карту организаций</a
-          >
-          <span class="legal-meta">(когда появятся точки на карте)</span>
+          <a href="/blog/kak-privlech-klientov-cherez-kartu">Клиенты через карту организаций</a>
         </li>
       </ul>
-
-      <p class="legal-meta">
-        Тарифы: бесплатная запись без срока · Бизнес — 990 ₽/мес ·
-        <a href="/#pricing">на главной</a>
-        ·
-        <a href="/contacts">контакты</a>
-      </p>
     </main>
+
+    <footer class="article-footer">
+      Вместе · онлайн-запись и кабинет для бизнеса · <a href="/contacts">контакты</a>
+    </footer>
   </body>
 </html>
