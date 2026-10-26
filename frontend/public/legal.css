@@ -548,10 +548,22 @@ a.btn-primary-link:hover {
   object-fit: cover;
 }
 
+/* UI screenshots: never crop — show the whole frame */
+.article-figure.is-shot {
+  overflow: visible;
+  background: #fff8f0;
+}
+
 .article-figure.is-shot img {
   aspect-ratio: auto;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: none;
   object-fit: contain;
+  object-position: top center;
   background: #fff8f0;
+  border-radius: 14px 14px 0 0;
 }
 
 .article-shot-where {
