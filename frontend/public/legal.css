@@ -28,6 +28,7 @@ body {
   font-weight: 500;
   line-height: 1.65;
   color: var(--ink);
+  overflow-x: clip;
   background-color: #fff4e8;
   background-image:
     radial-gradient(ellipse 90% 55% at 10% -10%, rgba(255, 180, 100, 0.45), transparent 55%),
@@ -141,6 +142,7 @@ a:focus-visible {
 .legal-page,
 .article-page {
   position: relative;
+  width: min(720px, calc(100% - 2rem));
   max-width: 720px;
   margin: 1.5rem auto 3rem;
   padding: 2rem 1.4rem 2.5rem;
@@ -151,6 +153,8 @@ a:focus-visible {
     0 1px 0 rgba(255, 255, 255, 0.7) inset,
     0 18px 48px rgba(90, 40, 0, 0.08);
   min-height: auto;
+  overflow-x: clip;
+  box-sizing: border-box;
 }
 
 @media (min-width: 720px) {
@@ -515,6 +519,16 @@ a.btn-primary-link:hover {
 }
 
 /* ——— Article visuals: figures, charts, flows ——— */
+.article-figure,
+.article-chart,
+.article-flow,
+.article-stats,
+.article-timeline,
+.article-pipeline {
+  max-width: 100%;
+  min-width: 0;
+}
+
 .article-figure {
   margin: 1.35rem 0 1.6rem;
   padding: 0;
@@ -528,6 +542,7 @@ a.btn-primary-link:hover {
 .article-figure img {
   display: block;
   width: 100%;
+  max-width: 100%;
   height: auto;
   aspect-ratio: 16 / 9;
   object-fit: cover;
