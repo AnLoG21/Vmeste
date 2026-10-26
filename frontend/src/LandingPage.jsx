@@ -907,6 +907,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
             RuStore
           </a>
           <a href="/businesses">Для бизнеса</a>
+          <a href="/blog/kak-zapustit-biznes-na-vmeste-za-15-minut">Запуск за 15 минут</a>
           <a href="/blog">Блог</a>
           <a href="/salon">Салон</a>
           <a href="/avtoservis">Автосервис</a>
