@@ -548,22 +548,23 @@ a.btn-primary-link:hover {
   object-fit: cover;
 }
 
-/* UI screenshots: never crop — show the whole frame */
+/* UI screenshots: full landscape PNGs, no crop / no squeeze from HTML attrs */
 .article-figure.is-shot {
-  overflow: visible;
-  background: #fff8f0;
+  overflow: hidden;
+  background: rgba(26, 18, 8, 0.06);
 }
 
 .article-figure.is-shot img {
-  aspect-ratio: auto;
+  display: block;
   width: 100%;
   max-width: 100%;
-  height: auto;
+  height: auto !important;
   max-height: none;
-  object-fit: contain;
+  aspect-ratio: auto !important;
+  object-fit: contain !important;
   object-position: top center;
   background: #fff8f0;
-  border-radius: 14px 14px 0 0;
+  border-radius: 0;
 }
 
 .article-shot-where {
