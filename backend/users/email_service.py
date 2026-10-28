@@ -119,6 +119,35 @@ def send_booking_notification_email(*, to: str, subject: str, text_body: str) ->
     return _send_branded(to=to, subject=f"{SITE_BRAND}: {subject}"[:180], text_body=text_body or subject, html_body=html)
 
 
+def send_outreach_email(*, to: str, subject: str, text_body: str, title: str = "") -> bool:
+    """Branded cold/warm outreach email (salon acquisition). Uses the same SMTP as registration."""
+    to = (to or "").strip()
+    if not to or "@" not in to:
+        return False
+    if should_skip_smtp(to=to):
+        logger.info("Skip outreach email to demo mailbox %s", to)
+        return False
+    paragraphs = [p.strip() for p in (text_body or "").split("\n") if p.strip()]
+    # Drop duplicated greeting — _wrap_html already adds «Здравствуйте!»
+    if paragraphs and paragraphs[0].lower().startswith("здравствуйте"):
+        paragraphs = paragraphs[1:]
+    if not paragraphs:
+        paragraphs = [subject or "Предложение для салона"]
+    html = _wrap_html(
+        title=title or subject or "Вместе для салона",
+        greeting="Здравствуйте!",
+        paragraphs=paragraphs,
+        button_url="https://vsevmeste.space",
+        button_label="Открыть демо",
+    )
+    return _send_branded(
+        to=to,
+        subject=(subject or f"{SITE_BRAND} для салона")[:180],
+        text_body=text_body or subject,
+        html_body=html,
+    )
+
+
 def send_verification_email(user) -> bool:
     if should_skip_smtp(user=user, to=getattr(user, "email", "") or ""):
         logger.info("Skip verification email for demo user %s", getattr(user, "username", "?"))
