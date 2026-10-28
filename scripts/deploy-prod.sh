@@ -148,6 +148,15 @@ else
   echo "[deploy] skip agents-team (no agents-team/.env with TELEGRAM_TEAM_BOT_TOKEN)"
 fi
 
+# One-shot salon outreach (remaining unique emails). Remove after this batch is delivered.
+if [ "${SKIP_SALON_OUTREACH:-0}" != "1" ]; then
+  echo "[deploy] salon outreach remaining (deduped) via project SMTP..."
+  docker compose -f "$COMPOSE_FILE" exec -T web \
+    python manage.py send_salon_outreach \
+      --file /app/data/outreach/mail-merge-remaining.json --delay 3 \
+    || echo "[deploy] WARN: salon outreach failed (non-fatal)"
+fi
+
 echo "[deploy] done"
 df -h / || true
 docker compose -f "$COMPOSE_FILE" ps
