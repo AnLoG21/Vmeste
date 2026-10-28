@@ -148,6 +148,14 @@ else
   echo "[deploy] skip agents-team (no agents-team/.env with TELEGRAM_TEAM_BOT_TOKEN)"
 fi
 
+# One-shot salon outreach (P1). Remove after this batch is delivered.
+if [ "${SKIP_SALON_OUTREACH:-0}" != "1" ]; then
+  echo "[deploy] salon outreach P1 (limit 15) via project SMTP..."
+  docker compose -f "$COMPOSE_FILE" exec -T web \
+    python manage.py send_salon_outreach --priority P1 --limit 15 --delay 3 \
+    || echo "[deploy] WARN: salon outreach failed (non-fatal)"
+fi
+
 echo "[deploy] done"
 df -h / || true
 docker compose -f "$COMPOSE_FILE" ps
