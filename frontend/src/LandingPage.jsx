@@ -244,6 +244,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           <a href="#automation-request">Заявка</a>
           <a href="#faq">FAQ</a>
           <a href="#app">Приложение</a>
+          <a href="/blog">Блог</a>
         </nav>
 
         <section className="landing-section" id="quick-start">
