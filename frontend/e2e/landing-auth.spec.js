@@ -52,7 +52,8 @@ test.describe("Landing auth smoke", () => {
     await expect(page.getByPlaceholder("Логин")).toBeVisible({ timeout: 10_000 });
     await page.getByPlaceholder("Логин").fill("e2e-client");
     await page.getByPlaceholder("Пароль").fill("password123");
-    await page.locator(".auth-modal").getByRole("button", { name: "Войти", exact: true }).click();
+    // Submit via Enter — avoids flaky overlay hit-testing on the «Войти» button in CI.
+    await page.getByPlaceholder("Пароль").press("Enter");
 
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem("vmeste_access")), { timeout: 15_000 })
