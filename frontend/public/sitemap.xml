@@ -242,6 +242,36 @@
     <priority>0.85</priority>
   </url>
   <url>
+    <loc>https://vsevmeste.space/blog/vmagazine-poisk-magazinov</loc>
+    <lastmod>2026-11-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://vsevmeste.space/blog/galereya-i-grafik-organizacii</loc>
+    <lastmod>2026-11-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://vsevmeste.space/blog/vin-i-statusy-remonta</loc>
+    <lastmod>2026-11-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://vsevmeste.space/blog/udalenie-akkaunta-i-152-fz</loc>
+    <lastmod>2026-11-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://vsevmeste.space/blog/vmeste-v-moskve</loc>
+    <lastmod>2026-11-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
     <loc>https://vsevmeste.space/blog/kak-zapustit-biznes-na-vmeste-za-15-minut</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>monthly</changefreq>
