@@ -27,6 +27,7 @@ urlpatterns = [
     path("api/vmenu/", include("vmenu.urls")),
     path("api/vmagazine/", include("vmagazine.urls")),
     path("api/vkvartire/", include("vkvartire.urls")),
+    path("api/vefire/", include("vefire.urls")),
     path("api/moy-nalog/", include("moy_nalog.urls")),
     path("api/shop/", include("shop.urls")),
 ]

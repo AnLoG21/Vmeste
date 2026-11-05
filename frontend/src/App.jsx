@@ -19,8 +19,11 @@ import ShopWorkspace from "./ShopWorkspace.jsx";
 import VmenuApp, { ServicesHub } from "./vmenu/VmenuApp.jsx";
 import VmagazineApp from "./vmagazine/VmagazineApp.jsx";
 import VkvartireApp from "./vkvartire/VkvartireApp.jsx";
+import VefireApp from "./vefire/VefireApp.jsx";
+import { canAccessVefire } from "./vefire/vefireAccess.js";
 import "./vmagazine/vmagazine.css";
 import "./vkvartire/vkvartire.css";
+import "./vefire/vefire.css";
 import { CabinetErrorBoundary } from "./CabinetErrorBoundary.jsx";
 import CabinetChrome from "./CabinetChrome.jsx";
 import InspectionWorkspace from "./InspectionWorkspace.jsx";
@@ -949,6 +952,11 @@ export default function App() {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
+
+  useEffect(() => {
+    if (!me || currentView !== "vefire") return;
+    if (!canAccessVefire(me)) setCurrentView("service_apps");
+  }, [me, currentView]);
 
   const chatActivityBadgeRef = useRef(0);
   useEffect(() => {
@@ -2942,7 +2950,7 @@ export default function App() {
     me?.role === "staff";
   const chatsPortalTarget =
     currentView === "vmenu" || currentView === "vmagazine" ? vmenuChatsHostEl : mainChatsHostEl;
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "service_apps", "vmenu", "vmagazine", "vkvartire"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "service_apps", "vmenu", "vmagazine", "vkvartire", "vefire"].includes(currentView);
   const profileWide = accessToken && ["profile", "subscriptions"].includes(currentView);
 
   return (
@@ -3145,9 +3153,11 @@ export default function App() {
         )}
         {accessToken && currentView === "service_apps" && (
           <ServicesHub
+            me={me}
             onOpenVmenu={() => setCurrentView("vmenu")}
             onOpenVmagazine={() => setCurrentView("vmagazine")}
             onOpenVkvartire={() => setCurrentView("vkvartire")}
+            onOpenVefire={() => setCurrentView("vefire")}
           />
         )}
         {accessToken && currentView === "vmenu" && (
@@ -3185,6 +3195,14 @@ export default function App() {
               setSelectedChatId(Number(conversationId));
               setCurrentView("chats");
             }}
+          />
+        )}
+        {accessToken && currentView === "vefire" && canAccessVefire(me) && (
+          <VefireApp
+            me={me}
+            authFetch={authFetch}
+            API_URL={API_URL}
+            onExit={() => setCurrentView("service_apps")}
           />
         )}
         {accessToken &&

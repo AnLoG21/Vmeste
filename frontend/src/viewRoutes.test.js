@@ -15,6 +15,11 @@ describe("viewRoutes", () => {
     expect(viewFromPath("/vmagazine")).toBe("vmagazine");
   });
 
+  it("maps vefire ↔ /vefire", () => {
+    expect(pathForView("vefire")).toBe("/vefire");
+    expect(viewFromPath("/vefire")).toBe("vefire");
+  });
+
   it("returns null for unknown paths", () => {
     expect(viewFromPath("/no-such-view")).toBeNull();
     expect(pathForView("unknown")).toBe("/");

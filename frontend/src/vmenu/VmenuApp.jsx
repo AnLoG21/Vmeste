@@ -3,6 +3,8 @@ import "./vmenu.css";
 import VmenuLogo from "./VmenuLogo.jsx";
 import VmagazineLogo from "../vmagazine/VmagazineLogo.jsx";
 import VkvartireLogo from "../vkvartire/VkvartireLogo.jsx";
+import VefireLogo from "../vefire/VefireLogo.jsx";
+import { canAccessVefire } from "../vefire/vefireAccess.js";
 import { vmenuFetch, VMENU_DRAFT_KEY } from "./vmenuApi.js";
 import { VmenuErrorBoundary } from "./VmenuErrorBoundary.jsx";
 import { readVmenuUrlState, writeVmenuUrlState } from "./vmenuUrl.js";
@@ -298,7 +300,8 @@ export default function VmenuApp({
   );
 }
 
-export function ServicesHub({ onOpenVmenu, onOpenVmagazine, onOpenVkvartire }) {
+export function ServicesHub({ me, onOpenVmenu, onOpenVmagazine, onOpenVkvartire, onOpenVefire }) {
+  const showVefire = canAccessVefire(me);
   return (
     <section className="card services-hub">
       <h2>Сервисы</h2>
@@ -324,6 +327,15 @@ export function ServicesHub({ onOpenVmenu, onOpenVmagazine, onOpenVkvartire }) {
           <p className="muted small">Подбор квартир: лента, карта, фильтр по удалённости и избранное.</p>
         </div>
       </button>
+      {showVefire ? (
+        <button type="button" className="services-hub-card services-hub-card--tv" onClick={onOpenVefire}>
+          <VefireLogo size={48} />
+          <div>
+            <strong>Вэфире</strong>
+            <p className="muted small">Домашний экран ТВ: Кинопоиск, Rutube, VK Видео и запуск по ссылке.</p>
+          </div>
+        </button>
+      ) : null}
     </section>
   );
 }

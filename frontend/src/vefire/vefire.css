@@ -1,0 +1,275 @@
+.vefire-shell {
+  --vefire-bg: #0b0d12;
+  --vefire-card: #151821;
+  --vefire-text: #f4f6fb;
+  --vefire-muted: #9aa3b5;
+  --vefire-accent: #ff7a00;
+  background: radial-gradient(120% 80% at 10% 0%, #1a2233 0%, var(--vefire-bg) 45%);
+  color: var(--vefire-text);
+  border-radius: 16px;
+  min-height: min(78vh, 820px);
+  padding: 1rem 1.1rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow: hidden;
+}
+
+.vefire-shell--denied {
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.vefire-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.vefire-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.vefire-clock {
+  color: var(--vefire-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 3.5rem;
+  text-align: right;
+}
+
+.vefire-back {
+  border: 0;
+  background: transparent;
+  color: var(--vefire-muted);
+  cursor: pointer;
+  padding: 0.25rem 0;
+  font: inherit;
+}
+
+.vefire-back:hover {
+  color: var(--vefire-text);
+}
+
+.vefire-home {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.vefire-eyebrow {
+  margin: 0;
+  color: var(--vefire-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.vefire-title {
+  margin: 0 0 0.5rem;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.vefire-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.85rem;
+}
+
+.vefire-tile {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, #1b2030 0%, var(--vefire-card) 100%);
+  border-radius: 18px;
+  padding: 1rem 0.9rem 1.05rem;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 150px;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.vefire-tile:hover,
+.vefire-tile:focus-visible {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--tile-accent, var(--vefire-accent)) 55%, transparent);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  outline: none;
+}
+
+.vefire-tile-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: #fff;
+  margin-bottom: 0.35rem;
+}
+
+.vefire-tile-title {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.vefire-tile-sub {
+  color: var(--vefire-muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.vefire-app-stage {
+  flex: 1;
+  display: grid;
+}
+
+.vefire-app-hero {
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 360px;
+}
+
+.vefire-app-hero h2 {
+  margin: 0.4rem 0 0;
+  font-size: 1.8rem;
+}
+
+.vefire-app-hero p {
+  margin: 0;
+  color: var(--vefire-muted);
+  max-width: 36rem;
+}
+
+.vefire-app-hero-icon {
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.35rem;
+}
+
+.vefire-app-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.vefire-btn {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--vefire-text);
+  border-radius: 999px;
+  padding: 0.65rem 1.1rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.vefire-btn--accent {
+  background: var(--vefire-accent);
+  border-color: transparent;
+  color: #111;
+  font-weight: 700;
+}
+
+.vefire-hint,
+.vefire-muted {
+  color: var(--vefire-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.vefire-cast-msg {
+  margin: 0.35rem 0 0;
+  color: #ffd39a;
+  font-size: 0.92rem;
+}
+
+.vefire-cast-status {
+  margin: 0.15rem 0 0.35rem;
+  font-size: 0.82rem;
+}
+
+.vefire-app-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.vefire-link-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 720px;
+}
+
+.vefire-link-panel h2 {
+  margin: 0;
+}
+
+.vefire-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.vefire-input {
+  flex: 1 1 220px;
+  min-width: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #0f1218;
+  color: var(--vefire-text);
+  padding: 0.75rem 0.9rem;
+  font: inherit;
+}
+
+.vefire-player-wrap {
+  margin-top: 0.5rem;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.vefire-player {
+  width: 100%;
+  max-height: 55vh;
+  display: block;
+  background: #000;
+}
+
+@media (max-width: 640px) {
+  .vefire-shell {
+    min-height: 70vh;
+    padding: 0.85rem;
+  }
+
+  .vefire-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -411,6 +411,10 @@ body:has(.page-logged:has(.vmenu-app)) {
   align-items: center;
 }
 
+.services-hub-card--tv {
+  border-color: rgba(255, 122, 0, 0.4);
+}
+
 .vmag-home {
   display: flex;
   flex-direction: column;

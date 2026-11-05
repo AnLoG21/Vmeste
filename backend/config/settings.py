@@ -81,6 +81,7 @@ INSTALLED_APPS = [
     "vmenu",
     "vmagazine",
     "vkvartire",
+    "vefire",
     "moy_nalog",
     "shop",
 ]

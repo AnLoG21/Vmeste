@@ -22,6 +22,7 @@ export const VIEW_PATHS = {
   vmenu: "/vmenu",
   vmagazine: "/vmagazine",
   vkvartire: "/vkvartire",
+  vefire: "/vefire",
   client_map: "/map",
   activity: "/activity",
   client_book: "/book",
