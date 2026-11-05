@@ -11,10 +11,12 @@ if not exist .env (
   echo Fill VEFIRE_PASSWORD in .env
   notepad .env
 )
-python -m pip install -r requirements.txt
+REM Wrong PyPI package "websocket" shadows websocket-client — remove it first.
+python -m pip uninstall -y websocket >nul 2>&1
+python -m pip install -U -r requirements.txt
 echo.
-echo After start open the remote URL from the console on your phone.
 echo Lid closed: Win+P = Second screen only; Power = Do nothing when lid closes.
+echo Remote is inside Vmeste -^> Vefire -^> Pult (no separate link needed).
 echo.
 python agent.py
 pause

@@ -213,6 +213,39 @@
   font-size: 0.82rem;
 }
 
+.vefire-remote {
+  gap: 0.55rem;
+}
+
+.vefire-remote-stage {
+  flex: 1;
+  min-height: 240px;
+  background: #000;
+  border-radius: 14px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  touch-action: none;
+}
+
+.vefire-remote-frame {
+  max-width: 100%;
+  max-height: 52vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  touch-action: none;
+  user-select: none;
+  background: #111;
+}
+
+.vefire-remote-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
 .vefire-app-dot {
   width: 0.65rem;
   height: 0.65rem;

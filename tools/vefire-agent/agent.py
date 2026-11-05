@@ -163,14 +163,47 @@ def find_browser() -> tuple[str, list[str]]:
     return "", []
 
 
+_last_upload_ts = 0.0
+
+
 def on_frame(jpeg: bytes, width: int, height: int) -> None:
-    global _latest_jpeg
+    global _latest_jpeg, _last_upload_ts
     with _jpeg_cond:
         _latest_jpeg = jpeg
         _latest_meta["width"] = width
         _latest_meta["height"] = height
         _latest_meta["ready"] = True
         _jpeg_cond.notify_all()
+    # Throttle uploads to Vmeste (~4 fps) for in-app remote
+    now = time.time()
+    if now - _last_upload_ts < 0.25:
+        return
+    _last_upload_ts = now
+    try:
+        files = {"frame": ("frame.jpg", jpeg, "image/jpeg")}
+        data = {"width": str(width), "height": str(height)}
+        r = session.post(f"{API_URL}/vefire/agent/frame/", files=files, data=data, timeout=8)
+        if r.status_code == 401:
+            login()
+            session.post(f"{API_URL}/vefire/agent/frame/", files=files, data=data, timeout=8)
+    except Exception:
+        pass
+
+
+def input_poll_loop() -> None:
+    while True:
+        try:
+            r = api_get("/vefire/agent/input/")
+            if r.ok:
+                events = (r.json() or {}).get("events") or []
+                for ev in events:
+                    try:
+                        handle_input(ev if isinstance(ev, dict) else {})
+                    except Exception as e:  # noqa: BLE001
+                        log(f"Input apply: {e}")
+        except Exception as e:  # noqa: BLE001
+            log(f"Input poll: {e}")
+        time.sleep(0.12)
 
 
 def ensure_browser(start_url: str | None = None) -> CdpBrowser:
@@ -389,6 +422,8 @@ def main() -> int:
 
     threading.Thread(target=poll_loop, daemon=True).start()
     threading.Thread(target=heartbeat_loop, daemon=True).start()
+    threading.Thread(target=input_poll_loop, daemon=True).start()
+    log("Пульт внутри Вместе → Вэфире → «Пульт» (зеркало без отдельной ссылки).")
 
     try:
         while True:

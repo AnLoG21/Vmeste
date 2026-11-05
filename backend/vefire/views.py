@@ -1,3 +1,4 @@
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -99,15 +100,13 @@ class AgentHeartbeatView(VefireGateMixin, APIView):
         if denied:
             return denied
         remote_url = str(request.data.get("remote_url") or "").strip()
-        if not remote_url.startswith("http://") and not remote_url.startswith("https://"):
-            return Response({"detail": "remote_url required"}, status=status.HTTP_400_BAD_REQUEST)
         ips = request.data.get("ips") or []
         if not isinstance(ips, list):
             ips = []
-        obj, _ = AgentHeartbeat.objects.update_or_create(
-            user=request.user,
-            defaults={"remote_url": remote_url[:500], "ips": [str(x)[:64] for x in ips[:8]]},
-        )
+        defaults = {"ips": [str(x)[:64] for x in ips[:8]]}
+        if remote_url.startswith("http://") or remote_url.startswith("https://"):
+            defaults["remote_url"] = remote_url[:500]
+        obj, _ = AgentHeartbeat.objects.update_or_create(user=request.user, defaults=defaults)
         return Response({"remote_url": obj.remote_url, "updated_at": obj.updated_at, "ips": obj.ips})
 
     def get(self, request):
@@ -119,7 +118,10 @@ class AgentHeartbeatView(VefireGateMixin, APIView):
         except AgentHeartbeat.DoesNotExist:
             return Response({"agent": None})
         age = (timezone.now() - obj.updated_at).total_seconds()
-        online = age < 45
+        frame_age = None
+        if obj.frame_updated_at:
+            frame_age = int((timezone.now() - obj.frame_updated_at).total_seconds())
+        online = age < 45 or (frame_age is not None and frame_age < 8)
         return Response(
             {
                 "agent": {
@@ -128,7 +130,94 @@ class AgentHeartbeatView(VefireGateMixin, APIView):
                     "updated_at": obj.updated_at,
                     "online": online,
                     "age_sec": int(age),
+                    "has_frame": bool(obj.last_jpeg),
+                    "frame_width": obj.frame_width,
+                    "frame_height": obj.frame_height,
+                    "frame_age_sec": frame_age,
                 }
             }
         )
+
+
+class AgentFrameView(VefireGateMixin, APIView):
+    """Agent uploads JPEG frames; phone downloads them inside Vmeste (HTTPS)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        denied = self.deny_if_not_allowed(request)
+        if denied:
+            return denied
+        upload = request.FILES.get("frame")
+        raw = upload.read() if upload else request.body
+        if not raw:
+            return Response({"detail": "empty frame"}, status=status.HTTP_400_BAD_REQUEST)
+        # Cap ~400KB to protect DB
+        if len(raw) > 450_000:
+            return Response({"detail": "frame too large"}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+        width = int(request.data.get("width") or request.META.get("HTTP_X_FRAME_WIDTH") or 1280)
+        height = int(request.data.get("height") or request.META.get("HTTP_X_FRAME_HEIGHT") or 720)
+        obj, _ = AgentHeartbeat.objects.get_or_create(user=request.user, defaults={"remote_url": ""})
+        obj.last_jpeg = raw
+        obj.frame_width = max(1, min(width, 3840))
+        obj.frame_height = max(1, min(height, 2160))
+        obj.frame_updated_at = timezone.now()
+        obj.updated_at = timezone.now()
+        obj.save(
+            update_fields=["last_jpeg", "frame_width", "frame_height", "frame_updated_at", "updated_at"]
+        )
+        return Response({"ok": True, "bytes": len(raw)})
+
+    def get(self, request):
+        denied = self.deny_if_not_allowed(request)
+        if denied:
+            return denied
+        try:
+            obj = AgentHeartbeat.objects.get(user=request.user)
+        except AgentHeartbeat.DoesNotExist:
+            return HttpResponse(status=404)
+        if not obj.last_jpeg:
+            return HttpResponse(status=404)
+        resp = HttpResponse(bytes(obj.last_jpeg), content_type="image/jpeg")
+        resp["Cache-Control"] = "no-store"
+        resp["X-Frame-Width"] = str(obj.frame_width)
+        resp["X-Frame-Height"] = str(obj.frame_height)
+        return resp
+
+
+class AgentInputView(VefireGateMixin, APIView):
+    """Phone enqueues input; agent drains the queue."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        denied = self.deny_if_not_allowed(request)
+        if denied:
+            return denied
+        event = request.data if isinstance(request.data, dict) else {}
+        if not event.get("type"):
+            return Response({"detail": "type required"}, status=status.HTTP_400_BAD_REQUEST)
+        obj, _ = AgentHeartbeat.objects.get_or_create(user=request.user, defaults={"remote_url": ""})
+        queue = list(obj.input_queue or [])
+        queue.append(event)
+        obj.input_queue = queue[-80:]
+        obj.save(update_fields=["input_queue", "updated_at"])
+        return Response({"ok": True, "queued": len(obj.input_queue)})
+
+    def get(self, request):
+        denied = self.deny_if_not_allowed(request)
+        if denied:
+            return denied
+        from django.db import transaction
+
+        with transaction.atomic():
+            try:
+                obj = AgentHeartbeat.objects.select_for_update().get(user=request.user)
+            except AgentHeartbeat.DoesNotExist:
+                return Response({"events": []})
+            events = list(obj.input_queue or [])
+            obj.input_queue = []
+            obj.save(update_fields=["input_queue", "updated_at"])
+        return Response({"events": events})
+
 

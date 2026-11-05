@@ -35,10 +35,16 @@ class AgentHeartbeat(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="vefire_agent"
     )
-    remote_url = models.URLField(max_length=500)
+    remote_url = models.URLField(max_length=500, blank=True, default="")
     ips = models.JSONField(default=list, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+    last_jpeg = models.BinaryField(null=True, blank=True)
+    frame_width = models.PositiveIntegerField(default=1280)
+    frame_height = models.PositiveIntegerField(default=720)
+    frame_updated_at = models.DateTimeField(null=True, blank=True)
+    input_queue = models.JSONField(default=list, blank=True)
 
     def __str__(self):
         return f"Agent<{self.user_id}> {self.remote_url}"
+
 

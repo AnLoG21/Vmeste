@@ -4,6 +4,7 @@ import VefireLogo from "./VefireLogo.jsx";
 import { VEFIRE_APPS } from "./vefireApps.js";
 import { canAccessVefire } from "./vefireAccess.js";
 import { castToTv, fetchAgentStatus, fetchLatestCast } from "./vefireApi.js";
+import VefireRemote from "./VefireRemote.jsx";
 
 function isDirectVideoUrl(url) {
   return /\.(mp4|webm|ogg|m3u8)(\?|#|$)/i.test(url);
@@ -28,6 +29,7 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
   const [castMsg, setCastMsg] = useState("");
   const [latestCast, setLatestCast] = useState(null);
   const [agent, setAgent] = useState(null);
+  const [showRemote, setShowRemote] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 30_000);
@@ -138,11 +140,17 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
     : "Агент на ноуте пока молчит — запусти Vefire-TV-Agent на рабочем столе";
 
   const agentLine = agent?.online
-    ? `Пульт онлайн: ${agent.remote_url}`
-    : "Пульт офлайн — запусти агент на ноуте у ТВ (та же Wi‑Fi)";
+    ? "Агент онлайн — можно открыть пульт здесь"
+    : "Агент офлайн — запусти run.bat на ноуте у ТВ";
 
-  function openRemote() {
-    if (agent?.remote_url) window.open(agent.remote_url, "_blank", "noopener,noreferrer");
+  if (showRemote) {
+    return (
+      <VefireRemote
+        authFetch={authFetch}
+        API_URL={API_URL}
+        onBack={() => setShowRemote(false)}
+      />
+    );
   }
 
   if (activeApp?.kind === "link") {
@@ -190,11 +198,13 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
           {castMsg ? <p className="vefire-cast-msg">{castMsg}</p> : null}
           <p className="vefire-muted vefire-cast-status">{castStatusLine}</p>
           <p className="vefire-muted vefire-cast-status">{agentLine}</p>
-          {agent?.online ? (
-            <button type="button" className="vefire-btn vefire-btn--accent" onClick={openRemote}>
-              Открыть пульт (зеркало ТВ)
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="vefire-btn vefire-btn--accent"
+            onClick={() => setShowRemote(true)}
+          >
+            Пульт
+          </button>
           {playerUrl ? (
             <div className="vefire-player-wrap">
               <video className="vefire-player" src={playerUrl} controls autoPlay playsInline />
@@ -254,11 +264,9 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
             </p>
             <p className="vefire-muted vefire-cast-status">{castStatusLine}</p>
             <p className="vefire-muted vefire-cast-status">{agentLine}</p>
-            {agent?.online ? (
-              <button type="button" className="vefire-btn vefire-btn--accent" onClick={openRemote}>
-                Открыть пульт (зеркало ТВ)
-              </button>
-            ) : null}
+            <button type="button" className="vefire-btn vefire-btn--accent" onClick={() => setShowRemote(true)}>
+              Пульт
+            </button>
           </div>
         </div>
       </section>
@@ -285,13 +293,11 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
         <h1 className="vefire-title">Что смотрим?</h1>
         <p className="vefire-muted vefire-cast-status">{castStatusLine}</p>
         <p className="vefire-muted vefire-cast-status">{agentLine}</p>
-        {agent?.online ? (
-          <div className="vefire-app-actions" style={{ marginBottom: "0.5rem" }}>
-            <button type="button" className="vefire-btn vefire-btn--accent" onClick={openRemote}>
-              Открыть пульт (зеркало ТВ)
-            </button>
-          </div>
-        ) : null}
+        <div className="vefire-app-actions" style={{ marginBottom: "0.5rem" }}>
+          <button type="button" className="vefire-btn vefire-btn--accent" onClick={() => setShowRemote(true)}>
+            Пульт
+          </button>
+        </div>
         <div className="vefire-grid">
           {VEFIRE_APPS.map((app) => (
             <button

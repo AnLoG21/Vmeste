@@ -7,7 +7,18 @@ import time
 from typing import Any, Callable
 
 import requests
-from websocket import WebSocketConnectionClosedException, create_connection
+
+try:
+    # Correct package is websocket-client (imports as websocket).
+    from websocket import create_connection
+    from websocket._exceptions import WebSocketConnectionClosedException
+except ImportError as exc:  # pragma: no cover
+    raise SystemExit(
+        "Нужен пакет websocket-client.\n"
+        "Выполни: python -m pip uninstall -y websocket\n"
+        "          python -m pip install -U websocket-client\n"
+        f"({exc})"
+    ) from exc
 
 
 class CdpBrowser:
