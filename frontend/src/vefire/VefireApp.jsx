@@ -3,7 +3,7 @@ import "./vefire.css";
 import VefireLogo from "./VefireLogo.jsx";
 import { VEFIRE_APPS } from "./vefireApps.js";
 import { canAccessVefire } from "./vefireAccess.js";
-import { castToTv, fetchLatestCast } from "./vefireApi.js";
+import { castToTv, fetchAgentStatus, fetchLatestCast } from "./vefireApi.js";
 
 function isDirectVideoUrl(url) {
   return /\.(mp4|webm|ogg|m3u8)(\?|#|$)/i.test(url);
@@ -27,6 +27,7 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
   const [castBusy, setCastBusy] = useState(false);
   const [castMsg, setCastMsg] = useState("");
   const [latestCast, setLatestCast] = useState(null);
+  const [agent, setAgent] = useState(null);
 
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 30_000);
@@ -42,8 +43,14 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
     let cancelled = false;
     async function load() {
       try {
-        const job = await fetchLatestCast(authFetch, API_URL);
-        if (!cancelled) setLatestCast(job);
+        const [job, ag] = await Promise.all([
+          fetchLatestCast(authFetch, API_URL),
+          fetchAgentStatus(authFetch, API_URL),
+        ]);
+        if (!cancelled) {
+          setLatestCast(job);
+          setAgent(ag);
+        }
       } catch {
         /* ignore */
       }
@@ -128,7 +135,15 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
 
   const castStatusLine = latestCast
     ? `Последний cast #${latestCast.id}: ${latestCast.status}${latestCast.title ? ` · ${latestCast.title}` : ""}`
-    : "Агент на ноуте пока молчит — запусти tools/vefire-agent";
+    : "Агент на ноуте пока молчит — запусти Vefire-TV-Agent на рабочем столе";
+
+  const agentLine = agent?.online
+    ? `Пульт онлайн: ${agent.remote_url}`
+    : "Пульт офлайн — запусти агент на ноуте у ТВ (та же Wi‑Fi)";
+
+  function openRemote() {
+    if (agent?.remote_url) window.open(agent.remote_url, "_blank", "noopener,noreferrer");
+  }
 
   if (activeApp?.kind === "link") {
     return (
@@ -174,6 +189,12 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
           </div>
           {castMsg ? <p className="vefire-cast-msg">{castMsg}</p> : null}
           <p className="vefire-muted vefire-cast-status">{castStatusLine}</p>
+          <p className="vefire-muted vefire-cast-status">{agentLine}</p>
+          {agent?.online ? (
+            <button type="button" className="vefire-btn vefire-btn--accent" onClick={openRemote}>
+              Открыть пульт (зеркало ТВ)
+            </button>
+          ) : null}
           {playerUrl ? (
             <div className="vefire-player-wrap">
               <video className="vefire-player" src={playerUrl} controls autoPlay playsInline />
@@ -229,10 +250,15 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
             </div>
             {castMsg ? <p className="vefire-cast-msg">{castMsg}</p> : null}
             <p className="vefire-hint">
-              «На ТВ» работает через агент на ноуте (`tools/vefire-agent`). Ноут должен быть с HDMI к
-              Philips и с запущенным `python agent.py`.
+              «На ТВ» → агент на ноуте. Потом «Открыть пульт» — зеркало экрана и управление с телефона.
             </p>
             <p className="vefire-muted vefire-cast-status">{castStatusLine}</p>
+            <p className="vefire-muted vefire-cast-status">{agentLine}</p>
+            {agent?.online ? (
+              <button type="button" className="vefire-btn vefire-btn--accent" onClick={openRemote}>
+                Открыть пульт (зеркало ТВ)
+              </button>
+            ) : null}
           </div>
         </div>
       </section>
@@ -258,6 +284,14 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
         <p className="vefire-eyebrow">Домашний экран</p>
         <h1 className="vefire-title">Что смотрим?</h1>
         <p className="vefire-muted vefire-cast-status">{castStatusLine}</p>
+        <p className="vefire-muted vefire-cast-status">{agentLine}</p>
+        {agent?.online ? (
+          <div className="vefire-app-actions" style={{ marginBottom: "0.5rem" }}>
+            <button type="button" className="vefire-btn vefire-btn--accent" onClick={openRemote}>
+              Открыть пульт (зеркало ТВ)
+            </button>
+          </div>
+        ) : null}
         <div className="vefire-grid">
           {VEFIRE_APPS.map((app) => (
             <button

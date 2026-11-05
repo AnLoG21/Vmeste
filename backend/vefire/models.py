@@ -29,3 +29,16 @@ class CastRequest(models.Model):
 
     def __str__(self):
         return f"Cast#{self.pk} {self.status} {self.url[:60]}"
+
+
+class AgentHeartbeat(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="vefire_agent"
+    )
+    remote_url = models.URLField(max_length=500)
+    ips = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Agent<{self.user_id}> {self.remote_url}"
+

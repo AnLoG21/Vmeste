@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .access import user_can_vefire
-from .models import CastRequest
+from .models import AgentHeartbeat, CastRequest
 from .serializers import CastCreateSerializer, CastRequestSerializer
 
 
@@ -89,3 +89,46 @@ class CastLatestView(VefireGateMixin, APIView):
             return denied
         job = CastRequest.objects.filter(user=request.user).order_by("-created_at").first()
         return Response({"job": CastRequestSerializer(job).data if job else None})
+
+
+class AgentHeartbeatView(VefireGateMixin, APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        denied = self.deny_if_not_allowed(request)
+        if denied:
+            return denied
+        remote_url = str(request.data.get("remote_url") or "").strip()
+        if not remote_url.startswith("http://") and not remote_url.startswith("https://"):
+            return Response({"detail": "remote_url required"}, status=status.HTTP_400_BAD_REQUEST)
+        ips = request.data.get("ips") or []
+        if not isinstance(ips, list):
+            ips = []
+        obj, _ = AgentHeartbeat.objects.update_or_create(
+            user=request.user,
+            defaults={"remote_url": remote_url[:500], "ips": [str(x)[:64] for x in ips[:8]]},
+        )
+        return Response({"remote_url": obj.remote_url, "updated_at": obj.updated_at, "ips": obj.ips})
+
+    def get(self, request):
+        denied = self.deny_if_not_allowed(request)
+        if denied:
+            return denied
+        try:
+            obj = AgentHeartbeat.objects.get(user=request.user)
+        except AgentHeartbeat.DoesNotExist:
+            return Response({"agent": None})
+        age = (timezone.now() - obj.updated_at).total_seconds()
+        online = age < 45
+        return Response(
+            {
+                "agent": {
+                    "remote_url": obj.remote_url,
+                    "ips": obj.ips,
+                    "updated_at": obj.updated_at,
+                    "online": online,
+                    "age_sec": int(age),
+                }
+            }
+        )
+

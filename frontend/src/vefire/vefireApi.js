@@ -18,3 +18,10 @@ export async function fetchLatestCast(authFetch, API_URL) {
   if (!res.ok) return null;
   return data?.job || null;
 }
+
+export async function fetchAgentStatus(authFetch, API_URL) {
+  const res = await authFetch(`${API_URL}/vefire/agent/heartbeat/`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return null;
+  return data?.agent || null;
+}
