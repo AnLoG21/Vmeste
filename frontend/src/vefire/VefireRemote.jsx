@@ -5,8 +5,10 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
   const [meta, setMeta] = useState({ width: 1280, height: 720 });
   const [status, setStatus] = useState("подключение…");
   const [text, setText] = useState("");
+  const [failHint, setFailHint] = useState("");
   const dragRef = useRef({ on: false, x: 0, y: 0, lastTap: 0 });
   const blobUrlRef = useRef("");
+  const missesRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -16,8 +18,16 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
       try {
         const res = await authFetch(`${API_URL}/vefire/agent/frame/`);
         if (!res.ok) {
-          if (!cancelled) setStatus("ждём картинку с ноута…");
+          missesRef.current += 1;
+          if (!cancelled) {
+            setStatus("ждём картинку с ноута…");
+            if (missesRef.current > 8) {
+              setFailHint("Запусти/перезапусти run.bat на ноуте у ТВ. Сначала «На ТВ», потом пульт.");
+            }
+          }
         } else {
+          missesRef.current = 0;
+          setFailHint("");
           const blob = await res.blob();
           const w = Number(res.headers.get("X-Frame-Width") || 0);
           const h = Number(res.headers.get("X-Frame-Height") || 0);
@@ -29,7 +39,7 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
           if (!cancelled) setStatus("онлайн · ТВ");
         }
       } catch {
-        if (!cancelled) setStatus("нет связи");
+        if (!cancelled) setStatus("нет связи с API");
       }
       if (!cancelled) timer = setTimeout(tick, 280);
     }
@@ -122,6 +132,7 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
 
       <div className="vefire-remote-dock">
         <p className="vefire-muted">Тап = клик · свайп = скролл · текст уходит в поиск на ТВ</p>
+        {failHint ? <p className="vefire-cast-msg">{failHint}</p> : null}
         <div className="vefire-link-row">
           <button type="button" className="vefire-btn" onClick={() => send({ type: "nav", action: "back" })}>
             ← Назад

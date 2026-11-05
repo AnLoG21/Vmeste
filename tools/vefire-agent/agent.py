@@ -1,5 +1,5 @@
 """
-Vefire cast agent: HDMI TV browser + phone remote mirror (MJPEG + input).
+Vefire cast agent: HDMI TV browser + phone remote mirror.
 """
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import os
 import shutil
 import socket
 import subprocess
-import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -31,7 +30,9 @@ POLL_SEC = max(1.0, float(os.environ.get("VEFIRE_POLL_SEC", "2")))
 BROWSER = os.environ.get("VEFIRE_BROWSER", "edge").strip().lower()
 REMOTE_PORT = int(os.environ.get("VEFIRE_REMOTE_PORT", "8765"))
 DEBUG_PORT = int(os.environ.get("VEFIRE_DEBUG_PORT", "9222"))
-HOME_URL = os.environ.get("VEFIRE_HOME_URL", "https://www.kinopoisk.ru/").strip()
+# Never auto-open a content site — only navigate on explicit cast / user home.
+BLANK_URL = "about:blank"
+HOME_URL = os.environ.get("VEFIRE_HOME_URL", BLANK_URL).strip() or BLANK_URL
 PROFILE_DIR = ROOT / ".browser-profile"
 
 session = requests.Session()
@@ -39,9 +40,12 @@ refresh_token = REFRESH
 _browser_proc: subprocess.Popen | None = None
 _cdp: CdpBrowser | None = None
 _cdp_lock = threading.Lock()
+_current_url = BLANK_URL
 _latest_jpeg = b""
 _latest_meta = {"width": 1280, "height": 720, "ready": False}
 _jpeg_cond = threading.Condition()
+_last_upload_ts = 0.0
+_frame_fail_logged = False
 
 
 def log(msg: str) -> None:
@@ -116,6 +120,17 @@ def lan_ips() -> list[str]:
 
 def find_browser() -> tuple[str, list[str]]:
     candidates: list[tuple[str, list[str], list[str]]] = []
+    common_args = [
+        "--kiosk",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-session-crashed-bubble",
+        "--hide-crash-restore-bubble",
+        f"--remote-debugging-port={DEBUG_PORT}",
+        f"--user-data-dir={PROFILE_DIR}",
+        "--autoplay-policy=no-user-gesture-required",
+        "--disable-features=TranslateUI,InfiniteSessionRestore",
+    ]
     if BROWSER in ("edge", "default"):
         candidates.append(
             (
@@ -124,15 +139,7 @@ def find_browser() -> tuple[str, list[str]]:
                     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
                     r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
                 ],
-                [
-                    "--kiosk",
-                    "--edge-kiosk-type=fullscreen",
-                    "--no-first-run",
-                    f"--remote-debugging-port={DEBUG_PORT}",
-                    f"--user-data-dir={PROFILE_DIR}",
-                    "--disable-features=TranslateUI",
-                    "--autoplay-policy=no-user-gesture-required",
-                ],
+                [*common_args, "--edge-kiosk-type=fullscreen"],
             )
         )
     if BROWSER in ("chrome", "default"):
@@ -143,14 +150,7 @@ def find_browser() -> tuple[str, list[str]]:
                     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
                     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
                 ],
-                [
-                    "--kiosk",
-                    "--no-first-run",
-                    "--disable-session-crashed-bubble",
-                    f"--remote-debugging-port={DEBUG_PORT}",
-                    f"--user-data-dir={PROFILE_DIR}",
-                    "--autoplay-policy=no-user-gesture-required",
-                ],
+                common_args,
             )
         )
     for _name, paths, args in candidates:
@@ -163,64 +163,104 @@ def find_browser() -> tuple[str, list[str]]:
     return "", []
 
 
-_last_upload_ts = 0.0
-
-
 def on_frame(jpeg: bytes, width: int, height: int) -> None:
-    global _latest_jpeg, _last_upload_ts
+    global _latest_jpeg, _last_upload_ts, _frame_fail_logged
     with _jpeg_cond:
         _latest_jpeg = jpeg
         _latest_meta["width"] = width
         _latest_meta["height"] = height
         _latest_meta["ready"] = True
         _jpeg_cond.notify_all()
-    # Throttle uploads to Vmeste (~4 fps) for in-app remote
     now = time.time()
-    if now - _last_upload_ts < 0.25:
+    if now - _last_upload_ts < 0.35:
         return
     _last_upload_ts = now
     try:
-        files = {"frame": ("frame.jpg", jpeg, "image/jpeg")}
+        # Shrink payload: skip if huge
+        payload = jpeg
+        if len(payload) > 400_000:
+            return
+        files = {"frame": ("frame.jpg", payload, "image/jpeg")}
         data = {"width": str(width), "height": str(height)}
-        r = session.post(f"{API_URL}/vefire/agent/frame/", files=files, data=data, timeout=8)
+        r = session.post(f"{API_URL}/vefire/agent/frame/", files=files, data=data, timeout=10)
         if r.status_code == 401:
             login()
-            session.post(f"{API_URL}/vefire/agent/frame/", files=files, data=data, timeout=8)
+            r = session.post(f"{API_URL}/vefire/agent/frame/", files=files, data=data, timeout=10)
+        if not r.ok:
+            if not _frame_fail_logged:
+                log(f"Frame upload failed: {r.status_code} {r.text[:200]}")
+                _frame_fail_logged = True
+        else:
+            _frame_fail_logged = False
+    except Exception as e:  # noqa: BLE001
+        if not _frame_fail_logged:
+            log(f"Frame upload error: {e}")
+            _frame_fail_logged = True
+
+
+def _cdp_alive(cdp: CdpBrowser) -> bool:
+    try:
+        cdp.call("Runtime.evaluate", {"expression": "1"}, timeout=2.0)
+        return True
     except Exception:
-        pass
+        return False
 
 
-def input_poll_loop() -> None:
-    while True:
-        try:
-            r = api_get("/vefire/agent/input/")
-            if r.ok:
-                events = (r.json() or {}).get("events") or []
-                for ev in events:
-                    try:
-                        handle_input(ev if isinstance(ev, dict) else {})
-                    except Exception as e:  # noqa: BLE001
-                        log(f"Input apply: {e}")
-        except Exception as e:  # noqa: BLE001
-            log(f"Input poll: {e}")
-        time.sleep(0.12)
+def _attach_cdp() -> CdpBrowser:
+    global _cdp
+    cdp = CdpBrowser(DEBUG_PORT)
+    cdp.on_frame = on_frame
+    cdp.connect()
+    cdp.start_screencast()
+    _cdp = cdp
+    _latest_meta["ready"] = True
+    return cdp
 
 
 def ensure_browser(start_url: str | None = None) -> CdpBrowser:
-    global _browser_proc, _cdp
+    """Keep current page unless start_url is explicitly provided (cast)."""
+    global _browser_proc, _cdp, _current_url
     with _cdp_lock:
-        if _cdp and _browser_proc and _browser_proc.poll() is None:
-            if start_url:
-                _cdp.navigate(start_url)
-            return _cdp
+        if start_url:
+            _current_url = start_url
+
+        browser_running = _browser_proc is not None and _browser_proc.poll() is None
+        if browser_running:
+            if _cdp and _cdp_alive(_cdp):
+                if start_url:
+                    log(f"Navigate: {start_url}")
+                    _cdp.navigate(start_url)
+                return _cdp
+            # Browser still up — only reattach CDP, do NOT relaunch with a default site
+            log("CDP reconnect (keeping current tab)")
+            try:
+                if _cdp:
+                    try:
+                        _cdp.close()
+                    except Exception:
+                        pass
+                cdp = _attach_cdp()
+                if start_url:
+                    cdp.navigate(start_url)
+                return cdp
+            except Exception as e:  # noqa: BLE001
+                log(f"CDP reattach failed: {e} — will relaunch browser")
 
         exe, args = find_browser()
         if not exe:
             raise RuntimeError("Edge/Chrome not found")
         PROFILE_DIR.mkdir(parents=True, exist_ok=True)
-        url = start_url or HOME_URL
-        cmd = [exe, *args, url]
-        log(f"Launch browser debug:{DEBUG_PORT}")
+        # Only open blank or the explicit cast URL — never surprise Kinopoisk
+        launch_url = start_url or _current_url or BLANK_URL
+        if launch_url == HOME_URL and HOME_URL.rstrip("/") in (
+            "https://www.kinopoisk.ru",
+            "http://www.kinopoisk.ru",
+        ):
+            # Old .env default — ignore for relaunch without cast
+            if not start_url:
+                launch_url = BLANK_URL
+        cmd = [exe, *args, launch_url]
+        log(f"Launch browser → {launch_url}")
         if _browser_proc and _browser_proc.poll() is None:
             try:
                 _browser_proc.terminate()
@@ -228,14 +268,8 @@ def ensure_browser(start_url: str | None = None) -> CdpBrowser:
                 pass
             time.sleep(0.5)
         _browser_proc = subprocess.Popen(cmd)  # noqa: S603
-        time.sleep(1.2)
-        cdp = CdpBrowser(DEBUG_PORT)
-        cdp.on_frame = on_frame
-        cdp.connect()
-        cdp.start_screencast()
-        _cdp = cdp
-        _latest_meta["ready"] = True
-        return cdp
+        time.sleep(1.4)
+        return _attach_cdp()
 
 
 def open_fullscreen(url: str) -> None:
@@ -268,9 +302,8 @@ def heartbeat_loop() -> None:
     while True:
         try:
             ips = lan_ips()
-            if ips:
-                remote_url = f"http://{ips[0]}:{REMOTE_PORT}/"
-                api_post("/vefire/agent/heartbeat/", {"remote_url": remote_url, "ips": ips})
+            remote_url = f"http://{(ips[0] if ips else '127.0.0.1')}:{REMOTE_PORT}/"
+            api_post("/vefire/agent/heartbeat/", {"remote_url": remote_url, "ips": ips})
         except Exception as e:  # noqa: BLE001
             log(f"Heartbeat: {e}")
         time.sleep(15)
@@ -285,8 +318,25 @@ def poll_loop() -> None:
         time.sleep(POLL_SEC)
 
 
+def input_poll_loop() -> None:
+    while True:
+        try:
+            r = api_get("/vefire/agent/input/")
+            if r.ok:
+                events = (r.json() or {}).get("events") or []
+                for ev in events:
+                    try:
+                        handle_input(ev if isinstance(ev, dict) else {})
+                    except Exception as e:  # noqa: BLE001
+                        log(f"Input apply: {e}")
+        except Exception as e:  # noqa: BLE001
+            log(f"Input poll: {e}")
+        time.sleep(0.12)
+
+
 def handle_input(data: dict) -> dict:
-    cdp = ensure_browser()
+    # Never pass a default content URL here — reconnect must keep the tab
+    cdp = ensure_browser(None)
     typ = data.get("type")
     if typ == "pointer":
         cdp.mouse(
@@ -314,7 +364,11 @@ def handle_input(data: dict) -> dict:
         elif action == "reload":
             cdp.reload()
         elif action == "home":
-            cdp.navigate(HOME_URL)
+            # Explicit user action only — blank, not Kinopoisk
+            target = HOME_URL if HOME_URL != "https://www.kinopoisk.ru/" else BLANK_URL
+            global _current_url
+            _current_url = target
+            cdp.navigate(target)
     return {"ok": True, "width": _latest_meta["width"], "height": _latest_meta["height"]}
 
 
@@ -354,19 +408,16 @@ class RemoteHandler(BaseHTTPRequestHandler):
             return
         if path.startswith("/stream.mjpg"):
             self.send_response(200)
-            self.send_header("Age", "0")
             self.send_header("Cache-Control", "no-cache, private")
-            self.send_header("Pragma", "no-cache")
             self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
             self._cors()
             self.end_headers()
             try:
                 while True:
                     with _jpeg_cond:
-                        ok = _jpeg_cond.wait(timeout=2.0)
+                        _jpeg_cond.wait(timeout=2.0)
                         jpeg = _latest_jpeg
                     if not jpeg:
-                        # tiny black jpeg placeholder skipped — wait for real frame
                         time.sleep(0.2)
                         continue
                     self.wfile.write(b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ")
@@ -375,8 +426,6 @@ class RemoteHandler(BaseHTTPRequestHandler):
                     self.wfile.write(jpeg)
                     self.wfile.write(b"\r\n")
                     self.wfile.flush()
-                    if not ok:
-                        time.sleep(0.05)
             except (BrokenPipeError, ConnectionResetError):
                 return
             return
@@ -407,23 +456,19 @@ def main() -> int:
     log(f"Vefire agent → {API_URL}")
     login()
     try:
-        ensure_browser(HOME_URL)
+        # Blank start — wait for cast from phone (no auto Kinopoisk)
+        ensure_browser(BLANK_URL)
     except Exception as e:  # noqa: BLE001
         log(f"Browser start warning: {e}")
 
     server = ThreadingHTTPServer(("0.0.0.0", REMOTE_PORT), RemoteHandler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    ips = lan_ips() or ["127.0.0.1"]
-    log("——— Пульт с телефона ———")
-    for ip in ips:
-        log(f"  http://{ip}:{REMOTE_PORT}/")
-    log("Телефон и ноут в одной Wi‑Fi. Windows Firewall: разреши Python/порт 8765.")
-    log("Крышка ноута: Питание → при закрытии → «Ничего не делать», Win+P → только ТВ.")
+    log("Started. Cast from Vmeste → Vefire; open «Пульт» on phone.")
+    log("Крышка: Win+P = только ТВ; Питание = ничего не делать при закрытии.")
 
     threading.Thread(target=poll_loop, daemon=True).start()
     threading.Thread(target=heartbeat_loop, daemon=True).start()
     threading.Thread(target=input_poll_loop, daemon=True).start()
-    log("Пульт внутри Вместе → Вэфире → «Пульт» (зеркало без отдельной ссылки).")
 
     try:
         while True:

@@ -144,19 +144,27 @@ class AgentFrameView(VefireGateMixin, APIView):
 
     permission_classes = [IsAuthenticated]
 
+    def get_parsers(self):
+        from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+
+        return [MultiPartParser(), FormParser(), JSONParser()]
+
     def post(self, request):
         denied = self.deny_if_not_allowed(request)
         if denied:
             return denied
         upload = request.FILES.get("frame")
-        raw = upload.read() if upload else request.body
+        raw = upload.read() if upload else (request.body if request.body and request.body[:2] == b"\xff\xd8" else b"")
         if not raw:
             return Response({"detail": "empty frame"}, status=status.HTTP_400_BAD_REQUEST)
         # Cap ~400KB to protect DB
         if len(raw) > 450_000:
             return Response({"detail": "frame too large"}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
-        width = int(request.data.get("width") or request.META.get("HTTP_X_FRAME_WIDTH") or 1280)
-        height = int(request.data.get("height") or request.META.get("HTTP_X_FRAME_HEIGHT") or 720)
+        try:
+            width = int(request.data.get("width") or request.META.get("HTTP_X_FRAME_WIDTH") or 1280)
+            height = int(request.data.get("height") or request.META.get("HTTP_X_FRAME_HEIGHT") or 720)
+        except (TypeError, ValueError):
+            width, height = 1280, 720
         obj, _ = AgentHeartbeat.objects.get_or_create(user=request.user, defaults={"remote_url": ""})
         obj.last_jpeg = raw
         obj.frame_width = max(1, min(width, 3840))

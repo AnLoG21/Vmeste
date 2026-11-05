@@ -145,10 +145,10 @@ class CdpBrowser:
             "Page.startScreencast",
             {
                 "format": "jpeg",
-                "quality": 55,
-                "maxWidth": 960,
-                "maxHeight": 540,
-                "everyNthFrame": 1,
+                "quality": 40,
+                "maxWidth": 854,
+                "maxHeight": 480,
+                "everyNthFrame": 2,
             },
         )
 
