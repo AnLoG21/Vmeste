@@ -46,10 +46,42 @@ _latest_meta = {"width": 1280, "height": 720, "ready": False}
 _jpeg_cond = threading.Condition()
 _last_upload_ts = 0.0
 _frame_fail_logged = False
+_frame_ok_count = 0
+_launching = False
 
 
 def log(msg: str) -> None:
     print(msg, flush=True)
+
+
+def is_kinopoisk_home(url: str) -> bool:
+    u = (url or "").strip().rstrip("/").lower()
+    return u in (
+        "https://www.kinopoisk.ru",
+        "http://www.kinopoisk.ru",
+        "https://kinopoisk.ru",
+        "http://kinopoisk.ru",
+    )
+
+
+def wipe_session_restore(profile: Path) -> None:
+    """Stop Edge/Chrome from reopening old tabs (Kinopoisk etc.) on launch."""
+    victims = [
+        profile / "Default" / "Current Session",
+        profile / "Default" / "Last Session",
+        profile / "Default" / "Current Tabs",
+        profile / "Default" / "Last Tabs",
+        profile / "Default" / "Sessions",
+        profile / "Default" / "Session Storage",
+    ]
+    for p in victims:
+        try:
+            if p.is_file():
+                p.unlink(missing_ok=True)
+            elif p.is_dir():
+                shutil.rmtree(p, ignore_errors=True)
+        except Exception:
+            pass
 
 
 def set_auth(token: str) -> None:
@@ -126,10 +158,12 @@ def find_browser() -> tuple[str, list[str]]:
         "--no-default-browser-check",
         "--disable-session-crashed-bubble",
         "--hide-crash-restore-bubble",
+        "--disable-restore-session-state",
+        "--noerrdialogs",
         f"--remote-debugging-port={DEBUG_PORT}",
         f"--user-data-dir={PROFILE_DIR}",
         "--autoplay-policy=no-user-gesture-required",
-        "--disable-features=TranslateUI,InfiniteSessionRestore",
+        "--disable-features=TranslateUI,InfiniteSessionRestore,TriggeringRefreshRateThrottling",
     ]
     if BROWSER in ("edge", "default"):
         candidates.append(
@@ -164,7 +198,7 @@ def find_browser() -> tuple[str, list[str]]:
 
 
 def on_frame(jpeg: bytes, width: int, height: int) -> None:
-    global _latest_jpeg, _last_upload_ts, _frame_fail_logged
+    global _latest_jpeg, _last_upload_ts, _frame_fail_logged, _frame_ok_count
     with _jpeg_cond:
         _latest_jpeg = jpeg
         _latest_meta["width"] = width
@@ -172,25 +206,51 @@ def on_frame(jpeg: bytes, width: int, height: int) -> None:
         _latest_meta["ready"] = True
         _jpeg_cond.notify_all()
     now = time.time()
-    if now - _last_upload_ts < 0.35:
+    if now - _last_upload_ts < 0.4:
         return
     _last_upload_ts = now
     try:
-        # Shrink payload: skip if huge
         payload = jpeg
-        if len(payload) > 400_000:
+        # API rejects >450KB; screencast is tuned small — rare oversized frames are skipped once.
+        if len(payload) > 420_000:
+            if not _frame_fail_logged:
+                log(f"Frame skipped (too large: {len(payload)} B)")
+                _frame_fail_logged = True
             return
         files = {"frame": ("frame.jpg", payload, "image/jpeg")}
         data = {"width": str(width), "height": str(height)}
-        r = session.post(f"{API_URL}/vefire/agent/frame/", files=files, data=data, timeout=10)
+        # Avoid Content-Type: multipart sticky issues — rebuild request without json body
+        headers = {}
+        auth = session.headers.get("Authorization")
+        if auth:
+            headers["Authorization"] = auth
+        r = session.post(
+            f"{API_URL}/vefire/agent/frame/",
+            files=files,
+            data=data,
+            headers=headers,
+            timeout=12,
+        )
         if r.status_code == 401:
             login()
-            r = session.post(f"{API_URL}/vefire/agent/frame/", files=files, data=data, timeout=10)
+            auth = session.headers.get("Authorization")
+            if auth:
+                headers["Authorization"] = auth
+            r = session.post(
+                f"{API_URL}/vefire/agent/frame/",
+                files=files,
+                data=data,
+                headers=headers,
+                timeout=12,
+            )
         if not r.ok:
             if not _frame_fail_logged:
                 log(f"Frame upload failed: {r.status_code} {r.text[:200]}")
                 _frame_fail_logged = True
         else:
+            _frame_ok_count += 1
+            if _frame_fail_logged or _frame_ok_count % 50 == 1:
+                log(f"Frame upload ok ({len(payload)} B, {width}x{height})")
             _frame_fail_logged = False
     except Exception as e:  # noqa: BLE001
         if not _frame_fail_logged:
@@ -206,11 +266,11 @@ def _cdp_alive(cdp: CdpBrowser) -> bool:
         return False
 
 
-def _attach_cdp() -> CdpBrowser:
+def _attach_cdp(prefer_url: str | None = None, solo_tab: bool = False) -> CdpBrowser:
     global _cdp
     cdp = CdpBrowser(DEBUG_PORT)
     cdp.on_frame = on_frame
-    cdp.connect()
+    cdp.connect(prefer_url=prefer_url, solo_tab=solo_tab)
     cdp.start_screencast()
     _cdp = cdp
     _latest_meta["ready"] = True
@@ -219,12 +279,20 @@ def _attach_cdp() -> CdpBrowser:
 
 def ensure_browser(start_url: str | None = None) -> CdpBrowser:
     """Keep current page unless start_url is explicitly provided (cast)."""
-    global _browser_proc, _cdp, _current_url
+    global _browser_proc, _cdp, _current_url, _launching
     with _cdp_lock:
         if start_url:
             _current_url = start_url
 
         browser_running = _browser_proc is not None and _browser_proc.poll() is None
+        # Also detect an already-open Edge with our debug port (agent restart).
+        if not browser_running:
+            try:
+                requests.get(f"http://127.0.0.1:{DEBUG_PORT}/json/version", timeout=1.0).raise_for_status()
+                browser_running = True
+            except Exception:
+                pass
+
         if browser_running:
             if _cdp and _cdp_alive(_cdp):
                 if start_url:
@@ -239,7 +307,7 @@ def ensure_browser(start_url: str | None = None) -> CdpBrowser:
                         _cdp.close()
                     except Exception:
                         pass
-                cdp = _attach_cdp()
+                cdp = _attach_cdp(prefer_url=start_url or _current_url, solo_tab=bool(start_url))
                 if start_url:
                     cdp.navigate(start_url)
                 return cdp
@@ -250,17 +318,16 @@ def ensure_browser(start_url: str | None = None) -> CdpBrowser:
         if not exe:
             raise RuntimeError("Edge/Chrome not found")
         PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+        wipe_session_restore(PROFILE_DIR)
         # Only open blank or the explicit cast URL — never surprise Kinopoisk
         launch_url = start_url or _current_url or BLANK_URL
-        if launch_url == HOME_URL and HOME_URL.rstrip("/") in (
-            "https://www.kinopoisk.ru",
-            "http://www.kinopoisk.ru",
-        ):
-            # Old .env default — ignore for relaunch without cast
-            if not start_url:
-                launch_url = BLANK_URL
-        cmd = [exe, *args, launch_url]
+        if not start_url and (is_kinopoisk_home(launch_url) or is_kinopoisk_home(HOME_URL)):
+            launch_url = BLANK_URL
+        if is_kinopoisk_home(HOME_URL) and not start_url:
+            launch_url = BLANK_URL
+        cmd = [exe, *args, "--new-window", launch_url]
         log(f"Launch browser → {launch_url}")
+        _launching = True
         if _browser_proc and _browser_proc.poll() is None:
             try:
                 _browser_proc.terminate()
@@ -268,8 +335,14 @@ def ensure_browser(start_url: str | None = None) -> CdpBrowser:
                 pass
             time.sleep(0.5)
         _browser_proc = subprocess.Popen(cmd)  # noqa: S603
-        time.sleep(1.4)
-        return _attach_cdp()
+        time.sleep(1.6)
+        try:
+            cdp = _attach_cdp(prefer_url=launch_url, solo_tab=True)
+            if launch_url and launch_url != BLANK_URL:
+                cdp.navigate(launch_url)
+            return cdp
+        finally:
+            _launching = False
 
 
 def open_fullscreen(url: str) -> None:
@@ -364,8 +437,8 @@ def handle_input(data: dict) -> dict:
         elif action == "reload":
             cdp.reload()
         elif action == "home":
-            # Explicit user action only — blank, not Kinopoisk
-            target = HOME_URL if HOME_URL != "https://www.kinopoisk.ru/" else BLANK_URL
+            # Explicit user action only — blank, not Kinopoisk from old .env
+            target = BLANK_URL if is_kinopoisk_home(HOME_URL) else (HOME_URL or BLANK_URL)
             global _current_url
             _current_url = target
             cdp.navigate(target)
@@ -452,9 +525,23 @@ class RemoteHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+def drain_stale_input() -> None:
+    """Drop backlog accumulated while agent was offline."""
+    try:
+        r = api_get("/vefire/agent/input/")
+        n = len((r.json() or {}).get("events") or []) if r.ok else 0
+        if n:
+            log(f"Dropped {n} stale remote events")
+    except Exception as e:  # noqa: BLE001
+        log(f"Input drain: {e}")
+
+
 def main() -> int:
     log(f"Vefire agent → {API_URL}")
+    if is_kinopoisk_home(HOME_URL):
+        log("VEFIRE_HOME_URL указывает на Кинопоиск — игнорирую, стартую с about:blank")
     login()
+    drain_stale_input()
     try:
         # Blank start — wait for cast from phone (no auto Kinopoisk)
         ensure_browser(BLANK_URL)

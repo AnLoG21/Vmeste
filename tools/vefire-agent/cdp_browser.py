@@ -5,6 +5,7 @@ import json
 import threading
 import time
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 import requests
 
@@ -21,6 +22,14 @@ except ImportError as exc:  # pragma: no cover
     ) from exc
 
 
+def _url_key(url: str) -> str:
+    try:
+        p = urlparse(url or "")
+        return f"{p.scheme}://{p.netloc}{p.path}".rstrip("/").lower()
+    except Exception:
+        return (url or "").rstrip("/").lower()
+
+
 class CdpBrowser:
     def __init__(self, debug_port: int = 9222):
         self.debug_port = debug_port
@@ -28,13 +37,12 @@ class CdpBrowser:
         self._id = 0
         self._lock = threading.Lock()
         self._pending: dict[int, dict] = {}
-        self._events: list[dict] = []
         self._reader: threading.Thread | None = None
         self._alive = False
         self.frame_width = 1280
         self.frame_height = 720
         self.on_frame: Callable[[bytes, int, int], None] | None = None
-        self._session_id: str | None = None
+        self.target_id: str | None = None
 
     def _base(self) -> str:
         return f"http://127.0.0.1:{self.debug_port}"
@@ -51,14 +59,47 @@ class CdpBrowser:
             time.sleep(0.25)
         raise TimeoutError("Chrome DevTools port not ready")
 
-    def connect(self) -> None:
-        self.wait_ready()
+    def _list_pages(self) -> list[dict]:
         targets = requests.get(f"{self._base()}/json/list", timeout=5).json()
-        page = next((t for t in targets if t.get("type") == "page"), None)
+        return [t for t in targets if t.get("type") == "page"]
+
+    def _close_target(self, target_id: str) -> None:
+        try:
+            requests.get(f"{self._base()}/json/close/{target_id}", timeout=3)
+        except Exception:
+            pass
+
+    def _pick_page(self, pages: list[dict], prefer_url: str | None) -> dict | None:
+        if not pages:
+            return None
+        if prefer_url and prefer_url not in ("about:blank", "about:newtab"):
+            key = _url_key(prefer_url)
+            for t in pages:
+                if key and key in _url_key(t.get("url") or ""):
+                    return t
+        for t in pages:
+            u = (t.get("url") or "").lower()
+            if u.startswith("about:blank") or u in ("", "about:newtab", "chrome://newtab/"):
+                return t
+        return pages[0]
+
+    def connect(self, prefer_url: str | None = None, solo_tab: bool = False) -> None:
+        self.wait_ready()
+        pages = self._list_pages()
+        page = self._pick_page(pages, prefer_url)
         if not page:
-            # create a blank tab via /json/new
             page = requests.put(f"{self._base()}/json/new?about:blank", timeout=5).json()
+            pages = [page]
+
+        keep_id = page.get("id")
+        if solo_tab and keep_id:
+            for t in pages:
+                tid = t.get("id")
+                if tid and tid != keep_id:
+                    self._close_target(tid)
+
         ws_url = page["webSocketDebuggerUrl"]
+        self.target_id = keep_id
         self.ws = create_connection(ws_url, timeout=10)
         self._alive = True
         self._reader = threading.Thread(target=self._read_loop, daemon=True)
@@ -145,9 +186,9 @@ class CdpBrowser:
             "Page.startScreencast",
             {
                 "format": "jpeg",
-                "quality": 40,
-                "maxWidth": 854,
-                "maxHeight": 480,
+                "quality": 35,
+                "maxWidth": 800,
+                "maxHeight": 450,
                 "everyNthFrame": 2,
             },
         )
@@ -160,16 +201,20 @@ class CdpBrowser:
 
     def mouse(self, phase: str, x: float, y: float, click: bool = False, double: bool = False) -> None:
         typ = {"down": "mousePressed", "up": "mouseReleased", "move": "mouseMoved"}.get(phase, "mouseMoved")
+        click_count = 2 if double else 1
+        if phase == "move":
+            click_count = 0
         params = {
             "type": typ,
             "x": float(x),
             "y": float(y),
             "button": "left" if phase in ("down", "up") else "none",
-            "clickCount": 2 if double and phase == "up" else (1 if phase in ("down", "up") else 0),
+            "buttons": 1 if phase == "down" else 0,
+            "clickCount": click_count if phase in ("down", "up") else 0,
         }
         self.call("Input.dispatchMouseEvent", params)
+        # Some sites need an explicit click sequence if only "up" arrived
         if click and phase == "up" and not double:
-            # ensure click registered
             pass
 
     def scroll(self, x: float, y: float, dx: float, dy: float) -> None:
@@ -188,15 +233,30 @@ class CdpBrowser:
         self.call("Input.insertText", {"text": text})
 
     def key(self, key: str) -> None:
-        # Best-effort key events for navigation keys
-        self.call(
-            "Input.dispatchKeyEvent",
-            {"type": "keyDown", "key": key, "code": key if key.startswith("Arrow") else key, "windowsVirtualKeyCode": 0},
-        )
-        self.call(
-            "Input.dispatchKeyEvent",
-            {"type": "keyUp", "key": key, "code": key if key.startswith("Arrow") else key, "windowsVirtualKeyCode": 0},
-        )
+        vk = {
+            "Enter": 13,
+            " ": 32,
+            "ArrowLeft": 37,
+            "ArrowUp": 38,
+            "ArrowRight": 39,
+            "ArrowDown": 40,
+            "Escape": 27,
+            "Backspace": 8,
+        }.get(key, 0)
+        code = key if key.startswith("Arrow") else ("Space" if key == " " else key)
+        for typ in ("keyDown", "keyUp"):
+            self.call(
+                "Input.dispatchKeyEvent",
+                {
+                    "type": typ,
+                    "key": key,
+                    "code": code,
+                    "windowsVirtualKeyCode": vk,
+                    "nativeVirtualKeyCode": vk,
+                    "text": key if len(key) == 1 else "",
+                    "unmodifiedText": key if len(key) == 1 else "",
+                },
+            )
 
     def history_back(self) -> None:
         hist = self.call("Page.getNavigationHistory")

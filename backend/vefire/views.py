@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
@@ -8,6 +10,9 @@ from rest_framework.views import APIView
 from .access import user_can_vefire
 from .models import AgentHeartbeat, CastRequest
 from .serializers import CastCreateSerializer, CastRequestSerializer
+
+# Ignore leftover casts that sat in the queue (stops surprise navigations on agent restart).
+STALE_PENDING_SEC = 90
 
 
 class VefireGateMixin:
@@ -49,6 +54,26 @@ class CastNextView(VefireGateMixin, APIView):
         denied = self.deny_if_not_allowed(request)
         if denied:
             return denied
+        cutoff = timezone.now() - timedelta(seconds=STALE_PENDING_SEC)
+        CastRequest.objects.filter(
+            user=request.user,
+            status=CastRequest.STATUS_PENDING,
+            created_at__lt=cutoff,
+        ).update(
+            status=CastRequest.STATUS_FAILED,
+            finished_at=timezone.now(),
+            error="stale",
+        )
+        # Stuck "claimed" without ack also shouldn't block UX forever.
+        CastRequest.objects.filter(
+            user=request.user,
+            status=CastRequest.STATUS_CLAIMED,
+            claimed_at__lt=cutoff,
+        ).update(
+            status=CastRequest.STATUS_FAILED,
+            finished_at=timezone.now(),
+            error="stale_claim",
+        )
         job = (
             CastRequest.objects.filter(user=request.user, status=CastRequest.STATUS_PENDING)
             .order_by("created_at")
@@ -190,6 +215,7 @@ class AgentFrameView(VefireGateMixin, APIView):
         resp["Cache-Control"] = "no-store"
         resp["X-Frame-Width"] = str(obj.frame_width)
         resp["X-Frame-Height"] = str(obj.frame_height)
+        resp["Access-Control-Expose-Headers"] = "X-Frame-Width, X-Frame-Height"
         return resp
 
 
@@ -206,8 +232,10 @@ class AgentInputView(VefireGateMixin, APIView):
         if not event.get("type"):
             return Response({"detail": "type required"}, status=status.HTTP_400_BAD_REQUEST)
         obj, _ = AgentHeartbeat.objects.get_or_create(user=request.user, defaults={"remote_url": ""})
+        payload = dict(event)
+        payload["_ts"] = timezone.now().timestamp()
         queue = list(obj.input_queue or [])
-        queue.append(event)
+        queue.append(payload)
         obj.input_queue = queue[-80:]
         obj.save(update_fields=["input_queue", "updated_at"])
         return Response({"ok": True, "queued": len(obj.input_queue)})
@@ -223,7 +251,17 @@ class AgentInputView(VefireGateMixin, APIView):
                 obj = AgentHeartbeat.objects.select_for_update().get(user=request.user)
             except AgentHeartbeat.DoesNotExist:
                 return Response({"events": []})
-            events = list(obj.input_queue or [])
+            now_ts = timezone.now().timestamp()
+            # Drop events older than 8s so offline backlog doesn't spam the TV.
+            events = []
+            for ev in list(obj.input_queue or []):
+                if not isinstance(ev, dict):
+                    continue
+                ts = float(ev.get("_ts") or 0)
+                if ts and (now_ts - ts) > 8:
+                    continue
+                clean = {k: v for k, v in ev.items() if k != "_ts"}
+                events.append(clean)
             obj.input_queue = []
             obj.save(update_fields=["input_queue", "updated_at"])
         return Response({"events": events})

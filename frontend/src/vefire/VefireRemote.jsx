@@ -22,7 +22,27 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
           if (!cancelled) {
             setStatus("ждём картинку с ноута…");
             if (missesRef.current > 8) {
-              setFailHint("Запусти/перезапусти run.bat на ноуте у ТВ. Сначала «На ТВ», потом пульт.");
+              setFailHint(
+                "На ноуте у ТВ перезапусти run.bat (Desktop → Vefire-TV-Agent). Потом снова «На ТВ» и пульт."
+              );
+            }
+            // Pull size from heartbeat so taps still map once frames arrive
+            if (missesRef.current === 3 || missesRef.current % 15 === 0) {
+              try {
+                const hb = await authFetch(`${API_URL}/vefire/agent/heartbeat/`);
+                if (hb.ok) {
+                  const data = await hb.json();
+                  const a = data?.agent;
+                  if (a?.frame_width && a?.frame_height) {
+                    setMeta({ width: a.frame_width, height: a.frame_height });
+                  }
+                  if (a && a.online === false) {
+                    setFailHint("Агент офлайн — запусти run.bat на ноуте у ТВ.");
+                  }
+                }
+              } catch {
+                /* ignore */
+              }
             }
           }
         } else {
