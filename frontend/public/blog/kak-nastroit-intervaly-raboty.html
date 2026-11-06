@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Как настроить интервалы работы и слоты записи во Вместе</title>
+    <meta
+      name="description"
+      content="Рабочие интервалы мастеров во Вместе: почему без графика виджет пустой, как задать окна и связать длительность услуг со слотами. Скрины календаря."
+    />
+    <link rel="canonical" href="https://vsevmeste.space/blog/kak-nastroit-intervaly-raboty" />
+    <link rel="alternate" hreflang="ru" href="https://vsevmeste.space/blog/kak-nastroit-intervaly-raboty" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://vsevmeste.space/blog/kak-nastroit-intervaly-raboty" />
+    <meta property="og:title" content="Интервалы работы и слоты записи" />
+    <meta property="og:description" content="График мастера → свободные окна в /w/… Без интервалов запись не взлетит." />
+    <meta property="og:locale" content="ru_RU" />
+    <meta property="og:image" content="https://vsevmeste.space/blog/img/hero-calendar.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/legal.css?v=20261027" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "HowTo",
+            "name": "Настроить интервалы работы",
+            "step": [
+              { "@type": "HowToStep", "name": "Услуги", "text": "Задайте длительность в каталоге." },
+              { "@type": "HowToStep", "name": "Интервалы", "text": "Рабочие окна мастера по дням." },
+              { "@type": "HowToStep", "name": "Проверка", "text": "Откройте /w/… и убедитесь, что слоты видны." }
+            ],
+            "image": "https://vsevmeste.space/blog/img/hero-calendar.jpg"
+          },
+          {
+            "@type": "Article",
+            "headline": "Как настроить интервалы работы и слоты записи",
+            "datePublished": "2026-11-06",
+            "dateModified": "2026-11-06",
+            "author": { "@type": "Organization", "name": "Вместе" },
+            "publisher": {
+              "@type": "Organization",
+              "name": "Вместе",
+              "logo": { "@type": "ImageObject", "url": "https://vsevmeste.space/favicon.png" }
+            },
+            "mainEntityOfPage": "https://vsevmeste.space/blog/kak-nastroit-intervaly-raboty",
+            "image": "https://vsevmeste.space/blog/img/hero-calendar.jpg"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              { "@type": "ListItem", "position": 1, "name": "Главная", "item": "https://vsevmeste.space/" },
+              { "@type": "ListItem", "position": 2, "name": "Блог", "item": "https://vsevmeste.space/blog" },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "Интервалы работы",
+                "item": "https://vsevmeste.space/blog/kak-nastroit-intervaly-raboty"
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <header class="article-topbar">
+      <a class="article-brand" href="/" aria-label="Вместе — на главную">
+        <span class="article-brand-mark" aria-hidden="true">В</span>
+        <span>Вместе</span>
+      </a>
+      <nav class="article-topnav" aria-label="Разделы">
+        <a href="/blog">Блог</a>
+        <a href="/salon">Салон</a>
+        <a class="is-cta" href="/?register=1&amp;from=blog-intervals">Создать организацию</a>
+      </nav>
+    </header>
+    <main class="article-page legal-page">
+      <p class="article-meta legal-meta">6 ноября 2026 · Гайд · скрины</p>
+      <h1>Как настроить интервалы работы</h1>
+      <p>
+        Частая ошибка: ссылка /w/… уже в шапке Instagram, а клиент видит «нет окон». Слоты появляются
+        только из <strong>рабочих интервалов</strong> мастера и длительности услуг.
+      </p>
+
+      <figure class="article-figure">
+        <img src="/blog/img/hero-calendar.jpg" alt="Календарь и интервалы записи" width="1200" height="675" loading="eager" decoding="async" />
+        <figcaption>Интервал = когда можно бронировать; услуга = сколько минут займёт</figcaption>
+      </figure>
+
+      <aside class="article-cta">
+        <p>
+          <a href="/?register=1&amp;from=blog-intervals"><strong>Открыть кабинет</strong></a>
+          ·
+          <a href="/blog/kalendar-zapisey-v-kabinete">Календарь</a>
+        </p>
+      </aside>
+
+      <h2>1. Длительность в каталоге</h2>
+      <p>
+        Без минут в
+        <a href="/blog/katalog-uslug-i-ceny">услугах</a> сетка не сойдётся. Стрижка 45 и окрашивание
+        120 — разные окна.
+      </p>
+
+      <h2>2. Интервалы мастера</h2>
+      <p>
+        Задайте рабочие дни и часы. Несколько мастеров —
+        <a href="/blog/kak-nastroit-zapis-neskolkih-masterov">отдельные графики</a>. Соло — один
+        набор окон всё равно нужен.
+      </p>
+      <p class="article-shot-where">Где: интервалы / график сотрудника</p>
+      <figure class="article-figure is-shot">
+        <img src="/blog/img/screens/intervals-wide.png" alt="Интервалы работы в кабинете Вместе" loading="lazy" decoding="async" />
+        <figcaption>Рабочие окна кормят публичный виджет</figcaption>
+      </figure>
+
+      <h2>3. Проверка снаружи</h2>
+      <p>
+        Откройте свою
+        <a href="/blog/kak-podelitsya-ssylkoj-zapisi-klientam">/w/…</a> и выберите услугу — должны
+        появиться даты. Календарь команды —
+        <a href="/blog/kalendar-zapisey-v-kabinete">здесь</a>.
+      </p>
+      <p class="article-shot-where">Где: календарь записей</p>
+      <figure class="article-figure is-shot">
+        <img src="/blog/img/screens/calendar-bookings-wide.png" alt="Календарь записей" loading="lazy" decoding="async" />
+        <figcaption>Занятые слоты не отдаются повторно в виджет</figcaption>
+      </figure>
+
+      <h2>Частые ошибки</h2>
+      <ul>
+        <li>Интервалы только на прошлую неделю</li>
+        <li>Услуга длиннее окна — слот «не влезает»</li>
+        <li>Отпуск не закрыт — клиент бронирует пустой день</li>
+      </ul>
+
+      <aside class="article-cta">
+        <p>
+          <a href="/?register=1&amp;from=blog-intervals"><strong>Настроить график</strong></a>
+          ·
+          <a href="/blog/ochered-ozhidaniya-esli-net-slotov">Если окон нет</a>
+          ·
+          <a href="/blog">Блог</a>
+        </p>
+      </aside>
+    </main>
+    <footer class="article-footer">
+      Вместе · онлайн-запись и кабинет для бизнеса · <a href="/contacts">контакты</a>
+    </footer>
+  </body>
+</html>
