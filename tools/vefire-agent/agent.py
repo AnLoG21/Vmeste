@@ -449,10 +449,8 @@ def ensure_browser(start_url: str | None = None, force_relaunch: bool = False) -
                 cdp.close_stray_blank_tabs()
             except Exception:
                 pass
-            try:
-                cdp.force_window_fullscreen()
-            except Exception:
-                pass
+            # Do NOT fullscreen on idle start — that hides the agent console under Edge.
+            # Fullscreen is applied only when a cast arrives (enhance_playback).
             if _last_frame_ts <= 0:
                 _last_frame_ts = time.time()
             return cdp
@@ -860,7 +858,15 @@ def main() -> int:
         return 4
     threading.Thread(target=server.serve_forever, daemon=True).start()
     log(f"Started on remote port {bind_port}. Cast from Vmeste -> Vefire; open Remote on phone.")
+    log("Keep this console visible. If Edge covers it: Alt+Tab -> Vefire TV Agent.")
     log("Lid closed: Win+P = Second screen only; Power = Do nothing when lid closes.")
+    try:
+        (ROOT / "RUNNING.txt").write_text(
+            f"Vefire agent running\nport={bind_port}\napi={API_URL}\nuser={USERNAME}\n",
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
 
     threading.Thread(target=poll_loop, daemon=True).start()
     threading.Thread(target=heartbeat_loop, daemon=True).start()
