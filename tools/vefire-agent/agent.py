@@ -425,7 +425,9 @@ def ensure_browser(start_url: str | None = None, force_relaunch: bool = False) -
                     cdp.start_screencast()
                 except Exception:
                     pass
-            _last_frame_ts = 0.0
+            # Don't zero this — watchdog treats 0 as "never" and false-restarts.
+            if _last_frame_ts <= 0:
+                _last_frame_ts = time.time()
             return cdp
         finally:
             _launching = False
@@ -436,7 +438,7 @@ def open_fullscreen(url: str) -> None:
 
 
 def browser_watchdog_loop() -> None:
-    """Keep CDP screencast alive — without frames the phone remote stays black."""
+    """Keep CDP frame capture alive — without frames the phone remote stays black."""
     global _cdp
     while True:
         time.sleep(5.0)
@@ -445,11 +447,14 @@ def browser_watchdog_loop() -> None:
         try:
             port_ok = debug_port_up()
             cdp_ok = bool(_cdp and _cdp_alive(_cdp))
-            frame_age = time.time() - _last_frame_ts if _last_frame_ts else 9999
-            if port_ok and cdp_ok and frame_age < 12:
+            if _last_frame_ts <= 0:
+                frame_age = 0.0
+            else:
+                frame_age = time.time() - _last_frame_ts
+            if port_ok and cdp_ok and frame_age < 15:
                 continue
-            if port_ok and cdp_ok and frame_age >= 12:
-                log(f"No screencast frames for {int(frame_age)}s - restart screencast")
+            if port_ok and cdp_ok and frame_age >= 15:
+                log(f"No frames for {int(frame_age)}s - restart capture")
                 try:
                     with _cdp_lock:
                         if _cdp:
@@ -460,7 +465,7 @@ def browser_watchdog_loop() -> None:
                             _cdp.start_screencast()
                     continue
                 except Exception as e:  # noqa: BLE001
-                    log(f"Screencast restart failed: {e}")
+                    log(f"Capture restart failed: {e}")
             log(
                 f"Browser watchdog: port={port_ok} cdp={cdp_ok} frame_age={int(frame_age)}s - relaunch"
             )
