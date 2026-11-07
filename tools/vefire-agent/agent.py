@@ -79,14 +79,23 @@ _watchdog_port_fails = 0
 _cursor = {"x": 640.0, "y": 360.0}
 
 
+_LOG_PATH = ROOT / "agent-run.log"
+
+
 def log(msg: str) -> None:
     text = str(msg)
+    line = text
     try:
         print(text, flush=True)
     except UnicodeEncodeError:
         enc = getattr(sys.stdout, "encoding", None) or "utf-8"
-        safe = text.encode(enc, errors="replace").decode(enc, errors="replace")
-        print(safe, flush=True)
+        line = text.encode(enc, errors="replace").decode(enc, errors="replace")
+        print(line, flush=True)
+    try:
+        with _LOG_PATH.open("a", encoding="utf-8", errors="replace") as fh:
+            fh.write(line + "\n")
+    except Exception:
+        pass
 
 
 def is_kinopoisk_home(url: str) -> bool:
@@ -812,20 +821,45 @@ def drain_stale_input() -> None:
 
 
 def main() -> int:
+    global REMOTE_PORT
     log(f"Vefire agent -> {API_URL}")
+    log(f"User={USERNAME or '(empty)'} browser={BROWSER} debug={DEBUG_PORT} remote={REMOTE_PORT}")
+    if not USERNAME or not (PASSWORD or REFRESH):
+        log("FATAL: set VEFIRE_USERNAME + VEFIRE_PASSWORD (or VEFIRE_REFRESH_TOKEN) in .env")
+        return 2
     if is_kinopoisk_home(HOME_URL):
         log("VEFIRE_HOME_URL points to Kinopoisk - ignoring, start about:blank")
-    login()
+    try:
+        login()
+    except SystemExit as e:
+        log(f"FATAL login: {e}")
+        return 3
+    except Exception as e:  # noqa: BLE001
+        log(f"FATAL login: {e}")
+        return 3
     drain_stale_input()
     try:
         # Blank start — wait for cast from phone (no auto Kinopoisk)
         ensure_browser(BLANK_URL)
     except Exception as e:  # noqa: BLE001
         log(f"Browser start warning: {e}")
+        log("Will keep running and retry when a cast arrives.")
 
-    server = ThreadingHTTPServer(("0.0.0.0", REMOTE_PORT), RemoteHandler)
+    server = None
+    bind_port = REMOTE_PORT
+    for port in (REMOTE_PORT, REMOTE_PORT + 1, REMOTE_PORT + 2, 18765):
+        try:
+            server = ThreadingHTTPServer(("0.0.0.0", port), RemoteHandler)
+            bind_port = port
+            REMOTE_PORT = port
+            break
+        except OSError as e:
+            log(f"Port {port} busy: {e}")
+    if server is None:
+        log("FATAL: cannot bind remote HTTP port")
+        return 4
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    log("Started. Cast from Vmeste -> Vefire; open Remote on phone.")
+    log(f"Started on remote port {bind_port}. Cast from Vmeste -> Vefire; open Remote on phone.")
     log("Lid closed: Win+P = Second screen only; Power = Do nothing when lid closes.")
 
     threading.Thread(target=poll_loop, daemon=True).start()
@@ -833,11 +867,17 @@ def main() -> int:
     threading.Thread(target=input_poll_loop, daemon=True).start()
     threading.Thread(target=browser_watchdog_loop, daemon=True).start()
 
+    last_alive = 0.0
     try:
         while True:
-            time.sleep(3600)
+            time.sleep(30)
+            now = time.time()
+            if now - last_alive >= 600:
+                last_alive = now
+                age = (now - _last_frame_ts) if _last_frame_ts else -1
+                log(f"Still running · frame_age={age:.0f}s")
     except KeyboardInterrupt:
-        log("Stopped.")
+        log("Stopped by Ctrl+C.")
         if _cdp:
             _cdp.close()
         return 0
@@ -846,11 +886,19 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except SystemExit:
+    except SystemExit as e:
+        code = e.code if isinstance(e.code, int) else 1
+        if code not in (0, None):
+            log(f"Exit code {code}")
         raise
     except Exception as exc:  # noqa: BLE001
         log(f"FATAL: {exc}")
         import traceback
 
         traceback.print_exc()
+        try:
+            with _LOG_PATH.open("a", encoding="utf-8", errors="replace") as fh:
+                traceback.print_exc(file=fh)
+        except Exception:
+            pass
         raise SystemExit(1) from exc

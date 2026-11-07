@@ -16,11 +16,15 @@
 
 ## Установка на любом Windows-ноуте
 
-1. Скопируй всю папку **Vefire-TV-Agent** (или `tools/vefire-agent`)  
-2. Установи [Python 3.11+](https://www.python.org/downloads/) с галкой **Add to PATH**  
+1. Скопируй **всю** папку **Vefire-TV-Agent** (не один run.bat)  
+2. Установи [Python 3.11+](https://www.python.org/downloads/) с галкой **Add python.exe to PATH**  
 3. Нужен **Microsoft Edge** или Chrome  
-4. `run.bat` → впиши пароль в `.env`  
-5. Разреши Python в брандмауэре Windows (порт **8765**), телефон и ноут в **одной Wi‑Fi**
+4. Открой `.env` — должен быть пароль `VEFIRE_PASSWORD=...` (если пусто, окно само предложит заполнить)  
+5. Запусти `run.bat` **двойным кликом** и **не закрывай** чёрное окно  
+6. Если «само закрылось» — открой `agent-run.log` в этой же папке: там причина (логин, Python, pip, порт)  
+7. `run.bat` сам перезапускает агент при падении через 5 сек  
+
+Частые причины на втором ноуте: нет Python в PATH, пустой `.env`, нет интернета для входа на vsevmeste.space, нет Edge.
 
 ## Как смотреть
 
