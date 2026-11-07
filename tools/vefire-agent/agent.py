@@ -8,11 +8,21 @@ import os
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
+
+# Windows cp1251 consoles crash on arrows/emoji in print().
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+os.environ.setdefault("PYTHONUTF8", "1")
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
 import requests
 from dotenv import load_dotenv
@@ -44,7 +54,8 @@ BROWSER = os.environ.get("VEFIRE_BROWSER", "edge").strip().lower()
 REMOTE_PORT = int(os.environ.get("VEFIRE_REMOTE_PORT", "8765"))
 DEBUG_PORT = int(os.environ.get("VEFIRE_DEBUG_PORT", "9222"))
 # Never auto-open a content site — only navigate on explicit cast / user home.
-BLANK_URL = "about:blank"
+# Local idle page so CDP screencast emits frames (about:blank often does not).
+BLANK_URL = (ROOT / "idle.html").resolve().as_uri()
 HOME_URL = os.environ.get("VEFIRE_HOME_URL", BLANK_URL).strip() or BLANK_URL
 PROFILE_DIR = ROOT / ".browser-profile"
 
@@ -58,14 +69,22 @@ _current_url = BLANK_URL
 _latest_jpeg = b""
 _latest_meta = {"width": 1280, "height": 720, "ready": False}
 _jpeg_cond = threading.Condition()
+_upload_lock = threading.Lock()
 _last_upload_ts = 0.0
 _frame_fail_logged = False
 _frame_ok_count = 0
 _launching = False
+_last_frame_ts = 0.0
 
 
 def log(msg: str) -> None:
-    print(msg, flush=True)
+    text = str(msg)
+    try:
+        print(text, flush=True)
+    except UnicodeEncodeError:
+        enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+        safe = text.encode(enc, errors="replace").decode(enc, errors="replace")
+        print(safe, flush=True)
 
 
 def is_kinopoisk_home(url: str) -> bool:
@@ -87,15 +106,40 @@ def wipe_session_restore(profile: Path) -> None:
         profile / "Default" / "Last Tabs",
         profile / "Default" / "Sessions",
         profile / "Default" / "Session Storage",
+        profile / "SingletonLock",
+        profile / "SingletonSocket",
+        profile / "SingletonCookie",
+        profile / "lockfile",
     ]
     for p in victims:
         try:
-            if p.is_file():
+            if p.is_file() or p.is_symlink():
                 p.unlink(missing_ok=True)
             elif p.is_dir():
                 shutil.rmtree(p, ignore_errors=True)
         except Exception:
             pass
+
+
+def debug_port_up(timeout: float = 1.0) -> bool:
+    try:
+        r = requests.get(
+            f"http://127.0.0.1:{DEBUG_PORT}/json/version",
+            timeout=timeout,
+            proxies={"http": None, "https": None},
+        )
+        return r.ok
+    except Exception:
+        return False
+
+
+def wait_debug_port(timeout: float = 20.0) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if debug_port_up(1.2):
+            return True
+        time.sleep(0.35)
+    return False
 
 
 def set_auth(token: str) -> None:
@@ -110,7 +154,7 @@ def login() -> None:
             set_auth(r.json()["access"])
             log("Auth: refreshed access token")
             return
-        log(f"Refresh failed ({r.status_code}), trying username/password…")
+        log(f"Refresh failed ({r.status_code}), trying username/password...")
     if not USERNAME or not PASSWORD:
         raise SystemExit("Set VEFIRE_USERNAME + VEFIRE_PASSWORD or VEFIRE_REFRESH_TOKEN in .env")
     r = session.post(
@@ -177,9 +221,11 @@ def find_browser() -> tuple[str, list[str]]:
         # Bypass broken system proxy (127.0.0.1:12334) so TV pages actually load.
         "--no-proxy-server",
         f"--remote-debugging-port={DEBUG_PORT}",
+        "--remote-allow-origins=*",
         f"--user-data-dir={PROFILE_DIR}",
         "--autoplay-policy=no-user-gesture-required",
         "--disable-features=TranslateUI,InfiniteSessionRestore,TriggeringRefreshRateThrottling",
+        "--check-for-update-interval=31536000",
     ]
     if BROWSER in ("edge", "default"):
         candidates.append(
@@ -214,7 +260,8 @@ def find_browser() -> tuple[str, list[str]]:
 
 
 def on_frame(jpeg: bytes, width: int, height: int) -> None:
-    global _latest_jpeg, _last_upload_ts, _frame_fail_logged, _frame_ok_count
+    global _latest_jpeg, _last_upload_ts, _frame_fail_logged, _frame_ok_count, _last_frame_ts
+    _last_frame_ts = time.time()
     with _jpeg_cond:
         _latest_jpeg = jpeg
         _latest_meta["width"] = width
@@ -222,12 +269,16 @@ def on_frame(jpeg: bytes, width: int, height: int) -> None:
         _latest_meta["ready"] = True
         _jpeg_cond.notify_all()
     now = time.time()
-    if now - _last_upload_ts < 0.4:
+    if now - _last_upload_ts < 0.45:
         return
-    _last_upload_ts = now
+    if not _upload_lock.acquire(blocking=False):
+        return
     try:
+        if now - _last_upload_ts < 0.45:
+            return
+        _last_upload_ts = now
         payload = jpeg
-        # API rejects >450KB; screencast is tuned small — rare oversized frames are skipped once.
+        # API rejects >450KB; screenshot quality is tuned small.
         if len(payload) > 420_000:
             if not _frame_fail_logged:
                 log(f"Frame skipped (too large: {len(payload)} B)")
@@ -235,7 +286,6 @@ def on_frame(jpeg: bytes, width: int, height: int) -> None:
             return
         files = {"frame": ("frame.jpg", payload, "image/jpeg")}
         data = {"width": str(width), "height": str(height)}
-        # Avoid Content-Type: multipart sticky issues — rebuild request without json body
         headers = {}
         auth = session.headers.get("Authorization")
         if auth:
@@ -272,6 +322,8 @@ def on_frame(jpeg: bytes, width: int, height: int) -> None:
         if not _frame_fail_logged:
             log(f"Frame upload error: {e}")
             _frame_fail_logged = True
+    finally:
+        _upload_lock.release()
 
 
 def _cdp_alive(cdp: CdpBrowser) -> bool:
@@ -293,31 +345,26 @@ def _attach_cdp(prefer_url: str | None = None, solo_tab: bool = False) -> CdpBro
     return cdp
 
 
-def ensure_browser(start_url: str | None = None) -> CdpBrowser:
+def ensure_browser(start_url: str | None = None, force_relaunch: bool = False) -> CdpBrowser:
     """Keep current page unless start_url is explicitly provided (cast)."""
-    global _browser_proc, _cdp, _current_url, _launching
+    global _browser_proc, _cdp, _current_url, _launching, _last_frame_ts
     with _cdp_lock:
         if start_url:
             _current_url = start_url
 
-        browser_running = _browser_proc is not None and _browser_proc.poll() is None
-        # Also detect an already-open Edge with our debug port (agent restart).
-        if not browser_running:
-            try:
-                requests.get(
-                    f"http://127.0.0.1:{DEBUG_PORT}/json/version",
-                    timeout=1.0,
-                    proxies={"http": None, "https": None},
-                ).raise_for_status()
-                browser_running = True
-            except Exception:
-                pass
+        browser_running = (not force_relaunch) and (
+            (_browser_proc is not None and _browser_proc.poll() is None) or debug_port_up()
+        )
 
         if browser_running:
             if _cdp and _cdp_alive(_cdp):
                 if start_url:
                     log(f"Navigate: {start_url}")
                     _cdp.navigate(start_url)
+                    try:
+                        _cdp.start_screencast()
+                    except Exception:
+                        pass
                 return _cdp
             # Browser still up — only reattach CDP, do NOT relaunch with a default site
             log("CDP reconnect (keeping current tab)")
@@ -332,7 +379,7 @@ def ensure_browser(start_url: str | None = None) -> CdpBrowser:
                     cdp.navigate(start_url)
                 return cdp
             except Exception as e:  # noqa: BLE001
-                log(f"CDP reattach failed: {e} — will relaunch browser")
+                log(f"CDP reattach failed: {e} - will relaunch browser")
 
         exe, args = find_browser()
         if not exe:
@@ -345,21 +392,40 @@ def ensure_browser(start_url: str | None = None) -> CdpBrowser:
             launch_url = BLANK_URL
         if is_kinopoisk_home(HOME_URL) and not start_url:
             launch_url = BLANK_URL
-        cmd = [exe, *args, "--new-window", launch_url]
-        log(f"Launch browser → {launch_url}")
+        cmd = [exe, *args, launch_url]
+        log(f"Launch browser -> {launch_url}")
         _launching = True
         if _browser_proc and _browser_proc.poll() is None:
             try:
                 _browser_proc.terminate()
             except Exception:
                 pass
-            time.sleep(0.5)
+            time.sleep(0.8)
         _browser_proc = subprocess.Popen(cmd)  # noqa: S603
-        time.sleep(1.6)
+        if not wait_debug_port(20.0):
+            # Edge sometimes ignores debug port while another profile holds locks — retry once.
+            log("Debug port not ready - wiping profile locks and retrying browser")
+            try:
+                _browser_proc.terminate()
+            except Exception:
+                pass
+            time.sleep(1.0)
+            wipe_session_restore(PROFILE_DIR)
+            _browser_proc = subprocess.Popen(cmd)  # noqa: S603
+            if not wait_debug_port(20.0):
+                _launching = False
+                raise RuntimeError(f"Browser debug port {DEBUG_PORT} did not open")
         try:
             cdp = _attach_cdp(prefer_url=launch_url, solo_tab=True)
-            if launch_url and launch_url != BLANK_URL:
+            # Always navigate — attach may land on a blank leftover with no screencast frames.
+            if launch_url:
                 cdp.navigate(launch_url)
+                time.sleep(0.5)
+                try:
+                    cdp.start_screencast()
+                except Exception:
+                    pass
+            _last_frame_ts = 0.0
             return cdp
         finally:
             _launching = False
@@ -367,6 +433,57 @@ def ensure_browser(start_url: str | None = None) -> CdpBrowser:
 
 def open_fullscreen(url: str) -> None:
     ensure_browser(url)
+
+
+def browser_watchdog_loop() -> None:
+    """Keep CDP screencast alive — without frames the phone remote stays black."""
+    global _cdp
+    while True:
+        time.sleep(5.0)
+        if _launching:
+            continue
+        try:
+            port_ok = debug_port_up()
+            cdp_ok = bool(_cdp and _cdp_alive(_cdp))
+            frame_age = time.time() - _last_frame_ts if _last_frame_ts else 9999
+            if port_ok and cdp_ok and frame_age < 12:
+                continue
+            if port_ok and cdp_ok and frame_age >= 12:
+                log(f"No screencast frames for {int(frame_age)}s - restart screencast")
+                try:
+                    with _cdp_lock:
+                        if _cdp:
+                            try:
+                                _cdp.stop_screencast()
+                            except Exception:
+                                pass
+                            _cdp.start_screencast()
+                    continue
+                except Exception as e:  # noqa: BLE001
+                    log(f"Screencast restart failed: {e}")
+            log(
+                f"Browser watchdog: port={port_ok} cdp={cdp_ok} frame_age={int(frame_age)}s - relaunch"
+            )
+            ensure_browser(_current_url if _current_url != BLANK_URL else BLANK_URL, force_relaunch=True)
+        except Exception as e:  # noqa: BLE001
+            log(f"Watchdog: {e}")
+
+
+def _job_age_sec(job: dict) -> float | None:
+    raw = job.get("created_at") or ""
+    if not raw:
+        return None
+    try:
+        from datetime import datetime, timezone
+
+        # Django ISO: 2026-11-05T18:50:32.472490Z
+        ts = str(raw).replace("Z", "+00:00")
+        created = datetime.fromisoformat(ts)
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - created).total_seconds()
+    except Exception:
+        return None
 
 
 def claim_and_play() -> bool:
@@ -380,6 +497,12 @@ def claim_and_play() -> bool:
     job_id = job["id"]
     url = job["url"]
     title = job.get("title") or ""
+    age = _job_age_sec(job)
+    # Safety if prod has not expired old pending jobs yet.
+    if age is not None and age > 90:
+        log(f"Skip stale cast #{job_id} ({int(age)}s old): {title or url}")
+        api_post(f"/vefire/cast/{job_id}/ack/", {"ok": False, "error": "stale_client"})
+        return True
     log(f"Cast #{job_id}: {title or url}")
     try:
         open_fullscreen(url)
@@ -557,9 +680,9 @@ def drain_stale_input() -> None:
 
 
 def main() -> int:
-    log(f"Vefire agent → {API_URL}")
+    log(f"Vefire agent -> {API_URL}")
     if is_kinopoisk_home(HOME_URL):
-        log("VEFIRE_HOME_URL указывает на Кинопоиск — игнорирую, стартую с about:blank")
+        log("VEFIRE_HOME_URL points to Kinopoisk - ignoring, start about:blank")
     login()
     drain_stale_input()
     try:
@@ -570,12 +693,13 @@ def main() -> int:
 
     server = ThreadingHTTPServer(("0.0.0.0", REMOTE_PORT), RemoteHandler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    log("Started. Cast from Vmeste → Vefire; open «Пульт» on phone.")
-    log("Крышка: Win+P = только ТВ; Питание = ничего не делать при закрытии.")
+    log("Started. Cast from Vmeste -> Vefire; open Remote on phone.")
+    log("Lid closed: Win+P = Second screen only; Power = Do nothing when lid closes.")
 
     threading.Thread(target=poll_loop, daemon=True).start()
     threading.Thread(target=heartbeat_loop, daemon=True).start()
     threading.Thread(target=input_poll_loop, daemon=True).start()
+    threading.Thread(target=browser_watchdog_loop, daemon=True).start()
 
     try:
         while True:
@@ -588,4 +712,13 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        log(f"FATAL: {exc}")
+        import traceback
+
+        traceback.print_exc()
+        raise SystemExit(1) from exc

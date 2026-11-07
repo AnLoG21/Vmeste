@@ -1,6 +1,7 @@
-"""Minimal Chrome/Edge DevTools Protocol client for navigate + screencast + input."""
+"""Minimal Chrome/Edge DevTools Protocol client for navigate + frames + input."""
 from __future__ import annotations
 
+import base64
 import json
 import threading
 import time
@@ -46,6 +47,8 @@ class CdpBrowser:
         self.frame_height = 720
         self.on_frame: Callable[[bytes, int, int], None] | None = None
         self.target_id: str | None = None
+        self._shot_thread: threading.Thread | None = None
+        self._shot_alive = False
 
     def _base(self) -> str:
         return f"http://127.0.0.1:{self.debug_port}"
@@ -89,16 +92,30 @@ class CdpBrowser:
     def connect(self, prefer_url: str | None = None, solo_tab: bool = False) -> None:
         self.wait_ready()
         pages = self._list_pages()
-        page = self._pick_page(pages, prefer_url)
+        # Always open a fresh tab when we care about a specific URL — avoids about:blank
+        # leftovers that emit no screencast frames.
+        page = None
+        if prefer_url:
+            try:
+                from urllib.parse import quote
+
+                page = requests.put(
+                    f"{self._base()}/json/new?{quote(prefer_url, safe=':/?&=%#')}",
+                    timeout=5,
+                    proxies=_NO_PROXY,
+                ).json()
+            except Exception:
+                page = None
+        if not page:
+            page = self._pick_page(pages, prefer_url)
         if not page:
             page = requests.put(
                 f"{self._base()}/json/new?about:blank", timeout=5, proxies=_NO_PROXY
             ).json()
-            pages = [page]
 
         keep_id = page.get("id")
         if solo_tab and keep_id:
-            for t in pages:
+            for t in self._list_pages():
                 tid = t.get("id")
                 if tid and tid != keep_id:
                     self._close_target(tid)
@@ -111,9 +128,20 @@ class CdpBrowser:
         self._reader.start()
         self.call("Page.enable")
         self.call("Runtime.enable")
-        self.call("Input.enable")
+        # Edge CDP often has no Input.enable (-32601). Mouse/key still work without it.
+        try:
+            self.call("Input.enable")
+        except Exception:
+            pass
+        if prefer_url:
+            try:
+                self.navigate(prefer_url)
+                time.sleep(0.4)
+            except Exception:
+                pass
 
     def close(self) -> None:
+        self.stop_screencast()
         self._alive = False
         try:
             if self.ws:
@@ -141,29 +169,8 @@ class CdpBrowser:
             else:
                 self._handle_event(msg)
 
-    def _handle_event(self, msg: dict) -> None:
-        method = msg.get("method")
-        params = msg.get("params") or {}
-        if method == "Page.screencastFrame":
-            data_b64 = params.get("data") or ""
-            meta = params.get("metadata") or {}
-            session_id = params.get("sessionId")
-            try:
-                import base64
-
-                raw = base64.b64decode(data_b64)
-                self.frame_width = int(meta.get("deviceWidth") or self.frame_width)
-                self.frame_height = int(meta.get("deviceHeight") or self.frame_height)
-                if self.on_frame:
-                    self.on_frame(raw, self.frame_width, self.frame_height)
-            finally:
-                if session_id is not None:
-                    try:
-                        self.call("Page.screencastFrameAck", {"sessionId": session_id})
-                    except Exception:
-                        pass
-
-    def call(self, method: str, params: dict | None = None, timeout: float = 10.0) -> Any:
+    def _send_raw(self, method: str, params: dict | None = None) -> int:
+        """Send a CDP command without waiting (safe from the reader thread)."""
         assert self.ws
         with self._lock:
             self._id += 1
@@ -172,6 +179,32 @@ class CdpBrowser:
             if params:
                 payload["params"] = params
             self.ws.send(json.dumps(payload))
+            return msg_id
+
+    def _handle_event(self, msg: dict) -> None:
+        method = msg.get("method")
+        params = msg.get("params") or {}
+        if method == "Page.screencastFrame":
+            data_b64 = params.get("data") or ""
+            meta = params.get("metadata") or {}
+            session_id = params.get("sessionId")
+            try:
+                raw = base64.b64decode(data_b64)
+                self.frame_width = int(meta.get("deviceWidth") or self.frame_width)
+                self.frame_height = int(meta.get("deviceHeight") or self.frame_height)
+                if self.on_frame:
+                    self.on_frame(raw, self.frame_width, self.frame_height)
+            finally:
+                # NEVER call() here — it deadlocks the reader thread waiting for its own reply.
+                if session_id is not None:
+                    try:
+                        self._send_raw("Page.screencastFrameAck", {"sessionId": session_id})
+                    except Exception:
+                        pass
+
+    def call(self, method: str, params: dict | None = None, timeout: float = 10.0) -> Any:
+        assert self.ws
+        msg_id = self._send_raw(method, params)
         deadline = time.time() + timeout
         while time.time() < deadline:
             with self._lock:
@@ -186,19 +219,71 @@ class CdpBrowser:
     def navigate(self, url: str) -> None:
         self.call("Page.navigate", {"url": url})
 
+    def _refresh_metrics(self) -> None:
+        try:
+            metrics = self.call("Page.getLayoutMetrics", timeout=3.0) or {}
+            box = (
+                metrics.get("cssVisualViewport")
+                or metrics.get("cssLayoutViewport")
+                or metrics.get("layoutViewport")
+                or {}
+            )
+            w = int(box.get("clientWidth") or box.get("width") or 0)
+            h = int(box.get("clientHeight") or box.get("height") or 0)
+            if w > 0 and h > 0:
+                self.frame_width = w
+                self.frame_height = h
+        except Exception:
+            pass
+
+    def _screenshot_loop(self) -> None:
+        """Poll screenshots — Edge kiosk often stops Page.screencast after visibility=false."""
+        while self._shot_alive and self._alive:
+            try:
+                self._refresh_metrics()
+                result = self.call(
+                    "Page.captureScreenshot",
+                    {"format": "jpeg", "quality": 45, "fromSurface": True},
+                    timeout=5.0,
+                ) or {}
+                data_b64 = result.get("data") or ""
+                if data_b64 and self.on_frame:
+                    raw = base64.b64decode(data_b64)
+                    if raw:
+                        self.on_frame(raw, self.frame_width, self.frame_height)
+            except Exception:
+                time.sleep(0.6)
+                continue
+            time.sleep(0.35)
+
     def start_screencast(self) -> None:
-        self.call(
-            "Page.startScreencast",
-            {
-                "format": "jpeg",
-                "quality": 35,
-                "maxWidth": 800,
-                "maxHeight": 450,
-                "everyNthFrame": 2,
-            },
-        )
+        """Start frame capture (screenshot polling; name kept for agent compatibility)."""
+        try:
+            self.call("Page.bringToFront")
+        except Exception:
+            pass
+        # Best-effort live screencast; screenshot loop is the reliable path for TV kiosk.
+        try:
+            self.call(
+                "Page.startScreencast",
+                {
+                    "format": "jpeg",
+                    "quality": 35,
+                    "maxWidth": 800,
+                    "maxHeight": 450,
+                    "everyNthFrame": 2,
+                },
+            )
+        except Exception:
+            pass
+        if self._shot_alive:
+            return
+        self._shot_alive = True
+        self._shot_thread = threading.Thread(target=self._screenshot_loop, daemon=True)
+        self._shot_thread.start()
 
     def stop_screencast(self) -> None:
+        self._shot_alive = False
         try:
             self.call("Page.stopScreencast")
         except Exception:

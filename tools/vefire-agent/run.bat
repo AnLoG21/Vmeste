@@ -10,6 +10,10 @@ set "ALL_PROXY="
 set "all_proxy="
 set "NO_PROXY=*"
 set "no_proxy=*"
+REM Avoid UnicodeEncodeError crash on Windows cp1251 consoles.
+set "PYTHONIOENCODING=utf-8"
+set "PYTHONUTF8=1"
+chcp 65001 >nul 2>&1
 
 where python >nul 2>&1
 if errorlevel 1 (
