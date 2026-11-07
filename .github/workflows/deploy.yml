@@ -10,13 +10,66 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      deploy_scripts: ${{ steps.filter.outputs.deploy_scripts }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'docker-compose.prod.yml'
+              - 'agents-team/**'
+            frontend:
+              - 'frontend/**'
+            deploy_scripts:
+              - 'scripts/deploy-prod.sh'
+              - 'scripts/write-agents-team-env.sh'
+              - '.github/workflows/deploy.yml'
+
+  # Full CI only when backend/infra changes — frontend-only pushes skip ~10–15 min of tests.
   ci:
-    name: Gate — CI
+    name: Gate — CI (backend)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     uses: ./.github/workflows/ci.yml
+
+  frontend-gate:
+    name: Gate — frontend build
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' && needs.changes.outputs.backend != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install + build
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
 
   deploy:
     name: Deploy to VPS
-    needs: ci
+    needs: [changes, ci, frontend-gate]
+    if: |
+      always() &&
+      needs.changes.result == 'success' &&
+      (needs.ci.result == 'success' || needs.ci.result == 'skipped') &&
+      (needs.frontend-gate.result == 'success' || needs.frontend-gate.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -25,6 +78,8 @@ jobs:
       TELEGRAM_HTTP_PROXY: ${{ secrets.TELEGRAM_HTTP_PROXY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+      DEPLOY_BUILD_WEB: ${{ needs.changes.outputs.backend == 'true' || needs.changes.outputs.deploy_scripts == 'true' || github.event_name == 'workflow_dispatch' }}
+      DEPLOY_BUILD_FRONTEND: ${{ needs.changes.outputs.frontend == 'true' || needs.changes.outputs.deploy_scripts == 'true' || needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Preflight secrets
         run: |
@@ -32,14 +87,10 @@ jobs:
             echo "::error::Missing VPS_HOST / VPS_USER / VPS_SSH_KEY secrets"
             exit 1
           fi
-          echo "Deploy target host configured (length=${#HOST})"
-          if [ -n "${TELEGRAM_TEAM_BOT_TOKEN}" ]; then
-            echo "agents-team secrets: present"
-          else
-            echo "agents-team secrets: missing (bot will be skipped until TELEGRAM_TEAM_BOT_TOKEN is set)"
-          fi
+          echo "build_web=${DEPLOY_BUILD_WEB} build_frontend=${DEPLOY_BUILD_FRONTEND}"
         env:
-          HOST: ${{ secrets.VPS_HOST }}
+          DEPLOY_BUILD_WEB: ${{ env.DEPLOY_BUILD_WEB }}
+          DEPLOY_BUILD_FRONTEND: ${{ env.DEPLOY_BUILD_FRONTEND }}
 
       - name: Deploy over SSH
         id: deploy
@@ -54,7 +105,7 @@ jobs:
           timeout: 60s
           script_stop: true
           command_timeout: 40m
-          envs: TELEGRAM_TEAM_BOT_TOKEN,TELEGRAM_ALLOWED_USER_IDS,TELEGRAM_HTTP_PROXY,GEMINI_API_KEY,CURSOR_API_KEY
+          envs: TELEGRAM_TEAM_BOT_TOKEN,TELEGRAM_ALLOWED_USER_IDS,TELEGRAM_HTTP_PROXY,GEMINI_API_KEY,CURSOR_API_KEY,DEPLOY_BUILD_WEB,DEPLOY_BUILD_FRONTEND
           script: |
             set -euo pipefail
             echo "[deploy] connected as $(whoami)@$(hostname)"
@@ -64,6 +115,8 @@ jobs:
             git reset --hard origin/main
             chmod +x scripts/deploy-prod.sh scripts/write-agents-team-env.sh
             ./scripts/write-agents-team-env.sh
+            export DEPLOY_BUILD_WEB="${DEPLOY_BUILD_WEB:-true}"
+            export DEPLOY_BUILD_FRONTEND="${DEPLOY_BUILD_FRONTEND:-true}"
             ./scripts/deploy-prod.sh
 
       - name: Deploy over SSH (retry 1)
@@ -80,7 +133,7 @@ jobs:
           timeout: 60s
           script_stop: true
           command_timeout: 40m
-          envs: TELEGRAM_TEAM_BOT_TOKEN,TELEGRAM_ALLOWED_USER_IDS,TELEGRAM_HTTP_PROXY,GEMINI_API_KEY,CURSOR_API_KEY
+          envs: TELEGRAM_TEAM_BOT_TOKEN,TELEGRAM_ALLOWED_USER_IDS,TELEGRAM_HTTP_PROXY,GEMINI_API_KEY,CURSOR_API_KEY,DEPLOY_BUILD_WEB,DEPLOY_BUILD_FRONTEND
           script: |
             set -euo pipefail
             echo "[deploy] retry 1 connected as $(whoami)@$(hostname)"
@@ -90,6 +143,8 @@ jobs:
             git reset --hard origin/main
             chmod +x scripts/deploy-prod.sh scripts/write-agents-team-env.sh
             ./scripts/write-agents-team-env.sh
+            export DEPLOY_BUILD_WEB="${DEPLOY_BUILD_WEB:-true}"
+            export DEPLOY_BUILD_FRONTEND="${DEPLOY_BUILD_FRONTEND:-true}"
             ./scripts/deploy-prod.sh
 
       - name: Deploy over SSH (retry 2)
@@ -104,7 +159,7 @@ jobs:
           timeout: 60s
           script_stop: true
           command_timeout: 40m
-          envs: TELEGRAM_TEAM_BOT_TOKEN,TELEGRAM_ALLOWED_USER_IDS,TELEGRAM_HTTP_PROXY,GEMINI_API_KEY,CURSOR_API_KEY
+          envs: TELEGRAM_TEAM_BOT_TOKEN,TELEGRAM_ALLOWED_USER_IDS,TELEGRAM_HTTP_PROXY,GEMINI_API_KEY,CURSOR_API_KEY,DEPLOY_BUILD_WEB,DEPLOY_BUILD_FRONTEND
           script: |
             set -euo pipefail
             echo "[deploy] retry 2 connected as $(whoami)@$(hostname)"
@@ -114,11 +169,13 @@ jobs:
             git reset --hard origin/main
             chmod +x scripts/deploy-prod.sh scripts/write-agents-team-env.sh
             ./scripts/write-agents-team-env.sh
+            export DEPLOY_BUILD_WEB=true
+            export DEPLOY_BUILD_FRONTEND=true
             ./scripts/deploy-prod.sh
 
   notify-failure:
     name: Ops alert on failure
-    needs: [ci, deploy]
+    needs: [changes, ci, frontend-gate, deploy]
     if: failure()
     runs-on: ubuntu-latest
     steps:

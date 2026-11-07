@@ -482,13 +482,13 @@ def normalize_cast_url(url: str) -> str:
 
 
 def enhance_playback(cdp: CdpBrowser, reason: str = "") -> None:
-    """Force OS fullscreen + try player fullscreen after cast/load."""
+    """Force OS fullscreen + enter player fullscreen (no play/pause side effects)."""
     try:
         cdp.force_window_fullscreen()
     except Exception as e:  # noqa: BLE001
         log(f"Window fullscreen: {e}")
     try:
-        how = cdp.try_video_fullscreen()
+        how = cdp.try_video_fullscreen(enter_only=True)
         log(f"Video fullscreen ({reason or 'cast'}): {how}")
     except Exception as e:  # noqa: BLE001
         log(f"Video fullscreen failed: {e}")
@@ -497,14 +497,14 @@ def enhance_playback(cdp: CdpBrowser, reason: str = "") -> None:
 def open_fullscreen(url: str) -> None:
     url = normalize_cast_url(url)
     cdp = ensure_browser(url)
-    # Give the page a moment to paint, then expand.
-    time.sleep(1.8)
+    # Give the page a moment to paint, then expand once (retry only if still not FS).
+    time.sleep(2.0)
     enhance_playback(cdp, "after-cast")
 
     def _retry() -> None:
-        time.sleep(3.5)
+        time.sleep(4.0)
         try:
-            enhance_playback(cdp, "retry")
+            enhance_playback(cdp, "retry-if-needed")
         except Exception as e:  # noqa: BLE001
             log(f"Fullscreen retry: {e}")
 
@@ -709,79 +709,14 @@ def handle_input(data: dict) -> dict:
     elif typ == "media":
         action = str(data.get("action") or "")
         seconds = float(data.get("seconds") or 0)
-        cdp.pause_shots(1.5)
         if action == "fullscreen":
             enhance_playback(cdp, "remote")
         elif action == "playpause":
-            try:
-                cdp.call(
-                    "Runtime.evaluate",
-                    {
-                        "expression": """(() => {
-                          const v = document.querySelector('video');
-                          if (v) { if (v.paused) v.play(); else v.pause(); return v.paused ? 'paused' : 'playing'; }
-                          return 'none';
-                        })()""",
-                        "returnByValue": True,
-                    },
-                    timeout=3.0,
-                )
-            except Exception:
-                pass
-            try:
-                cdp.key("k")
-            except Exception:
-                pass
-            try:
-                cdp.key(" ")
-            except Exception:
-                pass
-            log("Media: playpause")
+            how = cdp.media_playpause()
+            log(f"Media: playpause -> {how}")
         elif action == "seek":
-            moved = None
-            try:
-                out = cdp.call(
-                    "Runtime.evaluate",
-                    {
-                        "expression": f"""(() => {{
-                          const v = document.querySelector('video');
-                          if (!v) return null;
-                          const d = Number.isFinite(v.duration) ? v.duration : 1e9;
-                          v.currentTime = Math.max(0, Math.min(d, v.currentTime + ({seconds})));
-                          return v.currentTime;
-                        }})()""",
-                        "returnByValue": True,
-                    },
-                    timeout=3.0,
-                ) or {}
-                moved = (out.get("result") or {}).get("value")
-            except Exception as e:  # noqa: BLE001
-                log(f"Media seek js: {e}")
-            # YouTube: j/l = ±10s, arrows ≈ ±5s
-            try:
-                if seconds <= -25:
-                    cdp.key("j")
-                    cdp.key("j")
-                    cdp.key("j")
-                elif seconds <= -10:
-                    cdp.key("j")
-                elif seconds < 0:
-                    cdp.key("ArrowLeft")
-                    cdp.key("ArrowLeft")
-                    cdp.key("ArrowLeft")
-                elif seconds >= 25:
-                    cdp.key("l")
-                    cdp.key("l")
-                    cdp.key("l")
-                elif seconds >= 10:
-                    cdp.key("l")
-                else:
-                    cdp.key("ArrowRight")
-                    cdp.key("ArrowRight")
-                    cdp.key("ArrowRight")
-            except Exception as e:  # noqa: BLE001
-                log(f"Media seek keys: {e}")
-            log(f"Media: seek {seconds}s (js={moved})")
+            how = cdp.media_seek(seconds)
+            log(f"Media: seek {seconds}s -> {how}")
     return {"ok": True, "width": _latest_meta["width"], "height": _latest_meta["height"]}
 
 

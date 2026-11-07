@@ -85,29 +85,62 @@ echo "[deploy] building images sequentially (low RAM)..."
 export COMPOSE_PARALLEL_LIMIT=1
 # Bake talks to registry-1.docker.io for FROM metadata even when layers exist.
 export COMPOSE_BAKE=false
-export DOCKER_BUILDKIT=0
+# BuildKit caches layers much faster on repeat frontend deploys.
+export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}"
+BUILD_WEB="${DEPLOY_BUILD_WEB:-true}"
+BUILD_FRONTEND="${DEPLOY_BUILD_FRONTEND:-true}"
+# Normalize GitHub expression booleans / strings
+case "${BUILD_WEB,,}" in false|0|no) BUILD_WEB=false ;; *) BUILD_WEB=true ;; esac
+case "${BUILD_FRONTEND,,}" in false|0|no) BUILD_FRONTEND=false ;; *) BUILD_FRONTEND=true ;; esac
+echo "[deploy] BUILD_WEB=${BUILD_WEB} BUILD_FRONTEND=${BUILD_FRONTEND}"
+
 ensure_base_image python:3.12-slim-bookworm
 ensure_base_image node:20-alpine
 ensure_base_image nginx:1.27-alpine
 docker compose -f "$COMPOSE_FILE" stop celery_worker celery_beat || true
 ensure_disk_space
-docker compose -f "$COMPOSE_FILE" build web
+
+if [[ "$BUILD_WEB" == "true" ]]; then
+  docker compose -f "$COMPOSE_FILE" build web
+else
+  echo "[deploy] skip web image rebuild (no backend changes)"
+fi
+
 # Cached frontend rebuild is enough after CI already validated the build.
 # Set FRONTEND_NO_CACHE=1 for a clean rebuild when Vite env args change.
 ensure_disk_space
-if [[ "${FRONTEND_NO_CACHE:-0}" == "1" ]]; then
-  docker compose -f "$COMPOSE_FILE" build --no-cache frontend
+if [[ "$BUILD_FRONTEND" == "true" ]]; then
+  if [[ "${FRONTEND_NO_CACHE:-0}" == "1" ]]; then
+    docker compose -f "$COMPOSE_FILE" build --no-cache frontend
+  else
+    docker compose -f "$COMPOSE_FILE" build frontend
+  fi
 else
-  docker compose -f "$COMPOSE_FILE" build frontend
+  echo "[deploy] skip frontend image rebuild (no frontend changes)"
 fi
-docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans web frontend caddy celery_worker celery_beat
+
+# Recreate only what we rebuilt; always bounce frontend/web lightly if either built.
+UP_SERVICES=(caddy celery_worker celery_beat)
+if [[ "$BUILD_WEB" == "true" ]]; then UP_SERVICES+=(web); fi
+if [[ "$BUILD_FRONTEND" == "true" ]]; then UP_SERVICES+=(frontend); fi
+# If nothing to build (tools-only), still refresh frontend so HTML picks up nothing — skip force.
+if [[ "$BUILD_WEB" == "true" || "$BUILD_FRONTEND" == "true" ]]; then
+  docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans "${UP_SERVICES[@]}"
+else
+  echo "[deploy] no app image changes — leave running containers"
+  docker compose -f "$COMPOSE_FILE" up -d caddy celery_worker celery_beat
+fi
 # Keep tunnel up if the profile/service exists (HTTPS via Cloudflare).
 docker compose -f "$COMPOSE_FILE" up -d cloudflared 2>/dev/null || true
 
 if [ -f .env ] && grep -qE '^ASTERISK_INTERNAL_SECRET=.+' .env; then
-  echo "[deploy] Asterisk telephony profile (SIP 5060/udp)…"
-  docker compose -f "$COMPOSE_FILE" --profile telephony build asterisk
-  docker compose -f "$COMPOSE_FILE" --profile telephony up -d --force-recreate asterisk
+  if [[ "$BUILD_WEB" == "true" ]]; then
+    echo "[deploy] Asterisk telephony profile (SIP 5060/udp)…"
+    docker compose -f "$COMPOSE_FILE" --profile telephony build asterisk
+    docker compose -f "$COMPOSE_FILE" --profile telephony up -d --force-recreate asterisk
+  else
+    echo "[deploy] skip Asterisk rebuild (no backend changes)"
+  fi
 else
   echo "[deploy] skip Asterisk (no ASTERISK_INTERNAL_SECRET in .env)"
 fi

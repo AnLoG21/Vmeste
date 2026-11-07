@@ -295,46 +295,47 @@ class CdpBrowser:
             except Exception:
                 pass
 
-    def try_video_fullscreen(self) -> str:
-        """Best-effort: play video and enter HTML/YouTube/Rutube fullscreen."""
-        self.pause_shots(1.5)
+    def try_video_fullscreen(self, enter_only: bool = True) -> str:
+        """Enter player fullscreen once — never toggle (F twice would exit)."""
+        self.pause_shots(2.0)
         try:
             self.force_window_fullscreen()
         except Exception:
             pass
-        result = "none"
         try:
             out = self.call(
                 "Runtime.evaluate",
                 {
-                    "expression": """(() => {
-                      const click = (sel) => {
+                    "expression": f"""(() => {{
+                      const enterOnly = {str(enter_only).lower()};
+                      const docFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                      if (enterOnly && docFs) return 'already-fs';
+                      const click = (sel) => {{
                         const el = document.querySelector(sel);
-                        if (el) { el.click(); return true; }
-                        return false;
-                      };
+                        if (!el) return false;
+                        // YouTube: aria-pressed / title changes when already fullscreen
+                        const label = ((el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
+                        if (enterOnly && (label.includes('exit') || label.includes('сверн') || label.includes('выход'))) return false;
+                        el.click();
+                        return true;
+                      }};
                       const v = document.querySelector('video');
-                      if (v) {
-                        try { v.muted = false; } catch (e) {}
-                        try { v.play(); } catch (e) {}
+                      if (v) {{
                         const req = v.requestFullscreen || v.webkitRequestFullscreen || v.msRequestFullscreen;
-                        if (req) {
-                          try { req.call(v); return 'video-fs'; } catch (e) {}
-                        }
-                      }
+                        if (req && !docFs) {{
+                          try {{ req.call(v); return 'video-fs'; }} catch (e) {{}}
+                        }}
+                      }}
                       if (click('button.ytp-fullscreen-button') ||
                           click('.ytp-fullscreen-button') ||
-                          click('button[aria-label*="Full" i]') ||
-                          click('button[title*="Full" i]') ||
-                          click('button[aria-label*="на весь" i]') ||
-                          click('button[aria-label*="полный" i]') ||
                           click('.vjs-fullscreen-control') ||
-                          click('[class*="fullscreen"] button') ||
-                          click('button[class*="fullscreen" i]')) {
+                          click('button[aria-label*="Full screen" i]') ||
+                          click('button[aria-label*="на весь" i]') ||
+                          click('button[aria-label*="Полный" i]')) {{
                         return 'btn-fs';
-                      }
+                      }}
                       return v ? 'video-no-fs' : 'none';
-                    })()""",
+                    }})()""",
                     "awaitPromise": False,
                     "returnByValue": True,
                 },
@@ -343,12 +344,99 @@ class CdpBrowser:
             result = str((out.get("result") or {}).get("value") or "none")
         except Exception as e:
             result = f"err:{e}"
-        # YouTube / many players: F = fullscreen
+        # Only press F if JS path did not already enter fullscreen (F toggles).
+        if result in ("none", "video-no-fs"):
+            try:
+                already = self.call(
+                    "Runtime.evaluate",
+                    {
+                        "expression": "!!(document.fullscreenElement||document.webkitFullscreenElement)",
+                        "returnByValue": True,
+                    },
+                    timeout=2.0,
+                ) or {}
+                if not (already.get("result") or {}).get("value"):
+                    self.key("f")
+                    result = f"{result}+f"
+            except Exception:
+                pass
+        return result
+
+    def media_playpause(self) -> str:
+        """Toggle pause exactly once — never stack JS + k + Space (that unpauses again)."""
+        self.pause_shots(1.2)
         try:
-            self.key("f")
+            out = self.call(
+                "Runtime.evaluate",
+                {
+                    "expression": """(() => {
+                      const v = document.querySelector('video');
+                      if (v) {
+                        if (v.paused) { v.play(); return 'play'; }
+                        v.pause();
+                        return 'pause';
+                      }
+                      // YouTube play button
+                      const btn = document.querySelector('button.ytp-play-button, .ytp-play-button');
+                      if (btn) { btn.click(); return 'yt-btn'; }
+                      return 'none';
+                    })()""",
+                    "returnByValue": True,
+                },
+                timeout=3.0,
+            ) or {}
+            result = str((out.get("result") or {}).get("value") or "none")
+        except Exception as e:
+            result = f"err:{e}"
+        if result == "none":
+            try:
+                self.key("k")
+                result = "key-k"
+            except Exception:
+                try:
+                    self.key(" ")
+                    result = "key-space"
+                except Exception:
+                    result = "fail"
+        return result
+
+    def media_seek(self, seconds: float) -> str:
+        """Seek once via video.currentTime, else a single YouTube hotkey."""
+        self.pause_shots(1.0)
+        try:
+            out = self.call(
+                "Runtime.evaluate",
+                {
+                    "expression": f"""(() => {{
+                      const v = document.querySelector('video');
+                      if (!v) return null;
+                      const d = Number.isFinite(v.duration) ? v.duration : 1e9;
+                      v.currentTime = Math.max(0, Math.min(d, v.currentTime + ({float(seconds)})));
+                      return v.currentTime;
+                    }})()""",
+                    "returnByValue": True,
+                },
+                timeout=3.0,
+            ) or {}
+            moved = (out.get("result") or {}).get("value")
+            if moved is not None:
+                return f"js:{moved}"
         except Exception:
             pass
-        return result
+        try:
+            if seconds <= -20:
+                self.key("j")
+                return "key-j"
+            if seconds < 0:
+                self.key("ArrowLeft")
+                return "key-left"
+            if seconds >= 20:
+                self.key("l")
+                return "key-l"
+            self.key("ArrowRight")
+            return "key-right"
+        except Exception as e:
+            return f"err:{e}"
 
     def _refresh_metrics(self) -> None:
         try:
