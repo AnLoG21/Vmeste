@@ -33,20 +33,6 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
             if (missesRef.current > 10) {
               setFailHint("Перезапусти run.bat на ноуте у ТВ.");
             }
-            if (missesRef.current === 3 || missesRef.current % 20 === 0) {
-              try {
-                const hb = await authFetch(`${API_URL}/vefire/agent/heartbeat/`);
-                if (hb.ok) {
-                  const a = (await hb.json())?.agent;
-                  if (a?.frame_width && a?.frame_height) {
-                    setMeta({ width: a.frame_width, height: a.frame_height });
-                  }
-                  if (a && a.online === false) setFailHint("Агент офлайн — run.bat на ноуте.");
-                }
-              } catch {
-                /* ignore */
-              }
-            }
           }
         } else {
           missesRef.current = 0;
@@ -77,7 +63,6 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
   }, [authFetch, API_URL]);
 
   function send(body) {
-    // Fire-and-forget — awaiting every tap added hundreds of ms of lag.
     authFetch(`${API_URL}/vefire/agent/input/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -98,10 +83,7 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
 
   function openKeyboard() {
     setKeyboardOpen(true);
-    // iOS/Android need focus in the same user gesture when possible; retry shortly.
-    requestAnimationFrame(() => {
-      inputRef.current?.focus({ preventScroll: false });
-    });
+    requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: false }));
     setTimeout(() => inputRef.current?.focus(), 50);
   }
 
@@ -135,10 +117,6 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
     const dbl = now - dragRef.current.lastTap < 320;
     dragRef.current.lastTap = now;
     send({ type: "pointer", phase: "up", x: p.x, y: p.y, click: true, double: dbl });
-    // After a short tap on the screen, offer the phone keyboard for search fields.
-    if (!dragRef.current.moved && !dbl) {
-      openKeyboard();
-    }
   }
 
   function onTextChange(e) {
@@ -185,6 +163,25 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
         />
       </div>
 
+      <div className="vefire-remote-transport">
+        <button type="button" className="vefire-remote-tr-btn" onClick={() => send({ type: "media", action: "seek", seconds: -15 })}>
+          −15с
+        </button>
+        <button
+          type="button"
+          className="vefire-remote-tr-btn vefire-remote-tr-btn--main"
+          onClick={() => send({ type: "media", action: "playpause" })}
+        >
+          ▶/❚❚
+        </button>
+        <button type="button" className="vefire-remote-tr-btn" onClick={() => send({ type: "media", action: "seek", seconds: 15 })}>
+          +15с
+        </button>
+        <button type="button" className="vefire-remote-tr-btn" onClick={() => send({ type: "media", action: "seek", seconds: 30 })}>
+          +30с
+        </button>
+      </div>
+
       {failHint ? <p className="vefire-remote-hint">{failHint}</p> : null}
 
       <div className={`vefire-remote-keys ${keyboardOpen ? "is-open" : ""}`}>
@@ -195,7 +192,7 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
           onChange={onTextChange}
           onFocus={() => setKeyboardOpen(true)}
           onBlur={() => setKeyboardOpen(false)}
-          placeholder="Печатай — уходит на ТВ"
+          placeholder="Поиск / текст на ТВ"
           inputMode="search"
           enterKeyHint="search"
           autoCapitalize="off"

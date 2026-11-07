@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import "./vefire.css";
 import VefireLogo from "./VefireLogo.jsx";
-import { VEFIRE_APPS } from "./vefireApps.js";
+import { VEFIRE_APPS, VEFIRE_SEARCH_TARGETS } from "./vefireApps.js";
 import { canAccessVefire } from "./vefireAccess.js";
 import { castToTv, fetchAgentStatus, fetchLatestCast } from "./vefireApi.js";
 import VefireRemote from "./VefireRemote.jsx";
@@ -30,6 +30,8 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
   const [latestCast, setLatestCast] = useState(null);
   const [agent, setAgent] = useState(null);
   const [showRemote, setShowRemote] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchTarget, setSearchTarget] = useState("youtube");
 
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 30_000);
@@ -106,13 +108,20 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
 
   function openApp(app) {
     setCastMsg("");
-    if (app.kind === "link") {
-      setActiveAppId(app.id);
-      setPlayerUrl("");
-      return;
-    }
     setActiveAppId(app.id);
     setPlayerUrl("");
+  }
+
+  async function castSearch({ openRemote = true } = {}) {
+    const q = searchQuery.trim();
+    if (!q) {
+      setCastMsg("Введи что искать");
+      return;
+    }
+    const target = VEFIRE_SEARCH_TARGETS.find((t) => t.id === searchTarget) || VEFIRE_SEARCH_TARGETS[0];
+    const url = target.build(q);
+    await sendToTv(url, `${target.title}: ${q}`);
+    if (openRemote) setShowRemote(true);
   }
 
   function launchLink({ toTv = false } = {}) {
@@ -153,6 +162,83 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
     );
   }
 
+  if (activeApp?.kind === "find") {
+    return (
+      <section className="vefire-shell">
+        <header className="vefire-top">
+          <button type="button" className="vefire-back" onClick={() => setActiveAppId(null)}>
+            ← Лаунчер
+          </button>
+          <div className="vefire-brand">
+            <VefireLogo size={28} />
+            <span>Найти видео</span>
+          </div>
+          <span className="vefire-clock">
+            {clock.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+        </header>
+        <div className="vefire-link-panel">
+          <h2>Поиск на ТВ</h2>
+          <p className="vefire-muted">
+            Введи запрос — ноут откроет поиск на телевизоре. Дальше пульт: выбери ролик и −15 / ▶ / +15.
+          </p>
+          <div className="vefire-search-targets">
+            {VEFIRE_SEARCH_TARGETS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={`vefire-chip ${searchTarget === t.id ? "is-active" : ""}`}
+                onClick={() => setSearchTarget(t.id)}
+              >
+                {t.title}
+              </button>
+            ))}
+          </div>
+          <div className="vefire-link-row">
+            <input
+              className="vefire-input"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Фильм, клип, шоу…"
+              enterKeyHint="search"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") castSearch();
+              }}
+            />
+            <button
+              type="button"
+              className="vefire-btn vefire-btn--accent"
+              disabled={castBusy}
+              onClick={() => castSearch()}
+            >
+              На ТВ
+            </button>
+          </div>
+          <button
+            type="button"
+            className="vefire-btn"
+            onClick={() => {
+              const q = searchQuery.trim();
+              if (!q) return;
+              const target = VEFIRE_SEARCH_TARGETS.find((t) => t.id === searchTarget) || VEFIRE_SEARCH_TARGETS[0];
+              openExternal(target.build(q));
+            }}
+          >
+            Сначала найти в браузере телефона
+          </button>
+          <p className="vefire-hint">
+            Из YouTube/RuTube на телефоне: Поделиться → Копировать ссылку → раздел «Ссылка» → На ТВ.
+          </p>
+          {castMsg ? <p className="vefire-cast-msg">{castMsg}</p> : null}
+          <p className="vefire-muted vefire-cast-status">{agentLine}</p>
+          <button type="button" className="vefire-btn vefire-btn--accent" onClick={() => setShowRemote(true)}>
+            Пульт
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   if (activeApp?.kind === "link") {
     return (
       <section className="vefire-shell">
@@ -169,9 +255,9 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
           </span>
         </header>
         <div className="vefire-link-panel">
-          <h2>Открыть здесь или на ТВ</h2>
+          <h2>Ссылка с телефона → ТВ</h2>
           <p className="vefire-muted">
-            «На ТВ» уходит агенту на ноут (HDMI). Прямой mp4/webm — можно смотреть и здесь.
+            Скопируй ссылку из YouTube / RuTube / браузера и отправь на телевизор. Прямой mp4 можно смотреть и здесь.
           </p>
           <div className="vefire-link-row">
             <input
@@ -187,12 +273,12 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
               type="button"
               className="vefire-btn vefire-btn--accent"
               disabled={castBusy}
-              onClick={() => launchLink({ toTv: true })}
+              onClick={() => {
+                launchLink({ toTv: true });
+                setShowRemote(true);
+              }}
             >
               На ТВ
-            </button>
-            <button type="button" className="vefire-btn" onClick={() => launchLink({ toTv: false })}>
-              Здесь
             </button>
           </div>
           {castMsg ? <p className="vefire-cast-msg">{castMsg}</p> : null}

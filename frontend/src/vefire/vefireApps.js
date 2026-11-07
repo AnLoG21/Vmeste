@@ -1,6 +1,15 @@
 /** Smart-TV style catalog. External sites often block iframes — we open them as apps. */
 export const VEFIRE_APPS = [
   {
+    id: "find",
+    title: "Найти",
+    subtitle: "Поиск → сразу на ТВ",
+    url: null,
+    accent: "#3d7eff",
+    letter: "⌕",
+    kind: "find",
+  },
+  {
     id: "kinopoisk",
     title: "Кинопоиск",
     subtitle: "Фильмы и сериалы",
@@ -35,10 +44,33 @@ export const VEFIRE_APPS = [
   {
     id: "link",
     title: "Ссылка",
-    subtitle: "Вставить URL и открыть",
+    subtitle: "Из приложения / браузера",
     url: null,
     accent: "#FF7A00",
     letter: "🔗",
     kind: "link",
+  },
+];
+
+export const VEFIRE_SEARCH_TARGETS = [
+  {
+    id: "youtube",
+    title: "YouTube",
+    build: (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+  },
+  {
+    id: "rutube",
+    title: "RuTube",
+    build: (q) => `https://rutube.ru/search/?query=${encodeURIComponent(q)}`,
+  },
+  {
+    id: "vkvideo",
+    title: "VK",
+    build: (q) => `https://vkvideo.ru/?q=${encodeURIComponent(q)}`,
+  },
+  {
+    id: "kinopoisk",
+    title: "Кинопоиск",
+    build: (q) => `https://www.kinopoisk.ru/index.php?kp_query=${encodeURIComponent(q)}`,
   },
 ];

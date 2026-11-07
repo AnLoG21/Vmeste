@@ -318,6 +318,54 @@
   font-weight: 600;
 }
 
+.vefire-remote-transport {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  padding: 0.4rem 0.5rem;
+  background: rgba(6, 10, 18, 0.96);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  flex: 0 0 auto;
+}
+
+.vefire-remote-tr-btn {
+  appearance: none;
+  border: 0;
+  border-radius: 10px;
+  min-height: 2.4rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e8eefc;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.vefire-remote-tr-btn--main {
+  background: #3d7eff;
+  color: #fff;
+}
+
+.vefire-search-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.vefire-chip {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--vefire-muted);
+  border-radius: 999px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.vefire-chip.is-active {
+  background: rgba(61, 126, 255, 0.25);
+  border-color: rgba(61, 126, 255, 0.7);
+  color: #e8eefc;
+}
+
 .vefire-remote-dock {
   display: flex;
   flex-direction: column;

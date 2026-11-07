@@ -75,6 +75,7 @@ _frame_fail_logged = False
 _frame_ok_count = 0
 _launching = False
 _last_frame_ts = 0.0
+_watchdog_port_fails = 0
 
 
 def log(msg: str) -> None:
@@ -447,51 +448,50 @@ def open_fullscreen(url: str) -> None:
 
 
 def browser_watchdog_loop() -> None:
-    """Keep CDP frame capture alive — without frames the phone remote stays black."""
-    global _cdp
+    """Keep capture alive without constantly killing the TV browser window."""
+    global _cdp, _watchdog_port_fails
     while True:
-        time.sleep(5.0)
+        time.sleep(8.0)
         if _launching:
             continue
         try:
             port_ok = debug_port_up()
-            cdp_ok = bool(_cdp and _cdp_alive(_cdp))
-            if _last_frame_ts <= 0:
-                frame_age = 0.0
-            else:
-                frame_age = time.time() - _last_frame_ts
-            if port_ok and cdp_ok:
-                try:
-                    with _cdp_lock:
-                        if _cdp:
-                            n = _cdp.close_stray_blank_tabs()
-                            if n:
-                                log(f"Closed {n} stray about:blank tab(s)")
-                except Exception:
-                    pass
-            if port_ok and cdp_ok and frame_age < 15:
+            frame_age = (time.time() - _last_frame_ts) if _last_frame_ts > 0 else 9999.0
+            frames_ok = frame_age < 20
+
+            # Recent frames mean the stick is healthy — never relaunch (CDP ping is flaky under load).
+            if port_ok and frames_ok:
+                _watchdog_port_fails = 0
                 continue
-            if port_ok and cdp_ok and frame_age >= 15:
-                log(f"No frames for {int(frame_age)}s - restart capture")
+
+            if port_ok and not frames_ok:
+                _watchdog_port_fails = 0
+                log(f"Watchdog: no frames {int(frame_age)}s - reattach capture (keep window)")
                 try:
                     with _cdp_lock:
                         if _cdp:
                             try:
-                                _cdp.stop_screencast()
+                                _cdp.close()
                             except Exception:
                                 pass
-                            _cdp.start_screencast()
-                    continue
+                            _cdp = None
+                        _attach_cdp(
+                            prefer_url=_current_url or BLANK_URL,
+                            solo_tab=False,
+                            navigate=False,
+                        )
                 except Exception as e:  # noqa: BLE001
-                    log(f"Capture restart failed: {e}")
-            log(
-                f"Browser watchdog: port={port_ok} cdp={cdp_ok} frame_age={int(frame_age)}s - relaunch"
-            )
-            # Relaunch only if the browser/CDP is actually dead — keep current content URL.
-            ensure_browser(
-                _current_url if _current_url else BLANK_URL,
-                force_relaunch=True,
-            )
+                    log(f"Watchdog reattach failed: {e}")
+                continue
+
+            # Debug port down — wait for a few checks before killing/reopening Edge.
+            _watchdog_port_fails += 1
+            log(f"Watchdog: debug port down ({_watchdog_port_fails}/4)")
+            if _watchdog_port_fails < 4:
+                continue
+            _watchdog_port_fails = 0
+            log("Watchdog: relaunch browser after repeated port failures")
+            ensure_browser(_current_url if _current_url else BLANK_URL, force_relaunch=True)
         except Exception as e:  # noqa: BLE001
             log(f"Watchdog: {e}")
 
@@ -612,6 +612,57 @@ def handle_input(data: dict) -> dict:
             global _current_url
             _current_url = target
             cdp.navigate(target)
+    elif typ == "media":
+        action = str(data.get("action") or "")
+        seconds = float(data.get("seconds") or 0)
+        if action == "playpause":
+            try:
+                cdp.call(
+                    "Runtime.evaluate",
+                    {
+                        "expression": """(() => {
+                          const v = document.querySelector('video');
+                          if (v) { if (v.paused) v.play(); else v.pause(); return 'video'; }
+                          return 'none';
+                        })()"""
+                    },
+                    timeout=3.0,
+                )
+            except Exception:
+                pass
+            try:
+                cdp.key("k")
+            except Exception:
+                pass
+            try:
+                cdp.key(" ")
+            except Exception:
+                pass
+        elif action == "seek":
+            try:
+                cdp.call(
+                    "Runtime.evaluate",
+                    {
+                        "expression": f"""(() => {{
+                          const v = document.querySelector('video');
+                          if (!v) return null;
+                          const d = Number.isFinite(v.duration) ? v.duration : 1e9;
+                          v.currentTime = Math.max(0, Math.min(d, v.currentTime + ({seconds})));
+                          return v.currentTime;
+                        }})()"""
+                    },
+                    timeout=3.0,
+                )
+            except Exception:
+                pass
+            # YouTube / many players: arrows ≈ ±5s
+            key = "ArrowRight" if seconds >= 0 else "ArrowLeft"
+            steps = max(1, min(12, int(abs(seconds) / 5) or 1))
+            for _ in range(steps):
+                try:
+                    cdp.key(key)
+                except Exception:
+                    break
     return {"ok": True, "width": _latest_meta["width"], "height": _latest_meta["height"]}
 
 
