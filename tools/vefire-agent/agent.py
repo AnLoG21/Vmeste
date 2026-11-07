@@ -213,6 +213,9 @@ def find_browser() -> tuple[str, list[str]]:
     candidates: list[tuple[str, list[str], list[str]]] = []
     common_args = [
         "--kiosk",
+        "--start-fullscreen",
+        "--start-maximized",
+        "--window-position=0,0",
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-session-crashed-bubble",
@@ -436,6 +439,10 @@ def ensure_browser(start_url: str | None = None, force_relaunch: bool = False) -
                 cdp.close_stray_blank_tabs()
             except Exception:
                 pass
+            try:
+                cdp.force_window_fullscreen()
+            except Exception:
+                pass
             if _last_frame_ts <= 0:
                 _last_frame_ts = time.time()
             return cdp
@@ -443,8 +450,64 @@ def ensure_browser(start_url: str | None = None, force_relaunch: bool = False) -
             _launching = False
 
 
+def normalize_cast_url(url: str) -> str:
+    """Turn short / share links into direct watch URLs when possible."""
+    u = (url or "").strip()
+    if not u:
+        return u
+    try:
+        from urllib.parse import parse_qs, urlparse, urlunparse
+
+        p = urlparse(u)
+        host = (p.netloc or "").lower()
+        if host in ("youtu.be", "www.youtu.be"):
+            vid = (p.path or "/").lstrip("/")
+            if vid:
+                return f"https://www.youtube.com/watch?v={vid}"
+        if "youtube.com" in host or "youtube-nocookie.com" in host:
+            qs = parse_qs(p.query or "")
+            if "v" in qs and qs["v"]:
+                return f"https://www.youtube.com/watch?v={qs['v'][0]}"
+            # /shorts/ID or /embed/ID
+            parts = [x for x in (p.path or "").split("/") if x]
+            if len(parts) >= 2 and parts[0] in ("shorts", "embed", "live"):
+                return f"https://www.youtube.com/watch?v={parts[1]}"
+        if "rutube.ru" in host and "/video/" in (p.path or ""):
+            # keep canonical video page
+            return urlunparse(("https", "rutube.ru", p.path.rstrip("/") + "/", "", "", ""))
+    except Exception:
+        return u
+    return u
+
+
+def enhance_playback(cdp: CdpBrowser, reason: str = "") -> None:
+    """Force OS fullscreen + try player fullscreen after cast/load."""
+    try:
+        cdp.force_window_fullscreen()
+    except Exception as e:  # noqa: BLE001
+        log(f"Window fullscreen: {e}")
+    try:
+        how = cdp.try_video_fullscreen()
+        log(f"Video fullscreen ({reason or 'cast'}): {how}")
+    except Exception as e:  # noqa: BLE001
+        log(f"Video fullscreen failed: {e}")
+
+
 def open_fullscreen(url: str) -> None:
-    ensure_browser(url)
+    url = normalize_cast_url(url)
+    cdp = ensure_browser(url)
+    # Give the page a moment to paint, then expand.
+    time.sleep(1.8)
+    enhance_playback(cdp, "after-cast")
+
+    def _retry() -> None:
+        time.sleep(3.5)
+        try:
+            enhance_playback(cdp, "retry")
+        except Exception as e:  # noqa: BLE001
+            log(f"Fullscreen retry: {e}")
+
+    threading.Thread(target=_retry, daemon=True).start()
 
 
 def browser_watchdog_loop() -> None:
@@ -615,16 +678,20 @@ def handle_input(data: dict) -> dict:
     elif typ == "media":
         action = str(data.get("action") or "")
         seconds = float(data.get("seconds") or 0)
-        if action == "playpause":
+        cdp.pause_shots(1.5)
+        if action == "fullscreen":
+            enhance_playback(cdp, "remote")
+        elif action == "playpause":
             try:
                 cdp.call(
                     "Runtime.evaluate",
                     {
                         "expression": """(() => {
                           const v = document.querySelector('video');
-                          if (v) { if (v.paused) v.play(); else v.pause(); return 'video'; }
+                          if (v) { if (v.paused) v.play(); else v.pause(); return v.paused ? 'paused' : 'playing'; }
                           return 'none';
-                        })()"""
+                        })()""",
+                        "returnByValue": True,
                     },
                     timeout=3.0,
                 )
@@ -638,9 +705,11 @@ def handle_input(data: dict) -> dict:
                 cdp.key(" ")
             except Exception:
                 pass
+            log("Media: playpause")
         elif action == "seek":
+            moved = None
             try:
-                cdp.call(
+                out = cdp.call(
                     "Runtime.evaluate",
                     {
                         "expression": f"""(() => {{
@@ -649,20 +718,39 @@ def handle_input(data: dict) -> dict:
                           const d = Number.isFinite(v.duration) ? v.duration : 1e9;
                           v.currentTime = Math.max(0, Math.min(d, v.currentTime + ({seconds})));
                           return v.currentTime;
-                        }})()"""
+                        }})()""",
+                        "returnByValue": True,
                     },
                     timeout=3.0,
-                )
-            except Exception:
-                pass
-            # YouTube / many players: arrows ≈ ±5s
-            key = "ArrowRight" if seconds >= 0 else "ArrowLeft"
-            steps = max(1, min(12, int(abs(seconds) / 5) or 1))
-            for _ in range(steps):
-                try:
-                    cdp.key(key)
-                except Exception:
-                    break
+                ) or {}
+                moved = (out.get("result") or {}).get("value")
+            except Exception as e:  # noqa: BLE001
+                log(f"Media seek js: {e}")
+            # YouTube: j/l = ±10s, arrows ≈ ±5s
+            try:
+                if seconds <= -25:
+                    cdp.key("j")
+                    cdp.key("j")
+                    cdp.key("j")
+                elif seconds <= -10:
+                    cdp.key("j")
+                elif seconds < 0:
+                    cdp.key("ArrowLeft")
+                    cdp.key("ArrowLeft")
+                    cdp.key("ArrowLeft")
+                elif seconds >= 25:
+                    cdp.key("l")
+                    cdp.key("l")
+                    cdp.key("l")
+                elif seconds >= 10:
+                    cdp.key("l")
+                else:
+                    cdp.key("ArrowRight")
+                    cdp.key("ArrowRight")
+                    cdp.key("ArrowRight")
+            except Exception as e:  # noqa: BLE001
+                log(f"Media seek keys: {e}")
+            log(f"Media: seek {seconds}s (js={moved})")
     return {"ok": True, "width": _latest_meta["width"], "height": _latest_meta["height"]}
 
 

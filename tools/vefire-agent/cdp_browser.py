@@ -40,6 +40,7 @@ class CdpBrowser:
         self.ws = None
         self._id = 0
         self._lock = threading.Lock()
+        self._rpc_lock = threading.RLock()
         self._pending: dict[int, dict] = {}
         self._reader: threading.Thread | None = None
         self._alive = False
@@ -49,6 +50,8 @@ class CdpBrowser:
         self.target_id: str | None = None
         self._shot_thread: threading.Thread | None = None
         self._shot_alive = False
+        self._shot_pause = threading.Event()
+        self._shot_pause.set()  # set = running; clear = pause for media/nav commands
 
     def _base(self) -> str:
         return f"http://127.0.0.1:{self.debug_port}"
@@ -238,20 +241,114 @@ class CdpBrowser:
 
     def call(self, method: str, params: dict | None = None, timeout: float = 10.0) -> Any:
         assert self.ws
-        msg_id = self._send_raw(method, params)
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            with self._lock:
-                if msg_id in self._pending:
-                    resp = self._pending.pop(msg_id)
-                    if "error" in resp:
-                        raise RuntimeError(f"CDP {method}: {resp['error']}")
-                    return resp.get("result")
-            time.sleep(0.01)
-        raise TimeoutError(f"CDP timeout: {method}")
+        # Serialize RPCs so screenshot polling cannot starve seek/fullscreen commands.
+        with self._rpc_lock:
+            msg_id = self._send_raw(method, params)
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                with self._lock:
+                    if msg_id in self._pending:
+                        resp = self._pending.pop(msg_id)
+                        if "error" in resp:
+                            raise RuntimeError(f"CDP {method}: {resp['error']}")
+                        return resp.get("result")
+                time.sleep(0.01)
+            raise TimeoutError(f"CDP timeout: {method}")
+
+    def pause_shots(self, seconds: float = 1.2) -> None:
+        self._shot_pause.clear()
+
+        def _resume() -> None:
+            time.sleep(seconds)
+            self._shot_pause.set()
+
+        threading.Thread(target=_resume, daemon=True).start()
 
     def navigate(self, url: str) -> None:
+        self.pause_shots(2.0)
         self.call("Page.navigate", {"url": url})
+
+    def force_window_fullscreen(self) -> None:
+        """Make the OS window fill the TV (not just a maximized tablet window)."""
+        try:
+            params = {"targetId": self.target_id} if self.target_id else {}
+            win = self.call("Browser.getWindowForTarget", params, timeout=3.0) or {}
+            wid = win.get("windowId")
+            if wid is None:
+                return
+            self.call(
+                "Browser.setWindowBounds",
+                {"windowId": wid, "bounds": {"windowState": "fullscreen"}},
+                timeout=3.0,
+            )
+        except Exception:
+            try:
+                # Fallback: maximized
+                win = self.call("Browser.getWindowForTarget", {}, timeout=3.0) or {}
+                wid = win.get("windowId")
+                if wid is not None:
+                    self.call(
+                        "Browser.setWindowBounds",
+                        {"windowId": wid, "bounds": {"windowState": "maximized"}},
+                        timeout=3.0,
+                    )
+            except Exception:
+                pass
+
+    def try_video_fullscreen(self) -> str:
+        """Best-effort: play video and enter HTML/YouTube/Rutube fullscreen."""
+        self.pause_shots(1.5)
+        try:
+            self.force_window_fullscreen()
+        except Exception:
+            pass
+        result = "none"
+        try:
+            out = self.call(
+                "Runtime.evaluate",
+                {
+                    "expression": """(() => {
+                      const click = (sel) => {
+                        const el = document.querySelector(sel);
+                        if (el) { el.click(); return true; }
+                        return false;
+                      };
+                      const v = document.querySelector('video');
+                      if (v) {
+                        try { v.muted = false; } catch (e) {}
+                        try { v.play(); } catch (e) {}
+                        const req = v.requestFullscreen || v.webkitRequestFullscreen || v.msRequestFullscreen;
+                        if (req) {
+                          try { req.call(v); return 'video-fs'; } catch (e) {}
+                        }
+                      }
+                      if (click('button.ytp-fullscreen-button') ||
+                          click('.ytp-fullscreen-button') ||
+                          click('button[aria-label*="Full" i]') ||
+                          click('button[title*="Full" i]') ||
+                          click('button[aria-label*="на весь" i]') ||
+                          click('button[aria-label*="полный" i]') ||
+                          click('.vjs-fullscreen-control') ||
+                          click('[class*="fullscreen"] button') ||
+                          click('button[class*="fullscreen" i]')) {
+                        return 'btn-fs';
+                      }
+                      return v ? 'video-no-fs' : 'none';
+                    })()""",
+                    "awaitPromise": False,
+                    "returnByValue": True,
+                },
+                timeout=4.0,
+            ) or {}
+            result = str((out.get("result") or {}).get("value") or "none")
+        except Exception as e:
+            result = f"err:{e}"
+        # YouTube / many players: F = fullscreen
+        try:
+            self.key("f")
+        except Exception:
+            pass
+        return result
 
     def _refresh_metrics(self) -> None:
         try:
@@ -274,6 +371,8 @@ class CdpBrowser:
         """Poll screenshots — Edge kiosk often stops Page.screencast after visibility=false."""
         last_metrics = 0.0
         while self._shot_alive and self._alive:
+            if not self._shot_pause.wait(timeout=0.5):
+                continue
             try:
                 now = time.time()
                 if now - last_metrics > 2.0:
@@ -361,28 +460,47 @@ class CdpBrowser:
         self.call("Input.insertText", {"text": text})
 
     def key(self, key: str) -> None:
-        vk = {
+        self.pause_shots(0.8)
+        vk_map = {
             "Enter": 13,
             " ": 32,
+            "Space": 32,
             "ArrowLeft": 37,
             "ArrowUp": 38,
             "ArrowRight": 39,
             "ArrowDown": 40,
             "Escape": 27,
             "Backspace": 8,
-        }.get(key, 0)
-        code = key if key.startswith("Arrow") else ("Space" if key == " " else key)
+            "f": 70,
+            "F": 70,
+            "k": 75,
+            "j": 74,
+            "l": 76,
+        }
+        vk = vk_map.get(key, ord(key.upper()) if len(key) == 1 else 0)
+        code = {
+            " ": "Space",
+            "Space": "Space",
+            "ArrowLeft": "ArrowLeft",
+            "ArrowRight": "ArrowRight",
+            "ArrowUp": "ArrowUp",
+            "ArrowDown": "ArrowDown",
+            "Enter": "Enter",
+            "Backspace": "Backspace",
+            "Escape": "Escape",
+        }.get(key, key)
+        text = " " if key in (" ", "Space") else (key if len(key) == 1 else "")
         for typ in ("keyDown", "keyUp"):
             self.call(
                 "Input.dispatchKeyEvent",
                 {
                     "type": typ,
-                    "key": key,
+                    "key": " " if key == "Space" else key,
                     "code": code,
                     "windowsVirtualKeyCode": vk,
                     "nativeVirtualKeyCode": vk,
-                    "text": key if len(key) == 1 else "",
-                    "unmodifiedText": key if len(key) == 1 else "",
+                    "text": text if typ == "keyDown" else "",
+                    "unmodifiedText": text if typ == "keyDown" else "",
                 },
             )
 

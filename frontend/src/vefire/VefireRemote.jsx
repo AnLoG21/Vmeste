@@ -180,6 +180,14 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
         <button type="button" className="vefire-remote-tr-btn" onClick={() => send({ type: "media", action: "seek", seconds: 30 })}>
           +30с
         </button>
+        <button
+          type="button"
+          className="vefire-remote-tr-btn"
+          style={{ gridColumn: "1 / -1" }}
+          onClick={() => send({ type: "media", action: "fullscreen" })}
+        >
+          На весь экран
+        </button>
       </div>
 
       {failHint ? <p className="vefire-remote-hint">{failHint}</p> : null}
