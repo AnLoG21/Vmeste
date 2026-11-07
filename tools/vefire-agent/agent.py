@@ -22,6 +22,19 @@ from cdp_browser import CdpBrowser
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env")
 
+# Dead local VPN proxies (e.g. 127.0.0.1:12334) break API + pip + page loads.
+for _k in (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "ALL_PROXY",
+    "all_proxy",
+):
+    os.environ.pop(_k, None)
+os.environ["NO_PROXY"] = "*"
+os.environ["no_proxy"] = "*"
+
 API_URL = os.environ.get("VEFIRE_API_URL", "https://vsevmeste.space/api").rstrip("/")
 USERNAME = os.environ.get("VEFIRE_USERNAME", "").strip()
 PASSWORD = os.environ.get("VEFIRE_PASSWORD", "").strip()
@@ -36,6 +49,7 @@ HOME_URL = os.environ.get("VEFIRE_HOME_URL", BLANK_URL).strip() or BLANK_URL
 PROFILE_DIR = ROOT / ".browser-profile"
 
 session = requests.Session()
+session.trust_env = False  # ignore Windows/system proxy for API calls
 refresh_token = REFRESH
 _browser_proc: subprocess.Popen | None = None
 _cdp: CdpBrowser | None = None
@@ -160,6 +174,8 @@ def find_browser() -> tuple[str, list[str]]:
         "--hide-crash-restore-bubble",
         "--disable-restore-session-state",
         "--noerrdialogs",
+        # Bypass broken system proxy (127.0.0.1:12334) so TV pages actually load.
+        "--no-proxy-server",
         f"--remote-debugging-port={DEBUG_PORT}",
         f"--user-data-dir={PROFILE_DIR}",
         "--autoplay-policy=no-user-gesture-required",
@@ -288,7 +304,11 @@ def ensure_browser(start_url: str | None = None) -> CdpBrowser:
         # Also detect an already-open Edge with our debug port (agent restart).
         if not browser_running:
             try:
-                requests.get(f"http://127.0.0.1:{DEBUG_PORT}/json/version", timeout=1.0).raise_for_status()
+                requests.get(
+                    f"http://127.0.0.1:{DEBUG_PORT}/json/version",
+                    timeout=1.0,
+                    proxies={"http": None, "https": None},
+                ).raise_for_status()
                 browser_running = True
             except Exception:
                 pass

@@ -9,6 +9,9 @@ from urllib.parse import urlparse
 
 import requests
 
+# Ignore broken system HTTP proxy for local DevTools + any CDP HTTP helpers.
+_NO_PROXY = {"http": None, "https": None}
+
 try:
     # Correct package is websocket-client (imports as websocket).
     from websocket import create_connection
@@ -51,7 +54,7 @@ class CdpBrowser:
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
-                r = requests.get(f"{self._base()}/json/version", timeout=1.5)
+                r = requests.get(f"{self._base()}/json/version", timeout=1.5, proxies=_NO_PROXY)
                 if r.ok:
                     return
             except Exception:
@@ -60,12 +63,12 @@ class CdpBrowser:
         raise TimeoutError("Chrome DevTools port not ready")
 
     def _list_pages(self) -> list[dict]:
-        targets = requests.get(f"{self._base()}/json/list", timeout=5).json()
+        targets = requests.get(f"{self._base()}/json/list", timeout=5, proxies=_NO_PROXY).json()
         return [t for t in targets if t.get("type") == "page"]
 
     def _close_target(self, target_id: str) -> None:
         try:
-            requests.get(f"{self._base()}/json/close/{target_id}", timeout=3)
+            requests.get(f"{self._base()}/json/close/{target_id}", timeout=3, proxies=_NO_PROXY)
         except Exception:
             pass
 
@@ -88,7 +91,9 @@ class CdpBrowser:
         pages = self._list_pages()
         page = self._pick_page(pages, prefer_url)
         if not page:
-            page = requests.put(f"{self._base()}/json/new?about:blank", timeout=5).json()
+            page = requests.put(
+                f"{self._base()}/json/new?about:blank", timeout=5, proxies=_NO_PROXY
+            ).json()
             pages = [page]
 
         keep_id = page.get("id")
