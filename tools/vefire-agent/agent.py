@@ -76,6 +76,7 @@ _frame_ok_count = 0
 _launching = False
 _last_frame_ts = 0.0
 _watchdog_port_fails = 0
+_cursor = {"x": 640.0, "y": 360.0}
 
 
 def log(msg: str) -> None:
@@ -640,18 +641,48 @@ def input_poll_loop() -> None:
         time.sleep(0.05)
 
 
+def _clamp_cursor(x: float, y: float) -> tuple[float, float]:
+    w = float(_latest_meta.get("width") or 1280)
+    h = float(_latest_meta.get("height") or 720)
+    return max(0.0, min(w - 1, x)), max(0.0, min(h - 1, y))
+
+
 def handle_input(data: dict) -> dict:
     # Never pass a default content URL here — reconnect must keep the tab
+    global _cursor
     cdp = ensure_browser(None)
     typ = data.get("type")
     if typ == "pointer":
+        x = float(data.get("x") or _cursor["x"])
+        y = float(data.get("y") or _cursor["y"])
+        _cursor["x"], _cursor["y"] = _clamp_cursor(x, y)
         cdp.mouse(
             str(data.get("phase") or "up"),
-            float(data.get("x") or 0),
-            float(data.get("y") or 0),
+            _cursor["x"],
+            _cursor["y"],
             click=bool(data.get("click")),
             double=bool(data.get("double")),
         )
+    elif typ == "cursor":
+        action = str(data.get("action") or "move")
+        step = float(data.get("step") or 48)
+        dx = float(data.get("dx") or 0)
+        dy = float(data.get("dy") or 0)
+        cdp.pause_shots(0.6)
+        if action == "move":
+            _cursor["x"], _cursor["y"] = _clamp_cursor(
+                _cursor["x"] + dx * step,
+                _cursor["y"] + dy * step,
+            )
+            cdp.mouse("move", _cursor["x"], _cursor["y"])
+        elif action == "click":
+            x, y = _clamp_cursor(_cursor["x"], _cursor["y"])
+            cdp.mouse("down", x, y)
+            cdp.mouse("up", x, y, click=True)
+        elif action == "dblclick":
+            x, y = _clamp_cursor(_cursor["x"], _cursor["y"])
+            cdp.mouse("down", x, y)
+            cdp.mouse("up", x, y, click=True, double=True)
     elif typ == "scroll":
         cdp.scroll(
             float(data.get("x") or 0),

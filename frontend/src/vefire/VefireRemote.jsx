@@ -138,6 +138,24 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
     setText("");
   }
 
+  const holdRef = useRef(null);
+
+  function stopHold() {
+    if (holdRef.current) {
+      clearInterval(holdRef.current);
+      holdRef.current = null;
+    }
+  }
+
+  function startHold(dx, dy) {
+    stopHold();
+    const step = () => send({ type: "cursor", action: "move", dx, dy, step: 56 });
+    step();
+    holdRef.current = setInterval(step, 120);
+  }
+
+  useEffect(() => () => stopHold(), []);
+
   return (
     <section className="vefire-shell vefire-remote">
       <header className="vefire-remote-bar">
@@ -161,6 +179,73 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
         />
+      </div>
+
+      <div className="vefire-remote-dpad" aria-label="Курсор">
+        <button
+          type="button"
+          className="vefire-remote-dpad-btn"
+          style={{ gridArea: "up" }}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            startHold(0, -1);
+          }}
+          onPointerUp={stopHold}
+          onPointerLeave={stopHold}
+          onPointerCancel={stopHold}
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          className="vefire-remote-dpad-btn"
+          style={{ gridArea: "left" }}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            startHold(-1, 0);
+          }}
+          onPointerUp={stopHold}
+          onPointerLeave={stopHold}
+          onPointerCancel={stopHold}
+        >
+          ◀
+        </button>
+        <button
+          type="button"
+          className="vefire-remote-dpad-btn vefire-remote-dpad-btn--ok"
+          style={{ gridArea: "ok" }}
+          onClick={() => send({ type: "cursor", action: "click" })}
+        >
+          OK
+        </button>
+        <button
+          type="button"
+          className="vefire-remote-dpad-btn"
+          style={{ gridArea: "right" }}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            startHold(1, 0);
+          }}
+          onPointerUp={stopHold}
+          onPointerLeave={stopHold}
+          onPointerCancel={stopHold}
+        >
+          ▶
+        </button>
+        <button
+          type="button"
+          className="vefire-remote-dpad-btn"
+          style={{ gridArea: "down" }}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            startHold(0, 1);
+          }}
+          onPointerUp={stopHold}
+          onPointerLeave={stopHold}
+          onPointerCancel={stopHold}
+        >
+          ▼
+        </button>
       </div>
 
       <div className="vefire-remote-transport">

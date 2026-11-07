@@ -318,6 +318,38 @@
   font-weight: 600;
 }
 
+.vefire-remote-dpad {
+  display: grid;
+  grid-template-areas:
+    ". up ."
+    "left ok right"
+    ". down .";
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.45rem 1.1rem 0.25rem;
+  background: rgba(6, 10, 18, 0.96);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  flex: 0 0 auto;
+  touch-action: none;
+  user-select: none;
+}
+
+.vefire-remote-dpad-btn {
+  appearance: none;
+  border: 0;
+  border-radius: 14px;
+  min-height: 2.7rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e8eefc;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.vefire-remote-dpad-btn--ok {
+  background: #3d7eff;
+  color: #fff;
+}
+
 .vefire-remote-transport {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
