@@ -40,10 +40,11 @@ if not exist .env (
   goto :end
 )
 
-findstr /r /c:"^VEFIRE_PASSWORD=.\+" .env >nul 2>&1
+REM findstr has no "+" quantifier — require at least one char after =
+findstr /r /c:"^VEFIRE_PASSWORD=." .env >nul 2>&1
 if errorlevel 1 (
   echo [ERROR] VEFIRE_PASSWORD is empty in .env
-  echo Fill the password for a.loginov150 and save.
+  echo Fill VEFIRE_PASSWORD=... and save, then run again.
   notepad .env
   goto :end
 )
