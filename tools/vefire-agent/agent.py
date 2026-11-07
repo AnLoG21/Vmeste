@@ -334,11 +334,16 @@ def _cdp_alive(cdp: CdpBrowser) -> bool:
         return False
 
 
-def _attach_cdp(prefer_url: str | None = None, solo_tab: bool = False) -> CdpBrowser:
+def _attach_cdp(
+    prefer_url: str | None = None,
+    solo_tab: bool = False,
+    navigate: bool = False,
+) -> CdpBrowser:
     global _cdp
     cdp = CdpBrowser(DEBUG_PORT)
     cdp.on_frame = on_frame
-    cdp.connect(prefer_url=prefer_url, solo_tab=solo_tab)
+    # Reuse existing tab — opening json/new about:blank was causing random blank windows.
+    cdp.connect(prefer_url=prefer_url, solo_tab=solo_tab, navigate=navigate)
     cdp.start_screencast()
     _cdp = cdp
     _latest_meta["ready"] = True
@@ -362,11 +367,17 @@ def ensure_browser(start_url: str | None = None, force_relaunch: bool = False) -
                     log(f"Navigate: {start_url}")
                     _cdp.navigate(start_url)
                     try:
+                        _cdp.close_stray_blank_tabs()
                         _cdp.start_screencast()
                     except Exception:
                         pass
+                else:
+                    try:
+                        _cdp.close_stray_blank_tabs()
+                    except Exception:
+                        pass
                 return _cdp
-            # Browser still up — only reattach CDP, do NOT relaunch with a default site
+            # Browser still up — only reattach CDP, do NOT open a new blank tab
             log("CDP reconnect (keeping current tab)")
             try:
                 if _cdp:
@@ -374,9 +385,11 @@ def ensure_browser(start_url: str | None = None, force_relaunch: bool = False) -
                         _cdp.close()
                     except Exception:
                         pass
-                cdp = _attach_cdp(prefer_url=start_url or _current_url, solo_tab=bool(start_url))
-                if start_url:
-                    cdp.navigate(start_url)
+                cdp = _attach_cdp(
+                    prefer_url=start_url or _current_url,
+                    solo_tab=False,
+                    navigate=bool(start_url),
+                )
                 return cdp
             except Exception as e:  # noqa: BLE001
                 log(f"CDP reattach failed: {e} - will relaunch browser")
@@ -386,7 +399,7 @@ def ensure_browser(start_url: str | None = None, force_relaunch: bool = False) -
             raise RuntimeError("Edge/Chrome not found")
         PROFILE_DIR.mkdir(parents=True, exist_ok=True)
         wipe_session_restore(PROFILE_DIR)
-        # Only open blank or the explicit cast URL — never surprise Kinopoisk
+        # Only open idle page or the explicit cast URL — never surprise Kinopoisk
         launch_url = start_url or _current_url or BLANK_URL
         if not start_url and (is_kinopoisk_home(launch_url) or is_kinopoisk_home(HOME_URL)):
             launch_url = BLANK_URL
@@ -416,16 +429,12 @@ def ensure_browser(start_url: str | None = None, force_relaunch: bool = False) -
                 _launching = False
                 raise RuntimeError(f"Browser debug port {DEBUG_PORT} did not open")
         try:
-            cdp = _attach_cdp(prefer_url=launch_url, solo_tab=True)
-            # Always navigate — attach may land on a blank leftover with no screencast frames.
-            if launch_url:
-                cdp.navigate(launch_url)
-                time.sleep(0.5)
-                try:
-                    cdp.start_screencast()
-                except Exception:
-                    pass
-            # Don't zero this — watchdog treats 0 as "never" and false-restarts.
+            # Browser already opened launch_url — attach to that tab, don't create another.
+            cdp = _attach_cdp(prefer_url=launch_url, solo_tab=True, navigate=False)
+            try:
+                cdp.close_stray_blank_tabs()
+            except Exception:
+                pass
             if _last_frame_ts <= 0:
                 _last_frame_ts = time.time()
             return cdp
@@ -451,6 +460,15 @@ def browser_watchdog_loop() -> None:
                 frame_age = 0.0
             else:
                 frame_age = time.time() - _last_frame_ts
+            if port_ok and cdp_ok:
+                try:
+                    with _cdp_lock:
+                        if _cdp:
+                            n = _cdp.close_stray_blank_tabs()
+                            if n:
+                                log(f"Closed {n} stray about:blank tab(s)")
+                except Exception:
+                    pass
             if port_ok and cdp_ok and frame_age < 15:
                 continue
             if port_ok and cdp_ok and frame_age >= 15:
@@ -469,7 +487,11 @@ def browser_watchdog_loop() -> None:
             log(
                 f"Browser watchdog: port={port_ok} cdp={cdp_ok} frame_age={int(frame_age)}s - relaunch"
             )
-            ensure_browser(_current_url if _current_url != BLANK_URL else BLANK_URL, force_relaunch=True)
+            # Relaunch only if the browser/CDP is actually dead — keep current content URL.
+            ensure_browser(
+                _current_url if _current_url else BLANK_URL,
+                force_relaunch=True,
+            )
         except Exception as e:  # noqa: BLE001
             log(f"Watchdog: {e}")
 

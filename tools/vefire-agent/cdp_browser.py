@@ -75,42 +75,67 @@ class CdpBrowser:
         except Exception:
             pass
 
+    @staticmethod
+    def _is_blank_url(url: str | None) -> bool:
+        u = (url or "").strip().lower()
+        return (
+            not u
+            or u.startswith("about:blank")
+            or u in ("about:newtab", "chrome://newtab/", "edge://newtab/")
+            or u.startswith("chrome://new-tab-page")
+            or u.startswith("edge://newtab")
+        )
+
     def _pick_page(self, pages: list[dict], prefer_url: str | None) -> dict | None:
         if not pages:
             return None
-        if prefer_url and prefer_url not in ("about:blank", "about:newtab"):
+        if prefer_url and not self._is_blank_url(prefer_url):
             key = _url_key(prefer_url)
             for t in pages:
                 if key and key in _url_key(t.get("url") or ""):
                     return t
-        for t in pages:
-            u = (t.get("url") or "").lower()
-            if u.startswith("about:blank") or u in ("", "about:newtab", "chrome://newtab/"):
-                return t
+        # Prefer an already-open content tab over about:blank (blank popups are noise).
+        content = [t for t in pages if not self._is_blank_url(t.get("url"))]
+        if content:
+            return content[0]
         return pages[0]
 
-    def connect(self, prefer_url: str | None = None, solo_tab: bool = False) -> None:
+    def close_stray_blank_tabs(self, keep_id: str | None = None) -> int:
+        """Close leftover about:blank pages so they don't flash as random windows."""
+        keep = keep_id or self.target_id
+        closed = 0
+        for t in self._list_pages():
+            tid = t.get("id")
+            if not tid or tid == keep:
+                continue
+            if self._is_blank_url(t.get("url")):
+                self._close_target(tid)
+                closed += 1
+        return closed
+
+    def connect(
+        self,
+        prefer_url: str | None = None,
+        solo_tab: bool = False,
+        navigate: bool = False,
+    ) -> None:
+        """Attach to an existing tab. Never opens a random about:blank window.
+
+        A new tab is created only if the browser has zero pages.
+        """
         self.wait_ready()
         pages = self._list_pages()
-        # Always open a fresh tab when we care about a specific URL — avoids about:blank
-        # leftovers that emit no screencast frames.
-        page = None
-        if prefer_url:
-            try:
-                from urllib.parse import quote
+        page = self._pick_page(pages, prefer_url)
 
-                page = requests.put(
-                    f"{self._base()}/json/new?{quote(prefer_url, safe=':/?&=%#')}",
-                    timeout=5,
-                    proxies=_NO_PROXY,
-                ).json()
-            except Exception:
-                page = None
         if not page:
-            page = self._pick_page(pages, prefer_url)
-        if not page:
+            # Browser has no tabs yet (fresh kiosk) — open the intended URL once.
+            from urllib.parse import quote
+
+            target = prefer_url if prefer_url and not self._is_blank_url(prefer_url) else "about:blank"
             page = requests.put(
-                f"{self._base()}/json/new?about:blank", timeout=5, proxies=_NO_PROXY
+                f"{self._base()}/json/new?{quote(target, safe=':/?&=%#')}",
+                timeout=5,
+                proxies=_NO_PROXY,
             ).json()
 
         keep_id = page.get("id")
@@ -118,6 +143,12 @@ class CdpBrowser:
             for t in self._list_pages():
                 tid = t.get("id")
                 if tid and tid != keep_id:
+                    self._close_target(tid)
+        else:
+            # Even without solo_tab, sweep blank leftovers from earlier reconnects.
+            for t in self._list_pages():
+                tid = t.get("id")
+                if tid and tid != keep_id and self._is_blank_url(t.get("url")):
                     self._close_target(tid)
 
         ws_url = page["webSocketDebuggerUrl"]
@@ -133,12 +164,15 @@ class CdpBrowser:
             self.call("Input.enable")
         except Exception:
             pass
-        if prefer_url:
-            try:
-                self.navigate(prefer_url)
-                time.sleep(0.4)
-            except Exception:
-                pass
+        # Navigate in-place only when asked (cast / first launch), never on plain reconnect.
+        if navigate and prefer_url:
+            current = (page.get("url") or "").strip()
+            if _url_key(current) != _url_key(prefer_url):
+                try:
+                    self.navigate(prefer_url)
+                    time.sleep(0.3)
+                except Exception:
+                    pass
 
     def close(self) -> None:
         self.stop_screencast()
