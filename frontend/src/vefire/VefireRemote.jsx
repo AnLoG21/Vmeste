@@ -2,43 +2,46 @@ import { useEffect, useRef, useState } from "react";
 
 export default function VefireRemote({ authFetch, API_URL, onBack }) {
   const imgRef = useRef(null);
+  const inputRef = useRef(null);
   const [meta, setMeta] = useState({ width: 1280, height: 720 });
-  const [status, setStatus] = useState("подключение…");
+  const [status, setStatus] = useState("…");
   const [text, setText] = useState("");
   const [failHint, setFailHint] = useState("");
-  const dragRef = useRef({ on: false, x: 0, y: 0, lastTap: 0 });
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const dragRef = useRef({ on: false, x: 0, y: 0, lastTap: 0, moved: false });
   const blobUrlRef = useRef("");
   const missesRef = useRef(0);
+  const textRef = useRef("");
+  const pollBusyRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     let timer;
 
     async function tick() {
+      if (pollBusyRef.current) {
+        if (!cancelled) timer = setTimeout(tick, 40);
+        return;
+      }
+      pollBusyRef.current = true;
       try {
         const res = await authFetch(`${API_URL}/vefire/agent/frame/`);
         if (!res.ok) {
           missesRef.current += 1;
           if (!cancelled) {
-            setStatus("ждём картинку с ноута…");
-            if (missesRef.current > 8) {
-              setFailHint(
-                "На ноуте у ТВ перезапусти run.bat (Desktop → Vefire-TV-Agent). Потом снова «На ТВ» и пульт."
-              );
+            setStatus("нет картинки");
+            if (missesRef.current > 10) {
+              setFailHint("Перезапусти run.bat на ноуте у ТВ.");
             }
-            // Pull size from heartbeat so taps still map once frames arrive
-            if (missesRef.current === 3 || missesRef.current % 15 === 0) {
+            if (missesRef.current === 3 || missesRef.current % 20 === 0) {
               try {
                 const hb = await authFetch(`${API_URL}/vefire/agent/heartbeat/`);
                 if (hb.ok) {
-                  const data = await hb.json();
-                  const a = data?.agent;
+                  const a = (await hb.json())?.agent;
                   if (a?.frame_width && a?.frame_height) {
                     setMeta({ width: a.frame_width, height: a.frame_height });
                   }
-                  if (a && a.online === false) {
-                    setFailHint("Агент офлайн — запусти run.bat на ноуте у ТВ.");
-                  }
+                  if (a && a.online === false) setFailHint("Агент офлайн — run.bat на ноуте.");
                 }
               } catch {
                 /* ignore */
@@ -56,12 +59,14 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
           if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
           blobUrlRef.current = url;
           if (imgRef.current) imgRef.current.src = url;
-          if (!cancelled) setStatus("онлайн · ТВ");
+          if (!cancelled) setStatus("онлайн");
         }
       } catch {
-        if (!cancelled) setStatus("нет связи с API");
+        if (!cancelled) setStatus("нет API");
+      } finally {
+        pollBusyRef.current = false;
+        if (!cancelled) timer = setTimeout(tick, 90);
       }
-      if (!cancelled) timer = setTimeout(tick, 280);
     }
     tick();
     return () => {
@@ -71,16 +76,13 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
     };
   }, [authFetch, API_URL]);
 
-  async function send(body) {
-    try {
-      await authFetch(`${API_URL}/vefire/agent/input/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-    } catch {
-      /* ignore */
-    }
+  function send(body) {
+    // Fire-and-forget — awaiting every tap added hundreds of ms of lag.
+    authFetch(`${API_URL}/vefire/agent/input/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => {});
   }
 
   function mapPoint(clientX, clientY) {
@@ -94,11 +96,20 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
     return { x, y };
   }
 
+  function openKeyboard() {
+    setKeyboardOpen(true);
+    // iOS/Android need focus in the same user gesture when possible; retry shortly.
+    requestAnimationFrame(() => {
+      inputRef.current?.focus({ preventScroll: false });
+    });
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }
+
   function onPointerDown(e) {
     const p = mapPoint(e.clientX, e.clientY);
     if (!p) return;
     e.currentTarget.setPointerCapture?.(e.pointerId);
-    dragRef.current = { ...dragRef.current, on: true, x: p.x, y: p.y };
+    dragRef.current = { ...dragRef.current, on: true, x: p.x, y: p.y, moved: false };
     send({ type: "pointer", phase: "down", x: p.x, y: p.y });
   }
 
@@ -108,7 +119,8 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
     if (!p) return;
     const dy = p.y - dragRef.current.y;
     const dx = p.x - dragRef.current.x;
-    if (Math.abs(dy) > 6 || Math.abs(dx) > 6) {
+    if (Math.abs(dy) > 4 || Math.abs(dx) > 4) {
+      dragRef.current.moved = true;
       send({ type: "scroll", dx, dy: -dy * 1.6, x: p.x, y: p.y });
       dragRef.current.x = p.x;
       dragRef.current.y = p.y;
@@ -123,18 +135,41 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
     const dbl = now - dragRef.current.lastTap < 320;
     dragRef.current.lastTap = now;
     send({ type: "pointer", phase: "up", x: p.x, y: p.y, click: true, double: dbl });
+    // After a short tap on the screen, offer the phone keyboard for search fields.
+    if (!dragRef.current.moved && !dbl) {
+      openKeyboard();
+    }
+  }
+
+  function onTextChange(e) {
+    const next = e.target.value;
+    const prev = textRef.current;
+    textRef.current = next;
+    setText(next);
+    if (next.length > prev.length) {
+      send({ type: "text", text: next.slice(prev.length) });
+    } else if (next.length < prev.length) {
+      const n = prev.length - next.length;
+      for (let i = 0; i < n; i += 1) send({ type: "key", key: "Backspace" });
+    }
+  }
+
+  function submitText() {
+    send({ type: "key", key: "Enter" });
+    textRef.current = "";
+    setText("");
   }
 
   return (
     <section className="vefire-shell vefire-remote">
-      <header className="vefire-top">
-        <button type="button" className="vefire-back" onClick={onBack}>
-          ← Лаунчер
+      <header className="vefire-remote-bar">
+        <button type="button" className="vefire-remote-bar-btn" onClick={onBack}>
+          ←
         </button>
-        <div className="vefire-brand">
-          <span>Пульт ТВ</span>
-        </div>
-        <span className="vefire-clock">{status}</span>
+        <span className="vefire-remote-bar-status">{status}</span>
+        <button type="button" className="vefire-remote-bar-btn" onClick={openKeyboard}>
+          ⌨
+        </button>
       </header>
 
       <div className="vefire-remote-stage">
@@ -150,58 +185,33 @@ export default function VefireRemote({ authFetch, API_URL, onBack }) {
         />
       </div>
 
-      <div className="vefire-remote-dock">
-        <p className="vefire-muted">Тап = клик · свайп = скролл · текст уходит в поиск на ТВ</p>
-        {failHint ? <p className="vefire-cast-msg">{failHint}</p> : null}
-        <div className="vefire-link-row">
-          <button type="button" className="vefire-btn" onClick={() => send({ type: "nav", action: "back" })}>
-            ← Назад
-          </button>
-          <button type="button" className="vefire-btn" onClick={() => send({ type: "nav", action: "home" })}>
-            Домой
-          </button>
-          <button type="button" className="vefire-btn" onClick={() => send({ type: "nav", action: "reload" })}>
-            ↻
-          </button>
-        </div>
-        <div className="vefire-link-row">
-          <input
-            className="vefire-input"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Поиск / текст"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                send({ type: "text", text });
-                setText("");
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="vefire-btn vefire-btn--accent"
-            onClick={() => {
-              send({ type: "text", text });
-              setText("");
-            }}
-          >
-            Ввод
-          </button>
-        </div>
-        <div className="vefire-link-row">
-          <button type="button" className="vefire-btn" onClick={() => send({ type: "key", key: "ArrowLeft" })}>
-            ◀
-          </button>
-          <button type="button" className="vefire-btn" onClick={() => send({ type: "key", key: "ArrowRight" })}>
-            ▶
-          </button>
-          <button type="button" className="vefire-btn" onClick={() => send({ type: "key", key: " " })}>
-            Пробел
-          </button>
-          <button type="button" className="vefire-btn" onClick={() => send({ type: "key", key: "Enter" })}>
-            Enter
-          </button>
-        </div>
+      {failHint ? <p className="vefire-remote-hint">{failHint}</p> : null}
+
+      <div className={`vefire-remote-keys ${keyboardOpen ? "is-open" : ""}`}>
+        <input
+          ref={inputRef}
+          className="vefire-remote-type"
+          value={text}
+          onChange={onTextChange}
+          onFocus={() => setKeyboardOpen(true)}
+          onBlur={() => setKeyboardOpen(false)}
+          placeholder="Печатай — уходит на ТВ"
+          inputMode="search"
+          enterKeyHint="search"
+          autoCapitalize="off"
+          autoCorrect="off"
+          autoComplete="off"
+          spellCheck={false}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              submitText();
+            }
+          }}
+        />
+        <button type="button" className="vefire-remote-enter" onClick={submitText}>
+          Enter
+        </button>
       </div>
     </section>
   );

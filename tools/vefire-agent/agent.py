@@ -269,12 +269,12 @@ def on_frame(jpeg: bytes, width: int, height: int) -> None:
         _latest_meta["ready"] = True
         _jpeg_cond.notify_all()
     now = time.time()
-    if now - _last_upload_ts < 0.45:
+    if now - _last_upload_ts < 0.15:
         return
     if not _upload_lock.acquire(blocking=False):
         return
     try:
-        if now - _last_upload_ts < 0.45:
+        if now - _last_upload_ts < 0.15:
             return
         _last_upload_ts = now
         payload = jpeg
@@ -574,7 +574,7 @@ def input_poll_loop() -> None:
                         log(f"Input apply: {e}")
         except Exception as e:  # noqa: BLE001
             log(f"Input poll: {e}")
-        time.sleep(0.12)
+        time.sleep(0.05)
 
 
 def handle_input(data: dict) -> dict:

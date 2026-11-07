@@ -272,13 +272,17 @@ class CdpBrowser:
 
     def _screenshot_loop(self) -> None:
         """Poll screenshots — Edge kiosk often stops Page.screencast after visibility=false."""
+        last_metrics = 0.0
         while self._shot_alive and self._alive:
             try:
-                self._refresh_metrics()
+                now = time.time()
+                if now - last_metrics > 2.0:
+                    self._refresh_metrics()
+                    last_metrics = now
                 result = self.call(
                     "Page.captureScreenshot",
-                    {"format": "jpeg", "quality": 45, "fromSurface": True},
-                    timeout=5.0,
+                    {"format": "jpeg", "quality": 28, "fromSurface": True},
+                    timeout=3.0,
                 ) or {}
                 data_b64 = result.get("data") or ""
                 if data_b64 and self.on_frame:
@@ -286,9 +290,9 @@ class CdpBrowser:
                     if raw:
                         self.on_frame(raw, self.frame_width, self.frame_height)
             except Exception:
-                time.sleep(0.6)
+                time.sleep(0.35)
                 continue
-            time.sleep(0.35)
+            time.sleep(0.12)
 
     def start_screencast(self) -> None:
         """Start frame capture (screenshot polling; name kept for agent compatibility)."""
