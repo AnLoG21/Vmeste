@@ -1,18 +1,6 @@
-# Всайте published sites: https://{slug}.vsayte.{$DOMAIN}
-# (custom domains / on_demand TLS — later; a catch-all https:// block took Caddy down.)
-*.vsayte.{$DOMAIN} {
-	encode gzip zstd
-	header {
-		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
-	}
-	rewrite * /api/vsayte/serve{uri}
-	reverse_proxy web:8000 {
-		header_up Host {host}
-		header_up X-Forwarded-Proto {scheme}
-		header_up X-Forwarded-Host {host}
-	}
-}
+# Всайте hosting (*.vsayte / custom domains) is served via Django /api/vsayte/serve
+# and will get a dedicated Caddy site after DNS-01 is configured — do not add
+# catch-all https:// or bare wildcard TLS here (it crash-loops Caddy).
 
 # HTTPS via Let's Encrypt. Canonical host without www.
 www.{$DOMAIN} {
