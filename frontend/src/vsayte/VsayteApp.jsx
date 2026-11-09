@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import "./vsayte.css";
 import VsayteLogo from "./VsayteLogo.jsx";
-import VsayteEditor from "./VsayteEditor.jsx";
 import {
   vsayteAttachDomain,
   vsayteCheckDomain,
@@ -18,6 +17,8 @@ import {
 } from "./vsayteApi.js";
 import { exportSiteHtml, localDeleteSite, localListSites, localSaveSite } from "./vsayteLocal.js";
 import { buildTemplateDocument } from "./vsayteTemplates.js";
+
+const VsayteEditor = lazy(() => import("./VsayteEditor.jsx"));
 
 const PLAN_COPY = [
   {
@@ -384,12 +385,14 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
         {error ? <p className="error-text">{error}</p> : null}
         {message ? <p className="muted">{message}</p> : null}
 
-        <VsayteEditor
-          key={editing.id}
-          initialDocument={editing.document || draftDoc}
-          editorTier={editorTier}
-          onChange={setDraftDoc}
-        />
+        <Suspense fallback={<p className="muted">Загрузка редактора…</p>}>
+          <VsayteEditor
+            key={editing.id}
+            initialDocument={editing.document || draftDoc}
+            editorTier={editorTier}
+            onChange={setDraftDoc}
+          />
+        </Suspense>
 
         {canCustomDomain && !editing.local ? (
           <div className="vsayte-side-block" style={{ marginTop: 12 }}>

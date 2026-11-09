@@ -23,6 +23,8 @@ COPY public ./public
 COPY src ./src
 
 ENV NODE_ENV=production
+# GrapesJS (Всайте) раздувает граф модулей — без большего heap Vite OOM на VPS (~512MB default).
+ENV NODE_OPTIONS=--max-old-space-size=3072
 RUN node node_modules/vite/bin/vite.js build
 
 FROM nginx:1.27-alpine

@@ -14,6 +14,16 @@ export default defineConfig(({ mode }) => ({
     minify: "esbuild",
     cssMinify: "esbuild",
     target: "es2020",
+    chunkSizeWarningLimit: 2500,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/grapesjs") || id.includes("grapesjs-preset-webpage")) {
+            return "grapesjs";
+          }
+        },
+      },
+    },
   },
   test: {
     environment: "jsdom",
