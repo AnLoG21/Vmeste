@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     "vmagazine",
     "vkvartire",
     "vefire",
+    "vsayte",
     "moy_nalog",
     "shop",
 ]
@@ -286,6 +287,13 @@ OPENROUTER_HTTP_PROXY = os.environ.get("OPENROUTER_HTTP_PROXY", "").strip()
 OLLAMA_API_URL = os.environ.get("OLLAMA_API_URL", "http://localhost:11434").strip()
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "").strip()
 MARKETPLACE_VIDEO_ENABLED = os.environ.get("MARKETPLACE_VIDEO_ENABLED", "1") in ("1", "true", "True", "yes")
+
+# Всайте — конструктор сайтов + хостинг + домены
+VSAYTE_BASE_DOMAIN = os.environ.get("VSAYTE_BASE_DOMAIN", "vsayte.vsevmeste.space").strip()
+VSAYTE_SITES_ROOT = os.environ.get("VSAYTE_SITES_ROOT", str(MEDIA_ROOT / "vsayte-sites")).strip()
+VSAYTE_HOST_IP = os.environ.get("VSAYTE_HOST_IP", "").strip()
+REGRU_USERNAME = os.environ.get("REGRU_USERNAME", "").strip()
+REGRU_PASSWORD = os.environ.get("REGRU_PASSWORD", "").strip()
 
 from config.sentry_init import init_sentry
 

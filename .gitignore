@@ -63,3 +63,10 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/
 
+
+# Local agent skills (Nimble etc.)
+.agents/
+
+
+research/
+

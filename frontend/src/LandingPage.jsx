@@ -418,6 +418,14 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               <span>Аренда и покупка: лента и карта</span>
               <span className="landing-biz-link">Подробнее →</span>
             </a>
+            <a className="landing-biz-card landing-biz-card--app" href="/apps#vsayte">
+              <span className="landing-biz-emoji" aria-hidden="true">
+                <LandingIcon name="apps" />
+              </span>
+              <strong>Всайте</strong>
+              <span>Конструктор, хостинг и домены</span>
+              <span className="landing-biz-link">Подробнее →</span>
+            </a>
             <a className="landing-biz-card landing-biz-card--app" href="/apps#voice">
               <span className="landing-biz-emoji" aria-hidden="true">
                 <LandingIcon name="mic" />

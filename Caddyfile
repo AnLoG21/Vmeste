@@ -1,3 +1,50 @@
+# Global: on-demand TLS for Всайте custom domains (ask backend).
+{
+	on_demand_tls {
+		ask http://web:8000/api/vsayte/tls-ask/
+	}
+}
+
+# Всайте published sites: https://{slug}.vsayte.{$DOMAIN}
+*.vsayte.{$DOMAIN} {
+	encode gzip zstd
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+	# host labels from the right: space, vsevmeste, vsayte, {slug}
+	@hasSlug `{http.request.host.labels.3} != ""`
+	handle @hasSlug {
+		rewrite * /{http.request.host.labels.3}{path}
+		root * /srv/media/vsayte-sites
+		try_files {path} {path}/index.html /{http.request.host.labels.3}/index.html
+		file_server
+	}
+	respond "Site not found" 404
+}
+
+# Всайте custom domains (Pro) — TLS on-demand after /api/vsayte/tls-ask/
+https:// {
+	tls {
+		on_demand
+	}
+	@vsayteCustom {
+		not host {$DOMAIN} www.{$DOMAIN}
+		not host_regexp vsayte_sub ^.*\.vsayte\..+$
+	}
+	handle @vsayteCustom {
+		rewrite * /api/vsayte/serve{uri}
+		reverse_proxy web:8000 {
+			header_up Host {host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+	handle {
+		respond "Not found" 404
+	}
+}
+
 # HTTPS via Let's Encrypt. Canonical host without www.
 www.{$DOMAIN} {
 	redir https://{$DOMAIN}{uri} permanent

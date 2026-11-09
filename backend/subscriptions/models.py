@@ -13,6 +13,7 @@ class SubscriptionPlan(models.Model):
     class ProductKind(models.TextChoices):
         PLATFORM = "platform", "Платформа"
         VOICE = "voice", "Голосовой ассистент"
+        VSAYTE = "vsayte", "Всайте"
 
     slug = models.SlugField(unique=True)
     name = models.CharField(max_length=120)
@@ -31,7 +32,7 @@ class SubscriptionPlan(models.Model):
         choices=ProductKind.choices,
         default=ProductKind.PLATFORM,
         db_index=True,
-        help_text="platform — кабинет/сотрудники; voice — минуты SpeechKit для голосового ассистента.",
+        help_text="platform — кабинет/сотрудники; voice — минуты SpeechKit; vsayte — конструктор сайтов.",
     )
     voice_minutes_monthly = models.PositiveIntegerField(
         default=0,

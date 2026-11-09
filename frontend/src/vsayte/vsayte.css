@@ -1,0 +1,234 @@
+.vsayte-app {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(1100px, 100%);
+  margin: 0 auto;
+}
+
+.vsayte-app--editor {
+  width: min(1400px, 100%);
+  min-height: calc(100vh - 140px);
+}
+
+.vsayte-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.vsayte-head-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vsayte-head-brand h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.vsayte-plan-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent, #ff7a00) 14%, transparent);
+  color: var(--accent, #ff7a00);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.vsayte-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vsayte-tabs button.is-active {
+  border-color: var(--accent, #ff7a00);
+  color: var(--accent, #ff7a00);
+}
+
+.vsayte-sites-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.vsayte-site-card {
+  text-align: left;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card-bg, #fff) 92%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vsayte-site-card h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.vsayte-site-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vsayte-plans {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.vsayte-plan-card {
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 16px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vsayte-plan-card.is-current {
+  border-color: var(--accent, #ff7a00);
+  box-shadow: 0 0 0 1px var(--accent, #ff7a00);
+}
+
+.vsayte-plan-card .price {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.vsayte-plan-card ul {
+  margin: 0;
+  padding-left: 18px;
+  color: inherit;
+  opacity: 0.85;
+}
+
+.vsayte-editor {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+  min-height: 70vh;
+  flex: 1;
+}
+
+.vsayte-editor-side {
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: color-mix(in srgb, var(--card-bg, #fff) 96%, transparent);
+  overflow: auto;
+  max-height: 75vh;
+}
+
+.vsayte-side-block h4 {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.vsayte-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vsayte-palette-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vsayte-palette {
+  display: flex;
+  gap: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 0;
+  height: 28px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.vsayte-palette span {
+  flex: 1;
+  height: 100%;
+}
+
+.vsayte-palette.is-active {
+  border-color: var(--accent, #ff7a00);
+  outline: 1px solid var(--accent, #ff7a00);
+}
+
+.vsayte-select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  background: transparent;
+  color: inherit;
+}
+
+.vsayte-editor-canvas {
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 14px;
+  overflow: hidden;
+  min-height: 70vh;
+  background: #1e1e1e;
+}
+
+.vsayte-editor-canvas .gjs-one-bg {
+  background-color: #1e1e1e;
+}
+
+.vsayte-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.vsayte-domain-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.vsayte-domain-box input {
+  flex: 1;
+  min-width: 180px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  background: transparent;
+  color: inherit;
+}
+
+@media (max-width: 860px) {
+  .vsayte-editor {
+    grid-template-columns: 1fr;
+  }
+  .vsayte-editor-side {
+    max-height: none;
+  }
+  .vsayte-editor-canvas {
+    min-height: 60vh;
+  }
+}

@@ -20,6 +20,11 @@ describe("viewRoutes", () => {
     expect(viewFromPath("/vefire")).toBe("vefire");
   });
 
+  it("maps vsayte ↔ /vsayte", () => {
+    expect(pathForView("vsayte")).toBe("/vsayte");
+    expect(viewFromPath("/vsayte")).toBe("vsayte");
+  });
+
   it("returns null for unknown paths", () => {
     expect(viewFromPath("/no-such-view")).toBeNull();
     expect(pathForView("unknown")).toBe("/");

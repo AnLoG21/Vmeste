@@ -85,7 +85,12 @@ def _create_payment_for_plan(user, plan):
     )
 
     return_url = f"{settings.FRONTEND_URL}?payment=success&payment_id={payment.id}"
-    desc_prefix = "Голосовые минуты Vmeste" if is_voice_plan(plan) else "Подписка Vmeste"
+    if is_voice_plan(plan):
+        desc_prefix = "Голосовые минуты Vmeste"
+    elif plan.product_kind == SubscriptionPlan.ProductKind.VSAYTE:
+        desc_prefix = "Всайте Vmeste"
+    else:
+        desc_prefix = "Подписка Vmeste"
     yk = create_payment(
         amount=str(plan.price_monthly),
         description=f"{desc_prefix}: {plan.name}",

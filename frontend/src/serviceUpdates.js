@@ -4,6 +4,19 @@
  */
 export const SERVICE_UPDATES = [
   {
+    date: "2026-11-09",
+    items: [
+      {
+        kind: "added",
+        text: "Всайте: конструктор сайтов, шаблоны и палитры, локальный бесплатный режим",
+      },
+      {
+        kind: "added",
+        text: "Всайте: хостинг 300 ₽/мес на *.vsayte.vsevmeste.space и Pro 990 ₽ с доменами REG.RU",
+      },
+    ],
+  },
+  {
     date: "2026-10-16",
     items: [
       {

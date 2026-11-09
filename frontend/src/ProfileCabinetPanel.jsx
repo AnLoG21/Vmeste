@@ -176,6 +176,7 @@ export default function ProfileCabinetPanel({
         {me?.role !== "client" && (
           <button type="button" className="ghost-btn" onClick={() => setCurrentView("subscriptions")}>Подписки</button>
         )}
+        <button type="button" className="ghost-btn" onClick={() => setCurrentView("vsayte")}>Мои сайты</button>
         {canManageOrgSettings && (
           <button type="button" className="ghost-btn" onClick={() => setCurrentView("organization")}>Организация</button>
         )}

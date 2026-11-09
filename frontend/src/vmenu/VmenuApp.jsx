@@ -4,6 +4,7 @@ import VmenuLogo from "./VmenuLogo.jsx";
 import VmagazineLogo from "../vmagazine/VmagazineLogo.jsx";
 import VkvartireLogo from "../vkvartire/VkvartireLogo.jsx";
 import VefireLogo from "../vefire/VefireLogo.jsx";
+import VsayteLogo from "../vsayte/VsayteLogo.jsx";
 import { canAccessVefire } from "../vefire/vefireAccess.js";
 import { vmenuFetch, VMENU_DRAFT_KEY } from "./vmenuApi.js";
 import { VmenuErrorBoundary } from "./VmenuErrorBoundary.jsx";
@@ -300,7 +301,7 @@ export default function VmenuApp({
   );
 }
 
-export function ServicesHub({ me, onOpenVmenu, onOpenVmagazine, onOpenVkvartire, onOpenVefire }) {
+export function ServicesHub({ me, onOpenVmenu, onOpenVmagazine, onOpenVkvartire, onOpenVefire, onOpenVsayte }) {
   const showVefire = canAccessVefire(me);
   return (
     <section className="card services-hub">
@@ -325,6 +326,13 @@ export function ServicesHub({ me, onOpenVmenu, onOpenVmagazine, onOpenVkvartire,
         <div>
           <strong>Вквартире</strong>
           <p className="muted small">Подбор квартир: лента, карта, фильтр по удалённости и избранное.</p>
+        </div>
+      </button>
+      <button type="button" className="services-hub-card" onClick={onOpenVsayte}>
+        <VsayteLogo size={48} />
+        <div>
+          <strong>Всайте</strong>
+          <p className="muted small">Конструктор сайтов: шаблоны, хостинг на поддомене и свой домен.</p>
         </div>
       </button>
       {showVefire ? (

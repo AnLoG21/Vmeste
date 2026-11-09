@@ -570,6 +570,64 @@ export async function installClientMocks(
     if (path.includes("/inspections/reports")) return json([]);
     if (path.includes("/notifications")) return json([]);
     if (path.includes("/health")) return json({ status: "ok", checks: { db: true } });
+    if (path.includes("/subscriptions/plans") && method === "GET") {
+      return json([
+        {
+          id: 501,
+          slug: "vsayte-free",
+          name: "Всайте — Бесплатный",
+          price_monthly: "0.00",
+          product_kind: "vsayte",
+          features: ["Локальный preview"],
+        },
+        {
+          id: 502,
+          slug: "vsayte-hosting",
+          name: "Всайте — Хостинг",
+          price_monthly: "300.00",
+          product_kind: "vsayte",
+          features: ["Поддомен"],
+        },
+        {
+          id: 503,
+          slug: "vsayte-pro",
+          name: "Всайте — Pro",
+          price_monthly: "990.00",
+          product_kind: "vsayte",
+          features: ["Свой домен"],
+        },
+      ]);
+    }
+    if (path.includes("/vsayte/entitlement") && method === "GET") {
+      return json({
+        limits: {
+          plan_slug: "vsayte-free",
+          plan_name: "Всайте — Бесплатный",
+          max_sites: 1,
+          max_pages: 2,
+          can_publish: false,
+          can_custom_domain: false,
+          editor_tier: "basic",
+        },
+        can_publish: false,
+        can_custom_domain: false,
+        editor_tier: "basic",
+        base_domain: "vsayte.vsevmeste.space",
+      });
+    }
+    if (path.includes("/vsayte/sites") && method === "GET") {
+      return json([]);
+    }
+    if (path.includes("/vsayte/sites") && method === "POST") {
+      return json({
+        id: 1,
+        title: "Новый сайт",
+        slug: "new-site",
+        status: "draft",
+        document: {},
+        domains: [],
+      }, 201);
+    }
 
     return json([]);
   });

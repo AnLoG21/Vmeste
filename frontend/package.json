@@ -34,6 +34,8 @@
     "@sentry/react": "^10.73.0",
     "@vitejs/plugin-react-swc": "^3.7.2",
     "fabric": "^6.9.1",
+    "grapesjs": "^0.23.9",
+    "grapesjs-preset-webpage": "^1.0.3",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

@@ -20,10 +20,12 @@ import VmenuApp, { ServicesHub } from "./vmenu/VmenuApp.jsx";
 import VmagazineApp from "./vmagazine/VmagazineApp.jsx";
 import VkvartireApp from "./vkvartire/VkvartireApp.jsx";
 import VefireApp from "./vefire/VefireApp.jsx";
+import VsayteApp from "./vsayte/VsayteApp.jsx";
 import { canAccessVefire } from "./vefire/vefireAccess.js";
 import "./vmagazine/vmagazine.css";
 import "./vkvartire/vkvartire.css";
 import "./vefire/vefire.css";
+import "./vsayte/vsayte.css";
 import { CabinetErrorBoundary } from "./CabinetErrorBoundary.jsx";
 import CabinetChrome from "./CabinetChrome.jsx";
 import InspectionWorkspace from "./InspectionWorkspace.jsx";
@@ -2950,7 +2952,7 @@ export default function App() {
     me?.role === "staff";
   const chatsPortalTarget =
     currentView === "vmenu" || currentView === "vmagazine" ? vmenuChatsHostEl : mainChatsHostEl;
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "service_apps", "vmenu", "vmagazine", "vkvartire", "vefire"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "service_apps", "vmenu", "vmagazine", "vkvartire", "vefire", "vsayte"].includes(currentView);
   const profileWide = accessToken && ["profile", "subscriptions"].includes(currentView);
 
   return (
@@ -3158,6 +3160,15 @@ export default function App() {
             onOpenVmagazine={() => setCurrentView("vmagazine")}
             onOpenVkvartire={() => setCurrentView("vkvartire")}
             onOpenVefire={() => setCurrentView("vefire")}
+            onOpenVsayte={() => setCurrentView("vsayte")}
+          />
+        )}
+        {accessToken && currentView === "vsayte" && (
+          <VsayteApp
+            me={me}
+            authFetch={authFetch}
+            API_URL={API_URL}
+            onExit={() => setCurrentView("service_apps")}
           />
         )}
         {accessToken && currentView === "vmenu" && (
