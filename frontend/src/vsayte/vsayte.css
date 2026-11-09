@@ -7,8 +7,43 @@
 }
 
 .vsayte-app--editor {
-  width: min(1480px, 100%);
-  min-height: calc(100vh - 120px);
+  position: relative;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  min-height: calc(100vh - 88px);
+  padding: 12px 12px 12px 56px;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--card-bg, #fff) 96%, transparent);
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.vsayte-back {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 5;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card-bg, #fff) 92%, transparent);
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 140ms ease-out, transform 120ms ease-out, color 140ms ease-out;
+}
+
+.vsayte-back:hover {
+  border-color: var(--accent, #ff7a00);
+  color: var(--accent, #ff7a00);
+}
+
+.vsayte-back:active {
+  transform: scale(0.96);
 }
 
 .vsayte-head {
@@ -17,6 +52,7 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  padding-left: 0;
 }
 
 .vsayte-head-brand {
@@ -129,9 +165,9 @@
 /* —— Editor shell —— */
 .vsayte-editor {
   display: grid;
-  grid-template-columns: minmax(260px, 300px) 1fr;
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
   gap: 12px;
-  min-height: 72vh;
+  min-height: calc(100vh - 200px);
   flex: 1;
   align-items: stretch;
 }
@@ -145,7 +181,7 @@
   gap: 14px;
   background: color-mix(in srgb, var(--card-bg, #fff) 96%, transparent);
   overflow: auto;
-  max-height: min(78vh, 920px);
+  max-height: calc(100vh - 200px);
 }
 
 .vsayte-side-tabs {
@@ -359,7 +395,7 @@
 
 .vsayte-editor-canvas-wrap {
   min-width: 0;
-  min-height: 72vh;
+  min-height: calc(100vh - 200px);
   display: flex;
   flex-direction: column;
 }
@@ -368,9 +404,64 @@
   border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
   border-radius: 14px;
   overflow: hidden;
-  min-height: 72vh;
+  min-height: calc(100vh - 200px);
+  height: calc(100vh - 200px);
   flex: 1;
   background: #2b2b2b;
+}
+
+.vsayte-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed color-mix(in srgb, var(--accent, #ff7a00) 55%, transparent);
+  background: color-mix(in srgb, var(--accent, #ff7a00) 8%, transparent);
+  color: var(--accent, #ff7a00);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.vsayte-upload-btn:hover {
+  background: color-mix(in srgb, var(--accent, #ff7a00) 14%, transparent);
+}
+
+.vsayte-asset-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vsayte-asset-card {
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 10px;
+  overflow: hidden;
+  background: color-mix(in srgb, currentColor 3%, transparent);
+}
+
+.vsayte-asset-preview {
+  display: block;
+  width: 100%;
+  height: 88px;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  background-size: cover;
+  background-position: center;
+  background-color: #ddd;
+}
+
+.vsayte-asset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px;
 }
 
 /* GrapesJS chrome — readable Russian UI */
@@ -443,14 +534,19 @@
 }
 
 @media (max-width: 960px) {
+  .vsayte-app--editor {
+    padding: 52px 8px 8px;
+  }
   .vsayte-editor {
     grid-template-columns: 1fr;
+    min-height: auto;
   }
   .vsayte-editor-side {
     max-height: none;
   }
   .vsayte-editor-canvas,
   .vsayte-editor-canvas-wrap {
-    min-height: 58vh;
+    min-height: 62vh;
+    height: 62vh;
   }
 }

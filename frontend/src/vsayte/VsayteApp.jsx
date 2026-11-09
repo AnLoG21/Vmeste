@@ -260,16 +260,33 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
   }
 
   async function onUploadAsset(file) {
-    if (!editing || editing.local) {
-      setError("Загрузка файлов доступна для сайтов на сервере (Pro рекомендуется).");
-      return;
+    if (!editing) return null;
+    // Локальный сайт — data URL; серверный — API (если лимит тарифа).
+    if (editing.local || String(editing.id).startsWith("local-")) {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Не удалось прочитать файл"));
+        reader.readAsDataURL(file);
+      });
+      return {
+        src: dataUrl,
+        name: file.name || "file",
+        type: file.type || "image",
+      };
     }
     setBusy(true);
     try {
-      await vsayteUploadAsset(authFetch, API_URL, editing.id, file);
-      setMessage("Файл загружен");
+      const asset = await vsayteUploadAsset(authFetch, API_URL, editing.id, file);
+      setMessage("Файл загружен — можно применить к блоку на холсте");
+      return {
+        src: asset.url,
+        name: asset.original_name || file.name || "file",
+        type: asset.content_type || file.type || "image",
+      };
     } catch (e) {
       setError(e.message || "Ошибка загрузки");
+      return null;
     } finally {
       setBusy(false);
     }
@@ -327,10 +344,22 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
 
   if (tab === "editor" && editing) {
     return (
-      <section className="card vsayte-app vsayte-app--editor">
+      <section className="vsayte-app vsayte-app--editor">
+        <button
+          type="button"
+          className="vsayte-back"
+          aria-label="Назад к списку сайтов"
+          title="Назад"
+          onClick={() => { setTab("sites"); setEditing(null); }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 5L8 12l7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
         <div className="vsayte-head">
           <div className="vsayte-head-brand">
-            <VsayteLogo size={36} />
+            <VsayteLogo size={32} />
             <div>
               <input
                 className="vsayte-select vsayte-title-input"
@@ -347,9 +376,6 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
             </div>
           </div>
           <div className="vsayte-editor-toolbar">
-            <button type="button" className="ghost-btn" onClick={() => { setTab("sites"); setEditing(null); }}>
-              ← К списку сайтов
-            </button>
             <button type="button" className="ghost-btn" disabled={busy} onClick={saveEditing}>
               Сохранить
             </button>
@@ -369,17 +395,6 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
                 Скачать HTML
               </button>
             )}
-            {editorTier === "pro" && !editing.local ? (
-              <label className="ghost-btn" style={{ cursor: "pointer" }}>
-                Загрузить файл
-                <input
-                  type="file"
-                  accept="image/*,.svg,.webp,.png,.jpg,.jpeg,.gif"
-                  hidden
-                  onChange={(e) => e.target.files?.[0] && onUploadAsset(e.target.files[0])}
-                />
-              </label>
-            ) : null}
           </div>
         </div>
 
@@ -392,6 +407,7 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
             initialDocument={editing.document || draftDoc}
             editorTier={editorTier}
             onChange={setDraftDoc}
+            onUploadFile={onUploadAsset}
           />
         </Suspense>
 

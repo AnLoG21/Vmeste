@@ -97,10 +97,12 @@ export default function VsayteEditor({
   editorTier = "basic",
   onChange,
   onReady,
+  onUploadFile,
 }) {
   const hostRef = useRef(null);
   const editorRef = useRef(null);
   const colorsRef = useRef(null);
+  const [library, setLibrary] = useState(() => initialDocument?.meta?.assets || []);
 
   const initialPalette = palettesForTier(editorTier).find((p) => p.id === initialDocument?.meta?.paletteId)
     || palettesForTier(editorTier)[0];
@@ -119,7 +121,9 @@ export default function VsayteEditor({
   useEffect(() => {
     if (!hostRef.current || editorRef.current) return undefined;
 
-    const editor = grapesjs.init({
+    /** @type {import("grapesjs").Editor | null} */
+    let editor = null;
+    editor = grapesjs.init({
       container: hostRef.current,
       height: "100%",
       width: "auto",
@@ -177,16 +181,18 @@ export default function VsayteEditor({
           {
             name: "Оформление",
             open: true,
-            buildProps: ["background-color", "border-radius", "border", "box-shadow", "opacity"],
+            buildProps: [
+              "background-color",
+              "background",
+              "border-radius",
+              "border",
+              "box-shadow",
+              "opacity",
+            ],
             properties: [
-              {
-                property: "background-color",
-                type: "color",
-              },
-              {
-                property: "border-color",
-                type: "color",
-              },
+              { property: "background-color", type: "color" },
+              { property: "border-color", type: "color" },
+              { property: "background", type: "file" },
             ],
           },
           {
@@ -196,9 +202,44 @@ export default function VsayteEditor({
           },
         ],
       },
+      assetManager: {
+        embedAsBase64: false,
+        multiUpload: true,
+        autoAdd: 1,
+        uploadName: "file",
+        uploadFile: async (ev) => {
+          const files = ev?.dataTransfer?.files || ev?.target?.files;
+          if (!files?.length) return;
+          const added = [];
+          for (const file of Array.from(files)) {
+            let asset = null;
+            if (onUploadFile) {
+              asset = await onUploadFile(file);
+            } else {
+              asset = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve({ src: reader.result, name: file.name });
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+              });
+            }
+            if (asset?.src) added.push({ src: asset.src, name: asset.name, type: "image" });
+          }
+          if (added.length && editor) {
+            editor.AssetManager.add(added);
+            setLibrary((prev) => [...added, ...prev].slice(0, 40));
+          }
+        },
+      },
     });
 
     editorRef.current = editor;
+
+    // Уже сохранённые ассеты документа
+    const savedAssets = initialDocument?.meta?.assets || [];
+    if (savedAssets.length) {
+      editor.AssetManager.add(savedAssets.map((a) => ({ src: a.src, name: a.name, type: "image" })));
+    }
 
     // Перевод кнопок панелей, которые preset оставляет на английском
     const panelBtns = [
@@ -256,7 +297,63 @@ export default function VsayteEditor({
   }, []);
 
   function meta() {
-    return { paletteId, fontId, colors };
+    return { paletteId, fontId, colors, assets: library };
+  }
+
+  async function handleFilesPicked(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    const editor = editorRef.current;
+    const added = [];
+    for (const file of files) {
+      let asset = null;
+      if (onUploadFile) {
+        asset = await onUploadFile(file);
+      } else {
+        asset = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve({ src: reader.result, name: file.name, type: file.type });
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+      if (asset?.src) added.push({ src: asset.src, name: asset.name || file.name, type: "image" });
+    }
+    if (!added.length) return;
+    if (editor) editor.AssetManager.add(added);
+    setLibrary((prev) => [...added, ...prev].slice(0, 40));
+    if (editor) onChange?.(documentFromEditor(editor, { ...meta(), assets: [...added, ...library].slice(0, 40) }));
+  }
+
+  function applyAssetToSelected(asset, mode = "auto") {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const selected = editor.getSelected();
+    if (!selected) {
+      window.alert("Сначала кликните элемент на холсте (кнопку, блок, картинку).");
+      return;
+    }
+    const tag = (selected.get("tagName") || "").toLowerCase();
+    const type = selected.get("type");
+    if (mode === "image" || tag === "img" || type === "image") {
+      selected.set("src", asset.src);
+      selected.addAttributes({ src: asset.src, alt: asset.name || "" });
+    } else if (mode === "bg" || mode === "auto") {
+      selected.addStyle({
+        "background-image": `url("${asset.src}")`,
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat",
+      });
+    }
+    onChange?.(documentFromEditor(editor, meta()));
+  }
+
+  function insertImageBlock(asset) {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.addComponents(`<img src="${asset.src}" alt="${asset.name || ""}" style="max-width:100%;height:auto;display:block;"/>`);
+    onChange?.(documentFromEditor(editor, meta()));
   }
 
   function applyTemplate(templateId) {
@@ -451,9 +548,57 @@ export default function VsayteEditor({
               </select>
             </div>
 
+            <div className="vsayte-side-block">
+              <h4>Файлы</h4>
+              <p className="vsayte-side-hint">
+                Загрузите картинку и примените к кнопке, блоку (фон) или вставьте как изображение.
+              </p>
+              <label className="vsayte-upload-btn">
+                Загрузить файл
+                <input
+                  type="file"
+                  accept="image/*,.svg,.webp,.png,.jpg,.jpeg,.gif,.ico"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    handleFilesPicked(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {library.length ? (
+                <div className="vsayte-asset-grid">
+                  {library.map((asset) => (
+                    <div key={asset.src} className="vsayte-asset-card">
+                      <button
+                        type="button"
+                        className="vsayte-asset-preview"
+                        title={asset.name}
+                        onClick={() => applyAssetToSelected(asset, "auto")}
+                        style={{ backgroundImage: `url("${asset.src}")` }}
+                      />
+                      <div className="vsayte-asset-actions">
+                        <button type="button" className="vsayte-mini-btn" onClick={() => applyAssetToSelected(asset, "bg")}>
+                          Фон
+                        </button>
+                        <button type="button" className="vsayte-mini-btn" onClick={() => applyAssetToSelected(asset, "image")}>
+                          В картинку
+                        </button>
+                        <button type="button" className="vsayte-mini-btn" onClick={() => insertImageBlock(asset)}>
+                          Вставить
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted small">Пока нет загруженных файлов.</p>
+              )}
+            </div>
+
             {editorTier !== "pro" ? (
               <p className="muted small vsayte-tier-note">
-                На тарифе Pro доступны все шаблоны, шрифты и загрузка своих файлов.
+                На тарифе Pro доступны все шаблоны и шрифты.
               </p>
             ) : null}
           </>

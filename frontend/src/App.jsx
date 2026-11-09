@@ -2952,7 +2952,7 @@ export default function App() {
     me?.role === "staff";
   const chatsPortalTarget =
     currentView === "vmenu" || currentView === "vmagazine" ? vmenuChatsHostEl : mainChatsHostEl;
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "service_apps", "vmenu", "vmagazine", "vkvartire", "vefire", "vsayte"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "service_apps", "vmenu", "vmagazine", "vkvartire", "vefire"].includes(currentView);
   const profileWide = accessToken && ["profile", "subscriptions"].includes(currentView);
 
   return (
