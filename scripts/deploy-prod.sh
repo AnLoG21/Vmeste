@@ -127,8 +127,9 @@ if [[ "$BUILD_FRONTEND" == "true" ]]; then UP_SERVICES+=(frontend); fi
 if [[ "$BUILD_WEB" == "true" || "$BUILD_FRONTEND" == "true" ]]; then
   docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans "${UP_SERVICES[@]}"
 else
-  echo "[deploy] no app image changes — leave running containers"
-  docker compose -f "$COMPOSE_FILE" up -d caddy celery_worker celery_beat
+  # Still bounce Caddy so bind-mounted Caddyfile / compose changes take effect.
+  echo "[deploy] no app image changes — recreate caddy (+ workers)"
+  docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans caddy celery_worker celery_beat
 fi
 # Keep tunnel up if the profile/service exists (HTTPS via Cloudflare).
 docker compose -f "$COMPOSE_FILE" up -d cloudflared 2>/dev/null || true
