@@ -20,11 +20,9 @@
 
 ## Кастомные домены (Pro)
 
-1. Пользователь проверяет/покупает домен через API REG.RU (`REGRU_USERNAME` / `REGRU_PASSWORD`).
-2. Без ключей — mock-режим (заказ «принят», можно привязать домен вручную).
-3. DNS A → `VSAYTE_HOST_IP`.
-4. Caddy `on_demand_tls` спрашивает `GET /api/vsayte/tls-ask/?domain=…`.
-5. Отдача: `GET /api/vsayte/serve/…` по `Host`.
+API покупки/привязки и `tls-ask` / `serve` уже есть. Публичный catch-all `https://` + `on_demand_tls` в Caddy **отключён** (ронял весь Caddy) — включаем отдельно после проверки конфига.
+
+Сейчас в проде: поддомены `*.vsayte.{$DOMAIN}` → `rewrite` на `/api/vsayte/serve`.
 
 ## Env
 
