@@ -192,11 +192,24 @@ export function fontsForTier(tier) {
   return tier === "pro" ? PRO_FONTS : BASIC_FONTS;
 }
 
-export function buildTemplateDocument(templateId, paletteId, fontId, tier = "basic") {
+export function buildTemplateDocument(templateId, paletteId, fontId, tier = "basic", colorsOverride = null) {
   const template = ALL_TEMPLATES.find((t) => t.id === templateId) || ALL_TEMPLATES[0];
-  const palette =
+  const basePalette =
     palettesForTier(tier).find((p) => p.id === paletteId) || palettesForTier(tier)[0];
   const font = fontsForTier(tier).find((f) => f.id === fontId) || fontsForTier(tier)[0];
+  const palette = colorsOverride
+    ? {
+        id: "custom",
+        name: "Своя",
+        colors: [
+          colorsOverride.accent,
+          colorsOverride.ink,
+          colorsOverride.soft,
+          colorsOverride.paper,
+          colorsOverride.muted,
+        ],
+      }
+    : basePalette;
   const built = template.build(palette, font);
   return {
     html: built.html,
@@ -212,8 +225,15 @@ export function buildTemplateDocument(templateId, paletteId, fontId, tier = "bas
     ],
     meta: {
       templateId: template.id,
-      paletteId: palette.id,
+      paletteId: colorsOverride ? "custom" : palette.id,
       fontId: font.id,
+      colors: colorsOverride || {
+        accent: palette.colors[0],
+        ink: palette.colors[1],
+        soft: palette.colors[2],
+        paper: palette.colors[3],
+        muted: palette.colors[4],
+      },
     },
   };
 }

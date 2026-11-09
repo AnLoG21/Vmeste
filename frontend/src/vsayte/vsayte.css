@@ -7,8 +7,8 @@
 }
 
 .vsayte-app--editor {
-  width: min(1400px, 100%);
-  min-height: calc(100vh - 140px);
+  width: min(1480px, 100%);
+  min-height: calc(100vh - 120px);
 }
 
 .vsayte-head {
@@ -23,11 +23,19 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+  flex: 1;
 }
 
 .vsayte-head-brand h2 {
   margin: 0;
   font-size: 1.35rem;
+}
+
+.vsayte-title-input {
+  font-weight: 700;
+  font-size: 1.1rem;
+  width: min(360px, 100%);
 }
 
 .vsayte-plan-pill {
@@ -68,6 +76,11 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  transition: border-color 160ms ease-out, transform 120ms ease-out;
+}
+
+.vsayte-site-card:hover {
+  border-color: color-mix(in srgb, var(--accent, #ff7a00) 45%, transparent);
 }
 
 .vsayte-site-card h3 {
@@ -113,12 +126,14 @@
   opacity: 0.85;
 }
 
+/* —— Editor shell —— */
 .vsayte-editor {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: minmax(260px, 300px) 1fr;
   gap: 12px;
-  min-height: 70vh;
+  min-height: 72vh;
   flex: 1;
+  align-items: stretch;
 }
 
 .vsayte-editor-side {
@@ -130,14 +145,50 @@
   gap: 14px;
   background: color-mix(in srgb, var(--card-bg, #fff) 96%, transparent);
   overflow: auto;
-  max-height: 75vh;
+  max-height: min(78vh, 920px);
+}
+
+.vsayte-side-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 3px;
+  border-radius: 10px;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.vsayte-side-tabs button {
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.vsayte-side-tabs button.is-active {
+  background: color-mix(in srgb, var(--card-bg, #fff) 100%, transparent);
+  opacity: 1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  color: var(--accent, #ff7a00);
 }
 
 .vsayte-side-block h4 {
   margin: 0 0 8px;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
+  opacity: 0.65;
+  font-weight: 700;
+}
+
+.vsayte-side-hint {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
   opacity: 0.7;
 }
 
@@ -147,6 +198,26 @@
   gap: 6px;
 }
 
+.vsayte-chip {
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 140ms ease-out, background 140ms ease-out;
+}
+
+.vsayte-chip:hover {
+  border-color: var(--accent, #ff7a00);
+}
+
+.vsayte-chip:active {
+  transform: scale(0.97);
+}
+
 .vsayte-palette-row {
   display: flex;
   flex-direction: column;
@@ -154,25 +225,112 @@
 }
 
 .vsayte-palette {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr) auto;
+  align-items: stretch;
   gap: 0;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 10px;
   overflow: hidden;
   padding: 0;
-  height: 28px;
+  min-height: 34px;
   cursor: pointer;
   background: transparent;
+  text-align: left;
 }
 
 .vsayte-palette span {
-  flex: 1;
-  height: 100%;
+  display: block;
+  min-height: 34px;
+}
+
+.vsayte-palette em {
+  font-style: normal;
+  font-size: 0.75rem;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  opacity: 0.75;
+  background: color-mix(in srgb, currentColor 4%, transparent);
 }
 
 .vsayte-palette.is-active {
   border-color: var(--accent, #ff7a00);
-  outline: 1px solid var(--accent, #ff7a00);
+  box-shadow: 0 0 0 1px var(--accent, #ff7a00);
+}
+
+.vsayte-color-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vsayte-color-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vsayte-color-label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.vsayte-color-hint {
+  display: block;
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+.vsayte-color-controls {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.vsayte-color-controls input[type="color"] {
+  width: 40px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.vsayte-hex {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  background: transparent;
+  color: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+.vsayte-mini-btn {
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  background: transparent;
+  color: inherit;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.vsayte-mini-btn:hover {
+  border-color: var(--accent, #ff7a00);
+  color: var(--accent, #ff7a00);
+}
+
+.vsayte-mini-btn:active {
+  transform: scale(0.97);
 }
 
 .vsayte-select {
@@ -184,16 +342,74 @@
   color: inherit;
 }
 
+.vsayte-tier-note {
+  margin: 0;
+}
+
+.vsayte-help ol {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  opacity: 0.9;
+}
+
+.vsayte-editor-canvas-wrap {
+  min-width: 0;
+  min-height: 72vh;
+  display: flex;
+  flex-direction: column;
+}
+
 .vsayte-editor-canvas {
   border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
   border-radius: 14px;
   overflow: hidden;
-  min-height: 70vh;
-  background: #1e1e1e;
+  min-height: 72vh;
+  flex: 1;
+  background: #2b2b2b;
 }
 
+/* GrapesJS chrome — readable Russian UI */
 .vsayte-editor-canvas .gjs-one-bg {
-  background-color: #1e1e1e;
+  background-color: #2a2a2a;
+}
+
+.vsayte-editor-canvas .gjs-two-color {
+  color: #f2f2f2;
+}
+
+.vsayte-editor-canvas .gjs-three-bg {
+  background-color: #ff7a00;
+  color: #fff;
+}
+
+.vsayte-editor-canvas .gjs-four-color,
+.vsayte-editor-canvas .gjs-four-color-h:hover {
+  color: #ff7a00;
+}
+
+.vsayte-editor-canvas .gjs-pn-panel {
+  border-radius: 0;
+}
+
+.vsayte-editor-canvas .gjs-pn-views-container,
+.vsayte-editor-canvas .gjs-blocks-c,
+.vsayte-editor-canvas .gjs-sm-sector,
+.vsayte-editor-canvas .gjs-layer {
+  font-size: 12px;
+}
+
+.vsayte-editor-canvas .gjs-block {
+  border-radius: 8px;
+  min-height: 56px;
+}
+
+.vsayte-editor-canvas .gjs-frame-wrapper {
+  background: #e8e8e8;
 }
 
 .vsayte-editor-toolbar {
@@ -201,7 +417,6 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  margin-bottom: 8px;
 }
 
 .vsayte-domain-box {
@@ -221,14 +436,21 @@
   color: inherit;
 }
 
-@media (max-width: 860px) {
+.vsayte-domain-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+}
+
+@media (max-width: 960px) {
   .vsayte-editor {
     grid-template-columns: 1fr;
   }
   .vsayte-editor-side {
     max-height: none;
   }
-  .vsayte-editor-canvas {
-    min-height: 60vh;
+  .vsayte-editor-canvas,
+  .vsayte-editor-canvas-wrap {
+    min-height: 58vh;
   }
 }

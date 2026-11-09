@@ -333,21 +333,22 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
             <VsayteLogo size={36} />
             <div>
               <input
-                className="vsayte-select"
-                style={{ fontWeight: 700, fontSize: "1.1rem" }}
+                className="vsayte-select vsayte-title-input"
                 value={editing.title || ""}
                 onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                aria-label="Название сайта"
+                placeholder="Название сайта"
               />
               <div className="muted small">
                 {editing.local
-                  ? "Локальный режим — без публикации"
-                  : editing.public_url || `${editing.slug}.${baseDomain}`}
+                  ? "Локальный режим — без публикации в интернет"
+                  : editing.public_url || `Адрес: ${editing.slug}.${baseDomain}`}
               </div>
             </div>
           </div>
           <div className="vsayte-editor-toolbar">
             <button type="button" className="ghost-btn" onClick={() => { setTab("sites"); setEditing(null); }}>
-              ← Мои сайты
+              ← К списку сайтов
             </button>
             <button type="button" className="ghost-btn" disabled={busy} onClick={saveEditing}>
               Сохранить
@@ -359,7 +360,7 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
                 </button>
                 {editing.status === "published" ? (
                   <button type="button" className="ghost-btn" disabled={busy} onClick={unpublishEditing}>
-                    Снять
+                    Снять с публикации
                   </button>
                 ) : null}
               </>
@@ -370,7 +371,7 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
             )}
             {editorTier === "pro" && !editing.local ? (
               <label className="ghost-btn" style={{ cursor: "pointer" }}>
-                Файл
+                Загрузить файл
                 <input
                   type="file"
                   accept="image/*,.svg,.webp,.png,.jpg,.jpeg,.gif"
@@ -385,7 +386,7 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
         {error ? <p className="error-text">{error}</p> : null}
         {message ? <p className="muted">{message}</p> : null}
 
-        <Suspense fallback={<p className="muted">Загрузка редактора…</p>}>
+        <Suspense fallback={<p className="muted">Загрузка конструктора…</p>}>
           <VsayteEditor
             key={editing.id}
             initialDocument={editing.document || draftDoc}
@@ -395,19 +396,20 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
         </Suspense>
 
         {canCustomDomain && !editing.local ? (
-          <div className="vsayte-side-block" style={{ marginTop: 12 }}>
-            <h4>Свой домен (Pro)</h4>
+          <div className="vsayte-domain-panel">
+            <h4>Свой домен (тариф Pro)</h4>
             <div className="vsayte-domain-box">
               <input
                 value={domainInput}
                 onChange={(e) => setDomainInput(e.target.value)}
-                placeholder="example.ru"
+                placeholder="например site.ru"
+                aria-label="Имя домена"
               />
               <button type="button" className="ghost-btn" disabled={busy} onClick={checkDomain}>
                 Проверить
               </button>
               <button type="button" className="ghost-btn" disabled={busy} onClick={buyDomain}>
-                Купить (REG.RU)
+                Купить через REG.RU
               </button>
               <button type="button" className="ghost-btn" disabled={busy} onClick={attachDomain}>
                 Привязать свой
@@ -415,9 +417,9 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
             </div>
             {domainInfo ? (
               <p className="muted small">
-                {domainInfo.available ? "Доступен" : "Занят / недоступен"}
+                {domainInfo.available ? "Домен свободен" : "Домен занят или недоступен"}
                 {domainInfo.price ? ` · ${domainInfo.price} ${domainInfo.currency || ""}` : ""}
-                {domainInfo.mock ? " · тестовый режим" : ""}
+                {domainInfo.mock ? " · тестовый режим без ключей REG.RU" : ""}
               </p>
             ) : null}
           </div>
