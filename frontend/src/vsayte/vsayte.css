@@ -2,28 +2,87 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  width: min(1100px, 100%);
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+/* Список сайтов — на всю ширину сетки */
+.vsayte-app.full-width:not(.vsayte-app--editor) {
+  width: 100%;
+}
+
+/* —— Immersive editor: весь экран под шапкой —— */
+.page-logged:has(.vsayte-app--editor) {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+html:has(.page-logged:has(.vsayte-app--editor)),
+body:has(.page-logged:has(.vsayte-app--editor)) {
+  height: 100%;
+  overflow: hidden;
+}
+
+.page-logged:has(.vsayte-app--editor) > .hero.top-row {
+  flex-shrink: 0;
+}
+
+.page-logged:has(.vsayte-app--editor) > .app-subnav {
+  display: none !important;
+}
+
+.page-logged:has(.vsayte-app--editor) > .grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-top: 0;
+  margin-bottom: 0;
+  grid-template-columns: minmax(0, 1fr);
+  max-width: none;
+  width: 100%;
+}
+
+.page-logged:has(.vsayte-app--editor) > .grid > .vsayte-app--editor {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
 }
 
 .vsayte-app--editor {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   width: 100%;
   max-width: none;
   margin: 0;
-  min-height: calc(100vh - 88px);
-  padding: 12px 12px 12px 56px;
+  padding: 8px 10px 10px;
   box-sizing: border-box;
-  background: color-mix(in srgb, var(--card-bg, #fff) 96%, transparent);
-  border-radius: 16px;
+  background: color-mix(in srgb, var(--card-bg, #fff) 98%, transparent);
+  border-radius: 14px;
   border: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+  overflow: hidden;
+}
+
+.vsayte-editor-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  min-height: 48px;
 }
 
 .vsayte-back {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 5;
+  flex-shrink: 0;
   width: 40px;
   height: 40px;
   display: inline-flex;
@@ -52,13 +111,12 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  padding-left: 0;
 }
 
 .vsayte-head-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
   flex: 1;
 }
@@ -70,8 +128,16 @@
 
 .vsayte-title-input {
   font-weight: 700;
-  font-size: 1.1rem;
-  width: min(360px, 100%);
+  font-size: 1.05rem;
+  width: min(420px, 100%);
+  max-width: 100%;
+}
+
+.vsayte-editor-sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
 }
 
 .vsayte-plan-pill {
@@ -163,12 +229,25 @@
 }
 
 /* —— Editor shell —— */
+.vsayte-app--editor > .error-text,
+.vsayte-app--editor > .muted {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.vsayte-app--editor > .vsayte-editor,
+.vsayte-app--editor > .vsayte-editor-fallback {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .vsayte-editor {
   display: grid;
-  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
-  gap: 12px;
-  min-height: calc(100vh - 200px);
-  flex: 1;
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
   align-items: stretch;
 }
 
@@ -181,7 +260,9 @@
   gap: 14px;
   background: color-mix(in srgb, var(--card-bg, #fff) 96%, transparent);
   overflow: auto;
-  max-height: calc(100vh - 200px);
+  min-height: 0;
+  max-height: none;
+  height: 100%;
 }
 
 .vsayte-side-tabs {
@@ -395,7 +476,8 @@
 
 .vsayte-editor-canvas-wrap {
   min-width: 0;
-  min-height: calc(100vh - 200px);
+  min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -404,10 +486,17 @@
   border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
   border-radius: 14px;
   overflow: hidden;
-  min-height: calc(100vh - 200px);
-  height: calc(100vh - 200px);
-  flex: 1;
+  min-height: 0;
+  height: 100%;
+  flex: 1 1 auto;
   background: #2b2b2b;
+}
+
+/* GrapesJS должен заполнять доступную высоту */
+.vsayte-editor-canvas .gjs-editor,
+.vsayte-editor-canvas .gjs-cv-canvas,
+.vsayte-editor-canvas .gjs-pn-views-container {
+  height: 100%;
 }
 
 .vsayte-upload-btn {
@@ -533,20 +622,26 @@
   border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
 }
 
+.vsayte-app--editor .vsayte-domain-panel {
+  flex-shrink: 0;
+  max-height: 120px;
+  overflow: auto;
+}
+
 @media (max-width: 960px) {
-  .vsayte-app--editor {
-    padding: 52px 8px 8px;
-  }
   .vsayte-editor {
     grid-template-columns: 1fr;
-    min-height: auto;
+    grid-template-rows: minmax(180px, 32%) minmax(0, 1fr);
   }
   .vsayte-editor-side {
-    max-height: none;
+    max-height: 32vh;
   }
   .vsayte-editor-canvas,
   .vsayte-editor-canvas-wrap {
-    min-height: 62vh;
-    height: 62vh;
+    min-height: 0;
+    height: 100%;
+  }
+  .vsayte-editor-sub {
+    display: none;
   }
 }

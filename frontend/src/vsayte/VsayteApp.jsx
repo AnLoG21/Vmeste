@@ -344,36 +344,33 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
 
   if (tab === "editor" && editing) {
     return (
-      <section className="vsayte-app vsayte-app--editor">
-        <button
-          type="button"
-          className="vsayte-back"
-          aria-label="Назад к списку сайтов"
-          title="Назад"
-          onClick={() => { setTab("sites"); setEditing(null); }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M15 5L8 12l7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-
-        <div className="vsayte-head">
+      <section className="vsayte-app vsayte-app--editor full-width">
+        <header className="vsayte-editor-topbar">
+          <button
+            type="button"
+            className="vsayte-back"
+            aria-label="Назад к списку сайтов"
+            title="Назад"
+            onClick={() => { setTab("sites"); setEditing(null); }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M15 5L8 12l7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
           <div className="vsayte-head-brand">
-            <VsayteLogo size={32} />
-            <div>
-              <input
-                className="vsayte-select vsayte-title-input"
-                value={editing.title || ""}
-                onChange={(e) => setEditing({ ...editing, title: e.target.value })}
-                aria-label="Название сайта"
-                placeholder="Название сайта"
-              />
-              <div className="muted small">
-                {editing.local
-                  ? "Локальный режим — без публикации в интернет"
-                  : editing.public_url || `Адрес: ${editing.slug}.${baseDomain}`}
-              </div>
-            </div>
+            <VsayteLogo size={28} />
+            <input
+              className="vsayte-select vsayte-title-input"
+              value={editing.title || ""}
+              onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+              aria-label="Название сайта"
+              placeholder="Название сайта"
+            />
+            <span className="muted small vsayte-editor-sub">
+              {editing.local
+                ? "Локально"
+                : editing.public_url || `${editing.slug}.${baseDomain}`}
+            </span>
           </div>
           <div className="vsayte-editor-toolbar">
             <button type="button" className="ghost-btn" disabled={busy} onClick={saveEditing}>
@@ -386,7 +383,7 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
                 </button>
                 {editing.status === "published" ? (
                   <button type="button" className="ghost-btn" disabled={busy} onClick={unpublishEditing}>
-                    Снять с публикации
+                    Снять
                   </button>
                 ) : null}
               </>
@@ -396,12 +393,12 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
               </button>
             )}
           </div>
-        </div>
+        </header>
 
         {error ? <p className="error-text">{error}</p> : null}
         {message ? <p className="muted">{message}</p> : null}
 
-        <Suspense fallback={<p className="muted">Загрузка конструктора…</p>}>
+        <Suspense fallback={<p className="muted vsayte-editor-fallback">Загрузка конструктора…</p>}>
           <VsayteEditor
             key={editing.id}
             initialDocument={editing.document || draftDoc}
@@ -445,7 +442,7 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
   }
 
   return (
-    <section className="card vsayte-app">
+    <section className="card vsayte-app full-width">
       <div className="vsayte-head">
         <div className="vsayte-head-brand">
           <VsayteLogo size={44} />
