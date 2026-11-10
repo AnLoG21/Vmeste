@@ -732,7 +732,9 @@ body.theme-dark .calendar-day-sheet--tearoff .calendar-day-sheet-item {
   border-color: var(--vm-border);
 }
 
-/* Settings / org / staff sheets */
+/* Settings / org / staff sheets
+   Width is owned by .grid-centered-workspace — don't double-center cards
+   (nested max-width + auto margins caused overlap/pointer interception in E2E). */
 .page-logged .profile-card,
 .page-logged .org-settings-card,
 .page-logged .cabinet-sheet {
@@ -741,9 +743,10 @@ body.theme-dark .calendar-day-sheet--tearoff .calendar-day-sheet-item {
   border-radius: var(--vm-radius);
   box-shadow: none;
   color: var(--vm-ink);
-  max-width: 920px;
-  margin-left: auto;
-  margin-right: auto;
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .page-logged .profile-card > h2,

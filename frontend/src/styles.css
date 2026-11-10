@@ -415,6 +415,9 @@ button:active {
 }
 
 .map-box {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
   width: 100%;
   height: 220px;
   border: 1px solid #ffd9bd;
@@ -3980,9 +3983,25 @@ body.theme-dark .tg-chat-item-row:hover {
 
 .org-branch-add-toggle {
   margin: 10px 0;
+  position: relative;
+  z-index: 1;
+}
+
+.org-branch-add-form,
+.org-branch-detail form {
+  position: relative;
+  z-index: 1;
+}
+
+.org-branch-add-form > button[type="submit"],
+.org-branch-detail form > button[type="submit"] {
+  position: relative;
+  z-index: 2;
 }
 
 .org-branch-list {
+  position: relative;
+  z-index: 1;
   list-style: none;
   padding: 0;
   margin: 12px 0 0;
@@ -11474,13 +11493,21 @@ body.theme-dark .password-eye-btn:hover {
   background: #e3f2fd;
 }
 .voice-sim-input-row {
+  position: relative;
+  z-index: 2;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
 }
 .voice-sim-input-row input {
-  flex: 1;
-  min-width: 220px;
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.voice-sim-input-row button {
+  position: relative;
+  z-index: 3;
+  flex: 0 0 auto;
 }
 .voice-sessions-list li {
   display: flex;

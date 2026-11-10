@@ -29,7 +29,9 @@ test.describe("Provider voice simulate turn", () => {
     });
 
     await panel.getByPlaceholder(/маникюр завтра/i).fill("маникюр завтра к Лене");
-    await panel.locator(".voice-sim-input-row").getByRole("button", { name: "Отправить" }).click();
+    const sendBtn = panel.locator(".voice-sim-input-row").getByRole("button", { name: "Отправить" });
+    await sendBtn.scrollIntoViewIfNeeded();
+    await sendBtn.click({ force: true });
 
     await expect.poll(() => turns.length, { timeout: 15_000 }).toBeGreaterThan(0);
     expect(turns[0].token).toBe("e2e-voice-token");

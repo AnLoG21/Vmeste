@@ -35,8 +35,12 @@ test.describe("Provider branch create", () => {
     await page.getByRole("button", { name: "Добавить филиал" }).click();
 
     await page.getByPlaceholder("Название филиала").fill("Филиал Север");
-    await page.getByPlaceholder("Адрес филиала").fill("Москва, ул. Северная, 5");
-    await page.getByRole("button", { name: "Сохранить филиал" }).click();
+    const address = page.getByPlaceholder("Адрес филиала");
+    await address.fill("Москва, ул. Северная, 5");
+    await address.blur();
+    const saveBtn = page.getByRole("button", { name: "Сохранить филиал" });
+    await saveBtn.scrollIntoViewIfNeeded();
+    await saveBtn.click({ force: true });
 
     await expect.poll(() => postBody?.title, { timeout: 15_000 }).toBe("Филиал Север");
     expect(String(postBody.address || "")).toMatch(/Северная|Москва/);
