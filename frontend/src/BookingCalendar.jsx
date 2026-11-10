@@ -3,7 +3,7 @@ import {
   bookingSlotCompactIcon,
   bookingStatusLabel,
 } from "./bookingDisplay.jsx";
-import { isoMonthKey } from "./bookingCalendarUtils.jsx";
+import { formatSlotTime, isoMonthKey } from "./bookingCalendarUtils.jsx";
 
 /** Месячный календарь записей (клиент / организация). */
 export default function BookingCalendar({
@@ -13,7 +13,6 @@ export default function BookingCalendar({
   bookings,
   setCalendarDayDetail,
   bookingSlotSecondaryLabel,
-  renderBookingSlotActions,
 }) {
   const [year, month] = bookingsMonth.split("-").map(Number);
   const firstDay = new Date(year, month - 1, 1);
@@ -84,40 +83,36 @@ export default function BookingCalendar({
                 <>
                   <div className="calendar-day">{day}</div>
                   <div className="calendar-slots calendar-slots--desktop">
-                    {dayItems.map((it) => (
-                      <div
-                        key={it.id}
-                        className={["calendar-slot", "booking", bookingSlotStatusModifier(it)].filter(Boolean).join(" ")}
-                      >
-                        <div className="booking-slot-time">
-                          {new Date(it.slot_starts_at).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                          {" – "}
-                          {new Date(it.slot_ends_at).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                    {dayItems.slice(0, 4).map((it) => {
+                      const start = formatSlotTime(it.slot_starts_at);
+                      const end = formatSlotTime(it.slot_ends_at);
+                      return (
+                        <div
+                          key={it.id}
+                          className={["calendar-slot", "booking", bookingSlotStatusModifier(it)].filter(Boolean).join(" ")}
+                        >
+                          <div className="booking-slot-time">
+                            {start}
+                            {end ? ` – ${end}` : ""}
+                          </div>
+                          <div className="booking-slot-name">{bookingSlotSecondaryLabel(it)}</div>
+                          {it.status &&
+                            it.status !== "confirmed" &&
+                            !it.is_manual_hold &&
+                            it.status !== "manual_hold" && (
+                              <div className="booking-slot-status">{bookingStatusLabel(it)}</div>
+                            )}
                         </div>
-                        <div className="booking-slot-name">{bookingSlotSecondaryLabel(it)}</div>
-                        {it.status &&
-                          it.status !== "confirmed" &&
-                          !it.is_manual_hold &&
-                          it.status !== "manual_hold" && (
-                            <div className="booking-slot-status">{bookingStatusLabel(it)}</div>
-                          )}
-                        {renderBookingSlotActions(it)}
-                      </div>
-                    ))}
+                      );
+                    })}
+                    {dayItems.length > 4 ? (
+                      <div className="calendar-slot-more">+{dayItems.length - 4}</div>
+                    ) : null}
                   </div>
                   <div className="calendar-slots calendar-slots--mobile">
                     {dayItems.slice(0, 3).map((it) => {
                       const mod = bookingSlotStatusModifier(it);
-                      const time = new Date(it.slot_starts_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      });
+                      const time = formatSlotTime(it.slot_starts_at);
                       return (
                         <div
                           key={it.id}

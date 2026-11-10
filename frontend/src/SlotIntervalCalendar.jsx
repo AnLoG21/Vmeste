@@ -1,5 +1,6 @@
 import { createPortal } from "react-dom";
 import {
+  formatSlotTime,
   groupSavedIntervalsByStaff,
   staffIntervalOptionLabel,
 } from "./bookingCalendarUtils.jsx";
@@ -436,9 +437,8 @@ export default function SlotIntervalCalendar({
                       }
                     >
                       <span className="slot-chip-label">
-                        {new Date(s.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        {" – "}
-                        {new Date(s.ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        {formatSlotTime(s.starts_at)}
+                        {formatSlotTime(s.ends_at) ? ` – ${formatSlotTime(s.ends_at)}` : ""}
                         {s.is_booked
                           ? ` · ${s.booking_client_name || s.hold_label || "бронь"}`
                           : ""}
@@ -502,10 +502,10 @@ export default function SlotIntervalCalendar({
                     >
                       <span className="calendar-slot-compact-time">
                         <span className="calendar-slot-compact-start">
-                          {new Date(s.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {formatSlotTime(s.starts_at)}
                         </span>
                         <span className="calendar-slot-compact-end">
-                          {new Date(s.ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {formatSlotTime(s.ends_at)}
                         </span>
                       </span>
                     </div>

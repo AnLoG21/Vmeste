@@ -1,4 +1,5 @@
 import { bookingStatusLabel } from "./bookingDisplay.jsx";
+import { formatSlotTime } from "./bookingCalendarUtils.jsx";
 
 /** Calendar day detail sheet (bookings or free slots). App wraps with createPortal(..., document.body). */
 export default function CalendarDayDetailModal({
@@ -83,15 +84,8 @@ export default function CalendarDayDetailModal({
                 {isBookings ? (
                   <>
                     <strong>
-                      {new Date(it.slot_starts_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                      {" – "}
-                      {new Date(it.slot_ends_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatSlotTime(it.slot_starts_at)}
+                      {formatSlotTime(it.slot_ends_at) ? ` – ${formatSlotTime(it.slot_ends_at)}` : ""}
                     </strong>
                     <div>{bookingSlotSecondaryLabel(it)}</div>
                     {it.status ? <div className="muted">{bookingStatusLabel(it)}</div> : null}
@@ -127,15 +121,8 @@ export default function CalendarDayDetailModal({
                       </button>
                     ) : null}
                     <strong>
-                      {new Date(it.starts_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                      {" – "}
-                      {new Date(it.ends_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatSlotTime(it.starts_at)}
+                      {formatSlotTime(it.ends_at) ? ` – ${formatSlotTime(it.ends_at)}` : ""}
                     </strong>
                     <div className="muted">
                       {it.is_manual_hold

@@ -390,11 +390,19 @@ body.theme-dark .page-logged .app-subnav button.active {
 }
 
 .page-logged .calendar-pad .calendar-slot-compact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--vm-radius-sm);
   border: 0;
   box-shadow: none;
-  padding: 2px 5px;
+  padding: 3px 4px;
+  min-height: 18px;
   font-family: var(--vm-font);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
   background: color-mix(in srgb, #e85d5d 88%, #fff);
   color: #fff;
   min-width: 0;
@@ -556,8 +564,10 @@ body.theme-dark .page-logged .app-subnav button.active {
   }
 
   .page-logged .calendar-pad .calendar-slot-compact {
-    min-height: 16px;
-    justify-content: center;
+    min-height: 18px;
+    padding: 3px 3px;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
   }
 
   .page-logged .calendar-pad .calendar-slot-compact-time {
@@ -566,10 +576,17 @@ body.theme-dark .page-logged .app-subnav button.active {
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 100%;
+    line-height: 1.15;
   }
 
   .page-logged .calendar-pad .calendar-slot-compact-icon {
     display: none;
+  }
+
+  .page-logged .calendar-pad .calendar-slot-more {
+    font-size: 10px;
+    text-align: center;
+    padding: 1px 0 0;
   }
 }
 

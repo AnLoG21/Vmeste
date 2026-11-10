@@ -2540,7 +2540,6 @@ export default function App() {
         bookings={bookings}
         setCalendarDayDetail={setCalendarDayDetail}
         bookingSlotSecondaryLabel={bookingSlotSecondaryLabel}
-        renderBookingSlotActions={renderBookingSlotActions}
       />
     );
   }
