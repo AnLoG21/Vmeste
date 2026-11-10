@@ -152,9 +152,13 @@ JS_COUNT="$(docker compose -f "$COMPOSE_FILE" exec -T frontend sh -c 'ls -1 /usr
 echo "$FE_HTML" | grep -q '/assets/index-' || { echo "[deploy] ERROR: index.html has no /assets/index-*.js"; exit 1; }
 test "${JS_COUNT:-0}" -ge 2 || { echo "[deploy] ERROR: expected JS assets in /assets, found ${JS_COUNT}"; exit 1; }
 
+# Always migrate — frontend-only rebuilds still need pending apps (e.g. vsayte leads).
+echo "[deploy] apply migrations..."
+docker compose -f "$COMPOSE_FILE" exec -T web python manage.py migrate --noinput
+
 echo "[deploy] verify critical migrations applied..."
-MIGS="$(docker compose -f "$COMPOSE_FILE" exec -T web python manage.py showmigrations booking shop vmagazine 2>/dev/null || true)"
-echo "$MIGS" | sed -n '1,120p'
+MIGS="$(docker compose -f "$COMPOSE_FILE" exec -T web python manage.py showmigrations booking shop vmagazine vsayte 2>/dev/null || true)"
+echo "$MIGS" | sed -n '1,160p'
 need_ok() {
   local app="$1" name="$2"
   echo "$MIGS" | grep -E "\[X\][[:space:]]+${name}([[:space:]]|$)" >/dev/null || {
@@ -167,6 +171,7 @@ need_ok booking 0033_messaging_enable_email
 need_ok booking 0034_client_migrate_request
 need_ok shop 0008_product_weight_dims
 need_ok vmagazine 0006_returnrequestphoto
+need_ok vsayte 0002_sitelead
 echo "[deploy] critical migrations OK"
 
 echo "[deploy] pruning dangling images (safe)..."

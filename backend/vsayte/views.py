@@ -43,6 +43,38 @@ def _subdomain_hostname(slug: str) -> str:
     return f"{slug}.{base}"
 
 
+def _origin_host(origin: str) -> str:
+    o = (origin or "").strip()
+    if not o:
+        return ""
+    # https://example.com → example.com
+    return o.split("://", 1)[-1].split("/", 1)[0].split(":", 1)[0].lower()
+
+
+def _lead_cors_allowed(site: Site, origin: str) -> bool:
+    """Allow subdomain + active custom domains for public lead forms."""
+    host = _origin_host(origin)
+    if not host or not site:
+        return False
+    if host == _subdomain_hostname(site.slug):
+        return True
+    return SiteDomain.objects.filter(
+        site=site,
+        hostname=host,
+        status=SiteDomain.Status.ACTIVE,
+    ).exists()
+
+
+def _apply_lead_cors(response, origin: str):
+    if not origin:
+        return response
+    response["Access-Control-Allow-Origin"] = origin
+    response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response["Access-Control-Allow-Headers"] = "Content-Type"
+    response["Vary"] = "Origin"
+    return response
+
+
 class EntitlementView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -228,13 +260,25 @@ class PublicSiteLeadCreateView(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
 
+    def options(self, request, slug):
+        site = Site.objects.filter(slug=slug).first()
+        origin = request.headers.get("Origin") or ""
+        resp = HttpResponse(status=204)
+        if site and _lead_cors_allowed(site, origin):
+            return _apply_lead_cors(resp, origin)
+        return resp
+
     def post(self, request, slug):
         site = get_object_or_404(Site.objects.all(), slug=slug)
+        origin = request.headers.get("Origin") or ""
         if site.status != Site.Status.PUBLISHED:
-            return Response(
+            resp = Response(
                 {"detail": "Сайт не опубликован."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+            if _lead_cors_allowed(site, origin):
+                return _apply_lead_cors(resp, origin)
+            return resp
         ser = SiteLeadCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         data = ser.validated_data
@@ -246,10 +290,13 @@ class PublicSiteLeadCreateView(APIView):
             hour_ago = timezone.now() - timedelta(hours=1)
             recent = SiteLead.objects.filter(site=site, ip_address=ip, created_at__gte=hour_ago).count()
             if recent >= 30:
-                return Response(
+                resp = Response(
                     {"detail": "Слишком много заявок. Попробуйте позже."},
                     status=status.HTTP_429_TOO_MANY_REQUESTS,
                 )
+                if _lead_cors_allowed(site, origin):
+                    return _apply_lead_cors(resp, origin)
+                return resp
         lead = SiteLead.objects.create(
             site=site,
             name=data.get("name") or "",
@@ -261,7 +308,10 @@ class PublicSiteLeadCreateView(APIView):
             ip_address=ip or None,
         )
         notify_owner_new_lead(site, lead)
-        return Response({"ok": True, "id": lead.id}, status=status.HTTP_201_CREATED)
+        resp = Response({"ok": True, "id": lead.id}, status=status.HTTP_201_CREATED)
+        if _lead_cors_allowed(site, origin):
+            return _apply_lead_cors(resp, origin)
+        return resp
 
 
 class SiteCloneView(APIView):

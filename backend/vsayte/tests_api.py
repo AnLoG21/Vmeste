@@ -3,7 +3,7 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from subscriptions.models import SubscriptionPlan, UserSubscription
-from vsayte.models import Site
+from vsayte.models import Site, SiteDomain
 
 
 User = get_user_model()
@@ -117,3 +117,43 @@ class VsayteApiTests(TestCase):
         self.assertEqual(listed.status_code, 200)
         self.assertEqual(len(listed.data), 1)
         self.assertEqual(listed.data[0]["contact"], "+7000")
+
+    def test_public_lead_cors_allows_active_custom_domain(self):
+        site = Site.objects.create(
+            owner=self.user,
+            title="Custom",
+            slug="custom-lead",
+            document={"html": "", "css": ""},
+            status=Site.Status.PUBLISHED,
+        )
+        SiteDomain.objects.create(
+            site=site,
+            kind=SiteDomain.Kind.CUSTOM,
+            hostname="shop.example.com",
+            status=SiteDomain.Status.ACTIVE,
+        )
+        anon = APIClient()
+        origin = "https://shop.example.com"
+        options = anon.options(
+            "/api/vsayte/public/custom-lead/leads/",
+            HTTP_ORIGIN=origin,
+        )
+        self.assertEqual(options.status_code, 204)
+        self.assertEqual(options["Access-Control-Allow-Origin"], origin)
+        post = anon.post(
+            "/api/vsayte/public/custom-lead/leads/",
+            {"name": "Bob", "contact": "b@ex.com", "message": "Want"},
+            format="json",
+            HTTP_ORIGIN=origin,
+        )
+        self.assertEqual(post.status_code, 201)
+        self.assertEqual(post["Access-Control-Allow-Origin"], origin)
+
+        denied = anon.post(
+            "/api/vsayte/public/custom-lead/leads/",
+            {"name": "Eve", "contact": "e@ex.com", "message": "Nope"},
+            format="json",
+            HTTP_ORIGIN="https://evil.example",
+        )
+        self.assertEqual(denied.status_code, 201)
+        self.assertNotIn("Access-Control-Allow-Origin", denied)
