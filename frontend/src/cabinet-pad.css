@@ -358,17 +358,28 @@ body.theme-dark .calendar-day-sheet--tearoff .calendar-day-sheet-item {
   border-radius: var(--vm-radius);
   box-shadow: none;
   color: var(--vm-ink);
+  max-width: 920px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .page-logged .profile-card > h2,
-.page-logged .org-settings-card > h2 {
+.page-logged .org-settings-card > h2,
+.page-logged .cabinet-sheet > h2 {
   font-family: var(--vm-font-display);
   font-size: 1.25rem;
   font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--vm-ink);
   margin: 0 0 12px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--vm-gold);
+}
+
+.page-logged .profile-card .muted,
+.page-logged .org-settings-card .muted,
+.page-logged .cabinet-sheet .muted {
+  color: var(--vm-mute);
 }
 
 .page-logged .profile-card .ghost-btn,
@@ -377,6 +388,8 @@ body.theme-dark .calendar-day-sheet--tearoff .calendar-day-sheet-item {
   background: transparent;
   color: var(--vm-ink);
   border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius-sm);
+  font-family: var(--vm-font);
 }
 
 .page-logged .profile-card .ghost-btn:hover,
@@ -384,20 +397,59 @@ body.theme-dark .calendar-day-sheet--tearoff .calendar-day-sheet-item {
   background: var(--vm-chrome);
 }
 
-.page-logged .staff-list,
-.page-logged .staff-block {
-  border-color: var(--vm-hairline);
+.page-logged .staff-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  border: 0;
 }
 
 .page-logged .staff-block {
   background: var(--vm-surface);
   border: 1px solid var(--vm-hairline);
   border-radius: var(--vm-radius-sm);
-  padding: 12px;
+  padding: 14px;
+  margin: 0;
 }
 
 .page-logged .staff-row {
   color: var(--vm-ink);
+}
+
+.page-logged .staff-perms {
+  border-top: 1px solid var(--vm-hairline);
+}
+
+.page-logged .staff-perms-toggle {
+  color: var(--vm-mute);
+  font-family: var(--vm-font);
+}
+
+.page-logged .staff-media-block {
+  border-top: 1px solid var(--vm-hairline);
+}
+
+.page-logged .staff-media-avatar {
+  border-color: var(--vm-hairline);
+  background: var(--vm-pad);
+  color: var(--vm-ink);
+  border-radius: var(--vm-radius-sm);
+}
+
+.page-logged .staff-roster-sheet .form input,
+.page-logged .org-settings-card .form input,
+.page-logged .org-settings-card .form select,
+.page-logged .org-settings-card .form textarea,
+.page-logged .cabinet-sheet .form input,
+.page-logged .cabinet-sheet .form select,
+.page-logged .cabinet-sheet .form textarea {
+  border-color: var(--vm-hairline);
+  border-radius: var(--vm-radius-sm);
+  font-family: var(--vm-font);
+  color: var(--vm-ink);
+  background: #fff;
 }
 
 .page-logged button.primary,
@@ -405,6 +457,9 @@ body.theme-dark .calendar-day-sheet--tearoff .calendar-day-sheet-item {
   background: var(--vm-accent);
   border-color: transparent;
   color: #fff;
+  border-radius: var(--vm-radius-sm);
+  font-family: var(--vm-font);
+  font-weight: 700;
 }
 
 .page-logged button.primary:hover,
