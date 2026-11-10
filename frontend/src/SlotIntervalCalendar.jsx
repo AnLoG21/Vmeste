@@ -147,8 +147,16 @@ export default function SlotIntervalCalendar({
   for (let day = 1; day <= daysInMonth; day += 1) cells.push(day);
 
   return (
-    <section className="card full-width interval-calendar">
-      <h2>Календарь интервалов</h2>
+    <section className="card full-width interval-calendar calendar-pad">
+      <header className="calendar-pad-toolbar">
+        <h2>Календарь интервалов</h2>
+        <input
+          type="month"
+          value={calendarMonth}
+          onChange={(e) => setCalendarMonth(e.target.value)}
+          aria-label="Месяц интервалов"
+        />
+      </header>
       {pendingBookClient?.phone ? (
         <p className="status interval-pending-book">
           Запись из чата: {pendingBookClient.name || pendingBookClient.phone}. Откройте день со свободным временем →
@@ -332,7 +340,6 @@ export default function SlotIntervalCalendar({
           <p className="status">{sellerStatus}</p>
         </>
       )}
-      <input type="month" value={calendarMonth} onChange={(e) => setCalendarMonth(e.target.value)} />
       <div className="interval-templates">
         <h3>Сохранённые интервалы</h3>
         {savedIntervals.length === 0 && <p className="muted">Пока нет сохранённых интервалов.</p>}
@@ -355,14 +362,15 @@ export default function SlotIntervalCalendar({
           ))}
         </div>
       </div>
-      <div className="calendar-grid">
+      <div className="calendar-grid calendar-pad-sheet">
         {weekdays.map((wd, wi) => (
-          <div key={wd} className={`calendar-head ${wi >= 5 ? "weekend-head" : ""}`}>{wd}</div>
+          <div key={wd} className={`calendar-head ${wi >= 5 ? "weekend-head" : ""}`}>
+            {wd}
+          </div>
         ))}
         {cells.map((day, idx) => {
           const col = idx % 7;
-          const weekend =
-            day != null ? (offset + day - 1) % 7 >= 5 : col >= 5;
+          const weekend = day != null ? (offset + day - 1) % 7 >= 5 : col >= 5;
           const isToday =
             day != null &&
             year === new Date().getFullYear() &&
