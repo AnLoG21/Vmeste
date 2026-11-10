@@ -18,9 +18,15 @@
 }
 
 .page-logged .hero.top-row {
-  background: linear-gradient(135deg, #fdb750 0%, #ff8214 45%, #e85a00 100%);
-  color: #fff;
+  background-color: color-mix(in srgb, var(--vm-chrome) 86%, transparent);
+  background-image: none !important;
+  color: var(--vm-ink);
   align-items: center;
+  border-radius: 0;
+  border-bottom: 1px solid rgba(255, 191, 138, 0.45);
+  backdrop-filter: saturate(1.3) blur(16px);
+  -webkit-backdrop-filter: saturate(1.3) blur(16px);
+  box-shadow: none;
 }
 
 .page-logged .menu-dropdown {
@@ -186,20 +192,23 @@ body.theme-dark .page-logged .app-subnav button.active {
 
 .page-logged .booking-calendar.calendar-pad .calendar-cell--today {
   border-color: var(--vm-accent);
-  background: rgba(255, 255, 255, 0.7);
-  box-shadow: inset 0 0 0 2px rgba(255, 122, 0, 0.35);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(255, 122, 0, 0.45);
 }
 
 .page-logged .booking-calendar.calendar-pad .calendar-cell--today .calendar-day {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.6em;
-  padding: 2px 6px;
+  min-width: 1.7em;
+  min-height: 1.7em;
+  padding: 0;
   border-radius: 999px;
-  background: var(--vm-accent);
-  color: #fff;
+  border: 2px solid var(--vm-accent);
+  background: transparent;
+  color: var(--vm-ink);
   font-weight: 800;
+  box-sizing: border-box;
 }
 
 [data-theme="dark"] .page-logged .booking-calendar.calendar-pad,
@@ -219,14 +228,75 @@ body.theme-dark .page-logged .booking-calendar.calendar-pad .calendar-day {
   color: var(--vm-text);
 }
 
-/* Tear-off day sheet (portal to body) */
+/* Tear-off day sheet (portal to body — outside .page-logged) */
 .calendar-day-sheet--tearoff {
-  background: var(--vm-pad, #f7f3ea);
-  border: 1px solid var(--vm-hairline, #e5e0d6);
+  font-family: var(--vm-font, Manrope, Segoe UI, system-ui, sans-serif);
+  background: var(--vm-pad, #fff3e8);
+  border: 1px solid var(--vm-hairline, #ffe0c7);
   border-radius: var(--vm-radius, 10px) var(--vm-radius, 10px) 0 0;
   box-shadow: var(--vm-tearoff-shadow, 0 12px 28px rgba(26, 18, 8, 0.12));
   color: var(--vm-ink, #1a1208);
-  animation: cabinet-tearoff-in 160ms ease-out;
+  animation: cabinet-tearoff-in 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.calendar-day-sheet--tearoff .sheet-grab {
+  width: 40px;
+  height: 4px;
+  margin: 8px auto 4px;
+  border-radius: 999px;
+  background: rgba(141, 90, 43, 0.35);
+}
+
+.calendar-day-sheet--tearoff .calendar-day-sheet-head {
+  border-bottom: 1px solid var(--vm-gold, #ffbf8a);
+  padding-bottom: 10px;
+  margin-bottom: 8px;
+}
+
+.calendar-day-sheet--tearoff .calendar-day-sheet-head h3 {
+  font-family: var(--vm-font-display, Manrope, Segoe UI, system-ui, sans-serif);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--vm-ink, #1a1208);
+}
+
+.calendar-day-sheet--tearoff .calendar-day-sheet-close {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--vm-radius-sm, 6px);
+  border: 1px solid var(--vm-hairline, #ffe0c7);
+  background: var(--vm-chrome, #fff8f2);
+  color: var(--vm-ink, #1a1208);
+}
+
+.calendar-day-sheet--tearoff .calendar-day-sheet-close:hover {
+  background: #ffe8d5;
+  border-color: var(--vm-gold, #ffbf8a);
+}
+
+.calendar-day-sheet--tearoff .calendar-day-sheet-item {
+  background: color-mix(in srgb, var(--vm-surface, #fff) 88%, transparent);
+  border: 1px solid var(--vm-hairline, #ffe0c7);
+  border-radius: var(--vm-radius-sm, 6px);
+  padding: 12px;
+  box-shadow: none;
+}
+
+.calendar-day-sheet--tearoff .calendar-day-sheet-book-btn {
+  border-radius: var(--vm-radius-sm, 6px);
+  font-family: inherit;
+  font-weight: 700;
+}
+
+.calendar-day-sheet--tearoff .calendar-day-sheet-book-btn--day,
+.calendar-day-sheet--tearoff .calendar-day-sheet-book-btn.primary {
+  background: var(--vm-accent, #ff7a00);
+  color: #fff;
+  border: 0;
+}
+
+.calendar-day-sheet--tearoff .muted {
+  color: var(--vm-mute, #8d5a2b);
 }
 
 @keyframes cabinet-tearoff-in {
@@ -246,11 +316,37 @@ body.theme-dark .page-logged .booking-calendar.calendar-pad .calendar-day {
   }
 }
 
+@media (max-width: 720px) {
+  .calendar-day-sheet--tearoff {
+    border-radius: var(--vm-radius, 10px) var(--vm-radius, 10px) 0 0;
+  }
+}
+
 [data-theme="dark"] .calendar-day-sheet--tearoff,
 body.theme-dark .calendar-day-sheet--tearoff {
   background: var(--vm-pad);
   color: var(--vm-text);
   border-color: var(--vm-border);
+}
+
+[data-theme="dark"] .calendar-day-sheet--tearoff .calendar-day-sheet-item,
+body.theme-dark .calendar-day-sheet--tearoff .calendar-day-sheet-item {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--vm-border);
+}
+
+/* Booking chips on the pad — keep status modifiers, quiet the gloss */
+.page-logged .booking-calendar.calendar-pad .calendar-slot.booking {
+  border-radius: var(--vm-radius-sm);
+  font-family: var(--vm-font);
+  font-size: 12px;
+  font-weight: 650;
+  box-shadow: none;
+}
+
+.page-logged .booking-calendar.calendar-pad .calendar-slot-compact {
+  border-radius: var(--vm-radius-sm);
+  box-shadow: none;
 }
 
 /* Settings / org / staff sheets */
