@@ -40,17 +40,25 @@ export default function BookingCalendar({
 
   return (
     <section className="card full-width booking-calendar calendar-pad">
-      <h2>{title}</h2>
-      <input type="month" value={bookingsMonth} onChange={(e) => setBookingsMonth(e.target.value)} />
+      <header className="calendar-pad-toolbar">
+        <h2>{title}</h2>
+        <input
+          type="month"
+          value={bookingsMonth}
+          onChange={(e) => setBookingsMonth(e.target.value)}
+          aria-label="Месяц записей"
+        />
+      </header>
       <p className="muted small calendar-mobile-hint">На телефоне нажмите на день, чтобы открыть записи</p>
-      <div className="calendar-grid">
+      <div className="calendar-grid calendar-pad-sheet">
         {weekdays.map((wd, wi) => (
-          <div key={wd} className={`calendar-head ${wi >= 5 ? "weekend-head" : ""}`}>{wd}</div>
+          <div key={wd} className={`calendar-head ${wi >= 5 ? "weekend-head" : ""}`}>
+            {wd}
+          </div>
         ))}
         {cells.map((day, idx) => {
           const col = idx % 7;
-          const weekend =
-            day != null ? (offset + day - 1) % 7 >= 5 : col >= 5;
+          const weekend = day != null ? (offset + day - 1) % 7 >= 5 : col >= 5;
           const dayItems = day ? byDay[day] || [] : [];
           const isToday =
             day != null &&
@@ -59,67 +67,78 @@ export default function BookingCalendar({
             day === today.getDate();
           const isPast = day != null && new Date(year, month - 1, day) < todayStart && !isToday;
           return (
-          <div
-            key={`${day ?? "empty"}-${idx}`}
-            className={`calendar-cell ${day ? "clickable calendar-cell--bookings" : "empty"} ${weekend ? "weekend-cell" : ""} ${dayItems.length ? "calendar-cell--has-items" : ""} ${isToday ? "calendar-cell--today" : ""} ${isPast ? "calendar-cell--past" : ""}`}
-            onClick={() => {
-              if (!day) return;
-              setCalendarDayDetail({
-                mode: "bookings",
-                day,
-                month: bookingsMonth,
-                items: dayItems,
-              });
-            }}
-          >
-            {day && (
-              <>
-                <div className="calendar-day">{day}</div>
-                <div className="calendar-slots calendar-slots--desktop">
-                  {dayItems.map((it) => (
-                    <div
-                      key={it.id}
-                      className={["calendar-slot", "booking", bookingSlotStatusModifier(it)].filter(Boolean).join(" ")}
-                    >
-                      <div className="booking-slot-time">
-                        {new Date(it.slot_starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        {" – "}
-                        {new Date(it.slot_ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </div>
-                      <div className="booking-slot-name">{bookingSlotSecondaryLabel(it)}</div>
-                      {it.status && it.status !== "confirmed" && !it.is_manual_hold && it.status !== "manual_hold" && (
-                        <div className="booking-slot-status">{bookingStatusLabel(it)}</div>
-                      )}
-                      {renderBookingSlotActions(it)}
-                    </div>
-                  ))}
-                </div>
-                <div className="calendar-slots calendar-slots--mobile">
-                  {dayItems.slice(0, 3).map((it) => {
-                    const mod = bookingSlotStatusModifier(it);
-                    const time = new Date(it.slot_starts_at).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    });
-                    return (
+            <div
+              key={`${day ?? "empty"}-${idx}`}
+              className={`calendar-cell ${day ? "clickable calendar-cell--bookings" : "empty"} ${weekend ? "weekend-cell" : ""} ${dayItems.length ? "calendar-cell--has-items" : ""} ${isToday ? "calendar-cell--today" : ""} ${isPast ? "calendar-cell--past" : ""}`}
+              onClick={() => {
+                if (!day) return;
+                setCalendarDayDetail({
+                  mode: "bookings",
+                  day,
+                  month: bookingsMonth,
+                  items: dayItems,
+                });
+              }}
+            >
+              {day && (
+                <>
+                  <div className="calendar-day">{day}</div>
+                  <div className="calendar-slots calendar-slots--desktop">
+                    {dayItems.map((it) => (
                       <div
                         key={it.id}
-                        className={["calendar-slot-compact", mod].filter(Boolean).join(" ")}
-                        title={`${time} · ${bookingSlotSecondaryLabel(it)} · ${bookingStatusLabel(it)}`}
-                        aria-label={`${time} ${bookingStatusLabel(it)}`}
+                        className={["calendar-slot", "booking", bookingSlotStatusModifier(it)].filter(Boolean).join(" ")}
                       >
-                        <span className="calendar-slot-compact-time">{time}</span>
-                        <span className="calendar-slot-compact-icon" aria-hidden>
-                          {bookingSlotCompactIcon(mod)}
-                        </span>
+                        <div className="booking-slot-time">
+                          {new Date(it.slot_starts_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                          {" – "}
+                          {new Date(it.slot_ends_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </div>
+                        <div className="booking-slot-name">{bookingSlotSecondaryLabel(it)}</div>
+                        {it.status &&
+                          it.status !== "confirmed" &&
+                          !it.is_manual_hold &&
+                          it.status !== "manual_hold" && (
+                            <div className="booking-slot-status">{bookingStatusLabel(it)}</div>
+                          )}
+                        {renderBookingSlotActions(it)}
                       </div>
-                    );
-                  })}
-                  {dayItems.length > 3 ? <div className="calendar-slot-more">+{dayItems.length - 3}</div> : null}
-                </div>
-              </>
-            )}
-          </div>
+                    ))}
+                  </div>
+                  <div className="calendar-slots calendar-slots--mobile">
+                    {dayItems.slice(0, 3).map((it) => {
+                      const mod = bookingSlotStatusModifier(it);
+                      const time = new Date(it.slot_starts_at).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      });
+                      return (
+                        <div
+                          key={it.id}
+                          className={["calendar-slot-compact", mod].filter(Boolean).join(" ")}
+                          title={`${time} · ${bookingSlotSecondaryLabel(it)} · ${bookingStatusLabel(it)}`}
+                          aria-label={`${time} ${bookingStatusLabel(it)}`}
+                        >
+                          <span className="calendar-slot-compact-time">{time}</span>
+                          <span className="calendar-slot-compact-icon" aria-hidden>
+                            {bookingSlotCompactIcon(mod)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {dayItems.length > 3 ? (
+                      <div className="calendar-slot-more">+{dayItems.length - 3}</div>
+                    ) : null}
+                  </div>
+                </>
+              )}
+            </div>
           );
         })}
       </div>

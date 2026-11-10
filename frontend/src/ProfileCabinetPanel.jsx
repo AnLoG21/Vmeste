@@ -35,7 +35,7 @@ export default function ProfileCabinetPanel({
   const avatarInitial = (fullName || me?.username || "?").trim().slice(0, 1).toUpperCase();
 
   return (
-    <section className="card profile-card">
+    <section className="card profile-card cabinet-sheet">
       <div className="profile-title-row">
         <h2 className="profile-title-h2">Личный кабинет</h2>
         {(chatActivity?.badge_count ?? 0) > 0 && (
