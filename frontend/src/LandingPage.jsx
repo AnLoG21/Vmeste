@@ -13,6 +13,7 @@ import {
 } from "./seo/schema.js";
 import { setPageMeta } from "./seo/setPageMeta.js";
 import LandingDemo from "./LandingDemo.jsx";
+import LandingReveal from "./LandingReveal.jsx";
 import LandingSectionFold from "./LandingSectionFold.jsx";
 import LandingAutomationRequest, { scrollLandingHash } from "./LandingAutomationRequest.jsx";
 import { SERVICE_UPDATES, formatUpdateDate } from "./serviceUpdates.js";
@@ -177,13 +178,10 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
     scrollLandingHash("#automation-request");
   }
 
-  function scrollToPricing() {
-    scrollLandingHash("#pricing");
-  }
-
   return (
     <div className="landing">
       <JsonLd id="vmeste-home-jsonld" data={homeJsonLd} />
+      <LandingReveal />
       <LandingDemo
         open={demoOpen}
         onClose={() => setDemoOpen(false)}
@@ -192,15 +190,14 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
       />
 
       <main>
-        <section className="landing-hero">
-          <div className="landing-hero-content">
-            <h1 className="landing-hero-title">
-              Вместе — платформа для записи и автоматизации вашего бизнеса
-            </h1>
+        <section className="landing-hero" aria-labelledby="landing-brand">
+          <div className="landing-hero-stage">
+            <p id="landing-brand" className="landing-brand-mark">
+              Вместе
+            </p>
+            <h1 className="landing-hero-title">Онлайн-запись и кабинет для вашего бизнеса</h1>
             <p className="landing-hero-lead">
-              Онлайн-запись клиентов, каталог услуг, чаты, карта организаций и управление командой —
-              всё в одном сервисе. Подключайтесь за минуты или закажите индивидуальную автоматизацию
-              под процессы вашей компании.
+              Клиенты записываются сами. Вы видите расписание, чаты и команду в одном месте.
             </p>
             <div className="landing-hero-actions">
               <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
@@ -211,86 +208,43 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
                 className="landing-btn landing-btn--outline"
                 onClick={() => setDemoOpen(true)}
               >
-                Посмотреть демо
-              </button>
-              <button type="button" className="landing-btn landing-btn--outline" onClick={scrollToPricing}>
-                Тарифы
+                Открыть демо
               </button>
             </div>
           </div>
           <div className="landing-hero-visual" aria-hidden="true">
-            <div className="landing-hero-card">
-              <span className="landing-hero-card-icon"><LandingIcon name="calendar" /></span>
-              <strong>Онлайн-запись</strong>
-              <p>Клиенты записываются сами — вы управляете расписанием</p>
-            </div>
-            <div className="landing-hero-card">
-              <span className="landing-hero-card-icon"><LandingIcon name="chat" /></span>
-              <strong>Чаты</strong>
-              <p>Общение с клиентами прямо в платформе</p>
-            </div>
-            <div className="landing-hero-card">
-              <span className="landing-hero-card-icon"><LandingIcon name="map" /></span>
-              <strong>Карта</strong>
-              <p>Клиенты находят вас на интерактивной карте</p>
+            <div className="landing-hero-pad">
+              <div className="landing-hero-pad-head">
+                <span>Сегодня</span>
+                <strong>12 записей</strong>
+              </div>
+              <ul className="landing-hero-pad-list">
+                <li style={{ "--pad-i": 0 }}>
+                  <time>10:00</time>
+                  <span>Стрижка · Анна</span>
+                </li>
+                <li style={{ "--pad-i": 1 }}>
+                  <time>11:30</time>
+                  <span>Диагностика · Автосервис</span>
+                </li>
+                <li style={{ "--pad-i": 2 }}>
+                  <time>14:00</time>
+                  <span>Стол 4 · Кафе</span>
+                </li>
+                <li className="is-muted" style={{ "--pad-i": 3 }}>
+                  <time>16:20</time>
+                  <span>Свободно</span>
+                </li>
+              </ul>
             </div>
           </div>
         </section>
 
-        <nav className="landing-jump" aria-label="Разделы страницы">
-          <a href="#demo">Демо</a>
-          <a href="#businesses">Сферы</a>
-          <a href="#pricing">Тарифы</a>
-          <a href="#automation-request">Заявка</a>
-          <a href="#faq">FAQ</a>
-          <a href="#app">Приложение</a>
-          <a href="/blog">Блог</a>
-        </nav>
-
-        <section className="landing-section" id="quick-start">
-          <h2>Быстрый старт за 3 шага</h2>
-          <p className="landing-section-lead">
-            Настройка не займёт недели. Базовый запуск — в день регистрации.
-          </p>
-          <ol className="landing-timeline">
-            <li>
-              <span className="landing-timeline-step">1</span>
-              <div>
-                <strong>Зарегистрируйтесь за 2 минуты</strong>
-                <p>Email, подтверждение и вход в кабинет.</p>
-              </div>
-            </li>
-            <li>
-              <span className="landing-timeline-step">2</span>
-              <div>
-                <strong>Внесите услуги и цены</strong>
-                <p>Готовые шаблоны для салона, сервиса и кафе — или свой список.</p>
-              </div>
-            </li>
-            <li>
-              <span className="landing-timeline-step">3</span>
-              <div>
-                <strong>Поделитесь ссылкой</strong>
-                <p>Вставьте в соцсети, на сайт или отправьте клиентам — запись пойдёт сама.</p>
-              </div>
-            </li>
-          </ol>
-          <div className="landing-hero-actions">
-            <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
-              Начать использовать
-            </button>
-            <button type="button" className="landing-btn landing-btn--outline" onClick={() => setDemoOpen(true)}>
-              Сначала демо
-            </button>
-          </div>
-        </section>
-
-        <section className="landing-section" id="demo">
+        <section className="landing-section landing-reveal" id="demo">
           <h2>Живое демо кабинета</h2>
           <p className="landing-section-lead">
-            Не картинки, а настоящий общий аккаунт. Выберите сферу — внутри уже есть сотрудники,
-            услуги, записи и заказы. Можно создавать своё. При выходе из демо новые данные
-            очищаются, исходные остаются.
+            Настоящий кабинет со сферой, услугами и записями. Можно менять данные — при выходе из
+            демо ваши правки очистятся.
           </p>
           <div className="landing-demo-spheres landing-demo-spheres--page">
             <button type="button" className="landing-demo-sphere" onClick={() => startFromPage("hair_salon")}>
@@ -327,9 +281,10 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
         </section>
 
         <LandingSectionFold
+          alwaysFold
           id="about"
           title="Что такое Вместе?"
-          lead="Вместе — современная экосистема для сервисного бизнеса и селлеров: салонов красоты, сервисных центров, кафе, магазинов и кабинетов Ozon/Wildberries."
+          lead="Онлайн-запись, каталог, чаты и кабинет — для салонов, автосервисов, кафе, магазинов и селлеров."
         >
           <div className="landing-features">
             <article className="landing-feature">
@@ -363,6 +318,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
         </LandingSectionFold>
 
         <LandingSectionFold
+          alwaysFold
           id="cases"
           title="Как бизнес использует Вместе"
           lead="Типовые сценарии запуска — чтобы было понятно, какую задачу закрывает платформа на практике."
@@ -389,6 +345,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
         </LandingSectionFold>
 
         <LandingSectionFold
+          alwaysFold
           id="apps"
           title="Сервисы платформы"
           lead="Отдельные приложения внутри Вместе — один аккаунт, разные задачи. Подробнее о каждом сервисе на отдельной странице."
@@ -400,7 +357,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </span>
               <strong>Вменю</strong>
               <span>Рецепты, лента, книга и чаты</span>
-              <span className="landing-biz-link">Подробнее →</span>
+              <span className="landing-biz-link">Подробнее</span>
             </a>
             <a className="landing-biz-card landing-biz-card--app" href="/apps#vmagazine">
               <span className="landing-biz-emoji" aria-hidden="true">
@@ -408,7 +365,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </span>
               <strong>Вмагазине</strong>
               <span>Поиск магазинов, избранное и заказы</span>
-              <span className="landing-biz-link">Подробнее →</span>
+              <span className="landing-biz-link">Подробнее</span>
             </a>
             <a className="landing-biz-card landing-biz-card--app" href="/apps#vkvartire">
               <span className="landing-biz-emoji" aria-hidden="true">
@@ -416,7 +373,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </span>
               <strong>Вквартире</strong>
               <span>Аренда и покупка: лента и карта</span>
-              <span className="landing-biz-link">Подробнее →</span>
+              <span className="landing-biz-link">Подробнее</span>
             </a>
             <a className="landing-biz-card landing-biz-card--app" href="/apps#vsayte">
               <span className="landing-biz-emoji" aria-hidden="true">
@@ -424,7 +381,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </span>
               <strong>Всайте</strong>
               <span>Конструктор, хостинг и домены</span>
-              <span className="landing-biz-link">Подробнее →</span>
+              <span className="landing-biz-link">Подробнее</span>
             </a>
             <a className="landing-biz-card landing-biz-card--app" href="/apps#voice">
               <span className="landing-biz-emoji" aria-hidden="true">
@@ -432,7 +389,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </span>
               <strong>Голосовой ассистент</strong>
               <span>Звонки и напоминания клиентам</span>
-              <span className="landing-biz-link">Подробнее →</span>
+              <span className="landing-biz-link">Подробнее</span>
             </a>
             <a className="landing-biz-card landing-biz-card--more" href="/apps">
               <span className="landing-biz-emoji" aria-hidden="true">
@@ -440,12 +397,12 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </span>
               <strong>Все сервисы</strong>
               <span>Описания и возможности</span>
-              <span className="landing-biz-link">Открыть раздел →</span>
+              <span className="landing-biz-link">Все сервисы</span>
             </a>
           </div>
         </LandingSectionFold>
 
-        <section className="landing-section landing-businesses" id="businesses">
+        <section className="landing-section landing-businesses landing-reveal" id="businesses">
           <h2>Для каких бизнесов уже готово</h2>
           <p className="landing-section-lead">
             Подключайте готовую сферу с каталогом услуг — или закажите индивидуальную настройку.
@@ -457,7 +414,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </span>
               <strong>Салоны красоты</strong>
               <span>Запись, мастера, услуги</span>
-              <span className="landing-biz-link">Подробнее →</span>
+              <span className="landing-biz-link">Подробнее</span>
             </a>
             <a className="landing-biz-card" href="/avtoservis">
               <span className="landing-biz-emoji" aria-hidden="true">
@@ -465,7 +422,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </span>
               <strong>Автосервисы</strong>
               <span>VIN, приёмка, статусы ремонта</span>
-              <span className="landing-biz-link">Подробнее →</span>
+              <span className="landing-biz-link">Подробнее</span>
             </a>
             <a className="landing-biz-card" href="/kafe">
               <span className="landing-biz-emoji" aria-hidden="true">
@@ -473,7 +430,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </span>
               <strong>Кафе и рестораны</strong>
               <span>Зал, QR, меню, оплата</span>
-              <span className="landing-biz-link">Подробнее →</span>
+              <span className="landing-biz-link">Подробнее</span>
             </a>
             <a className="landing-biz-card" href="/businesses#shops">
               <span className="landing-biz-emoji" aria-hidden="true">
@@ -481,7 +438,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </span>
               <strong>Магазины</strong>
               <span>Каталог, склад, доставка</span>
-              <span className="landing-biz-link">Подробнее →</span>
+              <span className="landing-biz-link">Подробнее</span>
             </a>
             <a className="landing-biz-card" href="/businesses#marketplaces">
               <span className="landing-biz-emoji" aria-hidden="true">
@@ -489,7 +446,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </span>
               <strong>Маркетплейсы</strong>
               <span>Ozon и Wildberries</span>
-              <span className="landing-biz-link">Подробнее →</span>
+              <span className="landing-biz-link">Подробнее</span>
             </a>
             <a
               className="landing-biz-card landing-biz-card--more"
@@ -504,15 +461,16 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               </span>
               <strong>Другая сфера</strong>
               <span>Индивидуальная автоматизация</span>
-              <span className="landing-biz-link">Оставить заявку →</span>
+              <span className="landing-biz-link">Оставить заявку</span>
             </a>
           </div>
         </section>
 
         <LandingSectionFold
+          alwaysFold
           id="value"
           title="Больше, чем просто запись"
-          lead="CRM-ценность — в возврате клиентов, оплатах и цифрах для решений. Ниже — что уже работает и что готовим."
+          lead="Возврат клиентов, предоплата и цифры для решений — без отдельных сервисов."
         >
           <div className="landing-value-grid">
             <article className="landing-value-card">
@@ -550,7 +508,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
                 <li>Обзор нагрузки — чтобы видеть, что приносит деньги</li>
               </ul>
               <button type="button" className="landing-link-btn" onClick={() => startFromPage("hair_salon")}>
-                Открыть демо кабинета →
+                Открыть демо кабинета
               </button>
             </article>
             <article className="landing-value-card">
@@ -565,6 +523,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
         </LandingSectionFold>
 
         <LandingSectionFold
+          alwaysFold
           id="integrations"
           title="Интеграции, календари и уведомления"
           lead="Как клиент узнаёт, что сеанс подтверждён, и с чем можно связать календарь."
@@ -604,7 +563,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           </div>
         </LandingSectionFold>
 
-        <section className="landing-section landing-pricing" ref={pricingRef} id="pricing">
+        <section className="landing-section landing-pricing landing-reveal" ref={pricingRef} id="pricing">
           <h2>Тарифы и цены</h2>
           <p className="landing-section-lead">
             <strong>Бесплатный</strong> — онлайн-запись без срока. <strong>Бизнес</strong> — 990 ₽/мес:
@@ -678,6 +637,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
         </section>
 
         <LandingSectionFold
+          alwaysFold
           id="delivery"
           className="landing-delivery"
           title="Получение услуги после оплаты"
@@ -755,6 +715,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
         </div>
 
         <LandingSectionFold
+          alwaysFold
           id="updates"
           className="landing-updates"
           title="Обновления сервиса"
@@ -780,6 +741,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
         </LandingSectionFold>
 
         <LandingSectionFold
+          alwaysFold
           className="landing-roadmap"
           title="Функционал платформы"
           lead="Мы развиваем Вместе поэтапно: сначала базовые инструменты для записи и коммуникации, затем — оплата, автоматизация и расширенная аналитика."
@@ -830,7 +792,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           </div>
         </LandingSectionFold>
 
-        <section className="landing-section landing-faq" id="faq">
+        <section className="landing-section landing-faq landing-reveal" id="faq">
           <h2>Частые вопросы</h2>
           <p className="landing-section-lead">
             Ответы про запуск, отличия от аналогов, мобильный доступ и гео-поиск.
@@ -843,7 +805,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           ))}
         </section>
 
-        <section className="landing-section landing-app-download" id="app" aria-labelledby="landing-app-title">
+        <section className="landing-section landing-app-download landing-reveal" id="app" aria-labelledby="landing-app-title">
           <div className="landing-app-download-copy">
             <h2 id="landing-app-title">Приложение Вместе</h2>
             <p className="landing-section-lead">
@@ -877,10 +839,10 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
           </figure>
         </section>
 
-        <section className="landing-section landing-cta" id="start">
-          <h2>Готовы начать?</h2>
+        <section className="landing-section landing-cta landing-reveal" id="start">
+          <h2>Начните бесплатно</h2>
           <p>
-            Записи бесплатны. Сотрудники и приоритетная поддержка — в тарифе Бизнес. Можно сначала открыть демо.
+            Онлайн-запись без срока. Команда и аналитика — в тарифе Бизнес. Или сначала откройте демо.
           </p>
           <div className="landing-hero-actions">
             <button type="button" className="landing-btn landing-btn--primary" onClick={onRegister}>
@@ -908,36 +870,14 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
         </p>
         <nav className="landing-footer-nav" aria-label="Разделы сайта">
           <a href="/#demo">Демо</a>
-          <a href="/#cases">Кейсы</a>
-          <a href="/apps">Сервисы</a>
-          <a href="/#app">Приложение</a>
-          <a href="/android">Android</a>
-          <a href={RUSTORE_APP_URL} target="_blank" rel="noopener noreferrer">
-            RuStore
-          </a>
-          <a href="/businesses">Для бизнеса</a>
-          <a href="/blog/kak-zapustit-biznes-na-vmeste-za-15-minut">Запуск за 15 минут</a>
-          <a href="/blog">Блог</a>
-          <a href="/salon">Салон</a>
-          <a href="/avtoservis">Автосервис</a>
-          <a href="/kafe">Кафе</a>
-          <a href="/city/moscow">Москва</a>
-          <a href="/city/spb">Санкт-Петербург</a>
-          <a href="/city/ekaterinburg">Екатеринбург</a>
-          <a href="/city/kazan">Казань</a>
-          <a href="/city/novosibirsk">Новосибирск</a>
-          <a href="/city/nizhny">Нижний Новгород</a>
-          <a href="/city/rostov">Ростов-на-Дону</a>
-          <a href="/city/krasnodar">Краснодар</a>
-          <a href="/city/samara">Самара</a>
-          <a href="/city/chelyabinsk">Челябинск</a>
           <a href="/#pricing">Тарифы</a>
-          <a href="/#updates">Обновления</a>
-          <a href="/#faq">Вопросы</a>
-          <a href="/#automation-request">Заявка на автоматизацию</a>
-          <a href="/contacts">Контакты и реквизиты</a>
-          <a href="/offer">Публичная оферта</a>
-          <a href="/privacy">Политика конфиденциальности</a>
+          <a href="/businesses">Для бизнеса</a>
+          <a href="/apps">Сервисы</a>
+          <a href="/blog">Блог</a>
+          <a href="/#app">Приложение</a>
+          <a href="/contacts">Контакты</a>
+          <a href="/offer">Оферта</a>
+          <a href="/privacy">Конфиденциальность</a>
         </nav>
       </footer>
     </div>

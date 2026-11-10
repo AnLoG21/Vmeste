@@ -9,6 +9,8 @@ export default function LandingSectionFold({
   className = "",
   children,
   defaultOpenMobile = false,
+  /** Keep accordion on desktop too — for secondary / long sections. */
+  alwaysFold = false,
 }) {
   const [desktop, setDesktop] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia(DESKTOP_MQ).matches : true
@@ -23,16 +25,15 @@ export default function LandingSectionFold({
     return () => mq.removeEventListener("change", sync);
   }, []);
 
-  const expanded = desktop || open;
+  const useFold = alwaysFold || !desktop;
+  const expanded = useFold ? open : true;
 
   return (
     <section
-      className={`landing-section landing-fold${expanded ? " is-open" : ""}${className ? ` ${className}` : ""}`}
+      className={`landing-section landing-fold landing-reveal${expanded ? " is-open" : ""}${className ? ` ${className}` : ""}`}
       id={id}
     >
-      {desktop ? (
-        <h2>{title}</h2>
-      ) : (
+      {useFold ? (
         <button
           type="button"
           className="landing-fold-toggle"
@@ -42,6 +43,8 @@ export default function LandingSectionFold({
           <h2>{title}</h2>
           <span className="landing-fold-chevron" aria-hidden="true" />
         </button>
+      ) : (
+        <h2>{title}</h2>
       )}
       {expanded && lead ? <p className="landing-section-lead">{lead}</p> : null}
       {expanded ? <div className="landing-fold-body">{children}</div> : null}

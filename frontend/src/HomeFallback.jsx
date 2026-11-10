@@ -8,13 +8,14 @@ export default function HomeFallback() {
         </button>
       </header>
       <main>
-        <section className="landing-hero">
-          <div className="landing-hero-content">
-            <h1 className="landing-hero-title">
-              Вместе — платформа для записи и автоматизации вашего бизнеса
-            </h1>
+        <section className="landing-hero" aria-labelledby="landing-brand-fallback">
+          <div className="landing-hero-stage">
+            <p id="landing-brand-fallback" className="landing-brand-mark">
+              Вместе
+            </p>
+            <h1 className="landing-hero-title">Онлайн-запись и кабинет для вашего бизнеса</h1>
             <p className="landing-hero-lead">
-              Онлайн-запись клиентов, каталог услуг, чаты, карта организаций — всё в одном сервисе.
+              Клиенты записываются сами. Вы видите расписание, чаты и команду в одном месте.
             </p>
           </div>
         </section>

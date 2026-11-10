@@ -421,6 +421,20 @@ export default function CabinetChrome({
         )}
         {!accessToken && (
           <div className="landing-header-auth">
+            <nav className="landing-header-nav" aria-label="Разделы">
+              <a href="#demo" data-nav="demo">
+                Демо
+              </a>
+              <a href="#pricing" data-nav="pricing">
+                Тарифы
+              </a>
+              <a href="#businesses" data-nav="businesses">
+                Сферы
+              </a>
+              <a href="#faq" data-nav="faq">
+                Вопросы
+              </a>
+            </nav>
             <button type="button" className="landing-header-btn landing-header-btn--login" onClick={() => openAuth("login")}>
               Войти
             </button>
