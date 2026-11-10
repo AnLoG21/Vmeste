@@ -291,11 +291,14 @@ body.theme-dark .page-logged .app-subnav button.active {
 }
 
 .page-logged .calendar-pad .calendar-slots {
-  display: grid;
   gap: 4px;
   margin: 0;
   flex: 1;
   min-height: 0;
+}
+
+.page-logged .calendar-pad .calendar-slots--desktop {
+  display: grid;
 }
 
 .page-logged .calendar-pad .calendar-slot.booking {
@@ -310,6 +313,31 @@ body.theme-dark .page-logged .app-subnav button.active {
   font-size: 11px;
   font-weight: 650;
   line-height: 1.25;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.page-logged .calendar-pad .calendar-slot.booking .booking-slot-time,
+.page-logged .calendar-pad .calendar-slot.booking .booking-slot-name,
+.page-logged .calendar-pad .calendar-slot.booking .booking-slot-status {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page-logged .calendar-pad .calendar-slot.booking .booking-slot-time {
+  white-space: nowrap;
+}
+
+.page-logged .calendar-pad .calendar-slot.booking .booking-slot-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .page-logged .calendar-pad .calendar-slot.booking.booking-slot--confirmed {
@@ -355,14 +383,54 @@ body.theme-dark .page-logged .app-subnav button.active {
   color: #444;
 }
 
+.page-logged .calendar-pad .calendar-slot.booking.booking-slot--noshow {
+  border-left-color: #6b7280;
+  background: color-mix(in srgb, #9ca3af 22%, #fff);
+  color: #374151;
+}
+
 .page-logged .calendar-pad .calendar-slot-compact {
-  border-radius: 0;
+  border-radius: var(--vm-radius-sm);
   border: 0;
-  border-left: 3px solid var(--vm-accent);
-  background: color-mix(in srgb, var(--vm-pad) 65%, #fff);
   box-shadow: none;
   padding: 2px 5px;
   font-family: var(--vm-font);
+  background: color-mix(in srgb, #e85d5d 88%, #fff);
+  color: #fff;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.page-logged .calendar-pad .calendar-slot-compact.booking-slot--confirmed {
+  background: color-mix(in srgb, #c6e86a 88%, #fff);
+  color: #2a3d0a;
+}
+
+.page-logged .calendar-pad .calendar-slot-compact.booking-slot--new {
+  background: color-mix(in srgb, #e85d5d 88%, #fff);
+  color: #fff;
+}
+
+.page-logged .calendar-pad .calendar-slot-compact.booking-slot--pending {
+  background: color-mix(in srgb, #f0a202 88%, #fff);
+  color: #3d2a00;
+}
+
+.page-logged .calendar-pad .calendar-slot-compact.booking-slot--overdue {
+  background: color-mix(in srgb, #8b5a2b 88%, #fff);
+  color: #fff;
+}
+
+.page-logged .calendar-pad .calendar-slot-compact.booking-slot--done {
+  background: color-mix(in srgb, #2f9e5f 88%, #fff);
+  color: #fff;
+}
+
+.page-logged .calendar-pad .calendar-slot-compact.booking-slot--cancelled,
+.page-logged .calendar-pad .calendar-slot-compact.booking-slot--manual-hold,
+.page-logged .calendar-pad .calendar-slot-compact.booking-slot--noshow {
+  background: color-mix(in srgb, #c0c0c0 88%, #fff);
+  color: #444;
 }
 
 .page-logged .calendar-pad .calendar-slot-more {
@@ -463,14 +531,45 @@ body.theme-dark .page-logged .app-subnav button.active {
 
   .page-logged .calendar-pad .calendar-cell {
     min-height: 68px;
-    max-height: none;
+    max-height: 92px;
     padding: 6px 5px 4px;
     border-radius: 0 !important;
+    overflow: hidden;
   }
 
   .page-logged .calendar-pad .calendar-day {
     font-size: 0.85rem;
     margin-bottom: 0;
+  }
+
+  /* Pad must not re-show desktop cards on phone — only compact chips */
+  .page-logged .calendar-pad .calendar-slots--desktop {
+    display: none !important;
+  }
+
+  .page-logged .calendar-pad .calendar-slots--mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .page-logged .calendar-pad .calendar-slot-compact {
+    min-height: 16px;
+    justify-content: center;
+  }
+
+  .page-logged .calendar-pad .calendar-slot-compact-time {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  .page-logged .calendar-pad .calendar-slot-compact-icon {
+    display: none;
   }
 }
 
