@@ -65,9 +65,20 @@ class VsayteApiTests(TestCase):
             format="json",
         )
         self.assertEqual(res.status_code, 201)
+        self.assertTrue(res.data.get("slug"))
         site_id = res.data["id"]
         pub = self.client.post(f"/api/vsayte/sites/{site_id}/publish/")
         self.assertEqual(pub.status_code, 403)
+
+    def test_create_site_without_slug_autogenerates(self):
+        res = self.client.post(
+            "/api/vsayte/sites/",
+            {"title": "Новый сайт", "template_id": "landing", "document": {"html": "", "css": ""}},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertEqual(res.data["title"], "Новый сайт")
+        self.assertTrue(res.data["slug"])
 
     @override_settings(VSAYTE_SITES_ROOT="/tmp/vsayte-test-sites")
     def test_publish_on_hosting(self):

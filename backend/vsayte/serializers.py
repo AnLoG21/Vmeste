@@ -107,6 +107,12 @@ class SiteDetailSerializer(SiteListSerializer):
 
 
 class SiteWriteSerializer(serializers.ModelSerializer):
+    # slug optional on create — view auto-generates from title when blank
+    slug = serializers.CharField(required=False, allow_blank=True, max_length=80)
+    title = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    document = serializers.JSONField(required=False)
+    template_id = serializers.CharField(required=False, allow_blank=True, max_length=64)
+
     class Meta:
         model = Site
         fields = ["title", "slug", "document", "template_id"]
