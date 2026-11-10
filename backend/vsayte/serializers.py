@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Site, SiteAsset, SiteDomain, SitePublish
+from .models import Site, SiteAsset, SiteDomain, SiteLead, SitePublish
 
 
 class SiteDomainSerializer(serializers.ModelSerializer):
@@ -55,6 +55,7 @@ class SiteAssetSerializer(serializers.ModelSerializer):
 class SiteListSerializer(serializers.ModelSerializer):
     public_url = serializers.SerializerMethodField()
     domains = SiteDomainSerializer(many=True, read_only=True)
+    unread_leads = serializers.SerializerMethodField()
 
     class Meta:
         model = Site
@@ -69,6 +70,7 @@ class SiteListSerializer(serializers.ModelSerializer):
             "updated_at",
             "public_url",
             "domains",
+            "unread_leads",
         ]
         read_only_fields = fields
 
@@ -82,6 +84,12 @@ class SiteListSerializer(serializers.ModelSerializer):
         if custom:
             return f"https://{custom.hostname}"
         return f"https://{obj.slug}.{base}"
+
+    def get_unread_leads(self, obj):
+        # annotate if present, else query
+        if hasattr(obj, "unread_leads_count"):
+            return int(obj.unread_leads_count or 0)
+        return obj.leads.filter(is_read=False).count()
 
 
 class SiteDetailSerializer(SiteListSerializer):
@@ -113,3 +121,39 @@ class SiteWriteSerializer(serializers.ModelSerializer):
         if qs.exists():
             raise serializers.ValidationError("Этот адрес уже занят.")
         return value
+
+
+class SiteLeadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SiteLead
+        fields = [
+            "id",
+            "name",
+            "contact",
+            "message",
+            "payload",
+            "page_url",
+            "is_read",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class SiteLeadCreateSerializer(serializers.Serializer):
+    name = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    contact = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    message = serializers.CharField(required=False, allow_blank=True, max_length=4000)
+    page_url = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    payload = serializers.DictField(required=False)
+
+    def validate(self, attrs):
+        contact = (attrs.get("contact") or "").strip()
+        name = (attrs.get("name") or "").strip()
+        message = (attrs.get("message") or "").strip()
+        payload = attrs.get("payload") or {}
+        if not contact and not name and not message and not payload:
+            raise serializers.ValidationError("Пустая заявка.")
+        attrs["contact"] = contact
+        attrs["name"] = name
+        attrs["message"] = message
+        return attrs

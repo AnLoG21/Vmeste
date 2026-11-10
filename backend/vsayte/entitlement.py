@@ -88,11 +88,21 @@ def ensure_free_vsayte_subscription(user) -> UserSubscription | None:
 
 
 def current_limits(user) -> dict:
+    from .access import user_has_full_vsayte_access
+
+    if user_has_full_vsayte_access(user):
+        base = dict(LIMITS[PRO_SLUG])
+        base["plan_slug"] = PRO_SLUG
+        base["plan_name"] = "Всайте — Pro (полный доступ)"
+        base["full_access"] = True
+        return base
+
     live = live_vsayte_subscription(user)
     slug = live.plan.slug if live and live.plan_id else FREE_SLUG
     base = dict(LIMITS.get(slug) or LIMITS[FREE_SLUG])
     base["plan_slug"] = slug
     base["plan_name"] = live.plan.name if live and live.plan_id else "Бесплатный"
+    base["full_access"] = False
     return base
 
 

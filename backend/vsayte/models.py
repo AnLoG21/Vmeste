@@ -101,3 +101,22 @@ class SitePublish(models.Model):
     class Meta:
         ordering = ["-created_at"]
         unique_together = [("site", "version")]
+
+
+class SiteLead(models.Model):
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name="leads")
+    name = models.CharField(max_length=200, blank=True, default="")
+    contact = models.CharField(max_length=200, blank=True, default="")
+    message = models.TextField(blank=True, default="")
+    payload = models.JSONField(default=dict, blank=True)
+    page_url = models.CharField(max_length=500, blank=True, default="")
+    user_agent = models.CharField(max_length=400, blank=True, default="")
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    is_read = models.BooleanField(default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Lead {self.pk} · {self.site_id}"

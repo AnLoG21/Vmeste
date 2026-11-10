@@ -166,6 +166,13 @@ for _cap_origin in ("https://localhost", "capacitor://localhost", "http://localh
     if _cap_origin not in CORS_ALLOWED_ORIGINS:
         CORS_ALLOWED_ORIGINS.append(_cap_origin)
 
+# Опубликованные сайты Всайте (формы заявок → API)
+_vsayte_base = os.environ.get("VSAYTE_BASE_DOMAIN", "vsayte.vsevmeste.space").strip().replace(".", r"\.")
+CORS_ALLOWED_ORIGIN_REGEXES = list(globals().get("CORS_ALLOWED_ORIGIN_REGEXES") or [])
+_vsayte_cors_re = rf"^https://[\w-]+\.{_vsayte_base}$"
+if _vsayte_cors_re not in CORS_ALLOWED_ORIGIN_REGEXES:
+    CORS_ALLOWED_ORIGIN_REGEXES.append(_vsayte_cors_re)
+
 SKIP_EMAIL_VERIFICATION = os.environ.get("SKIP_EMAIL_VERIFICATION", "0") in ("1", "true", "True", "yes")
 
 EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
@@ -292,6 +299,11 @@ MARKETPLACE_VIDEO_ENABLED = os.environ.get("MARKETPLACE_VIDEO_ENABLED", "1") in 
 VSAYTE_BASE_DOMAIN = os.environ.get("VSAYTE_BASE_DOMAIN", "vsayte.vsevmeste.space").strip()
 VSAYTE_SITES_ROOT = os.environ.get("VSAYTE_SITES_ROOT", str(MEDIA_ROOT / "vsayte-sites")).strip()
 VSAYTE_HOST_IP = os.environ.get("VSAYTE_HOST_IP", "").strip()
+# Публичный базовый URL API для форм на опубликованных сайтах (без хвоста /vsayte)
+VSAYTE_API_PUBLIC_BASE = os.environ.get(
+    "VSAYTE_API_PUBLIC_BASE",
+    os.environ.get("VITE_API_URL", FRONTEND_URL.rstrip("/") + "/api"),
+).rstrip("/")
 REGRU_USERNAME = os.environ.get("REGRU_USERNAME", "").strip()
 REGRU_PASSWORD = os.environ.get("REGRU_PASSWORD", "").strip()
 

@@ -46,10 +46,22 @@ function landingHtml(palette, font) {
   <div><h3 style="margin:0 0 8px;color:${ink};">Свой стиль</h3><p style="margin:0;color:${muted};">Палитры, типографика и загрузка своих картинок.</p></div>
   <div><h3 style="margin:0 0 8px;color:${ink};">Публикация</h3><p style="margin:0;color:${muted};">Поддомен Всайте или свой домен через REG.RU.</p></div>
 </section>
-<section id="cta" style="font-family:${font.stack};background:${ink};color:#fff;padding:64px 24px;text-align:center;">
-  <h2 style="margin:0 0 12px;">Готовы запуститься?</h2>
-  <p style="margin:0 0 24px;opacity:.8;">Напишите нам — ответим в течение дня.</p>
-  <a href="mailto:hello@example.com" style="display:inline-block;background:${accent};color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;">hello@example.com</a>
+<section id="cta" style="font-family:${font.stack};background:${soft};color:${ink};padding:64px 24px;">
+  <form class="vs-lead-form" data-vs="lead-form" style="max-width:420px;margin:0 auto;padding:28px;border-radius:12px;background:${paper};border:1px solid color-mix(in srgb, ${accent} 28%, transparent);display:grid;gap:12px;box-shadow:0 10px 28px rgba(26,18,8,.06);">
+    <h2 style="margin:0;letter-spacing:-0.02em;">Оставить заявку</h2>
+    <p style="margin:0;color:${muted};font-size:14px;">Ответим в течение дня</p>
+    <label style="display:grid;gap:6px;font-size:13px;font-weight:600;">Имя
+      <input class="vs-input" data-vs="input" name="name" placeholder="Как к вам обращаться" required style="padding:11px 14px;border:1px solid #e8d5c4;border-radius:8px;font-weight:400;font-family:inherit;"/>
+    </label>
+    <label style="display:grid;gap:6px;font-size:13px;font-weight:600;">Телефон или email
+      <input class="vs-input" data-vs="input" name="contact" placeholder="+7… или email" required style="padding:11px 14px;border:1px solid #e8d5c4;border-radius:8px;font-weight:400;font-family:inherit;"/>
+    </label>
+    <label style="display:grid;gap:6px;font-size:13px;font-weight:600;">Комментарий
+      <textarea class="vs-textarea" data-vs="textarea" name="message" rows="3" placeholder="Коротко о задаче" style="padding:11px 14px;border:1px solid #e8d5c4;border-radius:8px;font-weight:400;font-family:inherit;"></textarea>
+    </label>
+    <button class="vs-btn" data-vs="button" type="submit" style="padding:12px;border:0;border-radius:8px;background:${accent};color:#fff;font-weight:700;cursor:pointer;">Отправить</button>
+    <p class="vs-lead-status" style="margin:0;font-size:13px;color:${muted};min-height:1.2em;"></p>
+  </form>
 </section>`,
     css: `body{margin:0}`,
   };
@@ -172,6 +184,69 @@ export const ALL_TEMPLATES = [
   <div style="background:${paper};padding:20px;border-radius:14px;"><strong>Эспрессо</strong><p style="margin:8px 0 0;color:${muted};">180 ₽</p></div>
   <div style="background:${paper};padding:20px;border-radius:14px;"><strong>Капучино</strong><p style="margin:8px 0 0;color:${muted};">250 ₽</p></div>
   <div style="background:${paper};padding:20px;border-radius:14px;"><strong>Круассан</strong><p style="margin:8px 0 0;color:${muted};">220 ₽</p></div>
+</section>`,
+        css: `body{margin:0}`,
+      };
+    },
+  },
+  {
+    id: "pricing",
+    name: "Тарифы",
+    tier: "pro",
+    build: (palette, font) => {
+      const [accent, ink, soft, paper, muted] = palette.colors;
+      return {
+        html: `<section style="font-family:${font.stack};padding:64px 24px;background:${soft};color:${ink};text-align:center;">
+  <h1 style="margin:0 0 10px;">Простые тарифы</h1>
+  <p style="margin:0 auto 32px;max-width:480px;color:${muted};">Выберите план под задачу — без скрытых платежей.</p>
+  <div style="display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));max-width:900px;margin:0 auto;text-align:left;">
+    <article style="background:${paper};border-radius:16px;padding:24px;border:1px solid #eee;">
+      <h3 style="margin:0 0 6px;">Старт</h3>
+      <p style="margin:0 0 16px;font-size:1.6rem;font-weight:700;">0 ₽</p>
+      <p style="margin:0 0 18px;color:${muted};">Черновики и базовые шаблоны.</p>
+      <a href="#cta" style="color:${accent};font-weight:600;text-decoration:none;">Начать</a>
+    </article>
+    <article style="background:${paper};border-radius:16px;padding:24px;border:2px solid ${accent};">
+      <h3 style="margin:0 0 6px;">Хостинг</h3>
+      <p style="margin:0 0 16px;font-size:1.6rem;font-weight:700;">300 ₽</p>
+      <p style="margin:0 0 18px;color:${muted};">Публикация на поддомене.</p>
+      <a href="#cta" style="display:inline-block;background:${accent};color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:600;">Выбрать</a>
+    </article>
+    <article style="background:${paper};border-radius:16px;padding:24px;border:1px solid #eee;">
+      <h3 style="margin:0 0 6px;">Pro</h3>
+      <p style="margin:0 0 16px;font-size:1.6rem;font-weight:700;">990 ₽</p>
+      <p style="margin:0 0 18px;color:${muted};">Все блоки и свой домен.</p>
+      <a href="#cta" style="color:${accent};font-weight:600;text-decoration:none;">Подробнее</a>
+    </article>
+  </div>
+</section>`,
+        css: `body{margin:0}`,
+      };
+    },
+  },
+  {
+    id: "contacts",
+    name: "Контакты",
+    tier: "pro",
+    build: (palette, font) => {
+      const [accent, ink, soft, paper, muted] = palette.colors;
+      return {
+        html: `<section style="font-family:${font.stack};padding:64px 24px;background:${soft};color:${ink};">
+  <div style="max-width:720px;margin:0 auto;display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+    <div>
+      <h1 style="margin:0 0 12px;">Контакты</h1>
+      <p style="margin:0 0 16px;color:${muted};">Напишите — ответим в рабочий день.</p>
+      <p style="margin:0 0 8px;"><strong>Телефон:</strong> +7 (900) 000-00-00</p>
+      <p style="margin:0 0 8px;"><strong>Email:</strong> hello@example.com</p>
+      <p style="margin:0;"><strong>Адрес:</strong> Москва</p>
+    </div>
+    <form style="background:${paper};padding:22px;border-radius:16px;border:1px solid #eee;display:grid;gap:10px;">
+      <input placeholder="Имя" style="padding:10px 12px;border:1px solid #ddd;border-radius:8px;"/>
+      <input placeholder="Email" style="padding:10px 12px;border:1px solid #ddd;border-radius:8px;"/>
+      <textarea placeholder="Сообщение" rows="4" style="padding:10px 12px;border:1px solid #ddd;border-radius:8px;"></textarea>
+      <button type="button" style="padding:12px;border:0;border-radius:8px;background:${accent};color:#fff;font-weight:600;">Отправить</button>
+    </form>
+  </div>
 </section>`,
         css: `body{margin:0}`,
       };

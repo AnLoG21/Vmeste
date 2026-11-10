@@ -39,7 +39,24 @@ class VsayteApiTests(TestCase):
         res = self.client.get("/api/vsayte/entitlement/")
         self.assertEqual(res.status_code, 200)
         self.assertFalse(res.data["can_publish"])
+        self.assertFalse(res.data.get("full_access"))
         self.assertEqual(res.data["limits"]["plan_slug"], "vsayte-free")
+
+    def test_entitlement_full_access_allowlist(self):
+        user = User.objects.create_user(
+            username="a.loginov150",
+            email="loginov@test.local",
+            password="pass12345",
+        )
+        client = APIClient()
+        client.force_authenticate(user)
+        res = client.get("/api/vsayte/entitlement/")
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.data["full_access"])
+        self.assertTrue(res.data["can_publish"])
+        self.assertTrue(res.data["can_custom_domain"])
+        self.assertEqual(res.data["editor_tier"], "pro")
+        self.assertEqual(res.data["limits"]["plan_slug"], "vsayte-pro")
 
     def test_create_site_and_block_publish_on_free(self):
         res = self.client.post(
@@ -71,3 +88,32 @@ class VsayteApiTests(TestCase):
         self.assertEqual(pub.status_code, 200)
         site.refresh_from_db()
         self.assertEqual(site.status, Site.Status.PUBLISHED)
+
+    @override_settings(VSAYTE_SITES_ROOT="/tmp/vsayte-test-sites")
+    def test_public_lead_on_published_site(self):
+        plan = SubscriptionPlan.objects.get(slug="vsayte-hosting")
+        UserSubscription.objects.create(
+            user=self.user,
+            plan=plan,
+            status=UserSubscription.Status.ACTIVE,
+            source=UserSubscription.Source.PAID,
+        )
+        site = Site.objects.create(
+            owner=self.user,
+            title="Leads",
+            slug="leads-demo",
+            document={"html": "<form class='vs-lead-form'></form>", "css": ""},
+            status=Site.Status.PUBLISHED,
+        )
+        anon = APIClient()
+        blocked = anon.post(
+            "/api/vsayte/public/leads-demo/leads/",
+            {"name": "Ann", "contact": "+7000", "message": "Hi"},
+            format="json",
+        )
+        # status already published above — should accept
+        self.assertEqual(blocked.status_code, 201)
+        listed = self.client.get(f"/api/vsayte/sites/{site.id}/leads/")
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(len(listed.data), 1)
+        self.assertEqual(listed.data[0]["contact"], "+7000")

@@ -4,11 +4,14 @@ import VsayteLogo from "./VsayteLogo.jsx";
 import {
   vsayteAttachDomain,
   vsayteCheckDomain,
+  vsayteCloneSite,
   vsayteCreateSite,
   vsayteDeleteSite,
   vsayteEntitlement,
   vsayteGetSite,
+  vsayteListLeads,
   vsayteListSites,
+  vsayteMarkLeadRead,
   vsaytePublish,
   vsaytePurchaseDomain,
   vsayteUnpublish,
@@ -17,6 +20,7 @@ import {
 } from "./vsayteApi.js";
 import { exportSiteHtml, localDeleteSite, localListSites, localSaveSite } from "./vsayteLocal.js";
 import { buildTemplateDocument } from "./vsayteTemplates.js";
+import { hasFullVsayteAccess } from "./vsayteAccess.js";
 
 const VsayteEditor = lazy(() => import("./VsayteEditor.jsx"));
 
@@ -42,7 +46,7 @@ const PLAN_COPY = [
 ];
 
 export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
-  const [tab, setTab] = useState("sites"); // sites | plans | editor
+  const [tab, setTab] = useState("sites"); // sites | plans | editor | leads
   const [entitlement, setEntitlement] = useState(null);
   const [sites, setSites] = useState([]);
   const [localSites, setLocalSites] = useState([]);
@@ -54,11 +58,18 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
   const [draftDoc, setDraftDoc] = useState(null);
   const [domainInput, setDomainInput] = useState("");
   const [domainInfo, setDomainInfo] = useState(null);
+  const [leadsSiteId, setLeadsSiteId] = useState(null);
+  const [leads, setLeads] = useState([]);
 
-  const editorTier = entitlement?.editor_tier || "basic";
-  const canPublish = Boolean(entitlement?.can_publish);
-  const canCustomDomain = Boolean(entitlement?.can_custom_domain);
+  const fullAccess = Boolean(entitlement?.full_access) || hasFullVsayteAccess(me);
+  const editorTier = fullAccess ? "pro" : entitlement?.editor_tier || "basic";
+  const canPublish = fullAccess || Boolean(entitlement?.can_publish);
+  const canCustomDomain = fullAccess || Boolean(entitlement?.can_custom_domain);
+  const maxPages = fullAccess ? 100 : Number(entitlement?.max_pages || entitlement?.limits?.max_pages || 2);
   const baseDomain = entitlement?.base_domain || "vsayte.vsevmeste.space";
+  const planLabel = fullAccess
+    ? "Pro — полный доступ"
+    : entitlement?.limits?.plan_name || "…";
 
   const refresh = useCallback(async () => {
     setError("");
@@ -85,7 +96,7 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
     refresh();
   }, [refresh]);
 
-  const currentPlanSlug = entitlement?.limits?.plan_slug || "vsayte-free";
+  const currentPlanSlug = fullAccess ? "vsayte-pro" : entitlement?.limits?.plan_slug || "vsayte-free";
 
   async function payPlan(planId) {
     setBusy(true);
@@ -335,6 +346,65 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
     }
   }
 
+  async function openLeads(siteId) {
+    setBusy(true);
+    setError("");
+    try {
+      const list = await vsayteListLeads(authFetch, API_URL, siteId);
+      setLeads(Array.isArray(list) ? list : []);
+      setLeadsSiteId(siteId);
+      setTab("leads");
+    } catch (e) {
+      setError(e.message || "Не удалось загрузить заявки");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function markLeadRead(leadId) {
+    if (!leadsSiteId) return;
+    try {
+      const updated = await vsayteMarkLeadRead(authFetch, API_URL, leadsSiteId, leadId);
+      setLeads((prev) => prev.map((l) => (l.id === leadId ? updated : l)));
+      await refresh();
+    } catch (e) {
+      setError(e.message || "Не удалось отметить заявку");
+    }
+  }
+
+  async function cloneSite(site) {
+    if (site.local || String(site.id).startsWith("local-")) {
+      setBusy(true);
+      try {
+        const saved = await localSaveSite({
+          title: `${site.title || "Сайт"} — копия`,
+          document: site.document || {},
+          template_id: site.template_id || "",
+        });
+        setMessage("Локальная копия создана");
+        openEditor(saved);
+        await refresh();
+      } catch (e) {
+        setError(e.message || "Не удалось скопировать");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const cloned = await vsayteCloneSite(authFetch, API_URL, site.id);
+      setMessage("Копия сайта создана");
+      openEditor(cloned);
+      await refresh();
+    } catch (e) {
+      setError(e.message || "Не удалось клонировать сайт");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const planCards = useMemo(() => {
     return PLAN_COPY.map((copy) => {
       const apiPlan = plans.find((p) => p.slug === copy.slug);
@@ -376,6 +446,11 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
             <button type="button" className="ghost-btn" disabled={busy} onClick={saveEditing}>
               Сохранить
             </button>
+            {!editing.local ? (
+              <button type="button" className="ghost-btn" disabled={busy} onClick={() => openLeads(editing.id)}>
+                Заявки
+              </button>
+            ) : null}
             {canPublish && !editing.local ? (
               <>
                 <button type="button" className="primary-btn" disabled={busy} onClick={publishEditing}>
@@ -403,6 +478,7 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
             key={editing.id}
             initialDocument={editing.document || draftDoc}
             editorTier={editorTier}
+            maxPages={maxPages}
             onChange={setDraftDoc}
             onUploadFile={onUploadAsset}
           />
@@ -442,7 +518,7 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
   }
 
   return (
-    <section className="card vsayte-app full-width">
+    <section className="card vsayte-app cabinet-sheet full-width">
       <div className="vsayte-head">
         <div className="vsayte-head-brand">
           <VsayteLogo size={44} />
@@ -454,7 +530,7 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span className="vsayte-plan-pill">{entitlement?.limits?.plan_name || "…"}</span>
+          <span className={`vsayte-plan-pill ${fullAccess ? "is-pro" : ""}`}>{planLabel}</span>
           {onExit ? (
             <button type="button" className="ghost-btn" onClick={onExit}>
               К сервисам
@@ -470,6 +546,11 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
         <button type="button" className={`ghost-btn ${tab === "plans" ? "is-active" : ""}`} onClick={() => setTab("plans")}>
           Тарифы
         </button>
+        {leadsSiteId ? (
+          <button type="button" className={`ghost-btn ${tab === "leads" ? "is-active" : ""}`} onClick={() => setTab("leads")}>
+            Заявки
+          </button>
+        ) : null}
       </div>
 
       {error ? <p className="error-text">{error}</p> : null}
@@ -487,17 +568,34 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
           </div>
 
           <h3>На сервере</h3>
-          {sites.length === 0 ? <p className="muted">Пока нет сайтов на сервере.</p> : null}
+          {sites.length === 0 ? (
+            <div className="vsayte-empty">
+              <p className="muted" style={{ margin: 0 }}>
+                Пока нет сайтов на сервере. Создайте первый — шаблоны, страницы и публикация уже внутри.
+              </p>
+            </div>
+          ) : null}
           <div className="vsayte-sites-grid">
             {sites.map((site) => (
               <article key={site.id} className="vsayte-site-card">
-                <h3>{site.title}</h3>
+                <div className="vsayte-pages-head">
+                  <h3 style={{ margin: 0 }}>{site.title}</h3>
+                  {site.unread_leads > 0 ? (
+                    <span className="vsayte-lead-badge">{site.unread_leads}</span>
+                  ) : null}
+                </div>
                 <p className="muted small" style={{ margin: 0 }}>
                   {site.status === "published" ? site.public_url || `https://${site.slug}.${baseDomain}` : "Черновик"}
                 </p>
                 <div className="vsayte-site-actions">
                   <button type="button" className="ghost-btn small" onClick={() => openRemoteEditor(site.id)}>
                     Редактор
+                  </button>
+                  <button type="button" className="ghost-btn small" onClick={() => openLeads(site.id)}>
+                    Заявки
+                  </button>
+                  <button type="button" className="ghost-btn small" disabled={busy} onClick={() => cloneSite(site)}>
+                    Копия
                   </button>
                   <button type="button" className="ghost-btn small" onClick={() => removeSite(site)}>
                     Удалить
@@ -520,6 +618,9 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
                   <button type="button" className="ghost-btn small" onClick={() => openEditor(site)}>
                     Редактор
                   </button>
+                  <button type="button" className="ghost-btn small" disabled={busy} onClick={() => cloneSite(site)}>
+                    Копия
+                  </button>
                   <button type="button" className="ghost-btn small" onClick={() => removeSite(site)}>
                     Удалить
                   </button>
@@ -528,6 +629,37 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
             ))}
           </div>
         </>
+      ) : null}
+
+      {tab === "leads" ? (
+        <div className="vsayte-leads">
+          <div className="vsayte-pages-head" style={{ marginBottom: 12 }}>
+            <h3 style={{ margin: 0 }}>Заявки с сайта</h3>
+            <button type="button" className="ghost-btn small" disabled={busy} onClick={() => leadsSiteId && openLeads(leadsSiteId)}>
+              Обновить
+            </button>
+          </div>
+          {leads.length === 0 ? <p className="muted">Пока нет заявок. Опубликуйте сайт с формой заявки.</p> : null}
+          <div className="vsayte-leads-list">
+            {leads.map((lead) => (
+              <article key={lead.id} className={`vsayte-lead-card ${lead.is_read ? "" : "is-new"}`}>
+                <div className="vsayte-pages-head">
+                  <strong>{lead.name || "Без имени"}</strong>
+                  <span className="muted small">{new Date(lead.created_at).toLocaleString("ru-RU")}</span>
+                </div>
+                <p style={{ margin: "6px 0" }}>{lead.contact || "—"}</p>
+                {lead.message ? <p className="muted small">{lead.message}</p> : null}
+                {!lead.is_read ? (
+                  <button type="button" className="vsayte-mini-btn" onClick={() => markLeadRead(lead.id)}>
+                    Отметить прочитанной
+                  </button>
+                ) : (
+                  <span className="muted small">Прочитано</span>
+                )}
+              </article>
+            ))}
+          </div>
+        </div>
       ) : null}
 
       {tab === "plans" ? (
@@ -565,7 +697,8 @@ export default function VsayteApp({ authFetch, API_URL, me, onExit }) {
             </article>
           ))}
           <p className="muted small">
-            Тарифы Всайте отдельны от «Бизнес» платформы. Пользователь: {me?.email || me?.id || "—"}.
+            Тарифы Всайте отдельны от «Бизнес» платформы. Пользователь: {me?.username || me?.email || me?.id || "—"}.
+            {fullAccess ? " У вас полный Pro-доступ." : ""}
           </p>
         </div>
       ) : null}

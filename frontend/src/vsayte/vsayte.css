@@ -152,6 +152,11 @@ body:has(.page-logged:has(.vsayte-app--editor)) {
   font-weight: 600;
 }
 
+.vsayte-plan-pill.is-pro {
+  background: linear-gradient(120deg, #ff7a00, #ffb347);
+  color: #fff;
+}
+
 .vsayte-tabs {
   display: flex;
   gap: 8px;
@@ -161,6 +166,14 @@ body:has(.page-logged:has(.vsayte-app--editor)) {
 .vsayte-tabs button.is-active {
   border-color: var(--accent, #ff7a00);
   color: var(--accent, #ff7a00);
+}
+
+.vsayte-empty {
+  padding: 18px 16px;
+  border-radius: 14px;
+  border: 1px dashed color-mix(in srgb, currentColor 18%, transparent);
+  background: color-mix(in srgb, var(--accent, #ff7a00) 5%, transparent);
+  margin-bottom: 12px;
 }
 
 .vsayte-sites-grid {
@@ -267,11 +280,15 @@ body:has(.page-logged:has(.vsayte-app--editor)) {
 
 .vsayte-side-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 6px;
   padding: 3px;
   border-radius: 10px;
   background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.vsayte-side-tabs--4 {
+  grid-template-columns: 1.2fr 1fr 1fr 0.55fr;
 }
 
 .vsayte-side-tabs button {
@@ -333,6 +350,15 @@ body:has(.page-logged:has(.vsayte-app--editor)) {
 
 .vsayte-chip:active {
   transform: scale(0.97);
+}
+
+.vsayte-chip--accent {
+  border-color: color-mix(in srgb, var(--accent, #ff7a00) 45%, transparent);
+  background: color-mix(in srgb, var(--accent, #ff7a00) 8%, transparent);
+}
+
+.vsayte-chip--accent:hover {
+  background: color-mix(in srgb, var(--accent, #ff7a00) 16%, transparent);
 }
 
 .vsayte-palette-row {
@@ -628,6 +654,254 @@ body:has(.page-logged:has(.vsayte-app--editor)) {
   overflow: auto;
 }
 
+.vsayte-pages-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vsayte-pages-head h4 {
+  margin: 0;
+}
+
+.vsayte-pages-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vsayte-pages-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.vsayte-pages-list li.is-active {
+  border-color: var(--accent, #ff7a00);
+  background: color-mix(in srgb, var(--accent, #ff7a00) 8%, transparent);
+}
+
+.vsayte-page-open {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+}
+
+.vsayte-page-open span {
+  font-size: 0.78rem;
+  opacity: 0.65;
+}
+
+.vsayte-page-rename {
+  width: 100%;
+  grid-column: 1;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.vsayte-page-actions {
+  display: flex;
+  gap: 4px;
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.vsayte-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 0.82rem;
+}
+
+.vsayte-field > span {
+  opacity: 0.7;
+  font-weight: 600;
+}
+
+.vsayte-seo-desc {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+  min-height: 72px;
+}
+
+.vsayte-upload-btn--ghost {
+  margin-top: 8px;
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, currentColor 22%, transparent);
+}
+
+.vsayte-site-assets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.vsayte-site-previews {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.vsayte-site-favicon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.vsayte-site-og {
+  width: 96px;
+  height: 54px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.vsayte-sel-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent, #ff7a00) 10%, transparent);
+}
+
+.vsayte-device-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.vsayte-device-switch .vsayte-mini-btn.is-active {
+  background: color-mix(in srgb, var(--accent, #ff7a00) 18%, transparent);
+  color: var(--accent, #ff7a00);
+  font-weight: 700;
+}
+
+.vsayte-leads-list {
+  display: grid;
+  gap: 10px;
+}
+
+.vsayte-lead-card {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  background: color-mix(in srgb, var(--card-bg, #fff) 96%, transparent);
+}
+
+.vsayte-lead-card.is-new {
+  border-color: color-mix(in srgb, var(--accent, #ff7a00) 45%, transparent);
+  background: color-mix(in srgb, var(--accent, #ff7a00) 7%, transparent);
+}
+
+.vsayte-lead-badge {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent, #ff7a00);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.vsayte-custom-css {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.vsayte-canvas-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 4px 10px;
+  flex-shrink: 0;
+}
+
+.vsayte-canvas-bar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.vsayte-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(10, 10, 12, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.vsayte-preview-panel {
+  width: min(1100px, 100%);
+  height: min(860px, 100%);
+  background: #fff;
+  color: #111;
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+}
+
+.vsayte-preview-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #eee;
+}
+
+.vsayte-preview-panel iframe {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #fff;
+}
+
 @media (max-width: 960px) {
   .vsayte-editor {
     grid-template-columns: 1fr;
@@ -644,4 +918,110 @@ body:has(.page-logged:has(.vsayte-app--editor)) {
   .vsayte-editor-sub {
     display: none;
   }
+}
+
+/* ========== Calendar Pad chrome for Всайте shell ========== */
+.page-logged .vsayte-app.cabinet-sheet,
+.page-logged .vsayte-app:not(.vsayte-app--editor) {
+  background: var(--vm-surface, #fff);
+  border: 1px solid var(--vm-hairline, #ffe0c7);
+  border-radius: var(--vm-radius, 10px);
+  box-shadow: none;
+  color: var(--vm-ink, #1a1208);
+  font-family: var(--vm-font, Manrope, Segoe UI, system-ui, sans-serif);
+}
+
+.page-logged .vsayte-head-brand h2 {
+  font-family: var(--vm-font-display, Manrope, Segoe UI, system-ui, sans-serif);
+  letter-spacing: -0.02em;
+  color: var(--vm-ink, #1a1208);
+}
+
+.page-logged .vsayte-plan-pill {
+  border-radius: var(--vm-radius-sm, 6px);
+  background: color-mix(in srgb, var(--vm-accent, #ff7a00) 14%, #fff);
+  color: var(--vm-ink, #1a1208);
+}
+
+.page-logged .vsayte-plan-pill.is-pro {
+  background: var(--vm-accent, #ff7a00);
+  color: #fff;
+}
+
+.page-logged .vsayte-tabs button {
+  border-radius: var(--vm-radius-sm, 6px);
+  border: 1px solid var(--vm-hairline, #ffe0c7);
+  background: var(--vm-chrome, #fff8f2);
+  color: var(--vm-mute, #6b5344);
+  font-family: var(--vm-font, Manrope, Segoe UI, system-ui, sans-serif);
+  font-weight: 650;
+}
+
+.page-logged .vsayte-tabs button.is-active {
+  background: #fff;
+  color: var(--vm-ink, #1a1208);
+  border-color: var(--vm-gold, #ffbf8a);
+  box-shadow: inset 0 -2px 0 var(--vm-accent, #ff7a00);
+}
+
+.page-logged .vsayte-site-card,
+.page-logged .vsayte-plan-card,
+.page-logged .vsayte-lead-card {
+  background: #fff;
+  border: 1px solid var(--vm-hairline, #ffe0c7);
+  border-radius: var(--vm-radius-sm, 6px);
+  box-shadow: none;
+  color: var(--vm-ink, #1a1208);
+}
+
+.page-logged .vsayte-site-card:hover {
+  border-color: var(--vm-gold, #ffbf8a);
+  background: var(--vm-pad, #fff3e8);
+}
+
+.page-logged .vsayte-plan-card.is-current {
+  border-color: var(--vm-accent, #ff7a00);
+  box-shadow: inset 3px 0 0 var(--vm-accent, #ff7a00);
+}
+
+.page-logged .vsayte-lead-card.is-new {
+  box-shadow: inset 3px 0 0 var(--vm-accent, #ff7a00);
+}
+
+.page-logged .vsayte-empty {
+  border-radius: var(--vm-radius-sm, 6px);
+  border: 1px dashed var(--vm-gold, #ffbf8a);
+  background: var(--vm-pad, #fff3e8);
+  color: var(--vm-ink, #1a1208);
+}
+
+.page-logged .vsayte-app--editor {
+  background: var(--vm-chrome, #fff8f2);
+  border: 1px solid var(--vm-hairline, #ffe0c7);
+  border-radius: var(--vm-radius, 10px);
+  color: var(--vm-ink, #1a1208);
+}
+
+.page-logged .vsayte-back,
+.page-logged .vsayte-editor-side {
+  background: #fff;
+  border: 1px solid var(--vm-hairline, #ffe0c7);
+  border-radius: var(--vm-radius-sm, 6px);
+  color: var(--vm-ink, #1a1208);
+}
+
+.page-logged .vsayte-back:hover {
+  border-color: var(--vm-accent, #ff7a00);
+  color: var(--vm-accent, #ff7a00);
+}
+
+.page-logged .vsayte-side-tabs {
+  background: var(--vm-pad, #fff3e8);
+  border-radius: var(--vm-radius-sm, 6px);
+}
+
+.page-logged .vsayte-side-tabs button.is-active {
+  background: #fff;
+  color: var(--vm-ink, #1a1208);
+  box-shadow: inset 0 -2px 0 var(--vm-accent, #ff7a00);
 }

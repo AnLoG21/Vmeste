@@ -66,19 +66,62 @@ export async function localDeleteSite(id) {
   await withStore("readwrite", (store) => store.delete(id));
 }
 
+import { VSAYTE_INTERACTIVE_CSS } from "./vsayteSiteCss.js";
+
+function wrapPageHtml(title, css, html, description = "", site = {}) {
+  const safeTitle = String(title || "Сайт").replace(/</g, "");
+  const desc = String(description || site.ogDescription || "").replace(/"/g, "&quot;").replace(/</g, "");
+  const ogTitle = String(site.ogTitle || title || "").replace(/"/g, "&quot;").replace(/</g, "");
+  const ogDesc = String(site.ogDescription || description || "").replace(/"/g, "&quot;").replace(/</g, "");
+  const siteName = String(site.name || "").replace(/"/g, "&quot;").replace(/</g, "");
+  const favicon = String(site.favicon || "").replace(/"/g, "&quot;");
+  const ogImage = String(site.ogImage || "").replace(/"/g, "&quot;");
+  const tags = [
+    '<meta charset="utf-8"/>',
+    '<meta name="viewport" content="width=device-width, initial-scale=1"/>',
+  ];
+  if (desc) tags.push(`<meta name="description" content="${desc}"/>`);
+  if (favicon) tags.push(`<link rel="icon" href="${favicon}"/>`);
+  if (siteName) tags.push(`<meta property="og:site_name" content="${siteName}"/>`);
+  if (ogTitle) tags.push(`<meta property="og:title" content="${ogTitle}"/>`);
+  if (ogDesc) tags.push(`<meta property="og:description" content="${ogDesc}"/>`);
+  if (ogImage) {
+    tags.push(`<meta property="og:image" content="${ogImage}"/>`);
+    tags.push(`<meta name="twitter:card" content="summary_large_image"/>`);
+  }
+  tags.push(`<title>${safeTitle}</title>`);
+  return `<!DOCTYPE html>
+<html lang="ru">
+<head>
+${tags.join("\n")}
+<style>${css || ""}\n${VSAYTE_INTERACTIVE_CSS}\n${site.customCss || ""}</style>
+</head>
+<body>${html || ""}</body>
+</html>`;
+}
+
 export function exportSiteHtml(document, title = "Сайт") {
   const pages = document?.pages?.length
     ? document.pages
     : [{ name: title, html: document?.html || "", css: document?.css || "" }];
   const page = pages[0];
-  return `<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>${String(title).replace(/</g, "")}</title>
-<style>${document?.css || ""}\n${page.css || ""}</style>
-</head>
-<body>${page.html || document?.html || ""}</body>
-</html>`;
+  const css = `${document?.css || ""}\n${page.css || ""}`;
+  const pageTitle = page.seoTitle || page.name || title;
+  const site = document?.meta?.site || {};
+  if (pages.length <= 1) {
+    return wrapPageHtml(pageTitle, css, page.html || document?.html || "", page.seoDescription || "", site);
+  }
+  const nav = pages
+    .map((p) => {
+      const href = p.path === "/" ? "index.html" : `${String(p.path || "").replace(/^\//, "") || "page"}.html`;
+      return `<a href="${href}" style="margin-right:12px;">${p.name || href}</a>`;
+    })
+    .join("");
+  return wrapPageHtml(
+    pageTitle,
+    css,
+    `<nav style="padding:12px 16px;border-bottom:1px solid #eee;font-family:system-ui,sans-serif;">${nav}</nav>${page.html || document?.html || ""}`,
+    page.seoDescription || "",
+    site,
+  );
 }

@@ -1,3 +1,6 @@
+import copy
+from datetime import timedelta
+
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Max
@@ -16,13 +19,16 @@ from .entitlement import (
     current_limits,
     ensure_free_vsayte_subscription,
 )
-from .models import Site, SiteAsset, SiteDomain, SitePublish
+from .models import Site, SiteAsset, SiteDomain, SiteLead, SitePublish
+from .notifications import notify_owner_new_lead
 from .publish import publish_site, sites_root, unpublish_site
 from . import regru
 from .serializers import (
     SiteAssetSerializer,
     SiteDetailSerializer,
     SiteDomainSerializer,
+    SiteLeadCreateSerializer,
+    SiteLeadSerializer,
     SiteListSerializer,
     SiteWriteSerializer,
 )
@@ -49,6 +55,8 @@ class EntitlementView(APIView):
                 "can_publish": bool(limits.get("can_publish")),
                 "can_custom_domain": bool(limits.get("can_custom_domain")),
                 "editor_tier": limits.get("editor_tier"),
+                "full_access": bool(limits.get("full_access")),
+                "max_pages": int(limits.get("max_pages") or 2),
                 "base_domain": getattr(settings, "VSAYTE_BASE_DOMAIN", "vsayte.vsevmeste.space"),
             }
         )
@@ -58,8 +66,14 @@ class SiteListCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        from django.db.models import Count, Q
+
         ensure_free_vsayte_subscription(request.user)
-        qs = Site.objects.filter(owner=request.user).prefetch_related("domains")
+        qs = (
+            Site.objects.filter(owner=request.user)
+            .prefetch_related("domains")
+            .annotate(unread_leads_count=Count("leads", filter=Q(leads__is_read=False)))
+        )
         return Response(SiteListSerializer(qs, many=True).data)
 
     def post(self, request):
@@ -186,6 +200,99 @@ class SiteUnpublishView(APIView):
             status=SiteDomain.Status.PENDING
         )
         return Response(SiteDetailSerializer(site).data)
+
+
+class SiteLeadListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        site = _owned_site(request.user, pk)
+        qs = site.leads.all()[:200]
+        return Response(SiteLeadSerializer(qs, many=True).data)
+
+
+class SiteLeadReadView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk, lead_id):
+        site = _owned_site(request.user, pk)
+        lead = get_object_or_404(SiteLead.objects.filter(site=site), pk=lead_id)
+        lead.is_read = True
+        lead.save(update_fields=["is_read"])
+        return Response(SiteLeadSerializer(lead).data)
+
+
+class PublicSiteLeadCreateView(APIView):
+    """Публичный приём заявок с опубликованного сайта (по slug)."""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request, slug):
+        site = get_object_or_404(Site.objects.all(), slug=slug)
+        if site.status != Site.Status.PUBLISHED:
+            return Response(
+                {"detail": "Сайт не опубликован."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        ser = SiteLeadCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+        # простой антиспам: лимит 30 заявок / час с одного IP
+        ip = request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip() or request.META.get(
+            "REMOTE_ADDR"
+        )
+        if ip:
+            hour_ago = timezone.now() - timedelta(hours=1)
+            recent = SiteLead.objects.filter(site=site, ip_address=ip, created_at__gte=hour_ago).count()
+            if recent >= 30:
+                return Response(
+                    {"detail": "Слишком много заявок. Попробуйте позже."},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+        lead = SiteLead.objects.create(
+            site=site,
+            name=data.get("name") or "",
+            contact=data.get("contact") or "",
+            message=data.get("message") or "",
+            payload=data.get("payload") or {},
+            page_url=(data.get("page_url") or "")[:500],
+            user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:400],
+            ip_address=ip or None,
+        )
+        notify_owner_new_lead(site, lead)
+        return Response({"ok": True, "id": lead.id}, status=status.HTTP_201_CREATED)
+
+
+class SiteCloneView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        source = _owned_site(request.user, pk)
+        ensure_free_vsayte_subscription(request.user)
+        limits = current_limits(request.user)
+        count = Site.objects.filter(owner=request.user).count()
+        if count >= int(limits.get("max_sites") or 1):
+            return Response(
+                {"detail": f"Лимит сайтов на тарифе «{limits.get('plan_name')}»: {limits.get('max_sites')}."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        title = f"{source.title} — копия"
+        base = slugify(title, allow_unicode=False) or f"{source.slug}-copy"
+        slug = base[:60]
+        n = 1
+        while Site.objects.filter(slug=slug).exists():
+            n += 1
+            slug = f"{base[:50]}-{n}"
+        cloned = Site.objects.create(
+            owner=request.user,
+            title=title,
+            slug=slug,
+            document=copy.deepcopy(source.document or {}),
+            template_id=source.template_id or "",
+            status=Site.Status.DRAFT,
+        )
+        return Response(SiteDetailSerializer(cloned).data, status=status.HTTP_201_CREATED)
 
 
 class SiteAssetUploadView(APIView):

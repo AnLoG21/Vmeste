@@ -50,6 +50,10 @@ export function vsayteDeleteSite(authFetch, API_URL, id) {
   return vsayteFetch(authFetch, API_URL, `sites/${id}/`, { method: "DELETE" });
 }
 
+export function vsayteCloneSite(authFetch, API_URL, id) {
+  return vsayteFetch(authFetch, API_URL, `sites/${id}/clone/`, { method: "POST" });
+}
+
 export function vsaytePublish(authFetch, API_URL, id) {
   return vsayteFetch(authFetch, API_URL, `sites/${id}/publish/`, { method: "POST" });
 }
@@ -85,5 +89,15 @@ export function vsayteAttachDomain(authFetch, API_URL, siteId, domain) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ domain }),
+  });
+}
+
+export function vsayteListLeads(authFetch, API_URL, siteId) {
+  return vsayteFetch(authFetch, API_URL, `sites/${siteId}/leads/`);
+}
+
+export function vsayteMarkLeadRead(authFetch, API_URL, siteId, leadId) {
+  return vsayteFetch(authFetch, API_URL, `sites/${siteId}/leads/${leadId}/read/`, {
+    method: "POST",
   });
 }

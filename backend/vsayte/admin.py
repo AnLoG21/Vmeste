@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Site, SiteAsset, SiteDomain, SitePublish
+from .models import Site, SiteAsset, SiteDomain, SiteLead, SitePublish
 
 
 class SiteDomainInline(admin.TabularInline):
@@ -33,3 +33,10 @@ class SiteDomainAdmin(admin.ModelAdmin):
     list_display = ("hostname", "kind", "status", "site", "updated_at")
     list_filter = ("kind", "status")
     search_fields = ("hostname",)
+
+
+@admin.register(SiteLead)
+class SiteLeadAdmin(admin.ModelAdmin):
+    list_display = ("id", "site", "name", "contact", "is_read", "created_at")
+    list_filter = ("is_read",)
+    search_fields = ("name", "contact", "message", "site__slug")
