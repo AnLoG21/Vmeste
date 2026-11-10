@@ -104,7 +104,7 @@ export default function BookingHistory({
     (a, b) => new Date(b.slot_starts_at || 0) - new Date(a.slot_starts_at || 0),
   );
   return (
-    <section className="card full-width booking-history-card">
+    <section className="card full-width booking-history-card booking-history">
       <h2>История записей</h2>
       {showDiagnosticsTab ? (
         <div className="history-switch" role="tablist" aria-label="Раздел истории">

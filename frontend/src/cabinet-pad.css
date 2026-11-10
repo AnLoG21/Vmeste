@@ -810,3 +810,479 @@ body.theme-dark .calendar-day-sheet--tearoff .calendar-day-sheet-item {
   border-radius: var(--vm-radius-sm);
   font-family: var(--vm-font);
 }
+/* ========== Pad rollout: chats ========== */
+.page-logged .tg-chats-card {
+  background: var(--vm-surface);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius);
+  box-shadow: none;
+  color: var(--vm-ink);
+  font-family: var(--vm-font);
+}
+
+.page-logged {
+  --tg-sidebar: var(--vm-chrome);
+  --tg-main-bg: var(--vm-pad);
+  --tg-bubble: #fff;
+  --tg-bubble-own: color-mix(in srgb, var(--vm-accent) 12%, #fff);
+}
+
+.page-logged .tg-sidebar {
+  background: var(--vm-chrome);
+  border-right: 1px solid var(--vm-hairline);
+}
+
+.page-logged .tg-sidebar-head {
+  background: color-mix(in srgb, var(--vm-chrome) 80%, #fff);
+  border-bottom: 1px solid var(--vm-gold);
+}
+
+.page-logged .tg-sidebar-title {
+  color: var(--vm-ink);
+  font-family: var(--vm-font-display);
+  letter-spacing: -0.02em;
+}
+
+.page-logged .tg-chat-search {
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius-sm);
+  background: #fff;
+  color: var(--vm-ink);
+}
+
+.page-logged .tg-folder-tabs button {
+  border-color: var(--vm-hairline);
+  background: var(--vm-pad);
+  color: var(--vm-mute);
+  border-radius: 0;
+}
+
+.page-logged .tg-folder-tabs button:first-child {
+  border-radius: var(--vm-radius-sm) 0 0 var(--vm-radius-sm);
+}
+
+.page-logged .tg-folder-tabs button:last-child {
+  border-radius: 0 var(--vm-radius-sm) var(--vm-radius-sm) 0;
+}
+
+.page-logged .tg-folder-tabs button.active {
+  background: #fff;
+  color: var(--vm-ink);
+  box-shadow: inset 0 -2px 0 var(--vm-accent);
+}
+
+.page-logged .tg-chat-item-row {
+  border-bottom: 1px solid var(--vm-hairline);
+}
+
+.page-logged .tg-chat-item-row:hover {
+  background: color-mix(in srgb, var(--vm-pad) 55%, #fff);
+}
+
+.page-logged .tg-chat-item-row.active {
+  background: color-mix(in srgb, var(--vm-accent) 10%, #fff);
+  box-shadow: inset 3px 0 0 var(--vm-accent);
+}
+
+.page-logged .tg-chat-item-row--pinned {
+  box-shadow: inset 3px 0 0 var(--vm-gold);
+}
+
+.page-logged .tg-chat-item-title {
+  color: var(--vm-ink);
+}
+
+.page-logged .tg-chat-item-sub {
+  color: var(--vm-mute);
+}
+
+.page-logged .tg-chat-unread-badge {
+  background: var(--vm-accent);
+  color: #fff;
+  border-radius: var(--vm-radius-sm);
+}
+
+.page-logged .tg-fab,
+.page-logged .tg-chat-row-icon-btn {
+  border-radius: var(--vm-radius-sm);
+  border-color: var(--vm-hairline);
+  background: #fff;
+  color: var(--vm-ink);
+}
+
+.page-logged .tg-main {
+  background: var(--vm-pad);
+}
+
+.page-logged .tg-bubble,
+.page-logged .tg-msg-bubble {
+  border-radius: var(--vm-radius-sm);
+  border: 1px solid var(--vm-hairline);
+  box-shadow: none;
+}
+
+/* ========== Pad rollout: client map ========== */
+.page-logged .client-discover-card {
+  background: var(--vm-surface);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius);
+  box-shadow: none;
+  color: var(--vm-ink);
+}
+
+.page-logged .client-discover-title {
+  font-family: var(--vm-font-display);
+  letter-spacing: -0.02em;
+  color: var(--vm-ink);
+  border-bottom: 1px solid var(--vm-gold);
+  padding-bottom: 8px;
+}
+
+.page-logged .map-org-sheet {
+  background: var(--vm-chrome);
+  border-radius: var(--vm-radius) var(--vm-radius) 0 0;
+  box-shadow: 0 -8px 28px rgba(26, 18, 8, 0.1);
+  border-top: 1px solid var(--vm-hairline);
+  font-family: var(--vm-font);
+}
+
+.page-logged .map-org-sheet-title,
+.page-logged .map-org-sheet-peek-title {
+  color: var(--vm-ink);
+  font-family: var(--vm-font-display);
+  letter-spacing: -0.02em;
+}
+
+.page-logged .map-org-sheet-close,
+.page-logged .map-org-sheet-handle {
+  border-radius: var(--vm-radius-sm);
+  border-color: var(--vm-hairline);
+  background: #fff;
+  color: var(--vm-ink);
+}
+
+.page-logged .map-org-staff-card,
+.page-logged .map-org-featured-products > *,
+.page-logged .map-org-sheet-actions button,
+.page-logged .map-org-all-products-btn {
+  border-radius: var(--vm-radius-sm);
+  border-color: var(--vm-hairline);
+}
+
+.page-logged .map-org-staff-card {
+  background: #fff;
+  border: 1px solid var(--vm-hairline);
+  box-shadow: none;
+}
+
+/* ========== Pad rollout: marketplace ========== */
+.page-logged .mp-workspace.mp-ozon,
+.page-logged .mp-workspace.mp-wb {
+  background: var(--vm-chrome);
+  border-color: var(--vm-hairline);
+  color: var(--vm-ink);
+}
+
+.page-logged .mp-panel,
+.page-logged .mp-workspace .cafe-form-panel {
+  background: var(--vm-surface);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius);
+  box-shadow: none;
+}
+
+.page-logged .mp-mode-banner {
+  background: var(--vm-pad);
+  border: 1px solid var(--vm-gold);
+  border-radius: var(--vm-radius-sm);
+  color: var(--vm-ink);
+}
+
+.page-logged .mp-ui-mode {
+  border-radius: var(--vm-radius-sm);
+  border-color: var(--vm-hairline);
+  background: #fff;
+}
+
+.page-logged .mp-ui-mode button.is-active {
+  background: var(--vm-accent);
+  color: #fff;
+}
+
+.page-logged .mp-onboard {
+  background: #fff;
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius);
+  box-shadow: none;
+}
+
+.page-logged .mp-workspace .mp-btn-primary,
+.page-logged .mp-workspace button.primary {
+  background: var(--vm-accent);
+  border-color: transparent;
+  color: #fff;
+  border-radius: var(--vm-radius-sm);
+}
+
+/* ========== Pad rollout: cafe ========== */
+.page-logged .cafe-provider {
+  background: var(--vm-surface);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius);
+  box-shadow: none;
+  color: var(--vm-ink);
+}
+
+.page-logged .cafe-provider > h2 {
+  font-family: var(--vm-font-display);
+  letter-spacing: -0.02em;
+  border-bottom: 1px solid var(--vm-gold);
+  padding-bottom: 10px;
+}
+
+.page-logged .cafe-provider .cafe-toolbar button.is-active,
+.page-logged .cafe-provider .cafe-toolbar .ghost-btn.is-active {
+  border-color: var(--vm-accent);
+  background: var(--vm-pad);
+  color: var(--vm-ink);
+  box-shadow: inset 0 -2px 0 var(--vm-accent);
+}
+
+.page-logged .cafe-form-panel {
+  background: #fff;
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius-sm);
+}
+
+.page-logged .cafe-form-grid input,
+.page-logged .cafe-form-grid textarea,
+.page-logged .cafe-form-grid select {
+  border-radius: var(--vm-radius-sm);
+  border-color: var(--vm-hairline);
+}
+
+.page-logged .cafe-floor-canvas {
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius-sm);
+  background:
+    linear-gradient(90deg, rgba(255, 122, 0, 0.05) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(rgba(255, 122, 0, 0.05) 1px, transparent 1px) 0 0 / 24px 24px,
+    var(--vm-pad);
+}
+
+.page-logged .cafe-provider-tabs button,
+.page-logged .cafe-provider-tabs .is-active {
+  border-radius: var(--vm-radius-sm);
+}
+
+.page-logged .cafe-provider-tabs .is-active {
+  background: var(--vm-pad);
+  color: var(--vm-ink);
+  border-color: var(--vm-accent);
+}
+
+/* ========== Pad rollout: shop ========== */
+.page-logged .shop-workspace {
+  color: var(--vm-ink);
+  font-family: var(--vm-font);
+}
+
+.page-logged .shop-workspace .card,
+.page-logged .shop-workspace > section,
+.page-logged .shop-workspace .cafe-form-panel {
+  background: var(--vm-surface);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius);
+  box-shadow: none;
+}
+
+.page-logged .shop-workspace h2,
+.page-logged .shop-workspace h3 {
+  font-family: var(--vm-font-display);
+  letter-spacing: -0.02em;
+  color: var(--vm-ink);
+}
+
+.page-logged .shop-workspace input,
+.page-logged .shop-workspace select,
+.page-logged .shop-workspace textarea {
+  border-radius: var(--vm-radius-sm);
+  border-color: var(--vm-hairline);
+}
+
+/* ========== Pad rollout: clients base ========== */
+.page-logged .clients-base-panel {
+  background: var(--vm-surface);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius);
+  box-shadow: none;
+  color: var(--vm-ink);
+}
+
+.page-logged .clients-base-panel h2 {
+  font-family: var(--vm-font-display);
+  letter-spacing: -0.02em;
+  border-bottom: 1px solid var(--vm-gold);
+  padding-bottom: 10px;
+}
+
+.page-logged .clients-base-card {
+  background: #fff;
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius-sm);
+  box-shadow: none;
+}
+
+.page-logged .clients-base-modal {
+  border-radius: var(--vm-radius);
+  border: 1px solid var(--vm-hairline);
+  font-family: var(--vm-font);
+}
+
+/* ========== Pad rollout: services catalog ========== */
+.page-logged .service-catalog-workspace > .card {
+  background: var(--vm-surface);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius);
+  box-shadow: none;
+  color: var(--vm-ink);
+}
+
+.page-logged .service-catalog-workspace .catalog-help-panel h2 {
+  font-family: var(--vm-font-display);
+  letter-spacing: -0.02em;
+  border-bottom: 1px solid var(--vm-gold);
+  padding-bottom: 10px;
+}
+
+.page-logged .service-catalog-workspace .catalog-save-all-btn {
+  background: var(--vm-accent);
+  color: #fff;
+  border: 0;
+  border-radius: var(--vm-radius-sm);
+  font-weight: 700;
+}
+
+/* ========== Pad rollout: reviews ========== */
+.page-logged .reviews-page {
+  background: var(--vm-surface);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius);
+  box-shadow: none;
+  color: var(--vm-ink);
+}
+
+.page-logged .reviews-page h2 {
+  font-family: var(--vm-font-display);
+  letter-spacing: -0.02em;
+  border-bottom: 1px solid var(--vm-gold);
+  padding-bottom: 10px;
+}
+
+.page-logged .reviews-page .review-card,
+.page-logged .reviews-page .review-item,
+.page-logged .review-row {
+  background: #fff;
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius-sm);
+  box-shadow: none;
+}
+
+/* ========== Pad rollout: subscriptions ========== */
+.page-logged .subscriptions-page {
+  color: var(--vm-ink);
+}
+
+.page-logged .subscriptions-plan-card {
+  background: #fff;
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius);
+  box-shadow: none;
+}
+
+.page-logged .subscriptions-plan-card.is-current,
+.page-logged .subscriptions-plan-card--voice.is-current {
+  border-color: var(--vm-accent) !important;
+  box-shadow: inset 0 0 0 1px var(--vm-accent) !important;
+}
+
+.page-logged .subscriptions-plan-card--voice {
+  border-color: var(--vm-hairline) !important;
+}
+
+.page-logged .subscriptions-plan-price,
+.page-logged .subscriptions-plan-minutes {
+  color: var(--vm-accent) !important;
+}
+
+.page-logged .subscriptions-active {
+  background: var(--vm-pad);
+  border: 1px solid var(--vm-gold);
+  border-radius: var(--vm-radius-sm);
+}
+
+.page-logged .subscriptions-active--voice {
+  border-color: var(--vm-gold) !important;
+  background: var(--vm-pad) !important;
+}
+
+.page-logged .services-hub {
+  max-width: 920px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.page-logged .services-hub-card {
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius-sm);
+  background: #fff;
+  box-shadow: none;
+  color: var(--vm-ink);
+}
+
+.page-logged .services-hub-card:hover {
+  border-color: var(--vm-accent);
+  background: var(--vm-pad);
+}
+
+/* ========== Pad rollout: settings / inspections / tail ========== */
+.page-logged .general-settings-panel h3 {
+  font-family: var(--vm-font-display);
+  letter-spacing: -0.02em;
+  color: var(--vm-ink);
+  border-bottom: 1px solid var(--vm-hairline);
+  padding-bottom: 6px;
+}
+
+.page-logged .inspection-workspace {
+  background: var(--vm-surface);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius);
+  box-shadow: none;
+  color: var(--vm-ink);
+}
+
+.page-logged .inspection-workspace h2 {
+  font-family: var(--vm-font-display);
+  letter-spacing: -0.02em;
+  border-bottom: 1px solid var(--vm-gold);
+  padding-bottom: 10px;
+}
+
+.page-logged .chat-notif-banner,
+.page-logged .chat-notif-card {
+  background: var(--vm-pad);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius-sm);
+  box-shadow: none;
+}
+
+.page-logged .booking-history,
+.page-logged .client-activity-feed,
+.page-logged .client-loyalty-page {
+  background: var(--vm-surface);
+  border: 1px solid var(--vm-hairline);
+  border-radius: var(--vm-radius);
+  box-shadow: none;
+  color: var(--vm-ink);
+}

@@ -726,7 +726,7 @@ export default function CafeOrdersPage({ authFetch, API_URL, accessPerms = null,
   }
 
   return (
-    <section className="card full-width cafe-provider">
+    <section className="card full-width cafe-provider cafe-provider--orders">
       <h2>Заказы и посадка</h2>
       <div className="cafe-provider-tabs">
         {[

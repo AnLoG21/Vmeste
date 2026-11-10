@@ -304,7 +304,7 @@ export default function VmenuApp({
 export function ServicesHub({ me, onOpenVmenu, onOpenVmagazine, onOpenVkvartire, onOpenVefire, onOpenVsayte }) {
   const showVefire = canAccessVefire(me);
   return (
-    <section className="card services-hub">
+    <section className="card services-hub cabinet-sheet">
       <h2>Сервисы</h2>
       <p className="muted">Микросервисы платформы Вместе — отдельные приложения внутри кабинета.</p>
       <button type="button" className="services-hub-card" onClick={onOpenVmenu}>

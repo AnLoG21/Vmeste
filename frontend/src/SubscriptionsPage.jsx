@@ -272,7 +272,7 @@ export default function SubscriptionsPage({ apiUrl, authFetch, me }) {
 
   if (loading) {
     return (
-      <section className="card profile-card subscriptions-page">
+      <section className="card profile-card cabinet-sheet subscriptions-page">
         <p>Загрузка...</p>
       </section>
     );

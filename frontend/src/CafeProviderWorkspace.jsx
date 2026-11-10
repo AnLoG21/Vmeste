@@ -475,7 +475,7 @@ export default function CafeProviderWorkspace({ authFetch, API_URL, initialTab =
   }
 
   return (
-    <section className="card full-width cafe-provider">
+    <section className="card full-width cafe-provider cafe-provider--workspace">
       <h2>Зал и меню</h2>
       <p className="muted">
         Чертите стены по сетке, редактируйте точки, расставляйте столы. Заказы — во вкладке «Заказы» сверху.

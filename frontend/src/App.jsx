@@ -3,7 +3,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import "./styles.css";
 import "./design-kit.css";
 import "./mobile.css";
-import "./cabinet-pad.css";
 import LandingPage from "./LandingPage.jsx";
 import SubscriptionsPage from "./SubscriptionsPage.jsx";
 import AnalyticsPage from "./AnalyticsPage.jsx";
@@ -94,6 +93,8 @@ import {
 } from "./subnavBookmarks.js";
 import { getDevicePosition } from "./geoPosition.js";
 import "./landing.css";
+/* Pad overrides last so they win over landing / sphere CSS pulled by panels above. */
+import "./cabinet-pad.css";
 import {
   filterServiceGroupsFromCatalog,
   uniqueDiscoverOrgs,
@@ -2956,7 +2957,10 @@ export default function App() {
   const profileWide = accessToken && ["profile", "subscriptions"].includes(currentView);
 
   return (
-    <div className={`page${accessToken ? " page-logged" : " page--guest"}`}>
+    <div
+      className={`page${accessToken ? " page-logged" : " page--guest"}`}
+      data-cabinet-view={accessToken ? currentView : undefined}
+    >
       <CabinetErrorBoundary resetKey={accessToken ? `${me?.id || 0}:${currentView}` : "guest"}>
       <CabinetChrome
         accessToken={accessToken}
@@ -3479,7 +3483,7 @@ export default function App() {
           me?.employer_sphere !== "marketplaces" &&
           me?.employer_sphere !== "shops" &&
           (me?.role === "provider" || (me?.role === "staff" && staffHasPerm("manage_services"))) && (
-          <div className="services-layout">
+          <div className="services-layout service-catalog-workspace">
             {cabinetLoadError ? (
               <LoadErrorBanner
                 message={cabinetLoadError}
