@@ -464,3 +464,19 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+/* ========== Calendar Pad edge for Вэфире (keep dark TV world) ========== */
+.page-logged .vefire-shell.cabinet-sheet {
+  border: 1px solid color-mix(in srgb, var(--vm-accent, #ff7a00) 35%, #1a2233);
+  border-radius: var(--vm-radius, 10px);
+  box-shadow: none;
+  font-family: var(--vm-font, Manrope, Segoe UI, system-ui, sans-serif);
+}
+
+.page-logged .vefire-shell .vefire-back,
+.page-logged .vefire-shell .vefire-btn {
+  border-radius: var(--vm-radius-sm, 6px);
+}
+
+.page-logged .vefire-shell .vefire-tile {
+  border-radius: var(--vm-radius-sm, 6px);
+}

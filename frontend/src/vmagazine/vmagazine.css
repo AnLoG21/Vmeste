@@ -1606,3 +1606,59 @@ body:has(.page-logged:has(.vmenu-app)) {
   display: grid;
   gap: 0.65rem;
 }
+/* ========== Calendar Pad chrome for Вмагазине shell ========== */
+.page-logged .vmagazine-app.cabinet-sheet,
+.page-logged .vmagazine-app.card {
+  background: var(--vm-surface, #fff);
+  border: 1px solid var(--vm-hairline, #ffe0c7);
+  border-radius: var(--vm-radius, 10px);
+  box-shadow: none;
+  color: var(--vm-ink, #1a1208);
+  font-family: var(--vm-font, Manrope, Segoe UI, system-ui, sans-serif);
+}
+
+.page-logged .vmagazine-header-title {
+  font-family: var(--vm-font-display, Manrope, Segoe UI, system-ui, sans-serif);
+  letter-spacing: -0.02em;
+  color: var(--vm-ink, #1a1208);
+}
+
+.page-logged .vmagazine-bottom-nav.vmenu-bottom-nav {
+  background: color-mix(in srgb, var(--vm-chrome, #fff8f2) 92%, #fff);
+  border-top: 1px solid var(--vm-hairline, #ffe0c7);
+  box-shadow: none;
+}
+
+.page-logged .vmagazine-bottom-nav button {
+  color: var(--vm-mute, #6b5344);
+  font-family: var(--vm-font, Manrope, Segoe UI, system-ui, sans-serif);
+  font-weight: 650;
+  border-radius: var(--vm-radius-sm, 6px);
+}
+
+.page-logged .vmagazine-bottom-nav button.active {
+  color: var(--vm-ink, #1a1208);
+  box-shadow: inset 0 -2px 0 var(--vm-accent, #ff7a00);
+  font-weight: 700;
+}
+
+.page-logged .vmag-product-sheet-cover,
+.page-logged .vmag-product-card,
+.page-logged .vmag-shop-card,
+.page-logged .vmag-order-card,
+.page-logged .vmag-addr-card {
+  border-radius: var(--vm-radius-sm, 6px);
+  border-color: var(--vm-hairline, #ffe0c7);
+  box-shadow: none;
+}
+
+.page-logged .vmag-product-sheet-cover.is-empty {
+  background: linear-gradient(145deg, var(--vm-pad, #fff3e8), #fff);
+}
+
+.page-logged .vmag-paid-banner {
+  background: var(--vm-pad, #fff3e8);
+  border: 1px solid var(--vm-gold, #ffbf8a);
+  border-radius: var(--vm-radius-sm, 6px);
+  color: var(--vm-ink, #1a1208);
+}

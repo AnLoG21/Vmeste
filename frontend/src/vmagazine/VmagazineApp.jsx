@@ -158,7 +158,7 @@ export default function VmagazineApp({
 
   return (
     <section
-      className={`card vmagazine-app${tab === "chats" ? " vmagazine-app--chats" : ""}${
+      className={`card vmagazine-app cabinet-sheet${tab === "chats" ? " vmagazine-app--chats" : ""}${
         overlayOpen ? " vmagazine-app--overlay" : ""
       }`}
     >

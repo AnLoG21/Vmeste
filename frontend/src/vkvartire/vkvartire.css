@@ -1113,3 +1113,34 @@
     max-height: calc(100dvh - 120px);
   }
 }
+/* ========== Calendar Pad chrome for Вквартире shell ========== */
+.page-logged .vkvartire-app.cabinet-sheet {
+  --vk-ink: var(--vm-ink, #1a1208);
+  --vk-mute: var(--vm-mute, #6b5344);
+  --vk-line: var(--vm-hairline, #ffe0c7);
+  --vk-chrome: var(--vm-chrome, #fff8f2);
+  --vk-surface: var(--vm-surface, #fff);
+  --vk-accent: var(--vm-accent, #ff7a00);
+  --vk-accent-deep: #e56a00;
+  --vk-feed-bg: var(--vm-pad, #fff3e8);
+  --vk-radius: var(--vm-radius, 10px);
+  background: var(--vk-feed-bg);
+  border: 1px solid var(--vk-line);
+  border-radius: var(--vk-radius);
+  box-shadow: none;
+  font-family: var(--vm-font, Manrope, Segoe UI, system-ui, sans-serif);
+  color: var(--vk-ink);
+}
+
+.page-logged .vkvartire-app .vmenu-bottom-nav,
+.page-logged .vkvartire-bottom-nav {
+  background: color-mix(in srgb, var(--vk-chrome) 92%, #fff);
+  border-top: 1px solid var(--vk-line);
+}
+
+.page-logged .vkvartire-app .vmenu-bottom-nav button.active,
+.page-logged .vkvartire-bottom-nav button.active {
+  color: var(--vk-ink);
+  box-shadow: inset 0 -2px 0 var(--vk-accent);
+  font-weight: 700;
+}

@@ -281,7 +281,7 @@ export default function VmenuApp({
 
   return (
     <VmenuErrorBoundary>
-      <section className={`vmenu-app card${tab === "chats" ? " vmenu-app--chats" : ""}${tab === "follows" ? " vmenu-app--follows" : ""}`}>
+      <section className={`vmenu-app card cabinet-sheet${tab === "chats" ? " vmenu-app--chats" : ""}${tab === "follows" ? " vmenu-app--follows" : ""}`}>
         <div className="vmenu-app-body">{renderMain()}</div>
         <nav className="vmenu-bottom-nav" aria-label="Вменю">
           {TABS.map((t) => (

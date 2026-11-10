@@ -144,7 +144,7 @@ export default function VkvartireApp({ authFetch, API_URL, onTabChange, onOpenCo
   const list = tab === "favorites" ? favItems : items;
 
   return (
-    <section className="card vkvartire-app full-width">
+    <section className="card vkvartire-app cabinet-sheet full-width">
       <div className={`vkvartire-app-body${tab === "feed" && viewMode === "map" ? " vkvartire-app-body--map" : ""}`}>
         {tab === "feed" ? (
           <>

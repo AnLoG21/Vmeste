@@ -92,7 +92,7 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
 
   if (!allowed) {
     return (
-      <section className="vefire-shell vefire-shell--denied">
+      <section className="vefire-shell vefire-shell--denied cabinet-sheet">
         <p>Вэфире доступен только на тестовом аккаунте.</p>
         <button type="button" className="vefire-btn" onClick={onExit}>
           Назад к сервисам
@@ -164,7 +164,7 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
 
   if (activeApp?.kind === "find") {
     return (
-      <section className="vefire-shell">
+      <section className="vefire-shell cabinet-sheet">
         <header className="vefire-top">
           <button type="button" className="vefire-back" onClick={() => setActiveAppId(null)}>
             ← Лаунчер
@@ -241,7 +241,7 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
 
   if (activeApp?.kind === "link") {
     return (
-      <section className="vefire-shell">
+      <section className="vefire-shell cabinet-sheet">
         <header className="vefire-top">
           <button type="button" className="vefire-back" onClick={() => setActiveAppId(null)}>
             ← Лаунчер
@@ -303,7 +303,7 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
 
   if (activeApp) {
     return (
-      <section className="vefire-shell">
+      <section className="vefire-shell cabinet-sheet">
         <header className="vefire-top">
           <button type="button" className="vefire-back" onClick={() => setActiveAppId(null)}>
             ← Лаунчер
@@ -360,7 +360,7 @@ export default function VefireApp({ me, authFetch, API_URL, onExit }) {
   }
 
   return (
-    <section className="vefire-shell">
+    <section className="vefire-shell cabinet-sheet">
       <header className="vefire-top">
         <button type="button" className="vefire-back" onClick={onExit}>
           ← Сервисы
