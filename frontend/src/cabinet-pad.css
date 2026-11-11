@@ -2062,6 +2062,7 @@ body.theme-dark .calendar-day-sheet--tearoff .calendar-day-sheet-item {
 }
 
 /* ========== Voice admin + org teal → Calendar Pad ========== */
+/* shipped with pad accent remaps for onboard / checklist / gallery */
 .page-logged .voice-admin-panel {
   border-top-color: var(--vm-hairline, #ffe0c7);
   font-family: var(--vm-font, Manrope, Segoe UI, system-ui, sans-serif);
