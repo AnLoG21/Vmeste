@@ -2017,10 +2017,58 @@
   color: var(--vm-ink, #1a1208);
 }
 
-/* Brand teal stays for CTAs; quiet chrome only */
+/* Deepen: teal SaaS accents → pad orange stamp under cabinet */
 .page-logged .vmenu-app .primary-btn,
 .page-logged .vmenu-app .vmenu-send-btn,
 .page-logged .vmenu-app .vmenu-search-icon-btn,
-.page-logged .vmenu-app .vmenu-follow-toggle.on {
+.page-logged .vmenu-app .vmenu-follow-toggle.on,
+.page-logged .vmenu-app .vmenu-avatar-fallback {
   border-radius: var(--vm-radius-sm, 6px);
+  background: var(--vm-accent, #ff7a00) !important;
+  border-color: var(--vm-accent, #ff7a00) !important;
+  color: #fff !important;
+}
+
+.page-logged .vmenu-app .primary-btn:hover,
+.page-logged .vmenu-app .vmenu-send-btn:hover,
+.page-logged .vmenu-app .vmenu-search-icon-btn:hover {
+  background: #e56a00 !important;
+  border-color: #e56a00 !important;
+}
+
+.page-logged .vmenu-card-actions button.active,
+.page-logged .vmenu-chip,
+.page-logged .vmenu-photo-add-btn,
+.page-logged .vmenu-tabs-inline button.active,
+.page-logged .vmenu-portions-value,
+.page-logged .vmenu-portions-step,
+.page-logged .vmenu-follow-toggle.on,
+.page-logged .vmenu-stat-avatar {
+  color: var(--vm-accent, #ff7a00);
+  border-color: var(--vm-gold, #ffbf8a);
+}
+
+.page-logged .vmenu-card-actions button.active {
+  border-color: var(--vm-accent, #ff7a00);
+}
+
+.page-logged .vmenu-chip {
+  background: color-mix(in srgb, var(--vm-accent, #ff7a00) 12%, #fff);
+  border-radius: var(--vm-radius-sm, 6px);
+}
+
+.page-logged .vmenu-photo-add-btn {
+  background: var(--vm-pad, #fff3e8);
+  border: 1px dashed var(--vm-accent, #ff7a00);
+  border-radius: var(--vm-radius-sm, 6px);
+}
+
+.page-logged .vmenu-app input[type="checkbox"],
+.page-logged .vmenu-app input[type="radio"] {
+  accent-color: var(--vm-accent, #ff7a00);
+}
+
+.page-logged .vmenu-card-cover--empty,
+.page-logged .vmenu-app .vmenu-cover--empty {
+  background: linear-gradient(135deg, var(--vm-pad, #fff3e8), #fff) !important;
 }

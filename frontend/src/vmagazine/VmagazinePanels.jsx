@@ -1486,7 +1486,6 @@ export function CartTab({ authFetch, API_URL, me, onOpenProduct, onGoHome }) {
                       style={{
                         textAlign: "left",
                         cursor: "pointer",
-                        outline: Number(cardId) === Number(c.id) ? "2px solid #6a4c93" : undefined,
                       }}
                     >
                       <div className="vmag-pay-card-top">

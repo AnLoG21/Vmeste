@@ -1144,3 +1144,23 @@
   box-shadow: inset 0 -2px 0 var(--vk-accent);
   font-weight: 700;
 }
+
+/* Deepen: align CTAs/chips to pad accent (tokens already remapped) */
+.page-logged .vkvartire-app .primary,
+.page-logged .vkvartire-app .primary-btn {
+  background: var(--vk-accent);
+  border-color: var(--vk-accent);
+  color: #fff;
+  border-radius: var(--vm-radius-sm, 6px);
+}
+
+.page-logged .vkvartire-app .primary:hover,
+.page-logged .vkvartire-app .primary-btn:hover {
+  background: var(--vk-accent-deep);
+  border-color: var(--vk-accent-deep);
+}
+
+.page-logged .vkvartire-app input[type="checkbox"],
+.page-logged .vkvartire-app input[type="radio"] {
+  accent-color: var(--vk-accent);
+}
