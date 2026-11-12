@@ -25,6 +25,11 @@ describe("viewRoutes", () => {
     expect(viewFromPath("/vsayte")).toBe("vsayte");
   });
 
+  it("maps vmagnitol ↔ /vmagnitol", () => {
+    expect(pathForView("vmagnitol")).toBe("/vmagnitol");
+    expect(viewFromPath("/vmagnitol")).toBe("vmagnitol");
+  });
+
   it("returns null for unknown paths", () => {
     expect(viewFromPath("/no-such-view")).toBeNull();
     expect(pathForView("unknown")).toBe("/");

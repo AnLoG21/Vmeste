@@ -5,7 +5,9 @@ import VmagazineLogo from "../vmagazine/VmagazineLogo.jsx";
 import VkvartireLogo from "../vkvartire/VkvartireLogo.jsx";
 import VefireLogo from "../vefire/VefireLogo.jsx";
 import VsayteLogo from "../vsayte/VsayteLogo.jsx";
+import VmagnitolLogo from "../vmagnitol/VmagnitolLogo.jsx";
 import { canAccessVefire } from "../vefire/vefireAccess.js";
+import { canAccessVmagnitol } from "../vmagnitol/vmagnitolAccess.js";
 import { vmenuFetch, VMENU_DRAFT_KEY } from "./vmenuApi.js";
 import { VmenuErrorBoundary } from "./VmenuErrorBoundary.jsx";
 import { readVmenuUrlState, writeVmenuUrlState } from "./vmenuUrl.js";
@@ -301,8 +303,9 @@ export default function VmenuApp({
   );
 }
 
-export function ServicesHub({ me, onOpenVmenu, onOpenVmagazine, onOpenVkvartire, onOpenVefire, onOpenVsayte }) {
+export function ServicesHub({ me, onOpenVmenu, onOpenVmagazine, onOpenVkvartire, onOpenVefire, onOpenVsayte, onOpenVmagnitol }) {
   const showVefire = canAccessVefire(me);
+  const showVmagnitol = canAccessVmagnitol(me);
   return (
     <section className="card services-hub cabinet-sheet">
       <h2>Сервисы</h2>
@@ -341,6 +344,15 @@ export function ServicesHub({ me, onOpenVmenu, onOpenVmagazine, onOpenVkvartire,
           <div>
             <strong>Вэфире</strong>
             <p className="muted small">Домашний экран ТВ: Кинопоиск, Rutube, VK Видео и запуск по ссылке.</p>
+          </div>
+        </button>
+      ) : null}
+      {showVmagnitol ? (
+        <button type="button" className="services-hub-card services-hub-card--hu" onClick={onOpenVmagnitol}>
+          <VmagnitolLogo size={48} />
+          <div>
+            <strong>Вмагнитоле</strong>
+            <p className="muted small">Прошивка и русификация штатных ГУ: марки, модели, инструкции и файлы.</p>
           </div>
         </button>
       ) : null}

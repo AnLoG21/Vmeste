@@ -24,6 +24,7 @@ export const VIEW_PATHS = {
   vkvartire: "/vkvartire",
   vefire: "/vefire",
   vsayte: "/vsayte",
+  vmagnitol: "/vmagnitol",
   client_map: "/map",
   activity: "/activity",
   client_book: "/book",

@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     "vkvartire",
     "vefire",
     "vsayte",
+    "vmagnitol",
     "moy_nalog",
     "shop",
 ]

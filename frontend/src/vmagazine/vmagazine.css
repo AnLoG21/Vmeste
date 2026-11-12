@@ -415,6 +415,10 @@ body:has(.page-logged:has(.vmenu-app)) {
   border-color: rgba(255, 122, 0, 0.4);
 }
 
+.services-hub-card--hu {
+  border-color: rgba(26, 18, 8, 0.28);
+}
+
 .vmag-home {
   display: flex;
   flex-direction: column;

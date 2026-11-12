@@ -29,6 +29,7 @@ urlpatterns = [
     path("api/vkvartire/", include("vkvartire.urls")),
     path("api/vefire/", include("vefire.urls")),
     path("api/vsayte/", include("vsayte.urls")),
+    path("api/vmagnitol/", include("vmagnitol.urls")),
     path("api/moy-nalog/", include("moy_nalog.urls")),
     path("api/shop/", include("shop.urls")),
 ]

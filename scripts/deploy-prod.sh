@@ -157,8 +157,8 @@ echo "[deploy] apply migrations..."
 docker compose -f "$COMPOSE_FILE" exec -T web python manage.py migrate --noinput
 
 echo "[deploy] verify critical migrations applied..."
-MIGS="$(docker compose -f "$COMPOSE_FILE" exec -T web python manage.py showmigrations booking shop vmagazine vsayte 2>/dev/null || true)"
-echo "$MIGS" | sed -n '1,160p'
+MIGS="$(docker compose -f "$COMPOSE_FILE" exec -T web python manage.py showmigrations booking shop vmagazine vsayte vmagnitol 2>/dev/null || true)"
+echo "$MIGS" | sed -n '1,180p'
 need_ok() {
   local app="$1" name="$2"
   echo "$MIGS" | grep -E "\[X\][[:space:]]+${name}([[:space:]]|$)" >/dev/null || {
@@ -172,7 +172,11 @@ need_ok booking 0034_client_migrate_request
 need_ok shop 0008_product_weight_dims
 need_ok vmagazine 0006_returnrequestphoto
 need_ok vsayte 0002_sitelead
+need_ok vmagnitol 0001_initial
 echo "[deploy] critical migrations OK"
+
+echo "[deploy] seed Вмагнитоле Coolray starter (idempotent)..."
+docker compose -f "$COMPOSE_FILE" exec -T web python manage.py seed_vmagnitol_coolray || true
 
 echo "[deploy] pruning dangling images (safe)..."
 docker image prune -f >/dev/null 2>&1 || true

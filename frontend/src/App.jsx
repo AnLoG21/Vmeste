@@ -20,11 +20,14 @@ import VmagazineApp from "./vmagazine/VmagazineApp.jsx";
 import VkvartireApp from "./vkvartire/VkvartireApp.jsx";
 import VefireApp from "./vefire/VefireApp.jsx";
 import VsayteApp from "./vsayte/VsayteApp.jsx";
+import VmagnitolApp from "./vmagnitol/VmagnitolApp.jsx";
 import { canAccessVefire } from "./vefire/vefireAccess.js";
+import { canAccessVmagnitol } from "./vmagnitol/vmagnitolAccess.js";
 import "./vmagazine/vmagazine.css";
 import "./vkvartire/vkvartire.css";
 import "./vefire/vefire.css";
 import "./vsayte/vsayte.css";
+import "./vmagnitol/vmagnitol.css";
 import { CabinetErrorBoundary } from "./CabinetErrorBoundary.jsx";
 import CabinetChrome from "./CabinetChrome.jsx";
 import InspectionWorkspace from "./InspectionWorkspace.jsx";
@@ -959,6 +962,11 @@ export default function App() {
   useEffect(() => {
     if (!me || currentView !== "vefire") return;
     if (!canAccessVefire(me)) setCurrentView("service_apps");
+  }, [me, currentView]);
+
+  useEffect(() => {
+    if (!me || currentView !== "vmagnitol") return;
+    if (!canAccessVmagnitol(me)) setCurrentView("service_apps");
   }, [me, currentView]);
 
   const chatActivityBadgeRef = useRef(0);
@@ -2952,7 +2960,7 @@ export default function App() {
     me?.role === "staff";
   const chatsPortalTarget =
     currentView === "vmenu" || currentView === "vmagazine" ? vmenuChatsHostEl : mainChatsHostEl;
-  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "service_apps", "vmenu", "vmagazine", "vkvartire", "vefire"].includes(currentView);
+  const centeredWorkspace = accessToken && ["profile", "organization", "staff", "settings", "subscriptions", "cafe", "cafe_orders", "cafe_my_orders", "loyalty", "activity", "inspections", "marketplaces", "shop", "service_apps", "vmenu", "vmagazine", "vkvartire", "vefire", "vsayte", "vmagnitol"].includes(currentView);
   const profileWide = accessToken && ["profile", "subscriptions"].includes(currentView);
 
   return (
@@ -3164,10 +3172,19 @@ export default function App() {
             onOpenVkvartire={() => setCurrentView("vkvartire")}
             onOpenVefire={() => setCurrentView("vefire")}
             onOpenVsayte={() => setCurrentView("vsayte")}
+            onOpenVmagnitol={() => setCurrentView("vmagnitol")}
           />
         )}
         {accessToken && currentView === "vsayte" && (
           <VsayteApp
+            me={me}
+            authFetch={authFetch}
+            API_URL={API_URL}
+            onExit={() => setCurrentView("service_apps")}
+          />
+        )}
+        {accessToken && currentView === "vmagnitol" && canAccessVmagnitol(me) && (
+          <VmagnitolApp
             me={me}
             authFetch={authFetch}
             API_URL={API_URL}
