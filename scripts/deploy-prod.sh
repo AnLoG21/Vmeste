@@ -177,6 +177,7 @@ echo "[deploy] critical migrations OK"
 
 echo "[deploy] seed Вмагнитоле Coolray starter (idempotent)..."
 docker compose -f "$COMPOSE_FILE" exec -T web python manage.py seed_vmagnitol_coolray || true
+docker compose -f "$COMPOSE_FILE" exec -T web python manage.py seed_vmagnitol_geely || true
 
 echo "[deploy] pruning dangling images (safe)..."
 docker image prune -f >/dev/null 2>&1 || true
