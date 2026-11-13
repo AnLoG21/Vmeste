@@ -2,9 +2,9 @@
 
 from django.core.management.base import BaseCommand
 
-from vmagnitol.management.commands.seed_vmagnitol_coolray import upsert_guide
 from vmagnitol.management.commands.seed_vmagnitol_geely import ensure_brand, ensure_model
 from vmagnitol.models import Brand, CarModel
+from vmagnitol.seed_utils import upsert_guide
 
 
 def ensure_other_brand(slug, name, notes, sort_order):

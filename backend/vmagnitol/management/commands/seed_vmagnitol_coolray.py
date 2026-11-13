@@ -1,42 +1,7 @@
 from django.core.management.base import BaseCommand
 
-from vmagnitol.models import Brand, CarModel, Guide, GuideStep
-
-
-def upsert_guide(car_model, title, summary, source_url, steps, force=True):
-    """Создаёт или синхронизирует curated-гайд. По умолчанию перезаписывает шаги."""
-    guide, created = Guide.objects.get_or_create(
-        car_model=car_model,
-        title=title,
-        defaults={
-            "summary": summary,
-            "status": Guide.Status.PUBLISHED,
-            "source_url": source_url,
-        },
-    )
-    if not created:
-        guide.summary = summary
-        guide.status = Guide.Status.PUBLISHED
-        guide.source_url = source_url
-        guide.save(update_fields=["summary", "status", "source_url", "updated_at"])
-
-    if not force and not created and guide.steps.count() > 0:
-        return guide, False
-
-    wanted_orders = {step["order"] for step in steps}
-    if force and not created:
-        guide.steps.exclude(order__in=wanted_orders).delete()
-    for step in steps:
-        GuideStep.objects.update_or_create(
-            guide=guide,
-            order=step["order"],
-            defaults={
-                "title": step["title"],
-                "body": step["body"],
-                "warning": step.get("warning", ""),
-            },
-        )
-    return guide, True
+from vmagnitol.models import Brand, CarModel, Guide
+from vmagnitol.seed_utils import upsert_guide
 
 
 # --- Coolray / Belgee X50 дорест (Android 4.3) ---

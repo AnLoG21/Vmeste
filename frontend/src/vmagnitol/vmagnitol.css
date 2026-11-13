@@ -152,6 +152,126 @@
   font-size: 0.92rem;
 }
 
+.vmagnitol-stop {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--vm-radius-sm, 6px);
+  border: 1px solid #c62828;
+  background: #ffebee;
+  color: #7f1d1d;
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.vmagnitol-manifest {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--vm-radius-sm, 6px);
+  border: 1px dashed var(--vm-gold, #ffbf8a);
+  background: var(--vm-chrome, #fff8f2);
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  overflow-x: auto;
+}
+
+.vmagnitol-cat-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vmagnitol-chip {
+  border: 1px solid var(--vm-hairline, #ffe0c7);
+  background: #fff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: inherit;
+}
+
+.vmagnitol-chip.active {
+  border-color: var(--vm-accent, #ff7a00);
+  background: var(--vm-pad, #fff3e8);
+  color: var(--vm-accent, #ff7a00);
+  font-weight: 650;
+}
+
+.vmagnitol-section {
+  display: grid;
+  gap: 8px;
+}
+
+.vmagnitol-section-title {
+  margin: 8px 0 0;
+  font-size: 0.95rem;
+  color: var(--vm-mute, #6b5344);
+}
+
+.vmagnitol-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 4px 0;
+}
+
+.vmagnitol-risk {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.vmagnitol-risk.low {
+  background: #e8f5e9;
+  color: #1b5e20;
+  border-color: #a5d6a7;
+}
+
+.vmagnitol-risk.medium {
+  background: #fff8e1;
+  color: #e65100;
+  border-color: #ffe082;
+}
+
+.vmagnitol-risk.high {
+  background: #ffe0b2;
+  color: #bf360c;
+  border-color: #ffb74d;
+}
+
+.vmagnitol-risk.critical {
+  background: #ffebee;
+  color: #b71c1c;
+  border-color: #ef9a9a;
+}
+
+.vmagnitol-req {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #b71c1c;
+  border: 1px solid #ef9a9a;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.vmagnitol-guide-files {
+  display: grid;
+  gap: 8px;
+}
+
+.vmagnitol-model-intro {
+  display: grid;
+  gap: 4px;
+}
+
 .vmagnitol-files {
   list-style: none;
   margin: 0;

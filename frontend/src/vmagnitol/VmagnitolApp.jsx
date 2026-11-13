@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import "./vmagnitol.css";
 import VmagnitolLogo from "./VmagnitolLogo.jsx";
 import { canAccessVmagnitol } from "./vmagnitolAccess.js";
@@ -23,6 +23,30 @@ function formatBytes(n) {
   return `${(v / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const CATEGORY_ORDER = [
+  "identify",
+  "prep",
+  "firmware",
+  "community",
+  "russify",
+  "carplay",
+  "android_auto",
+  "apps",
+  "rollback",
+  "other",
+];
+
+function riskClass(level) {
+  if (level === "critical") return "vmagnitol-risk critical";
+  if (level === "high") return "vmagnitol-risk high";
+  if (level === "low") return "vmagnitol-risk low";
+  return "vmagnitol-risk medium";
+}
+
+function fileHref(f) {
+  return f.url || f.external_url || "";
+}
+
 export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
   const allowed = canAccessVmagnitol(me);
   const [brands, setBrands] = useState([]);
@@ -38,7 +62,8 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
   const [modelYears, setModelYears] = useState("");
   const [modelHu, setModelHu] = useState("");
   const [editingStepId, setEditingStepId] = useState(null);
-  const [stepDraft, setStepDraft] = useState({ title: "", body: "", warning: "" });
+  const [stepDraft, setStepDraft] = useState({ title: "", body: "", warning: "", stop_if: "" });
+  const [categoryFilter, setCategoryFilter] = useState("all");
 
   const refreshBrands = useCallback(async () => {
     const data = await listBrands(authFetch, API_URL);
@@ -72,6 +97,24 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
       cancelled = true;
     };
   }, [allowed, refreshBrands]);
+
+  const guidesByCategory = useMemo(() => {
+    const list = [...(model?.guides || [])].sort((a, b) => {
+      const ao = CATEGORY_ORDER.indexOf(a.category || "other");
+      const bo = CATEGORY_ORDER.indexOf(b.category || "other");
+      if (ao !== bo) return ao - bo;
+      return (a.sort_order || 0) - (b.sort_order || 0) || String(a.title).localeCompare(String(b.title));
+    });
+    const filtered =
+      categoryFilter === "all" ? list : list.filter((g) => (g.category || "other") === categoryFilter);
+    const map = new Map();
+    for (const g of filtered) {
+      const key = g.category || "other";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(g);
+    }
+    return map;
+  }, [model, categoryFilter]);
 
   if (!allowed) {
     return (
@@ -113,10 +156,12 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
         years: modelYears.trim(),
         head_unit: modelHu.trim(),
       });
-      const g = await createGuide(authFetch, API_URL, m.id, {
-        title: `Прошивка и русификация — ${m.name}`,
-        summary: "Новый гайд. Добавьте этапы и файлы.",
+      await createGuide(authFetch, API_URL, m.id, {
+        title: `0. Определение версии — ${m.name}`,
+        summary: "Сначала зафиксируйте ревизию ГУ. Затем добавьте разделы по целям.",
         status: "draft",
+        category: "identify",
+        risk_level: "low",
       });
       setModelName("");
       setModelYears("");
@@ -127,7 +172,8 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
       setBrand(b);
       const refreshed = (b.models || []).find((x) => x.id === m.id) || m;
       setModel(refreshed);
-      await openGuide(g.id);
+      setGuide(null);
+      setCategoryFilter("all");
     } catch (err) {
       setError(err.message || "Не удалось создать модель");
     } finally {
@@ -138,17 +184,19 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
   async function openModel(m) {
     setModel(m);
     setGuide(null);
+    setCategoryFilter("all");
     setError("");
-    const first = (m.guides || [])[0];
-    if (first) {
-      setBusy(true);
-      try {
-        await openGuide(first.id);
-      } catch (err) {
-        setError(err.message || "Не удалось открыть гайд");
-      } finally {
-        setBusy(false);
-      }
+  }
+
+  async function selectGuide(g) {
+    setBusy(true);
+    setError("");
+    try {
+      await openGuide(g.id);
+    } catch (err) {
+      setError(err.message || "Не удалось открыть гайд");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -161,6 +209,7 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
         title: "Новый шаг",
         body: "",
         warning: "",
+        stop_if: "",
       });
       await openGuide(guide.id);
     } catch (err) {
@@ -234,7 +283,9 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
         <VmagnitolLogo size={48} />
         <div>
           <h2>Вмагнитоле</h2>
-          <p className="muted">Прошивка и русификация штатных ГУ: марки → модели → поэтапные инструкции и файлы.</p>
+          <p className="muted">
+            Разделы по целям (русификация, CarPlay, AA, Community…) с поэтапными STOP-проверками против кирпича.
+          </p>
         </div>
         <div className="vmagnitol-actions">
           <button type="button" className="ghost-btn" onClick={onExit}>
@@ -274,7 +325,20 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
         {model ? (
           <>
             <span>/</span>
-            <span>{model.name}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setGuide(null);
+              }}
+            >
+              {model.name}
+            </button>
+          </>
+        ) : null}
+        {guide ? (
+          <>
+            <span>/</span>
+            <span>{guide.title}</span>
           </>
         ) : null}
       </nav>
@@ -337,7 +401,7 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
                 placeholder="Штатная ГУ / ревизия"
               />
               <button type="submit" className="primary-btn" disabled={busy}>
-                Создать модель и гайд
+                Создать модель
               </button>
             </form>
           ) : null}
@@ -348,6 +412,7 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
                 <p className="muted small">
                   {[m.years, m.head_unit].filter(Boolean).join(" · ") || "Без деталей"}
                 </p>
+                <p className="muted small">{(m.guides || []).length} разделов</p>
               </button>
             ))}
           </div>
@@ -355,9 +420,69 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
         </>
       ) : null}
 
+      {model && !guide ? (
+        <>
+          <div className="vmagnitol-model-intro">
+            <h3 style={{ margin: "0 0 6px" }}>{model.name}</h3>
+            {model.notes ? <p className="muted">{model.notes}</p> : null}
+            <p className="muted small">
+              Сначала раздел «Определение версии». Не переходите к прошивке, пока не совпала платформа/сборка.
+            </p>
+          </div>
+          <div className="vmagnitol-cat-filters">
+            <button
+              type="button"
+              className={categoryFilter === "all" ? "vmagnitol-chip active" : "vmagnitol-chip"}
+              onClick={() => setCategoryFilter("all")}
+            >
+              Все разделы
+            </button>
+            {CATEGORY_ORDER.map((cat) => {
+              const has = (model.guides || []).some((g) => (g.category || "other") === cat);
+              if (!has) return null;
+              const sample = (model.guides || []).find((g) => (g.category || "other") === cat);
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  className={categoryFilter === cat ? "vmagnitol-chip active" : "vmagnitol-chip"}
+                  onClick={() => setCategoryFilter(cat)}
+                >
+                  {sample?.category_label || cat}
+                </button>
+              );
+            })}
+          </div>
+          {[...guidesByCategory.entries()].map(([cat, items]) => (
+            <div key={cat} className="vmagnitol-section">
+              <h4 className="vmagnitol-section-title">{items[0]?.category_label || cat}</h4>
+              <div className="vmagnitol-grid">
+                {items.map((g) => (
+                  <button key={g.id} type="button" className="vmagnitol-card" onClick={() => selectGuide(g)}>
+                    <strong>{g.title}</strong>
+                    <div className="vmagnitol-card-meta">
+                      <span className={riskClass(g.risk_level)}>{g.risk_label || g.risk_level}</span>
+                      <span className="muted small">{g.verified_label || g.verified}</span>
+                    </div>
+                    {g.summary ? <p className="muted small">{g.summary}</p> : null}
+                    <p className="muted small">
+                      {g.steps_count || 0} шагов · {g.files_count || 0} файлов
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          {!(model.guides || []).length ? <p className="muted">У модели пока нет разделов.</p> : null}
+        </>
+      ) : null}
+
       {model && guide ? (
         <>
           <div className="vmagnitol-actions" style={{ marginLeft: 0 }}>
+            <button type="button" className="ghost-btn" disabled={busy} onClick={() => setGuide(null)}>
+              ← К разделам
+            </button>
             <button type="button" className="ghost-btn" disabled={busy} onClick={onTogglePublish}>
               {guide.status === "published" ? "Снять с публикации" : "Опубликовать"}
             </button>
@@ -366,17 +491,88 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
             </button>
           </div>
           <div>
+            <div className="vmagnitol-card-meta" style={{ marginBottom: 8 }}>
+              <span className="vmagnitol-chip active">{guide.category_label || guide.category}</span>
+              <span className={riskClass(guide.risk_level)}>{guide.risk_label || guide.risk_level}</span>
+              <span className="muted small">{guide.verified_label || guide.verified}</span>
+            </div>
             <h3 style={{ margin: "0 0 6px" }}>{guide.title}</h3>
             {guide.summary ? <p className="muted">{guide.summary}</p> : null}
+            {guide.brick_warning ? <p className="vmagnitol-warn">{guide.brick_warning}</p> : null}
+            {guide.file_manifest ? (
+              <pre className="vmagnitol-manifest">{guide.file_manifest}</pre>
+            ) : null}
             {guide.source_url ? (
               <p className="muted small">
-                Ориентир:{" "}
+                Источник сверки:{" "}
                 <a href={guide.source_url} target="_blank" rel="noreferrer">
-                  внешний источник
+                  открыть
                 </a>
               </p>
             ) : null}
           </div>
+
+          {(guide.files || []).length ? (
+            <div className="vmagnitol-guide-files">
+              <h4 style={{ margin: "0 0 8px" }}>Файлы раздела</h4>
+              <ul className="vmagnitol-files">
+                {guide.files.map((f) => {
+                  const href = fileHref(f);
+                  return (
+                    <li key={f.id}>
+                      {f.is_required ? <span className="vmagnitol-req">нужен</span> : null}
+                      {href ? (
+                        <a href={href} target="_blank" rel="noreferrer">
+                          {f.title || f.original_name || `Файл #${f.id}`}
+                        </a>
+                      ) : (
+                        <span>{f.title || f.original_name || `Файл #${f.id}`}</span>
+                      )}
+                      <span className="muted small">{f.role}</span>
+                      {f.size_bytes ? <span className="muted small">{formatBytes(f.size_bytes)}</span> : null}
+                      {f.notes ? <span className="muted small">{f.notes}</span> : null}
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={async () => {
+                          await deleteFile(authFetch, API_URL, f.id);
+                          await openGuide(guide.id);
+                        }}
+                      >
+                        Удалить
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <label className="ghost-btn" style={{ cursor: "pointer", width: "fit-content" }}>
+                + Загрузить файл в раздел
+                <input
+                  type="file"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) onUpload(null, f);
+                  }}
+                />
+              </label>
+            </div>
+          ) : (
+            <label className="ghost-btn" style={{ cursor: "pointer", width: "fit-content" }}>
+              + Загрузить файл в раздел
+              <input
+                type="file"
+                hidden
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) onUpload(null, f);
+                }}
+              />
+            </label>
+          )}
+
           <div style={{ display: "grid", gap: 10 }}>
             {(guide.steps || []).map((step) => (
               <article key={step.id} className="vmagnitol-step">
@@ -394,7 +590,7 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
                 {editingStepId === step.id ? (
                   <>
                     <textarea
-                      rows={6}
+                      rows={8}
                       value={stepDraft.body}
                       onChange={(e) => setStepDraft((d) => ({ ...d, body: e.target.value }))}
                       placeholder="Подробная инструкция…"
@@ -403,7 +599,13 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
                       rows={2}
                       value={stepDraft.warning}
                       onChange={(e) => setStepDraft((d) => ({ ...d, warning: e.target.value }))}
-                      placeholder="Предупреждение (опционально)"
+                      placeholder="Предупреждение"
+                    />
+                    <textarea
+                      rows={2}
+                      value={stepDraft.stop_if}
+                      onChange={(e) => setStepDraft((d) => ({ ...d, stop_if: e.target.value }))}
+                      placeholder="STOP если… (не переходить дальше)"
                     />
                     <div className="vmagnitol-actions" style={{ marginLeft: 0 }}>
                       <button type="button" className="primary-btn" disabled={busy} onClick={() => onSaveStep(step.id)}>
@@ -416,8 +618,13 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
                   </>
                 ) : (
                   <>
-                    {step.body ? <p className="vmagnitol-step-body">{step.body}</p> : <p className="muted">Текст шага пуст — отредактируйте.</p>}
+                    {step.body ? (
+                      <p className="vmagnitol-step-body">{step.body}</p>
+                    ) : (
+                      <p className="muted">Текст шага пуст — отредактируйте.</p>
+                    )}
                     {step.warning ? <p className="vmagnitol-warn">{step.warning}</p> : null}
+                    {step.stop_if ? <p className="vmagnitol-stop">STOP: {step.stop_if}</p> : null}
                     <div className="vmagnitol-actions" style={{ marginLeft: 0 }}>
                       <button
                         type="button"
@@ -428,6 +635,7 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
                             title: step.title || "",
                             body: step.body || "",
                             warning: step.warning || "",
+                            stop_if: step.stop_if || "",
                           });
                         }}
                       >
@@ -437,7 +645,7 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
                         Удалить
                       </button>
                       <label className="ghost-btn" style={{ cursor: "pointer" }}>
-                        + Файл
+                        + Файл к шагу
                         <input
                           type="file"
                           hidden
@@ -453,24 +661,31 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
                 )}
                 {(step.files || []).length ? (
                   <ul className="vmagnitol-files">
-                    {step.files.map((f) => (
-                      <li key={f.id}>
-                        <a href={f.url} target="_blank" rel="noreferrer">
-                          {f.title || f.original_name || `Файл #${f.id}`}
-                        </a>
-                        <span className="muted small">{formatBytes(f.size_bytes)}</span>
-                        <button
-                          type="button"
-                          className="ghost-btn"
-                          onClick={async () => {
-                            await deleteFile(authFetch, API_URL, f.id);
-                            await openGuide(guide.id);
-                          }}
-                        >
-                          Удалить файл
-                        </button>
-                      </li>
-                    ))}
+                    {step.files.map((f) => {
+                      const href = fileHref(f);
+                      return (
+                        <li key={f.id}>
+                          {href ? (
+                            <a href={href} target="_blank" rel="noreferrer">
+                              {f.title || f.original_name || `Файл #${f.id}`}
+                            </a>
+                          ) : (
+                            <span>{f.title || f.original_name}</span>
+                          )}
+                          <span className="muted small">{formatBytes(f.size_bytes)}</span>
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            onClick={async () => {
+                              await deleteFile(authFetch, API_URL, f.id);
+                              await openGuide(guide.id);
+                            }}
+                          >
+                            Удалить файл
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
                 ) : null}
               </article>
@@ -479,8 +694,6 @@ export default function VmagnitolApp({ me, authFetch, API_URL, onExit }) {
           {!(guide.steps || []).length ? <p className="muted">Шагов пока нет.</p> : null}
         </>
       ) : null}
-
-      {model && !guide ? <p className="muted">У модели нет гайда.</p> : null}
     </section>
   );
 }

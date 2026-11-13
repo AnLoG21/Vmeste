@@ -17,6 +17,10 @@ class GuideFileSerializer(serializers.ModelSerializer):
             "content_type",
             "size_bytes",
             "url",
+            "external_url",
+            "role",
+            "is_required",
+            "notes",
             "created_at",
         ]
         read_only_fields = fields
@@ -24,7 +28,7 @@ class GuideFileSerializer(serializers.ModelSerializer):
     def get_url(self, obj):
         request = self.context.get("request")
         if not obj.file:
-            return ""
+            return obj.external_url or ""
         url = obj.file.url
         if request:
             return request.build_absolute_uri(url)
@@ -43,6 +47,7 @@ class GuideStepSerializer(serializers.ModelSerializer):
             "title",
             "body",
             "warning",
+            "stop_if",
             "files",
             "created_at",
             "updated_at",
@@ -53,6 +58,9 @@ class GuideStepSerializer(serializers.ModelSerializer):
 class GuideListSerializer(serializers.ModelSerializer):
     steps_count = serializers.SerializerMethodField()
     files_count = serializers.SerializerMethodField()
+    category_label = serializers.CharField(source="get_category_display", read_only=True)
+    risk_label = serializers.CharField(source="get_risk_level_display", read_only=True)
+    verified_label = serializers.CharField(source="get_verified_display", read_only=True)
 
     class Meta:
         model = Guide
@@ -61,6 +69,15 @@ class GuideListSerializer(serializers.ModelSerializer):
             "car_model",
             "title",
             "summary",
+            "category",
+            "category_label",
+            "risk_level",
+            "risk_label",
+            "verified",
+            "verified_label",
+            "brick_warning",
+            "file_manifest",
+            "sort_order",
             "status",
             "source_url",
             "steps_count",
@@ -80,6 +97,9 @@ class GuideListSerializer(serializers.ModelSerializer):
 class GuideDetailSerializer(serializers.ModelSerializer):
     steps = GuideStepSerializer(many=True, read_only=True)
     files = GuideFileSerializer(many=True, read_only=True)
+    category_label = serializers.CharField(source="get_category_display", read_only=True)
+    risk_label = serializers.CharField(source="get_risk_level_display", read_only=True)
+    verified_label = serializers.CharField(source="get_verified_display", read_only=True)
 
     class Meta:
         model = Guide
@@ -88,6 +108,15 @@ class GuideDetailSerializer(serializers.ModelSerializer):
             "car_model",
             "title",
             "summary",
+            "category",
+            "category_label",
+            "risk_level",
+            "risk_label",
+            "verified",
+            "verified_label",
+            "brick_warning",
+            "file_manifest",
+            "sort_order",
             "status",
             "source_url",
             "steps",
@@ -101,7 +130,18 @@ class GuideDetailSerializer(serializers.ModelSerializer):
 class GuideWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Guide
-        fields = ["title", "summary", "status", "source_url"]
+        fields = [
+            "title",
+            "summary",
+            "status",
+            "source_url",
+            "category",
+            "risk_level",
+            "verified",
+            "brick_warning",
+            "file_manifest",
+            "sort_order",
+        ]
 
 
 class CarModelSerializer(serializers.ModelSerializer):

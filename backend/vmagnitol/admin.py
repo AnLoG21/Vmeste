@@ -31,9 +31,18 @@ class CarModelAdmin(admin.ModelAdmin):
 
 @admin.register(Guide)
 class GuideAdmin(admin.ModelAdmin):
-    list_display = ("title", "car_model", "status", "updated_at")
-    list_filter = ("status", "car_model__brand")
-    search_fields = ("title", "summary")
+    list_display = (
+        "title",
+        "car_model",
+        "category",
+        "risk_level",
+        "verified",
+        "status",
+        "sort_order",
+        "updated_at",
+    )
+    list_filter = ("status", "category", "risk_level", "verified", "car_model__brand")
+    search_fields = ("title", "summary", "brick_warning")
     inlines = [GuideStepInline, GuideFileInline]
 
 
@@ -45,4 +54,14 @@ class GuideStepAdmin(admin.ModelAdmin):
 
 @admin.register(GuideFile)
 class GuideFileAdmin(admin.ModelAdmin):
-    list_display = ("title", "original_name", "guide", "step", "size_bytes", "created_at")
+    list_display = (
+        "title",
+        "role",
+        "is_required",
+        "original_name",
+        "guide",
+        "step",
+        "size_bytes",
+        "created_at",
+    )
+    list_filter = ("role", "is_required")

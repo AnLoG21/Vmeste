@@ -64,9 +64,62 @@ class Guide(models.Model):
         DRAFT = "draft", "Черновик"
         PUBLISHED = "published", "Опубликован"
 
+    class Category(models.TextChoices):
+        IDENTIFY = "identify", "Определение версии / платформы"
+        PREP = "prep", "Подготовка и бэкап"
+        FIRMWARE = "firmware", "Сток / обновление прошивки"
+        COMMUNITY = "community", "Community / кастом-пакет"
+        RUSSIFY = "russify", "Русификация"
+        CARPLAY = "carplay", "Apple CarPlay"
+        ANDROID_AUTO = "android_auto", "Android Auto"
+        APPS = "apps", "Приложения и допы"
+        ROLLBACK = "rollback", "Откат в сток"
+        OTHER = "other", "Другое"
+
+    class RiskLevel(models.TextChoices):
+        LOW = "low", "Низкий"
+        MEDIUM = "medium", "Средний"
+        HIGH = "high", "Высокий"
+        CRITICAL = "critical", "Критический (риск кирпича)"
+
+    class Verified(models.TextChoices):
+        UNVERIFIED = "unverified", "Не проверено"
+        COMMUNITY = "community", "По отчётам сообщества"
+        CROSSCHECKED = "crosschecked", "Сверено по 2+ источникам"
+        BLOCKED = "blocked", "Заблокировано (опасно / неясно)"
+
     car_model = models.ForeignKey(CarModel, on_delete=models.CASCADE, related_name="guides")
     title = models.CharField(max_length=240)
     summary = models.TextField(blank=True, default="")
+    category = models.CharField(
+        max_length=32,
+        choices=Category.choices,
+        default=Category.OTHER,
+        db_index=True,
+    )
+    risk_level = models.CharField(
+        max_length=16,
+        choices=RiskLevel.choices,
+        default=RiskLevel.MEDIUM,
+        db_index=True,
+    )
+    verified = models.CharField(
+        max_length=16,
+        choices=Verified.choices,
+        default=Verified.UNVERIFIED,
+        db_index=True,
+    )
+    brick_warning = models.TextField(
+        blank=True,
+        default="",
+        help_text="Явные стоп-условия, при которых нельзя продолжать (кирпич).",
+    )
+    file_manifest = models.TextField(
+        blank=True,
+        default="",
+        help_text="Список файлов, которые должны быть приложены к гайду.",
+    )
+    sort_order = models.PositiveIntegerField(default=0, db_index=True)
     status = models.CharField(
         max_length=16,
         choices=Status.choices,
@@ -85,7 +138,7 @@ class Guide(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-updated_at"]
+        ordering = ["sort_order", "category", "title"]
 
     def __str__(self):
         return self.title
@@ -97,6 +150,11 @@ class GuideStep(models.Model):
     title = models.CharField(max_length=240)
     body = models.TextField(blank=True, default="")
     warning = models.TextField(blank=True, default="")
+    stop_if = models.TextField(
+        blank=True,
+        default="",
+        help_text="Условие STOP: если истинно — не переходить к следующему шагу.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -108,6 +166,15 @@ class GuideStep(models.Model):
 
 
 class GuideFile(models.Model):
+    class Role(models.TextChoices):
+        MANIFEST = "manifest", "Манифест / чеклист"
+        TOOL = "tool", "Инструмент"
+        FIRMWARE = "firmware", "Прошивка / образ"
+        PACKAGE = "package", "Пакет установки"
+        APK = "apk", "APK"
+        DOC = "doc", "Документация"
+        OTHER = "other", "Другое"
+
     guide = models.ForeignKey(Guide, on_delete=models.CASCADE, related_name="files")
     step = models.ForeignKey(
         GuideStep,
@@ -117,14 +184,27 @@ class GuideFile(models.Model):
         blank=True,
     )
     title = models.CharField(max_length=200, blank=True, default="")
-    file = models.FileField(upload_to="vmagnitol/files/%Y/%m/")
+    file = models.FileField(upload_to="vmagnitol/files/%Y/%m/", blank=True, default="")
+    external_url = models.URLField(
+        blank=True,
+        default="",
+        help_text="Ссылка на файл, если бинарник нельзя хранить у нас (бот/облако автора).",
+    )
+    role = models.CharField(
+        max_length=16,
+        choices=Role.choices,
+        default=Role.OTHER,
+        db_index=True,
+    )
+    is_required = models.BooleanField(default=False)
+    notes = models.TextField(blank=True, default="")
     original_name = models.CharField(max_length=255, blank=True, default="")
     content_type = models.CharField(max_length=120, blank=True, default="")
     size_bytes = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["-is_required", "role", "-created_at"]
 
     def __str__(self):
         return self.title or self.original_name or f"file-{self.pk}"

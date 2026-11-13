@@ -173,12 +173,14 @@ need_ok shop 0008_product_weight_dims
 need_ok vmagazine 0006_returnrequestphoto
 need_ok vsayte 0002_sitelead
 need_ok vmagnitol 0001_initial
+need_ok vmagnitol 0002_guide_sections_and_safety
 echo "[deploy] critical migrations OK"
 
 echo "[deploy] seed Вмагнитоле Coolray starter (idempotent)..."
 docker compose -f "$COMPOSE_FILE" exec -T web python manage.py seed_vmagnitol_coolray || true
 docker compose -f "$COMPOSE_FILE" exec -T web python manage.py seed_vmagnitol_geely || true
 docker compose -f "$COMPOSE_FILE" exec -T web python manage.py seed_vmagnitol_forum || true
+docker compose -f "$COMPOSE_FILE" exec -T web python manage.py seed_vmagnitol_detailed || true
 
 echo "[deploy] pruning dangling images (safe)..."
 docker image prune -f >/dev/null 2>&1 || true

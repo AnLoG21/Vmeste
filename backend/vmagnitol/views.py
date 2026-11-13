@@ -178,28 +178,44 @@ class GuideFileUploadView(APIView):
     def post(self, request, guide_id):
         guide = get_object_or_404(Guide, pk=guide_id)
         upload = request.FILES.get("file")
-        if not upload:
-            return Response({"detail": "Файл не передан."}, status=status.HTTP_400_BAD_REQUEST)
-        max_bytes = 200 * 1024 * 1024
-        if upload.size > max_bytes:
+        external_url = (request.data.get("external_url") or "").strip()
+        if not upload and not external_url:
             return Response(
-                {"detail": "Файл слишком большой (макс. 200 МБ)."},
+                {"detail": "Передайте файл или external_url."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if upload:
+            max_bytes = 512 * 1024 * 1024
+            if upload.size > max_bytes:
+                return Response(
+                    {"detail": "Файл слишком большой (макс. 512 МБ)."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         step_id = request.data.get("step") or request.data.get("step_id")
         step = None
         if step_id:
             step = get_object_or_404(GuideStep, pk=step_id, guide=guide)
         title = (request.data.get("title") or "").strip()
-        obj = GuideFile.objects.create(
+        role = (request.data.get("role") or GuideFile.Role.OTHER).strip()
+        if role not in GuideFile.Role.values:
+            role = GuideFile.Role.OTHER
+        is_required = str(request.data.get("is_required") or "").lower() in {"1", "true", "yes"}
+        notes = (request.data.get("notes") or "").strip()
+        obj = GuideFile(
             guide=guide,
             step=step,
             title=title,
-            file=upload,
-            original_name=getattr(upload, "name", "") or "",
-            content_type=getattr(upload, "content_type", "") or "",
-            size_bytes=int(upload.size or 0),
+            external_url=external_url,
+            role=role,
+            is_required=is_required,
+            notes=notes,
         )
+        if upload:
+            obj.file = upload
+            obj.original_name = getattr(upload, "name", "") or ""
+            obj.content_type = getattr(upload, "content_type", "") or ""
+            obj.size_bytes = int(upload.size or 0)
+        obj.save()
         return Response(
             GuideFileSerializer(obj, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
@@ -211,6 +227,7 @@ class GuideFileDeleteView(APIView):
 
     def delete(self, request, pk):
         obj = get_object_or_404(GuideFile, pk=pk)
-        obj.file.delete(save=False)
+        if obj.file:
+            obj.file.delete(save=False)
         obj.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
