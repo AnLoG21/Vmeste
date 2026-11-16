@@ -104,10 +104,20 @@ Campaign ID подставляется из настроек, если не пе
 
 Через универсальный `POST /api/marketplaces/call/`:
 
-- `action`: `finance.list` — транзакции  
+- `action`: `finance.list` — начисления `/v1/finance/accrual/by-day` (старый `transaction/list` отключён 08.09.2026); бэкенд обходит период по дням  
 - `action`: `actions.list` — акции  
 
+Заказы FBS: `orders.list` → `/v4/posting/fbs/list`, сборка `orders.ship` → `/v4/posting/fbs/ship`.
+
 В UI: вкладка **Финансы** (Ozon).
+
+## Мониторинг API (Celery Beat)
+
+Два раза в сутки (Europe/Moscow): **13:00** и **02:00** — задача `marketplaces.check_apis_health`.
+
+- Структурный аудит путей Ozon / WB / Яндекс  
+- Live read-only пинг по боевым кабинетам с ключами  
+- При сбое — письмо на `MARKETPLACE_HEALTH_EMAIL` (по умолчанию `vmesteofficialsupport@gmail.com`)
 
 ---
 

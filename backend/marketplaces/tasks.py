@@ -94,7 +94,15 @@ def poll_new_orders_task(self):
     from django.contrib.auth import get_user_model
     from django.utils import timezone
 
-    from .clients import OZON_ACTIONS, WB_ACTIONS, MarketplaceError, ozon_headers, request_json, wb_headers
+    from .clients import (
+        OZON_ACTIONS,
+        WB_ACTIONS,
+        MarketplaceError,
+        normalize_ozon_orders_list_payload,
+        ozon_headers,
+        request_json,
+        wb_headers,
+    )
     from .models import MarketplaceSettings
     from .notify import notify_new_orders
 
@@ -123,14 +131,18 @@ def poll_new_orders_task(self):
                             method="POST",
                             url=OZON_ACTIONS["orders.list"][1],
                             headers=ozon_headers(s),
-                            json_body={
-                                "dir": "DESC",
-                                "filter": {"since": since, "to": timezone.now().isoformat().replace("+00:00", "Z")},
-                                "limit": 50,
-                                "offset": 0,
-                            },
+                            json_body=normalize_ozon_orders_list_payload(
+                                {
+                                    "dir": "DESC",
+                                    "filter": {
+                                        "since": since,
+                                        "to": timezone.now().isoformat().replace("+00:00", "Z"),
+                                    },
+                                    "limit": 50,
+                                }
+                            ),
                         )
-                        rows = (data.get("result") or {}).get("postings") or data.get("postings") or []
+                        rows = data.get("postings") or (data.get("result") or {}).get("postings") or []
                         ids = []
                         for row in rows:
                             if not isinstance(row, dict):
@@ -174,3 +186,36 @@ def poll_new_orders_task(self):
         return {"ok": True, "checked": checked, "notified": notified}
 
     return _with_lock("mp:lock:poll_orders", 240, _run)
+
+
+@shared_task(
+    bind=True,
+    name="marketplaces.check_apis_health",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 1},
+    acks_late=True,
+)
+def check_apis_health_task(self, *, notify: bool = True):
+    """
+    Twice-daily marketplace API health: structural URL audit + live read-only probes.
+    Emails SUPPORT / MARKETPLACE_HEALTH_EMAIL only when something fails.
+    """
+
+    def _run():
+        from .health import run_marketplace_api_health, send_health_failure_email
+
+        report = run_marketplace_api_health(max_accounts=5)
+        emailed = False
+        if notify and not report.get("ok"):
+            emailed = send_health_failure_email(report)
+        return {
+            "ok": report.get("ok"),
+            "failures": len(report.get("failures") or []),
+            "probed_accounts": report.get("probed_accounts"),
+            "emailed": emailed,
+            "checked_at": report.get("checked_at"),
+            "failure_details": report.get("failures") or [],
+        }
+
+    return _with_lock("mp:lock:api_health", 900, _run)

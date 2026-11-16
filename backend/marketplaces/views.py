@@ -18,6 +18,7 @@ from .clients import (
     build_ozon_item,
     build_product_label_pdf,
     build_wb_card,
+    fetch_ozon_finance_period,
     fetch_ozon_package_label_pdf,
     fetch_wb_nm_id,
     fetch_wb_order_stickers_pdf,
@@ -25,6 +26,7 @@ from .clients import (
     generate_local_ean13,
     humanize_api_error,
     normalize_marketplace_images,
+    normalize_ozon_orders_list_payload,
     normalize_product_identifiers,
     ozon_headers,
     parse_ozon_product_item,
@@ -1142,8 +1144,36 @@ class MarketplaceCallView(APIView):
                 headers = yandex_market_headers(s)
             else:
                 headers = wb_headers(s)
+
+            # Ozon finance: legacy period filter → day-by-day accrual/by-day
+            if marketplace == "ozon" and action == "finance.list":
+                date_filter = {}
+                if isinstance(payload.get("filter"), dict):
+                    date_filter = payload["filter"].get("date") or {}
+                date_from = (
+                    payload.get("date")
+                    or (date_filter.get("from") if isinstance(date_filter, dict) else None)
+                    or ""
+                )
+                date_to = date_filter.get("to") if isinstance(date_filter, dict) else payload.get("date_to")
+                if not date_from:
+                    from datetime import date, timedelta
+
+                    date_to = date.today().isoformat()
+                    date_from = (date.today() - timedelta(days=6)).isoformat()
+                result = fetch_ozon_finance_period(
+                    provider=provider,
+                    settings=s,
+                    date_from=str(date_from),
+                    date_to=str(date_to) if date_to else None,
+                    max_days=int(payload.get("max_days") or 14),
+                )
+                return Response(result)
+
             use_json = method in ("POST", "PUT", "PATCH")
             json_body = payload if use_json else None
+            if marketplace == "ozon" and action == "orders.list" and isinstance(json_body, dict):
+                json_body = normalize_ozon_orders_list_payload(json_body)
             if method in ("POST", "PUT") and not json_body:
                 json_body = {}
             if method == "PATCH" and not payload:

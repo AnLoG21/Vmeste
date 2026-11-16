@@ -184,6 +184,8 @@ EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "Вместе <vmesteofficialsupport@gmail.com>")
 SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "vmesteofficialsupport@gmail.com")
+# Alerts when marketplace Seller API probes fail (Celery Beat: 13:00 and 02:00 Moscow)
+MARKETPLACE_HEALTH_EMAIL = os.environ.get("MARKETPLACE_HEALTH_EMAIL", SUPPORT_EMAIL)
 
 YOOKASSA_SHOP_ID = os.environ.get("YOOKASSA_SHOP_ID", "")
 YOOKASSA_SECRET_KEY = os.environ.get("YOOKASSA_SECRET_KEY", "")
@@ -247,6 +249,14 @@ CELERY_BEAT_SCHEDULE = {
     "marketplaces-poll-orders-every-10-min": {
         "task": "marketplaces.poll_new_orders",
         "schedule": 600.0,
+    },
+    "marketplaces-api-health-lunch": {
+        "task": "marketplaces.check_apis_health",
+        "schedule": crontab(hour=13, minute=0),
+    },
+    "marketplaces-api-health-night": {
+        "task": "marketplaces.check_apis_health",
+        "schedule": crontab(hour=2, minute=0),
     },
     "shop-sync-delivery-every-10-min": {
         "task": "shop.sync_delivery_statuses",

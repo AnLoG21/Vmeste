@@ -2203,7 +2203,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                   ...(warehouseId ? { warehouse_id: Number(warehouseId) } : {}),
                 },
                 limit: 50,
-                offset: 0,
+                cursor: "",
                 with: { analytics_data: true, financial_data: true },
               };
       const data = await mpCall("orders.list", payload);
@@ -2542,12 +2542,12 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   async function loadFinance() {
     await withBusy("finance", async () => {
       if (mp === "ozon") {
-        const from = ozonTimestampDaysAgo(30);
+        const from = ozonTimestampDaysAgo(7);
         const to = ozonTimestampNow();
+        // Ozon accrual/by-day (старый transaction/list отключён) — бэкенд обходит период по дням
         const fin = await mpCall("finance.list", {
-          filter: { date: { from, to }, operation_type: [] },
-          page: 1,
-          page_size: 50,
+          filter: { date: { from, to } },
+          max_days: 7,
         });
         if (fin?.sandbox) {
           setFinanceRows([]);

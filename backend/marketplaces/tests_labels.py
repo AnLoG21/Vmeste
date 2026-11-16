@@ -18,6 +18,15 @@ class MarketplaceLabelHelpersTests(TestCase):
         self.assertTrue(OZON_ACTIONS["orders.label.create"][1].endswith("/v3/posting/fbs/package-label/create"))
         self.assertTrue(OZON_ACTIONS["orders.label.get"][1].endswith("/v2/posting/fbs/package-label/get"))
 
+    def test_ozon_orders_and_finance_paths(self):
+        self.assertIn("/v4/posting/fbs/list", OZON_ACTIONS["orders.list"][1])
+        self.assertIn("/v4/posting/fbs/ship", OZON_ACTIONS["orders.ship"][1])
+        self.assertIn("/v1/finance/accrual/by-day", OZON_ACTIONS["finance.list"][1])
+        from marketplaces.health import structural_audit
+
+        fails = [c for c in structural_audit() if not c.get("ok")]
+        self.assertEqual(fails, [])
+
     def test_wb_and_yandex_label_actions(self):
         self.assertIn("orders.stickers", WB_ACTIONS)
         self.assertIn("orders.label", YANDEX_ACTIONS)

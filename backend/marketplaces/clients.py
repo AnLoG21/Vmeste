@@ -881,16 +881,19 @@ OZON_ACTIONS = {
     "products.prices": ("POST", f"{OZON_BASE}/v1/product/import/prices"),
     "products.stocks": ("POST", f"{OZON_BASE}/v2/products/stocks"),
     "products.stocks_info": ("POST", f"{OZON_BASE}/v4/product/info/stocks"),
-    "orders.list": ("POST", f"{OZON_BASE}/v3/posting/fbs/list"),
+    # orders.list: v3 disabled 2026-08-31 → v4 (cursor pagination, postings at top level)
+    "orders.list": ("POST", f"{OZON_BASE}/v4/posting/fbs/list"),
     "orders.info": ("POST", f"{OZON_BASE}/v3/posting/fbs/get"),
     "orders.cancel": ("POST", f"{OZON_BASE}/v3/posting/fbs/cancel"),
-    "orders.ship": ("POST", f"{OZON_BASE}/v3/posting/fbs/ship"),
+    # ship: use v4 (v3 marked obsolete / replaced in Seller API)
+    "orders.ship": ("POST", f"{OZON_BASE}/v4/posting/fbs/ship"),
     # Labels: sync /v2/.../package-label removed by Ozon after 2026-11-02 → create + get
     "orders.label.create": ("POST", f"{OZON_BASE}/v3/posting/fbs/package-label/create"),
     "orders.label.get": ("POST", f"{OZON_BASE}/v2/posting/fbs/package-label/get"),
     "analytics.data": ("POST", f"{OZON_BASE}/v1/analytics/data"),
     "analytics.stocks": ("POST", f"{OZON_BASE}/v1/analytics/stock_on_warehouses"),
-    "finance.list": ("POST", f"{OZON_BASE}/v3/finance/transaction/list"),
+    # finance: /v3/finance/transaction/list disabled 2026-09-08 → accrual/by-day
+    "finance.list": ("POST", f"{OZON_BASE}/v1/finance/accrual/by-day"),
     "warehouses.list": ("POST", f"{OZON_BASE}/v2/warehouse/list"),
     "actions.list": ("GET", f"{OZON_BASE}/v1/actions"),
     "reviews.list": ("POST", f"{OZON_BASE}/v1/review/list"),
@@ -944,6 +947,104 @@ YANDEX_ACTIONS = {
     "orders.label": ("GET", f"{YANDEX_MARKET_BASE}/v2/campaigns/{{campaignId}}/orders/{{orderId}}/delivery/labels"),
     "orders.status": ("PUT", f"{YANDEX_MARKET_BASE}/v2/campaigns/{{campaignId}}/orders/{{orderId}}/status"),
 }
+
+
+def normalize_ozon_orders_list_payload(payload: dict | None) -> dict:
+    """Adapt legacy v3 body (offset) to v4 cursor API."""
+    body = dict(payload or {})
+    body.pop("offset", None)
+    if "cursor" not in body:
+        body["cursor"] = ""
+    if "limit" not in body:
+        body["limit"] = 50
+    if "dir" not in body:
+        body["dir"] = "DESC"
+    return body
+
+
+def flatten_ozon_accrual(row: dict) -> dict:
+    """Map accrual/by-day row to a shape close to old transaction/list operations."""
+    if not isinstance(row, dict):
+        return {}
+    total = row.get("total_amount")
+    if isinstance(total, dict):
+        amount = total.get("amount")
+    else:
+        amount = total
+    unit = str(row.get("unit_number") or "").strip()
+    category = str(row.get("accrued_category") or row.get("type") or "").strip()
+    return {
+        "operation_id": row.get("accrual_id") or row.get("operation_id"),
+        "operation_date": row.get("date") or row.get("operation_date"),
+        "operation_type": category,
+        "operation_type_name": category or unit or "начисление",
+        "amount": amount,
+        "posting": {"posting_number": unit} if unit else {},
+        "raw": row,
+    }
+
+
+def fetch_ozon_finance_period(
+    *,
+    provider,
+    settings: MarketplaceSettings,
+    date_from: str,
+    date_to: str | None = None,
+    max_days: int = 14,
+    max_pages_per_day: int = 20,
+) -> dict:
+    """
+    Pull Ozon accruals for a date range via /v1/finance/accrual/by-day (one day per call).
+    Returns {operations: [...], days: N} compatible with the finance UI.
+    """
+    from datetime import date, datetime, timedelta
+
+    def _parse(d: str) -> date:
+        text = str(d or "").strip()
+        if "T" in text:
+            text = text.split("T", 1)[0]
+        return datetime.strptime(text[:10], "%Y-%m-%d").date()
+
+    start = _parse(date_from)
+    end = _parse(date_to) if date_to else start
+    if end < start:
+        start, end = end, start
+    span = (end - start).days + 1
+    if span > max_days:
+        start = end - timedelta(days=max_days - 1)
+
+    headers = ozon_headers(settings)
+    url = OZON_ACTIONS["finance.list"][1]
+    operations: list[dict] = []
+    days_done = 0
+    cur = start
+    while cur <= end:
+        last_id = ""
+        for _ in range(max_pages_per_day):
+            body: dict[str, Any] = {"date": cur.isoformat()}
+            if last_id:
+                body["last_id"] = last_id
+            data = request_json(
+                provider=provider,
+                marketplace="ozon",
+                method="POST",
+                url=url,
+                headers=headers,
+                json_body=body,
+            )
+            rows = data.get("accruals") if isinstance(data, dict) else None
+            if not isinstance(rows, list):
+                rows = []
+            for row in rows:
+                flat = flatten_ozon_accrual(row)
+                if flat:
+                    operations.append(flat)
+            last_id = str((data or {}).get("last_id") or "").strip()
+            if not last_id or not rows:
+                break
+        days_done += 1
+        cur += timedelta(days=1)
+    return {"operations": operations, "result": {"operations": operations}, "days": days_done}
 
 
 def resolve_url(template: str, extra: dict) -> str:
