@@ -1,4 +1,4 @@
-# Маркетплейсы (Ozon / Wildberries)
+# Маркетплейсы (Ozon / Wildberries / Яндекс Маркет)
 
 Кабинет исполнителя со сферой **Маркетплейсы**: выгрузка карточек, медиа, заказы, отзывы, финансы Ozon, логи API.
 
@@ -7,7 +7,7 @@
 ## Быстрый старт
 
 1. Войдите как исполнитель со сферой «Маркетплейсы».
-2. **Меню → Управление** — вставьте ключи Ozon (Client ID + API Key) и/или Wildberries API Key.
+2. **Меню → Управление** — вставьте ключи Ozon (Client ID + API Key), Wildberries API Key и/или Яндекс Маркет (Api-Key + Campaign ID).
 3. Включите **Боевой** режим, когда готовы к реальным запросам (в песочнице запись на площадку не уходит).
 4. Подключите **Яндекс Диск** (по желанию) — публичные URL фото для карточек.
 5. **Создать товар** → загрузите категории с площадки → заполните карточку → «Выгрузить».
@@ -29,6 +29,8 @@
 | GET | `logs/` | Логи API провайдера |
 | GET | `export/?export=csv\|xlsx` | Экспорт истории CSV/Excel |
 | POST | `barcodes/generate/` | Генерация штрихкодов |
+| POST | `orders/label/` | PDF этикетки отправления (Ozon / WB / Яндекс) |
+| POST | `products/label/` | PDF этикетка на товар (штрихкод, 58×40) |
 | POST | `sync/` | Фоновая синхронизация pending-импортов |
 | POST | `webhook/` | Входящий webhook (по secret) |
 | GET | `alerts/` | Алерты: остаток, failed-импорт, логи |
@@ -75,9 +77,26 @@
 
 Кнопка в форме сама выбирает local или product_ids.
 
-## Этикетки FBS (Ozon)
+## Этикетки отправлений
 
-`POST /api/marketplaces/orders/label/` — `{ "posting_numbers": ["…"] }` → PDF (через ~1 мин после сборки).
+`POST /api/marketplaces/orders/label/` (боевой режим):
+
+| Площадка | Тело | Примечание |
+|----------|------|------------|
+| Ozon | `{ "marketplace": "ozon", "posting_numbers": ["…"] }` | Async: `/v3/.../package-label/create` + `/v2/.../get` (старый sync `/v2/.../package-label` отключён Ozon с 02.11.2026) |
+| WB | `{ "marketplace": "wildberries", "order_ids": [123] }` | Stickers PNG → PDF 58×40; статусы confirm/complete |
+| Яндекс | `{ "marketplace": "yandex", "order_id": 123 }` | Partner `.../delivery/labels`; нужен Campaign ID |
+
+## Этикетки на товар
+
+`POST /api/marketplaces/products/label/` — `{ "history_id" }` или `{ "offer_id", "name", "barcode", "price", "copies" }` → локальный PDF 58×40 мм.  
+В UI: кнопка **Этикетка** в строке каталога.
+
+## Яндекс Маркет
+
+Ключи в `MarketplaceSettings`: `yandex_market_api_key`, `yandex_market_campaign_id`.  
+Через `POST /call/` с `marketplace: "yandex"`: `campaigns.list`, `products.list`, `orders.list`, `orders.info`, `orders.label`, `orders.status`.  
+Campaign ID подставляется из настроек, если не передан в `params.campaignId`.
 
 ---
 

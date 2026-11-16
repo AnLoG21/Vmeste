@@ -16,6 +16,18 @@ class MarketplaceSettings(models.Model):
     ozon_client_id = models.CharField(max_length=128, blank=True, default="")
     ozon_api_key = models.CharField(max_length=256, blank=True, default="")
     wb_api_key = models.CharField(max_length=512, blank=True, default="")
+    yandex_market_api_key = models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        help_text="Api-Key токен кабинета продавца Яндекс Маркета.",
+    )
+    yandex_market_campaign_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Campaign ID магазина в Partner API Яндекс Маркета.",
+    )
     yandex_disk_token = models.CharField(
         max_length=512,
         blank=True,
@@ -66,6 +78,9 @@ class MarketplaceSettings(models.Model):
     def has_wb(self) -> bool:
         return bool((self.wb_api_key or "").strip())
 
+    def has_yandex_market(self) -> bool:
+        return bool((self.yandex_market_api_key or "").strip())
+
 
 class MarketplaceProductHistory(models.Model):
     provider = models.ForeignKey(
@@ -73,7 +88,10 @@ class MarketplaceProductHistory(models.Model):
         on_delete=models.CASCADE,
         related_name="marketplace_products",
     )
-    marketplace = models.CharField(max_length=20, choices=[("ozon", "Ozon"), ("wildberries", "Wildberries")])
+    marketplace = models.CharField(
+        max_length=20,
+        choices=[("ozon", "Ozon"), ("wildberries", "Wildberries"), ("yandex", "Яндекс Маркет")],
+    )
     offer_id = models.CharField(max_length=128, db_index=True)
     product_data = models.JSONField(default=dict)
     status = models.CharField(max_length=32, default="pending")
@@ -96,7 +114,10 @@ class MarketplaceTemplate(models.Model):
     )
     name = models.CharField(max_length=180)
     description = models.TextField(blank=True, default="")
-    marketplace = models.CharField(max_length=20, choices=[("ozon", "Ozon"), ("wildberries", "Wildberries")])
+    marketplace = models.CharField(
+        max_length=20,
+        choices=[("ozon", "Ozon"), ("wildberries", "Wildberries"), ("yandex", "Яндекс Маркет")],
+    )
     brand = models.CharField(max_length=180, blank=True, default="")
     description_text = models.TextField(blank=True, default="")
     price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -149,7 +170,15 @@ class MarketplaceReplyTemplate(models.Model):
         related_name="marketplace_reply_templates",
     )
     name = models.CharField(max_length=180)
-    marketplace = models.CharField(max_length=20, choices=[("ozon", "Ozon"), ("wildberries", "Wildberries"), ("any", "Любая")])
+    marketplace = models.CharField(
+        max_length=20,
+        choices=[
+            ("ozon", "Ozon"),
+            ("wildberries", "Wildberries"),
+            ("yandex", "Яндекс Маркет"),
+            ("any", "Любая"),
+        ],
+    )
     kind = models.CharField(max_length=16, choices=KIND_CHOICES, default=KIND_REVIEW)
     body = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)

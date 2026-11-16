@@ -13,22 +13,27 @@ from .clients import (
     MarketplaceError,
     OZON_ACTIONS,
     WB_ACTIONS,
+    YANDEX_ACTIONS,
     apply_import_identifiers_to_history,
     build_ozon_item,
+    build_product_label_pdf,
     build_wb_card,
+    fetch_ozon_package_label_pdf,
     fetch_wb_nm_id,
+    fetch_wb_order_stickers_pdf,
+    fetch_yandex_order_label_pdf,
     generate_local_ean13,
     humanize_api_error,
     normalize_marketplace_images,
     normalize_product_identifiers,
     ozon_headers,
     parse_ozon_product_item,
-    request_bytes,
     request_json,
     resolve_url,
     summarize_ozon_import_status,
     validate_product_for_import,
     wb_headers,
+    yandex_market_headers,
 )
 from .models import (
     MarketplaceApiLog,
@@ -321,6 +326,8 @@ class MarketplaceSettingsView(APIView):
                 "ozon_client_id": s.ozon_client_id if can_keys else "",
                 "has_ozon_api_key": s.has_ozon() if can_keys else False,
                 "has_wb_api_key": s.has_wb() if can_keys else False,
+                "has_yandex_market": s.has_yandex_market() if can_keys else False,
+                "yandex_market_campaign_id": s.yandex_market_campaign_id if can_keys else "",
                 "has_yandex_disk": bool((s.yandex_disk_token or "").strip()) if can_keys else False,
                 "yandex_disk_oauth": bool(settings.YANDEX_OAUTH_CLIENT_ID and settings.YANDEX_OAUTH_CLIENT_SECRET),
                 "video_enabled": True,
@@ -367,6 +374,8 @@ class MarketplaceSettingsView(APIView):
                 "ozon_client_id",
                 "ozon_api_key",
                 "wb_api_key",
+                "yandex_market_api_key",
+                "yandex_market_campaign_id",
                 "yandex_disk_token",
                 "rotate_webhook_secret",
             )
@@ -384,6 +393,11 @@ class MarketplaceSettingsView(APIView):
         wb = str(data.get("wb_api_key") or "").strip()
         if wb and not wb.startswith("•"):
             s.wb_api_key = wb
+        ym = str(data.get("yandex_market_api_key") or "").strip()
+        if ym and not ym.startswith("•"):
+            s.yandex_market_api_key = ym
+        if "yandex_market_campaign_id" in data:
+            s.yandex_market_campaign_id = str(data.get("yandex_market_campaign_id") or "").strip()[:64]
         if "yandex_disk_token" in data:
             disk = str(data.get("yandex_disk_token") or "").strip()
             if disk == "":
@@ -462,7 +476,7 @@ class MarketplaceSettingsView(APIView):
 
 
 class MarketplaceSettingsVerifyView(APIView):
-    """Проверка ключей Ozon/WB живым ping (независимо от sandbox/prod)."""
+    """Проверка ключей Ozon/WB/Яндекс Маркет живым ping (независимо от sandbox/prod)."""
 
     def post(self, request):
         provider, err = _require_provider(request)
@@ -482,22 +496,29 @@ class MarketplaceSettingsVerifyView(APIView):
         wb_key = str(data.get("wb_api_key") or "").strip()
         if not wb_key or wb_key.startswith("•"):
             wb_key = (s.wb_api_key or "").strip()
+        ym_key = str(data.get("yandex_market_api_key") or "").strip()
+        if not ym_key or ym_key.startswith("•"):
+            ym_key = (s.yandex_market_api_key or "").strip()
 
-        checked = {"ozon": None, "wildberries": None}
+        checked = {"ozon": None, "wildberries": None, "yandex": None}
         any_ok = False
         any_attempt = False
 
         class _KeyProbe:
-            def __init__(self, ozon_client_id="", ozon_api_key="", wb_api_key=""):
+            def __init__(self, ozon_client_id="", ozon_api_key="", wb_api_key="", yandex_market_api_key=""):
                 self.ozon_client_id = ozon_client_id or ""
                 self.ozon_api_key = ozon_api_key or ""
                 self.wb_api_key = wb_api_key or ""
+                self.yandex_market_api_key = yandex_market_api_key or ""
 
             def has_ozon(self) -> bool:
                 return bool(self.ozon_client_id.strip() and self.ozon_api_key.strip())
 
             def has_wb(self) -> bool:
                 return bool(self.wb_api_key.strip())
+
+            def has_yandex_market(self) -> bool:
+                return bool(self.yandex_market_api_key.strip())
 
         if client_id and ozon_key:
             any_attempt = True
@@ -537,18 +558,37 @@ class MarketplaceSettingsVerifyView(APIView):
             except Exception as exc:
                 checked["wildberries"] = {"ok": False, "detail": str(exc)[:200]}
 
+        if ym_key:
+            any_attempt = True
+            try:
+                probe = _KeyProbe(yandex_market_api_key=ym_key)
+                request_json(
+                    provider=provider,
+                    marketplace="yandex",
+                    method="GET",
+                    url=YANDEX_ACTIONS["campaigns.list"][1],
+                    headers=yandex_market_headers(probe),
+                    params={"pageSize": 1},
+                )
+                checked["yandex"] = {"ok": True, "detail": "Яндекс Маркет: ключ принят"}
+                any_ok = True
+            except MarketplaceError as exc:
+                checked["yandex"] = {"ok": False, "detail": str(exc)}
+            except Exception as exc:
+                checked["yandex"] = {"ok": False, "detail": str(exc)[:200]}
+
         if not any_attempt:
             return Response(
                 {
                     "ok": False,
-                    "detail": "Укажите ключ Ozon (Client ID + API Key) и/или Wildberries.",
+                    "detail": "Укажите ключ Ozon, Wildberries и/или Яндекс Маркета.",
                     "checked": checked,
                 },
                 status=400,
             )
 
         details = []
-        for key in ("ozon", "wildberries"):
+        for key in ("ozon", "wildberries", "yandex"):
             item = checked.get(key)
             if item and not item.get("ok"):
                 details.append(item.get("detail") or f"{key}: ошибка")
@@ -1062,7 +1102,7 @@ class MarketplaceImportView(APIView):
 
 
 class MarketplaceCallView(APIView):
-    """Универсальный вызов действия Ozon/WB. Тело: {marketplace, action, payload, params}."""
+    """Универсальный вызов действия Ozon/WB/Яндекс Маркет. Тело: {marketplace, action, payload, params}."""
 
     def post(self, request):
         provider, err = _require_provider(request)
@@ -1070,19 +1110,38 @@ class MarketplaceCallView(APIView):
             return err
         data = request.data if isinstance(request.data, dict) else {}
         marketplace = (data.get("marketplace") or "ozon").strip()
+        if marketplace in ("yandex_market", "ym"):
+            marketplace = "yandex"
         action = (data.get("action") or "").strip()
         payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
-        extra = data.get("params") if isinstance(data.get("params"), dict) else {}
+        extra = dict(data.get("params") if isinstance(data.get("params"), dict) else {})
         s = _settings(provider)
-        table = OZON_ACTIONS if marketplace == "ozon" else WB_ACTIONS
+        if marketplace == "ozon":
+            table = OZON_ACTIONS
+        elif marketplace == "yandex":
+            table = YANDEX_ACTIONS
+        else:
+            table = WB_ACTIONS
         if action not in table:
             return Response({"detail": f"Неизвестное действие: {action}"}, status=400)
+        if marketplace == "yandex" and "campaignId" not in extra and (s.yandex_market_campaign_id or "").strip():
+            extra["campaignId"] = s.yandex_market_campaign_id.strip()
         method, url_tmpl = table[action]
         url = resolve_url(url_tmpl, extra)
+        if "{" in url and "}" in url:
+            return Response(
+                {"detail": "Для Яндекс Маркета укажите Campaign ID в Управлении или params.campaignId."},
+                status=400,
+            )
         try:
             if s.environment != "prod":
                 return Response({"sandbox": True, "message": "Тестовый режим: запрос к площадке не отправлялся. Включите боевой режим в меню «Управление»."})
-            headers = ozon_headers(s) if marketplace == "ozon" else wb_headers(s)
+            if marketplace == "ozon":
+                headers = ozon_headers(s)
+            elif marketplace == "yandex":
+                headers = yandex_market_headers(s)
+            else:
+                headers = wb_headers(s)
             use_json = method in ("POST", "PUT", "PATCH")
             json_body = payload if use_json else None
             if method in ("POST", "PUT") and not json_body:
@@ -1828,7 +1887,12 @@ class MarketplaceBarcodeView(APIView):
 
 
 class MarketplaceOrderLabelView(APIView):
-    """PDF этикетки Ozon FBS: POST {posting_numbers: [...]}."""
+    """
+    PDF этикетки отправлений:
+    - ozon: posting_numbers → async create/get
+    - wildberries: order_ids → stickers PNG → PDF
+    - yandex: order_id (+ campaign_id) → Partner labels PDF
+    """
 
     def post(self, request):
         from django.http import HttpResponse
@@ -1837,14 +1901,11 @@ class MarketplaceOrderLabelView(APIView):
         if err:
             return err
         data = request.data if isinstance(request.data, dict) else {}
-        numbers = data.get("posting_numbers") or data.get("posting_number") or []
-        if isinstance(numbers, str):
-            numbers = [numbers]
-        if not isinstance(numbers, list):
-            numbers = []
-        numbers = [str(n).strip() for n in numbers if str(n).strip()][:20]
-        if not numbers:
-            return Response({"detail": "Укажите posting_numbers."}, status=400)
+        marketplace = str(data.get("marketplace") or "ozon").strip().lower()
+        if marketplace in ("yandex_market", "ym"):
+            marketplace = "yandex"
+        if marketplace == "wb":
+            marketplace = "wildberries"
         s = _settings(provider)
         if s.environment != "prod":
             return Response(
@@ -1852,24 +1913,108 @@ class MarketplaceOrderLabelView(APIView):
                 status=400,
             )
         try:
-            content, ctype = request_bytes(
-                provider=provider,
-                marketplace="ozon",
-                method="POST",
-                url=OZON_ACTIONS["orders.label"][1],
-                headers=ozon_headers(s),
-                json_body={"posting_number": numbers},
-            )
-            if "pdf" not in (ctype or "").lower() and content[:4] != b"%PDF":
-                # Sometimes API wraps error as JSON with 200 — already handled by request_bytes on !ok
-                text = content[:400].decode("utf-8", errors="replace")
-                return Response({"detail": text or "Ozon не вернул PDF этикетки."}, status=400)
+            if marketplace == "ozon":
+                numbers = data.get("posting_numbers") or data.get("posting_number") or []
+                if isinstance(numbers, str):
+                    numbers = [numbers]
+                if not isinstance(numbers, list):
+                    numbers = []
+                numbers = [str(n).strip() for n in numbers if str(n).strip()][:20]
+                if not numbers:
+                    return Response({"detail": "Укажите posting_numbers."}, status=400)
+                content = fetch_ozon_package_label_pdf(
+                    provider=provider, settings=s, posting_numbers=numbers
+                )
+                name = numbers[0].replace("/", "-") if len(numbers) == 1 else "ozon-labels"
+            elif marketplace == "wildberries":
+                raw_ids = data.get("order_ids") or data.get("orders") or data.get("order_id") or []
+                if isinstance(raw_ids, (str, int)):
+                    raw_ids = [raw_ids]
+                if not isinstance(raw_ids, list):
+                    raw_ids = []
+                order_ids: list[int] = []
+                for x in raw_ids[:100]:
+                    try:
+                        order_ids.append(int(x))
+                    except (TypeError, ValueError):
+                        continue
+                if not order_ids:
+                    return Response({"detail": "Укажите order_ids сборочных заданий WB."}, status=400)
+                content = fetch_wb_order_stickers_pdf(
+                    provider=provider, settings=s, order_ids=order_ids
+                )
+                name = f"wb-sticker-{order_ids[0]}" if len(order_ids) == 1 else "wb-stickers"
+            elif marketplace == "yandex":
+                order_id = data.get("order_id") or data.get("orderId")
+                if order_id is None and data.get("posting_numbers"):
+                    pn = data.get("posting_numbers")
+                    order_id = pn[0] if isinstance(pn, list) and pn else pn
+                if order_id is None:
+                    return Response({"detail": "Укажите order_id Яндекс Маркета."}, status=400)
+                campaign_id = data.get("campaign_id") or data.get("campaignId") or s.yandex_market_campaign_id
+                content = fetch_yandex_order_label_pdf(
+                    provider=provider,
+                    settings=s,
+                    order_id=order_id,
+                    campaign_id=campaign_id,
+                    label_format=str(data.get("format") or "A7"),
+                )
+                name = f"ym-label-{order_id}"
+            else:
+                return Response({"detail": "marketplace: ozon | wildberries | yandex"}, status=400)
+
             resp = HttpResponse(content, content_type="application/pdf")
-            name = numbers[0].replace("/", "-") if len(numbers) == 1 else "ozon-labels"
             resp["Content-Disposition"] = f'attachment; filename="{name}.pdf"'
             return resp
         except MarketplaceError as exc:
             return Response({"detail": str(exc)}, status=min(exc.status_code, 599) if exc.status_code >= 400 else 400)
+
+
+class MarketplaceProductLabelView(APIView):
+    """Локальная PDF-этикетка на товар (штрихкод / артикул) — 58×40 мм."""
+
+    def post(self, request):
+        from django.http import HttpResponse
+
+        provider, err = _require_provider(request)
+        if err:
+            return err
+        data = request.data if isinstance(request.data, dict) else {}
+        offer_id = str(data.get("offer_id") or "").strip()
+        name = str(data.get("name") or "").strip()
+        barcode = str(data.get("barcode") or "").strip()
+        price = str(data.get("price") or "").strip()
+        history_id = data.get("history_id") or data.get("id")
+        if history_id:
+            row = MarketplaceProductHistory.objects.filter(provider=provider, pk=history_id).first()
+            if row:
+                product = row.product_data if isinstance(row.product_data, dict) else {}
+                offer_id = offer_id or str(row.offer_id or product.get("offer_id") or "").strip()
+                name = name or str(product.get("name") or "").strip()
+                barcode = barcode or str(product.get("barcode") or "").strip()
+                if not price and product.get("price") is not None:
+                    price = str(product.get("price"))
+        if not offer_id and not barcode:
+            return Response({"detail": "Укажите offer_id или barcode (или history_id)."}, status=400)
+        try:
+            copies = int(data.get("copies") or 1)
+        except (TypeError, ValueError):
+            copies = 1
+        try:
+            content = build_product_label_pdf(
+                offer_id=offer_id,
+                name=name,
+                barcode=barcode,
+                price=price,
+                copies=copies,
+            )
+        except Exception as exc:
+            logger.exception("product label pdf failed")
+            return Response({"detail": f"Не удалось сформировать этикетку: {exc}"}, status=500)
+        fname = (offer_id or barcode or "label").replace("/", "-")[:80]
+        resp = HttpResponse(content, content_type="application/pdf")
+        resp["Content-Disposition"] = f'attachment; filename="product-{fname}.pdf"'
+        return resp
 
 
 class MarketplaceSyncView(APIView):

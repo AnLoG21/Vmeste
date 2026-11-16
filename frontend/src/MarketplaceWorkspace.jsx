@@ -538,6 +538,27 @@ function normalizeOrders(data, marketplace) {
         raw: row,
       };
     }
+    if (marketplace === "yandex") {
+      const status = row.status || row.substatus || "—";
+      const items = row.items || row.orderItems || [];
+      const sku = items[0]?.offerId || items[0]?.shopSku || row.shopOrderId || "";
+      return {
+        key: String(row.id || row.orderId || i),
+        id: row.id || row.orderId,
+        number: String(row.id || row.orderId || "—"),
+        status,
+        status_label: orderStatusLabel(status, "yandex"),
+        date: row.creationDate || row.updatedAt || row.updateDate || "",
+        sku: sku || "",
+        price: row.buyerTotal || row.total || items[0]?.buyerPrice || "",
+        title: items
+          .map((p) => p.offerName || p.offerId)
+          .filter(Boolean)
+          .slice(0, 2)
+          .join(", "),
+        raw: row,
+      };
+    }
     const products = row.products || [];
     const names = products.map((p) => p.name || p.offer_id).filter(Boolean).slice(0, 2).join(", ");
     const status = row.status || row.posting_status || "—";
@@ -578,7 +599,16 @@ function orderStatusLabel(status, marketplace) {
     complete: "В доставке",
     cancel: "Отменён",
   };
+  const ym = {
+    processing: "В обработке",
+    delivery: "Доставка",
+    delivered: "Доставлен",
+    cancelled: "Отменён",
+    pickup: "Самовывоз",
+    pending: "Ожидает",
+  };
   if (marketplace === "wildberries") return wb[s] || status || "—";
+  if (marketplace === "yandex") return ym[s] || status || "—";
   return ozon[s] || status || "—";
 }
 
@@ -773,6 +803,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
     ozon_client_id: "",
     ozon_api_key: "",
     wb_api_key: "",
+    yandex_market_api_key: "",
+    yandex_market_campaign_id: "",
     yandex_disk_token: "",
     environment: "sandbox",
     low_stock_threshold: 5,
@@ -928,6 +960,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       environment: data.environment || "sandbox",
       ozon_api_key: data.has_ozon_api_key ? "••••••••" : "",
       wb_api_key: data.has_wb_api_key ? "••••••••" : "",
+      yandex_market_api_key: data.has_yandex_market ? "••••••••" : "",
+      yandex_market_campaign_id: data.yandex_market_campaign_id || "",
       yandex_disk_token: data.has_yandex_disk ? "••••••••" : "",
       low_stock_threshold: data.low_stock_threshold ?? 5,
       price_protect_enabled: Boolean(data.price_protect_enabled),
@@ -962,7 +996,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
 
   const loadHistory = useCallback(async () => {
     const q = search ? `&q=${encodeURIComponent(search)}` : "";
-    const res = await authFetch(`${base}/history/?marketplace=${mp === "wildberries" ? "wildberries" : "ozon"}${q}`);
+    const res = await authFetch(
+      `${base}/history/?marketplace=${mp === "wildberries" ? "wildberries" : mp === "yandex" ? "yandex" : "ozon"}${q}`,
+    );
     if (res.ok) {
       const data = await res.json();
       setHistory(data.results || []);
@@ -986,7 +1022,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   }, [authFetch, base]);
 
   const loadAlerts = useCallback(async () => {
-    const res = await authFetch(`${base}/alerts/?marketplace=${mp === "wildberries" ? "wildberries" : "ozon"}`);
+    const res = await authFetch(
+      `${base}/alerts/?marketplace=${mp === "wildberries" ? "wildberries" : mp === "yandex" ? "yandex" : "ozon"}`,
+    );
     if (res.ok) setAlerts(await res.json());
   }, [authFetch, base, mp]);
 
@@ -1078,6 +1116,10 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       };
       if (keysForm.ozon_api_key && !keysForm.ozon_api_key.startsWith("•")) body.ozon_api_key = keysForm.ozon_api_key;
       if (keysForm.wb_api_key && !keysForm.wb_api_key.startsWith("•")) body.wb_api_key = keysForm.wb_api_key;
+      if (keysForm.yandex_market_api_key && !keysForm.yandex_market_api_key.startsWith("•")) {
+        body.yandex_market_api_key = keysForm.yandex_market_api_key;
+      }
+      body.yandex_market_campaign_id = keysForm.yandex_market_campaign_id || "";
       if (keysForm.yandex_disk_token && !keysForm.yandex_disk_token.startsWith("•")) {
         body.yandex_disk_token = keysForm.yandex_disk_token;
       }
@@ -1099,6 +1141,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
         const bits = [];
         if (vData.checked?.ozon?.ok) bits.push("Ozon ✓");
         if (vData.checked?.wildberries?.ok) bits.push("WB ✓");
+        if (vData.checked?.yandex?.ok) bits.push("Яндекс ✓");
         setStatus(bits.length ? `Ключи сохранены и проверены: ${bits.join(", ")}.` : "Ключи сохранены и проверены.");
       } else {
         setStatus("Ключи сохранены.");
@@ -2146,18 +2189,23 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       const payload =
         mp === "wildberries"
           ? {}
-          : {
-              dir: "DESC",
-              filter: {
-                since: daysAgoIso(14),
-                to: new Date().toISOString().slice(0, 19) + "Z",
-                ...(orderStatusFilter ? { status: orderStatusFilter } : {}),
-                ...(warehouseId ? { warehouse_id: Number(warehouseId) } : {}),
-              },
-              limit: 50,
-              offset: 0,
-              with: { analytics_data: true, financial_data: true },
-            };
+          : mp === "yandex"
+            ? {
+                status: orderStatusFilter || "PROCESSING",
+                pageSize: 50,
+              }
+            : {
+                dir: "DESC",
+                filter: {
+                  since: daysAgoIso(14),
+                  to: new Date().toISOString().slice(0, 19) + "Z",
+                  ...(orderStatusFilter ? { status: orderStatusFilter } : {}),
+                  ...(warehouseId ? { warehouse_id: Number(warehouseId) } : {}),
+                },
+                limit: 50,
+                offset: 0,
+                with: { analytics_data: true, financial_data: true },
+              };
       const data = await mpCall("orders.list", payload);
       if (data?.sandbox) {
         setOrderRows([]);
@@ -2254,32 +2302,72 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   }
 
   async function printOrderLabel(row) {
-    if (mp !== "ozon") {
-      setStatus("Этикетки PDF из кабинета — для Ozon FBS.");
-      return;
-    }
     await withBusy("order-label", async () => {
+      const body =
+        mp === "wildberries"
+          ? { marketplace: "wildberries", order_ids: [Number(row.id || row.number)] }
+          : mp === "yandex"
+            ? { marketplace: "yandex", order_id: row.id || row.number }
+            : { marketplace: "ozon", posting_numbers: [row.number] };
       const res = await authFetch(`${base}/orders/label/`, {
         method: "POST",
-        body: JSON.stringify({ posting_numbers: [row.number] }),
+        body: JSON.stringify(body),
       });
       const ctype = res.headers.get("content-type") || "";
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "Не удалось получить этикетку. Обычно нужно подождать 45–60 сек после сборки.");
+        throw new Error(
+          data.detail || "Не удалось получить этикетку. Обычно нужно подождать 45–60 сек после сборки.",
+        );
       }
       if (!ctype.includes("pdf")) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || data.message || "Ozon не вернул PDF.");
+        throw new Error(data.detail || data.message || "Площадка не вернула PDF.");
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `ozon-label-${String(row.number).replace(/[^\w.-]+/g, "_")}.pdf`;
+      const prefix = mp === "wildberries" ? "wb" : mp === "yandex" ? "ym" : "ozon";
+      a.download = `${prefix}-label-${String(row.number).replace(/[^\w.-]+/g, "_")}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
       setStatus(`Этикетка ${row.number} скачана.`);
+    });
+  }
+
+  async function printProductLabel(row) {
+    await withBusy("product-label", async () => {
+      const product = row?.product || {};
+      const res = await authFetch(`${base}/products/label/`, {
+        method: "POST",
+        body: JSON.stringify({
+          history_id: row?.id,
+          offer_id: row?.offer_id || product.offer_id || "",
+          name: product.name || "",
+          barcode: product.barcode || row?.barcode || "",
+          price: product.price != null ? String(product.price) : "",
+          copies: 1,
+        }),
+      });
+      const ctype = res.headers.get("content-type") || "";
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Не удалось сформировать этикетку товара.");
+      }
+      if (!ctype.includes("pdf")) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Сервер не вернул PDF этикетки.");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `label-${String(row?.offer_id || row?.id || "product").replace(/[^\w.-]+/g, "_")}.pdf`;
+      a.click();
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setStatus(`Этикетка ${row?.offer_id || ""} готова к печати.`);
     });
   }
 
@@ -2861,7 +2949,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
     [history, search],
   );
   const tabLabel = TABS.find(([id]) => id === tab)?.[1] || "";
-  const hasMpKeys = Boolean(settings?.has_ozon_api_key || settings?.has_wb_api_key);
+  const hasMpKeys = Boolean(settings?.has_ozon_api_key || settings?.has_wb_api_key || settings?.has_yandex_market);
+  const mpLabel = mp === "wildberries" ? "Wildberries" : mp === "yandex" ? "Яндекс Маркет" : "Ozon";
   const hasSuccessfulImport = historyHasSuccessfulImport(history);
   const showOnboard =
     isBeginner &&
@@ -2937,12 +3026,12 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
 
   return (
     <section
-      className={`card full-width cafe-provider mp-workspace ${mp === "wildberries" ? "mp-wb" : "mp-ozon"} ${isBeginner ? "mp-ui-beginner" : "mp-ui-advanced"}`}
+      className={`card full-width cafe-provider mp-workspace ${mp === "wildberries" ? "mp-wb" : mp === "yandex" ? "mp-ym" : "mp-ozon"} ${isBeginner ? "mp-ui-beginner" : "mp-ui-advanced"}`}
     >
       <div className="mp-head">
         <div className="mp-head-title">
           <h2>Маркетплейсы</h2>
-          <p className="muted">{envLabel} · {mp === "wildberries" ? "Wildberries" : "Ozon"}</p>
+          <p className="muted">{envLabel} · {mpLabel}</p>
         </div>
         <div className="mp-toggle" role="group" aria-label="Площадка">
           <button type="button" className={mp === "ozon" ? "is-active" : ""} onClick={() => setMp("ozon")}>
@@ -2950,6 +3039,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
           </button>
           <button type="button" className={mp === "wildberries" ? "is-active" : ""} onClick={() => setMp("wildberries")}>
             WB
+          </button>
+          <button type="button" className={mp === "yandex" ? "is-active" : ""} onClick={() => setMp("yandex")}>
+            Яндекс
           </button>
         </div>
         <div className="mp-ui-mode" role="group" aria-label="Режим интерфейса">
@@ -3035,8 +3127,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
             >
               <h3>1. Ключи площадки</h3>
               <p className="muted small">
-                Вставьте ключ Ozon и/или WB. Перед продолжением ключи проверяются на площадке. Для выгрузки выберите
-                «Боевой».
+                Вставьте ключ Ozon, WB и/или Яндекс Маркета. Перед продолжением ключи проверяются на площадке. Для
+                выгрузки выберите «Боевой».
               </p>
               <div className="cafe-form-grid">
                 <label>
@@ -3057,6 +3149,22 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                 <label>
                   Wildberries API Key
                   <input type="password" autoComplete="off" value={keysForm.wb_api_key} onChange={(e) => updateKeysForm({ wb_api_key: e.target.value })} />
+                </label>
+                <label>
+                  Яндекс Маркет Api-Key
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={keysForm.yandex_market_api_key}
+                    onChange={(e) => updateKeysForm({ yandex_market_api_key: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Яндекс Campaign ID
+                  <input
+                    value={keysForm.yandex_market_campaign_id}
+                    onChange={(e) => updateKeysForm({ yandex_market_campaign_id: e.target.value })}
+                  />
                 </label>
               </div>
               <div className="mp-actions">
@@ -3204,6 +3312,15 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
 
       {tab === "create" && (
         <div className="mp-stack">
+          {mp === "yandex" ? (
+            <div className="cafe-form-panel">
+              <h3>Яндекс Маркет</h3>
+              <p className="muted">
+                Сейчас доступны ключи, проверка API, заказы и печать ярлыков. Выгрузка карточек и полный каталог — в
+                следующих итерациях; этикетки на товары из истории уже печатаются кнопкой «Этикетка».
+              </p>
+            </div>
+          ) : null}
           <form className="cafe-form-panel" onSubmit={submitOne}>
             <h3>{editingHistoryId ? `Редактирование · ${product.offer_id || "—"}` : "Карточка товара"}</h3>
             <div className="cafe-form-grid">
@@ -3747,7 +3864,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                   <th>Ост.</th>
                   <th>Статус</th>
                   {mp === "ozon" ? <th>Импорт</th> : null}
-                  <th className="mp-col-menu" />
+                  <th className="mp-col-menu">Этикетка</th>
                 </tr>
               </thead>
               <tbody>
@@ -3779,31 +3896,45 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                         </td>
                       ) : null}
                       <td className="mp-col-menu">
-                        <div className="mp-kebab">
+                        <div className="mp-row-quick">
                           <button
                             type="button"
-                            className="mp-kebab-btn"
-                            aria-label="Действия"
-                            aria-expanded={menuOpenRow}
+                            className="mp-label-quick"
+                            title="Быстрая печать этикетки на товар"
+                            disabled={busy === "product-label"}
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (menuOpenRow) {
-                                setRowMenuId(null);
-                                setRowMenuPos(null);
-                                return;
-                              }
-                              const rect = e.currentTarget.getBoundingClientRect();
-                              const menuH = 200;
-                              const openUp = rect.bottom + menuH > window.innerHeight - 8;
-                              setRowMenuPos({
-                                top: openUp ? Math.max(8, rect.top - menuH) : rect.bottom + 4,
-                                right: Math.max(8, window.innerWidth - rect.right),
-                              });
-                              setRowMenuId(row.id);
+                              printProductLabel(row);
                             }}
                           >
-                            ⋮
+                            {busy === "product-label" ? "…" : "Этикетка"}
                           </button>
+                          <div className="mp-kebab">
+                            <button
+                              type="button"
+                              className="mp-kebab-btn"
+                              aria-label="Действия"
+                              aria-expanded={menuOpenRow}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (menuOpenRow) {
+                                  setRowMenuId(null);
+                                  setRowMenuPos(null);
+                                  return;
+                                }
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const menuH = 200;
+                                const openUp = rect.bottom + menuH > window.innerHeight - 8;
+                                setRowMenuPos({
+                                  top: openUp ? Math.max(8, rect.top - menuH) : rect.bottom + 4,
+                                  right: Math.max(8, window.innerWidth - rect.right),
+                                });
+                                setRowMenuId(row.id);
+                              }}
+                            >
+                              ⋮
+                            </button>
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -3852,6 +3983,18 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                         >
                           Цены и остатки
                         </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={busy === "product-label"}
+                          onClick={() => {
+                            setRowMenuId(null);
+                            setRowMenuPos(null);
+                            printProductLabel(row);
+                          }}
+                        >
+                          Печать этикетки
+                        </button>
                         {mp === "ozon" && row.import_task_id ? (
                           <button
                             type="button"
@@ -3894,7 +4037,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
             <h3>Что нужно для функций</h3>
             <ul className="mp-need-list">
               <li>
-                <strong>Ozon / WB:</strong> ключи ниже. Реальные запросы — только в режиме «Боевой».
+                <strong>Ozon / WB / Яндекс Маркет:</strong> ключи ниже. Реальные запросы — только в режиме «Боевой».
               </li>
               <li>
                 <strong>ИИ-описание:</strong> {settings?.ai_enabled ? `включено (${settings.ai_model || "OpenRouter"}).` : "выключено. На сервере задайте OPENROUTER_API_KEY."}
@@ -3935,6 +4078,24 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
               <label>
                 Wildberries API Key
                 <input type="password" autoComplete="off" value={keysForm.wb_api_key} onChange={(e) => updateKeysForm({ wb_api_key: e.target.value })} />
+              </label>
+              <label>
+                Яндекс Маркет Api-Key
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={keysForm.yandex_market_api_key}
+                  onChange={(e) => updateKeysForm({ yandex_market_api_key: e.target.value })}
+                  placeholder="ACMA:…"
+                />
+              </label>
+              <label>
+                Яндекс Маркет Campaign ID
+                <input
+                  value={keysForm.yandex_market_campaign_id}
+                  onChange={(e) => updateKeysForm({ yandex_market_campaign_id: e.target.value })}
+                  placeholder="из кабинета → API и модули"
+                />
               </label>
               <div className="cafe-form-span2 mp-disk-row">
                 <span>Яндекс Диск</span>
@@ -4594,7 +4755,9 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
           <p className="muted small">
             {mp === "ozon"
               ? "FBS: «Собрать» → через ~1 мин «Этикетка». Склад фильтрует список отправлений."
-              : "WB: выберите поставку и нажмите «В поставку», затем «В доставку» у поставки выше."}
+              : mp === "yandex"
+                ? "Яндекс Маркет: загрузите заказы и печатайте ярлыки. Нужны Api-Key и Campaign ID в Управлении."
+                : "WB FBS: «Этикетка» для сборочных заданий (confirm/complete). Поставки — во вкладке «Поставки»."}
           </p>
           <div className="mp-table-wrap">
             <table className="mp-table">
@@ -4605,7 +4768,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                   <th>Дата</th>
                   <th>Артикул / SKU</th>
                   <th>Цена</th>
-                  {mp === "ozon" ? <th>Товары</th> : null}
+                  {mp === "ozon" || mp === "yandex" ? <th>Товары</th> : null}
                   <th />
                 </tr>
               </thead>
@@ -4621,7 +4784,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                     <td>{row.date ? String(row.date).slice(0, 19).replace("T", " ") : "—"}</td>
                     <td>{row.sku || "—"}</td>
                     <td>{row.price || "—"}</td>
-                    {mp === "ozon" ? <td>{row.title || "—"}</td> : null}
+                    {mp === "ozon" || mp === "yandex" ? <td>{row.title || "—"}</td> : null}
                     <td className="mp-row-actions">
                       {mp === "ozon" ? (
                         <>
@@ -4637,14 +4800,23 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                             {busy === "order-label" ? "…" : "Этикетка"}
                           </button>
                         </>
+                      ) : mp === "wildberries" ? (
+                        <>
+                          <button type="button" className="mp-btn" disabled={busy === "order-label"} onClick={() => printOrderLabel(row)}>
+                            {busy === "order-label" ? "…" : "Этикетка"}
+                          </button>
+                          <button
+                            type="button"
+                            className="mp-btn"
+                            disabled={busy === "supply-add" || !selectedSupplyId}
+                            onClick={() => addOrderToSupply(row)}
+                          >
+                            В поставку
+                          </button>
+                        </>
                       ) : (
-                        <button
-                          type="button"
-                          className="mp-btn"
-                          disabled={busy === "supply-add" || !selectedSupplyId}
-                          onClick={() => addOrderToSupply(row)}
-                        >
-                          В поставку
+                        <button type="button" className="mp-btn" disabled={busy === "order-label"} onClick={() => printOrderLabel(row)}>
+                          {busy === "order-label" ? "…" : "Этикетка"}
                         </button>
                       )}
                       <button

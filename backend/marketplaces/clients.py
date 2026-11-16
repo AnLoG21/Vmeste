@@ -1,8 +1,11 @@
-"""HTTP-клиент Ozon Seller API и Wildberries API."""
+"""HTTP-клиент Ozon Seller API, Wildberries API и Яндекс Маркета."""
 
 from __future__ import annotations
 
+import base64
 import logging
+import time
+from io import BytesIO
 from typing import Any
 
 import requests
@@ -20,6 +23,7 @@ WB_STATS = "https://statistics-api.wildberries.ru"
 WB_FEEDBACKS = "https://feedbacks-api.wildberries.ru"
 WB_ANALYTICS = "https://seller-analytics-api.wildberries.ru"
 WB_COMMON = "https://common-api.wildberries.ru"
+YANDEX_MARKET_BASE = "https://api.partner.market.yandex.ru"
 
 
 class MarketplaceError(Exception):
@@ -108,6 +112,16 @@ def wb_headers(settings: MarketplaceSettings) -> dict[str, str]:
     }
 
 
+def yandex_market_headers(settings: MarketplaceSettings) -> dict[str, str]:
+    if not settings.has_yandex_market():
+        raise MarketplaceError("Не указан API-ключ Яндекс Маркета.")
+    return {
+        "Api-Key": settings.yandex_market_api_key.strip(),
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+
 def request_json(
     *,
     provider,
@@ -152,6 +166,7 @@ def request_bytes(
     url: str,
     headers: dict,
     json_body: Any = None,
+    params: dict | None = None,
 ) -> tuple[bytes, str]:
     """Binary response (e.g. PDF labels). Returns (content, content_type)."""
     try:
@@ -160,6 +175,7 @@ def request_bytes(
             url,
             headers=headers,
             json=json_body,
+            params=params,
             timeout=TIMEOUT,
         )
     except requests.RequestException as exc:
@@ -174,9 +190,337 @@ def request_bytes(
         except ValueError:
             data = {}
         detail = data.get("message") or data.get("detail") or data.get("error") or text or resp.reason
+        if isinstance(detail, dict):
+            detail = detail.get("message") or detail.get("code") or str(detail)
         raise MarketplaceError(humanize_api_error(str(detail), resp.status_code), resp.status_code)
     _log(provider, marketplace, method, url, resp.status_code, "")
     return resp.content or b"", ctype
+
+
+def download_url_bytes(url: str, *, timeout: int = TIMEOUT) -> bytes:
+    """Download a public file URL (Ozon label file_url needs no seller auth)."""
+    try:
+        resp = requests.get(url, timeout=timeout)
+    except requests.RequestException as exc:
+        raise MarketplaceError(f"Не удалось скачать файл этикетки: {exc}", 502) from exc
+    if not resp.ok:
+        raise MarketplaceError(f"Файл этикетки недоступен ({resp.status_code}).", resp.status_code)
+    return resp.content or b""
+
+
+def fetch_ozon_package_label_pdf(
+    *,
+    provider,
+    settings: MarketplaceSettings,
+    posting_numbers: list[str],
+    poll_attempts: int = 16,
+    poll_delay: float = 1.5,
+) -> bytes:
+    """
+    Ozon FBS labels: async create (v3) + poll get (v2), then download file_url.
+    Old sync POST /v2/posting/fbs/package-label is deprecated/off after 2026-11-02.
+    """
+    headers = ozon_headers(settings)
+    created = request_json(
+        provider=provider,
+        marketplace="ozon",
+        method="POST",
+        url=OZON_ACTIONS["orders.label.create"][1],
+        headers=headers,
+        json_body={"posting_numbers": posting_numbers},
+    )
+    tasks = created.get("tasks") if isinstance(created, dict) else None
+    if not isinstance(tasks, list) or not tasks:
+        raise MarketplaceError("Ozon не создал задание на этикетки. Проверьте статус отправления (нужна сборка).")
+
+    pdf_chunks: list[bytes] = []
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        task_id = task.get("task_id")
+        if task_id is None:
+            continue
+        file_url = ""
+        last_detail = ""
+        for _ in range(max(1, poll_attempts)):
+            data = request_json(
+                provider=provider,
+                marketplace="ozon",
+                method="POST",
+                url=OZON_ACTIONS["orders.label.get"][1],
+                headers=headers,
+                json_body={"task_id": task_id},
+            )
+            err = data.get("error")
+            if err:
+                if isinstance(err, dict):
+                    last_detail = str(err.get("message") or err.get("code") or err)
+                else:
+                    last_detail = str(err)
+                if last_detail and last_detail.lower() not in ("none", "null"):
+                    raise MarketplaceError(f"Ozon: {last_detail}")
+            status = data.get("status")
+            code = ""
+            if isinstance(status, dict):
+                code = str(status.get("code") or "").lower()
+                unprinted = status.get("unprinted_postings") or []
+                if unprinted and not data.get("file_url"):
+                    msgs = []
+                    for u in unprinted[:3]:
+                        if isinstance(u, dict):
+                            msgs.append(str(u.get("message") or u.get("posting_number") or u))
+                        else:
+                            msgs.append(str(u))
+                    last_detail = "; ".join(msgs) or "часть отправлений ещё без этикетки"
+            else:
+                code = str(status or "").lower()
+            file_url = str(data.get("file_url") or "").strip()
+            if file_url and code in ("", "completed", "done", "ready", "success"):
+                break
+            if file_url and code not in ("pending", "processing", "in_progress", "running"):
+                break
+            time.sleep(poll_delay)
+        else:
+            raise MarketplaceError(
+                last_detail
+                or "Этикетки Ozon ещё не готовы. Подождите 45–60 сек после сборки и повторите."
+            )
+        if not file_url:
+            raise MarketplaceError("Ozon не вернул ссылку на PDF этикетки.")
+        content = download_url_bytes(file_url)
+        if content[:4] != b"%PDF":
+            raise MarketplaceError("Ozon вернул файл этикетки в неожиданном формате.")
+        pdf_chunks.append(content)
+
+    if not pdf_chunks:
+        raise MarketplaceError("Не удалось получить PDF этикеток Ozon.")
+    # Usually one task/PDF; if several, return the first (common: small_label).
+    return pdf_chunks[0]
+
+
+def fetch_wb_order_stickers_pdf(
+    *,
+    provider,
+    settings: MarketplaceSettings,
+    order_ids: list[int],
+    sticker_type: str = "png",
+    width: int = 58,
+    height: int = 40,
+) -> bytes:
+    """WB FBS stickers (PNG/SVG) → multi-page PDF 58×40 mm."""
+    headers = wb_headers(settings)
+    data = request_json(
+        provider=provider,
+        marketplace="wildberries",
+        method="POST",
+        url=WB_ACTIONS["orders.stickers"][1],
+        headers=headers,
+        json_body={"orders": order_ids},
+        params={"type": sticker_type, "width": width, "height": height},
+    )
+    stickers = data.get("stickers") if isinstance(data, dict) else None
+    if not isinstance(stickers, list) or not stickers:
+        raise MarketplaceError(
+            "WB не вернул стикеры. Доступны для статусов «на сборке» / «в доставке» (confirm/complete)."
+        )
+
+    from fpdf import FPDF
+    from PIL import Image
+
+    pdf = FPDF(unit="mm", format=(float(width), float(height)))
+    pdf.set_auto_page_break(auto=False)
+    added = 0
+    for item in stickers:
+        if not isinstance(item, dict):
+            continue
+        raw_b64 = item.get("file") or ""
+        if not raw_b64:
+            continue
+        try:
+            raw = base64.b64decode(raw_b64)
+        except Exception as exc:
+            raise MarketplaceError(f"Повреждённый стикер WB: {exc}") from exc
+        try:
+            img = Image.open(BytesIO(raw))
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            buf = BytesIO()
+            img.save(buf, format="PNG")
+            buf.seek(0)
+        except Exception as exc:
+            raise MarketplaceError(f"Не удалось разобрать стикер WB: {exc}") from exc
+        pdf.add_page()
+        pdf.image(buf, x=0, y=0, w=float(width), h=float(height))
+        added += 1
+    if not added:
+        raise MarketplaceError("WB вернул пустые стикеры.")
+    out = pdf.output()
+    return bytes(out) if not isinstance(out, (bytes, bytearray)) else bytes(out)
+
+
+def fetch_yandex_order_label_pdf(
+    *,
+    provider,
+    settings: MarketplaceSettings,
+    order_id: int | str,
+    campaign_id: int | str | None = None,
+    label_format: str = "A7",
+) -> bytes:
+    cid = str(campaign_id or settings.yandex_market_campaign_id or "").strip()
+    if not cid:
+        raise MarketplaceError("Укажите Campaign ID Яндекс Маркета в Управлении.")
+    oid = str(order_id).strip()
+    if not oid:
+        raise MarketplaceError("Укажите orderId Яндекс Маркета.")
+    url = resolve_url(YANDEX_ACTIONS["orders.label"][1], {"campaignId": cid, "orderId": oid})
+    params = {}
+    fmt = str(label_format or "").strip().upper()
+    if fmt in ("A4", "A7", "A9", "A9_HORIZONTALLY"):
+        params["format"] = fmt
+    content, ctype = request_bytes(
+        provider=provider,
+        marketplace="yandex",
+        method="GET",
+        url=url,
+        headers=yandex_market_headers(settings),
+        params=params or None,
+    )
+    if "pdf" not in (ctype or "").lower() and content[:4] != b"%PDF":
+        text = content[:400].decode("utf-8", errors="replace")
+        raise MarketplaceError(text or "Яндекс Маркет не вернул PDF ярлыка.")
+    return content
+
+
+def _product_label_font(size: int):
+    import os
+
+    from PIL import ImageFont
+
+    candidates = [
+        os.environ.get("VMESTE_LABEL_FONT", ""),
+        r"C:\Windows\Fonts\arial.ttf",
+        r"C:\Windows\Fonts\segoeui.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+    ]
+    for path in candidates:
+        if path and os.path.isfile(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                continue
+    return ImageFont.load_default()
+
+
+def _draw_code39_bars(draw, text: str, *, x: int, y: int, bar_w: int = 2, height: int = 70) -> int:
+    """Minimal Code39 bar painter (narrow/wide). Returns width used."""
+    patterns = {
+        "0": "nnnwwnwnn",
+        "1": "wnnwnnnnw",
+        "2": "nnwwnnnnw",
+        "3": "wnwwnnnnn",
+        "4": "nnnwwnnnw",
+        "5": "wnnwwnnnn",
+        "6": "nnwwwnnnn",
+        "7": "nnnwnnwnw",
+        "8": "wnnwnnwnn",
+        "9": "nnwwnnwnn",
+        "A": "wnnnnwnnw",
+        "B": "nnwnnwnnw",
+        "C": "wnwnnwnnn",
+        "D": "nnnnwwnnw",
+        "E": "wnnnwwnnn",
+        "F": "nnwnwwnnn",
+        "G": "nnnnnwwnw",
+        "H": "wnnnnwwnn",
+        "I": "nnwnnwwnn",
+        "J": "nnnnwwwnn",
+        "K": "wnnnnnnww",
+        "L": "nnwnnnnww",
+        "M": "wnwnnnnwn",
+        "N": "nnnnwnnww",
+        "O": "wnnnwnnwn",
+        "P": "nnwnwnnwn",
+        "Q": "nnnnnnwww",
+        "R": "wnnnnnwwn",
+        "S": "nnwnnnwwn",
+        "T": "nnnnwnwwn",
+        "U": "wwnnnnnnw",
+        "V": "nwwnnnnnw",
+        "W": "wwwnnnnnn",
+        "X": "nwnnwnnnw",
+        "Y": "wwnnwnnnn",
+        "Z": "nwwnwnnnn",
+        "-": "nwnnnnwnw",
+        ".": "wwnnnnwnn",
+        " ": "nwwnnnwnn",
+        "*": "nwnnwnwnn",
+        "$": "nwnwnwnnn",
+        "/": "nwnwnnnwn",
+        "+": "nwnnnwnwn",
+        "%": "nnnwnwnwn",
+    }
+    payload = "*" + "".join(ch for ch in text.upper() if ch in patterns and ch != "*")[:20] + "*"
+    cx = x
+    for ch in payload:
+        pat = patterns.get(ch)
+        if not pat:
+            continue
+        for i, bit in enumerate(pat):
+            w = bar_w * (3 if bit == "w" else 1)
+            if i % 2 == 0:
+                draw.rectangle([cx, y, cx + w - 1, y + height], fill=0)
+            cx += w
+        cx += bar_w  # inter-character gap
+    return cx - x
+
+
+def build_product_label_pdf(
+    *,
+    offer_id: str = "",
+    name: str = "",
+    barcode: str = "",
+    price: str = "",
+    copies: int = 1,
+) -> bytes:
+    """Local 58×40 mm product sticker (barcode + артикул) for warehouse labeling."""
+    from fpdf import FPDF
+    from PIL import Image, ImageDraw
+
+    offer = str(offer_id or "").strip()
+    title = str(name or "").strip() or offer or "Товар"
+    code = str(barcode or "").strip() or offer
+    price_s = str(price or "").strip()
+    n = max(1, min(int(copies or 1), 50))
+
+    # 58×40 mm @ 203 dpi ≈ 464×320 px
+    w_px, h_px = 464, 320
+    font_title = _product_label_font(22)
+    font_offer = _product_label_font(26)
+    font_small = _product_label_font(20)
+
+    pdf = FPDF(unit="mm", format=(58, 40))
+    pdf.set_auto_page_break(auto=False)
+    for _ in range(n):
+        img = Image.new("RGB", (w_px, h_px), "white")
+        draw = ImageDraw.Draw(img)
+        draw.text((16, 10), title[:70], fill=0, font=font_title)
+        draw.text((16, 70), offer[:40] or "—", fill=0, font=font_offer)
+        if code:
+            code39 = "".join(ch for ch in code.upper() if ch.isalnum() or ch in "-.$/+% ")[:20]
+            if code39:
+                _draw_code39_bars(draw, code39, x=16, y=120, bar_w=2, height=110)
+            draw.text((16, 244), code[:32], fill=0, font=font_small)
+        if price_s:
+            draw.text((16, 280), f"{price_s} RUB", fill=0, font=font_small)
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        pdf.add_page()
+        pdf.image(buf, x=0, y=0, w=58, h=40)
+    out = pdf.output()
+    return bytes(out) if not isinstance(out, (bytes, bytearray)) else bytes(out)
 
 
 def generate_local_ean13(count: int = 1) -> list[str]:
@@ -541,7 +885,9 @@ OZON_ACTIONS = {
     "orders.info": ("POST", f"{OZON_BASE}/v3/posting/fbs/get"),
     "orders.cancel": ("POST", f"{OZON_BASE}/v3/posting/fbs/cancel"),
     "orders.ship": ("POST", f"{OZON_BASE}/v3/posting/fbs/ship"),
-    "orders.label": ("POST", f"{OZON_BASE}/v2/posting/fbs/package-label"),
+    # Labels: sync /v2/.../package-label removed by Ozon after 2026-11-02 → create + get
+    "orders.label.create": ("POST", f"{OZON_BASE}/v3/posting/fbs/package-label/create"),
+    "orders.label.get": ("POST", f"{OZON_BASE}/v2/posting/fbs/package-label/get"),
     "analytics.data": ("POST", f"{OZON_BASE}/v1/analytics/data"),
     "analytics.stocks": ("POST", f"{OZON_BASE}/v1/analytics/stock_on_warehouses"),
     "finance.list": ("POST", f"{OZON_BASE}/v3/finance/transaction/list"),
@@ -565,6 +911,7 @@ WB_ACTIONS = {
     "orders.list": ("GET", f"{WB_MARKETPLACE}/api/v3/orders/new"),
     "orders.info": ("GET", f"{WB_MARKETPLACE}/api/v3/orders/{{id}}"),
     "orders.cancel": ("PATCH", f"{WB_MARKETPLACE}/api/v3/orders/{{id}}/cancel"),
+    "orders.stickers": ("POST", f"{WB_MARKETPLACE}/api/v3/orders/stickers"),
     "analytics.sales": ("GET", f"{WB_STATS}/api/v1/supplier/reportDetailByPeriod"),
     "analytics.stocks": ("GET", f"{WB_STATS}/api/v1/supplier/stocks"),
     "analytics.payments": ("GET", f"{WB_STATS}/api/v1/supplier/sales"),
@@ -586,6 +933,16 @@ WB_ACTIONS = {
     "supplies.delete": ("DELETE", f"{WB_MARKETPLACE}/api/v3/supplies/{{id}}"),
     # alias kept for older UI calls
     "supplies.close": ("PATCH", f"{WB_MARKETPLACE}/api/v3/supplies/{{id}}/deliver"),
+}
+
+
+YANDEX_ACTIONS = {
+    "campaigns.list": ("GET", f"{YANDEX_MARKET_BASE}/v2/campaigns"),
+    "products.list": ("POST", f"{YANDEX_MARKET_BASE}/v2/campaigns/{{campaignId}}/offers"),
+    "orders.list": ("GET", f"{YANDEX_MARKET_BASE}/v2/campaigns/{{campaignId}}/orders"),
+    "orders.info": ("GET", f"{YANDEX_MARKET_BASE}/v2/campaigns/{{campaignId}}/orders/{{orderId}}"),
+    "orders.label": ("GET", f"{YANDEX_MARKET_BASE}/v2/campaigns/{{campaignId}}/orders/{{orderId}}/delivery/labels"),
+    "orders.status": ("PUT", f"{YANDEX_MARKET_BASE}/v2/campaigns/{{campaignId}}/orders/{{orderId}}/status"),
 }
 
 

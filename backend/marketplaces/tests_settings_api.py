@@ -59,6 +59,8 @@ class MarketplaceSettingsApiTests(TestCase):
                 "ozon_client_id": "e2e-ozon-client",
                 "ozon_api_key": "ozon-secret-key",
                 "wb_api_key": "wb-secret-key",
+                "yandex_market_api_key": "ym-secret-key",
+                "yandex_market_campaign_id": "123456",
             },
             format="json",
         )
@@ -66,22 +68,29 @@ class MarketplaceSettingsApiTests(TestCase):
         self.assertEqual(patched.data.get("environment"), "prod")
         self.assertTrue(patched.data.get("has_ozon_api_key"))
         self.assertTrue(patched.data.get("has_wb_api_key"))
+        self.assertTrue(patched.data.get("has_yandex_market"))
+        self.assertEqual(patched.data.get("yandex_market_campaign_id"), "123456")
         self.assertNotIn("ozon_api_key", patched.data)
         self.assertNotIn("wb_api_key", patched.data)
+        self.assertNotIn("yandex_market_api_key", patched.data)
 
         settings = MarketplaceSettings.objects.get(provider=self.provider)
         self.assertEqual(settings.environment, "prod")
         self.assertEqual(settings.ozon_client_id, "e2e-ozon-client")
         self.assertEqual(settings.ozon_api_key, "ozon-secret-key")
         self.assertEqual(settings.wb_api_key, "wb-secret-key")
+        self.assertEqual(settings.yandex_market_api_key, "ym-secret-key")
+        self.assertEqual(settings.yandex_market_campaign_id, "123456")
 
         got = self.api.get("/api/marketplaces/settings/")
         self.assertEqual(got.status_code, 200, got.data)
         self.assertEqual(got.data.get("environment"), "prod")
         self.assertTrue(got.data.get("has_ozon_api_key"))
         self.assertTrue(got.data.get("has_wb_api_key"))
+        self.assertTrue(got.data.get("has_yandex_market"))
         self.assertNotIn("ozon_api_key", got.data)
         self.assertNotIn("wb_api_key", got.data)
+        self.assertNotIn("yandex_market_api_key", got.data)
 
     def test_client_forbidden(self):
         client = User.objects.create_user(
