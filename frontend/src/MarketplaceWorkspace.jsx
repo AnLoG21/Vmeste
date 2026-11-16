@@ -27,6 +27,11 @@ import { confirmDialog } from "./confirmDialog.js";
 import SearchableSelect from "./marketplaceSearchableSelect.jsx";
 import MarketplaceAnalyticsPanel from "./MarketplaceAnalyticsPanel.jsx";
 import { aggregateBuhRows, extractRecords as extractAnalyticsRecords } from "./marketplaceAnalytics.js";
+import {
+  buildMarketplaceNotifications,
+  countNotificationsByTab,
+  notificationSummary,
+} from "./marketplaceNotifications.js";
 
 const TABS = [
   ["today", "Сегодня"],
@@ -785,17 +790,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
     onInitialTabConsumed?.();
   }, [initialTab, onInitialTabConsumed]);
   const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    function onDoc(e) {
-      const t = e.target;
-      if (t?.closest?.(".mp-menu")) return;
-      setMenuOpen(false);
-    }
-    document.addEventListener("pointerdown", onDoc);
-    return () => document.removeEventListener("pointerdown", onDoc);
-  }, [menuOpen]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
 
   const [mp, setMp] = useState("ozon");
   const [settings, setSettings] = useState(null);
@@ -921,6 +917,18 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       window.removeEventListener("scroll", close, true);
     };
   }, [rowMenuId]);
+
+  useEffect(() => {
+    if (!menuOpen && !notifOpen) return undefined;
+    function onDoc(e) {
+      const t = e.target;
+      if (t?.closest?.(".mp-menu") || t?.closest?.(".mp-inbox") || t?.closest?.(".mp-inbox-btn")) return;
+      setMenuOpen(false);
+      setNotifOpen(false);
+    }
+    document.addEventListener("pointerdown", onDoc);
+    return () => document.removeEventListener("pointerdown", onDoc);
+  }, [menuOpen, notifOpen]);
 
   useEffect(() => {
     if (!settings || settings.environment !== "prod") return;
@@ -3011,9 +3019,20 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
   const visibility = useMemo(() => buildVisibilityChecklist(product, mp, attributeFields), [product, mp, attributeFields]);
   const mediaLimits = mediaLimitsFor(mp);
   const mediaCounts = countMediaItems(product.images);
-  const alertCount = alerts
-    ? (alerts.counts?.low_stock || 0) + (alerts.counts?.failed_imports || 0) + (alerts.counts?.log_errors || 0)
-    : 0;
+  const notifications = useMemo(
+    () =>
+      buildMarketplaceNotifications({
+        alerts,
+        orderRows,
+        reviewRows,
+        opsSummary,
+        mpLabel,
+      }),
+    [alerts, orderRows, reviewRows, opsSummary, mpLabel],
+  );
+  const notifByTab = useMemo(() => countNotificationsByTab(notifications), [notifications]);
+  const alertCount = notifications.length;
+  const alertsPreview = notificationSummary(notifications);
   const filteredReplyTemplates = useMemo(
     () =>
       replyTemplates.filter(
@@ -3052,39 +3071,125 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
             Все функции
           </button>
         </div>
-        <div className="mp-menu">
+        <div className="mp-head-actions">
           <button
             type="button"
-            className="mp-menu-btn"
-            onClick={() => setMenuOpen((v) => !v)}
-            aria-expanded={menuOpen}
-            aria-label="Меню разделов"
-            title="Меню"
+            className={`mp-inbox-btn${notifOpen ? " is-open" : ""}`}
+            onClick={() => {
+              setNotifOpen((v) => !v);
+              setMenuOpen(false);
+              if (!alerts) withBusy("alerts", loadAlerts);
+            }}
+            aria-expanded={notifOpen}
+            aria-label={alertCount ? `Уведомления, ${alertCount}` : "Уведомления"}
+            title="Все уведомления"
           >
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden fill="currentColor">
-              <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z" />
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="currentColor">
+              <path d="M12 22a2.2 2.2 0 0 0 2.2-2.2h-4.4A2.2 2.2 0 0 0 12 22zm7-6.2V11a7 7 0 1 0-14 0v4.8L3 17.6V19h18v-1.4l-2-1.8z" />
             </svg>
+            {alertCount > 0 ? <span className="mp-badge">{alertCount > 99 ? "99+" : alertCount}</span> : null}
           </button>
-          {menuOpen ? (
-            <div className="mp-menu-drop" role="menu">
-              {visibleTabs.map(([id, label]) => (
+          <div className="mp-menu">
+            <button
+              type="button"
+              className="mp-menu-btn"
+              onClick={() => {
+                setMenuOpen((v) => !v);
+                setNotifOpen(false);
+              }}
+              aria-expanded={menuOpen}
+              aria-label={alertCount ? `Меню разделов, ${alertCount} уведомлений` : "Меню разделов"}
+              title="Меню"
+            >
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden fill="currentColor">
+                <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z" />
+              </svg>
+              {alertCount > 0 ? <span className="mp-badge">{alertCount > 99 ? "99+" : alertCount}</span> : null}
+            </button>
+            {menuOpen ? (
+              <div className="mp-menu-drop" role="menu">
                 <button
-                  key={id}
                   type="button"
                   role="menuitem"
-                  className={tab === id ? "is-active" : ""}
+                  className="mp-menu-inbox-item"
                   onClick={() => {
-                    setTab(id);
+                    setNotifOpen(true);
                     setMenuOpen(false);
+                    setAlertsOpen(true);
                   }}
                 >
-                  {label}
+                  <span>Все уведомления</span>
+                  {alertCount > 0 ? <span className="mp-badge mp-badge-inline">{alertCount}</span> : null}
                 </button>
-              ))}
-            </div>
-          ) : null}
+                <div className="mp-menu-sep" />
+                {visibleTabs.map(([id, label]) => {
+                  const n = notifByTab[id] || 0;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      role="menuitem"
+                      className={tab === id ? "is-active" : ""}
+                      onClick={() => {
+                        setTab(id);
+                        setMenuOpen(false);
+                        setNotifOpen(false);
+                      }}
+                    >
+                      <span>{label}</span>
+                      {n > 0 ? <span className="mp-badge mp-badge-inline">{n}</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
+
+      {notifOpen ? (
+        <div className="mp-inbox" role="region" aria-label="Уведомления">
+          <div className="mp-inbox-head">
+            <div>
+              <strong>Уведомления</strong>
+              <p className="muted small">{alertsPreview}</p>
+            </div>
+            <div className="mp-actions">
+              <button type="button" className="ghost-btn" disabled={busy === "alerts"} onClick={() => withBusy("alerts", loadAlerts)}>
+                Обновить
+              </button>
+              <button type="button" className="ghost-btn" onClick={() => setNotifOpen(false)}>
+                Закрыть
+              </button>
+            </div>
+          </div>
+          {alertCount ? (
+            <ul className="mp-inbox-list">
+              {notifications.map((item) => (
+                <li key={item.id} className={`mp-inbox-item mp-sev-${item.severity || "info"}`}>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{item.body}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="mp-btn"
+                    onClick={() => {
+                      setTab(item.tab);
+                      setNotifOpen(false);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    {item.cta || "Открыть"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted mp-inbox-empty">Нет новых сообщений. Когда появятся заказы, остатки или ошибки — они будут здесь.</p>
+          )}
+        </div>
+      ) : null}
 
       {showOnboard ? (
         <div className="mp-onboard" role="region" aria-label="Онбординг">
@@ -3285,27 +3390,43 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
 
       {status ? <p className="status mp-status-line">{status}</p> : null}
       {alertCount > 0 ? (
-        <div className="mp-alerts-banner" role="status">
-          <div>
-            <strong>Алерты ({alertCount})</strong>
-            <p>
-              {[
-                alerts?.counts?.low_stock ? `низкий остаток: ${alerts.counts.low_stock}` : null,
-                alerts?.counts?.failed_imports ? `failed-импорт: ${alerts.counts.failed_imports}` : null,
-                alerts?.counts?.log_errors ? `ошибки в логах: ${alerts.counts.log_errors}` : null,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-          </div>
-          <div className="mp-actions">
-            <button type="button" className="mp-btn" onClick={() => { setTab("manage"); setMenuOpen(false); }}>
-              К настройкам
-            </button>
-            <button type="button" className="ghost-btn" disabled={busy === "alerts"} onClick={() => withBusy("alerts", loadAlerts)}>
-              Обновить
-            </button>
-          </div>
+        <div className={`mp-alerts-fold${alertsOpen ? " is-open" : ""}`} role="region" aria-label="Алерты">
+          <button
+            type="button"
+            className="mp-alerts-fold-toggle"
+            aria-expanded={alertsOpen}
+            onClick={() => setAlertsOpen((v) => !v)}
+          >
+            <span className="mp-alerts-chevron" aria-hidden>
+              {alertsOpen ? "▾" : "▸"}
+            </span>
+            <span className="mp-alerts-fold-copy">
+              <strong>Нужно внимание · {alertCount}</strong>
+              <em>{alertsPreview}</em>
+            </span>
+          </button>
+          {alertsOpen ? (
+            <ul className="mp-alerts-fold-list">
+              {notifications.map((item) => (
+                <li key={item.id} className={`mp-alerts-fold-item mp-sev-${item.severity || "info"}`}>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{item.body}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="mp-btn"
+                    onClick={() => {
+                      setTab(item.tab);
+                      setNotifOpen(false);
+                    }}
+                  >
+                    {item.cta || "Открыть"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
       <p className="mp-section-title">{tabLabel}</p>
