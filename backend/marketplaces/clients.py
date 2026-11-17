@@ -38,7 +38,9 @@ def humanize_api_error(detail: str, status_code: int | None = None) -> str:
     low = text.lower()
     code = int(status_code or 0)
     if "obsolete method" in low or "method is deprecated" in low:
-        return "Метод API устарел. Обновите кабинет — используется актуальный endpoint."
+        return "Метод API устарел. Обновите кабинет. Используется актуальный endpoint."
+    if code == 404 or "page not found" in low:
+        return "Endpoint площадки не найден (часто отключённая версия API). Проверьте логи и обновите кабинет."
     if code == 429 or "rate limit" in low or "max rate" in low or "too many requests" in low:
         return "Слишком частые запросы к площадке (лимит ~2/сек). Подождите пару секунд и повторите."
     if (
@@ -865,6 +867,34 @@ def summarize_ozon_import_status(data: dict) -> dict:
     if not rows:
         overall = str(result.get("status") or "pending").lower()
     return {"status": overall, "items": rows, "raw": data}
+
+
+# Paths Ozon turned off. Errors against them must not stick in alerts after we moved on.
+RETIRED_API_ENDPOINT_SUFFIXES = (
+    "/v3/posting/fbs/list",
+    "/v3/posting/fbs/unfulfilled/list",
+    "/v2/posting/fbo/list",
+    "/v1/posting/digital/list",
+    "/v3/finance/transaction/list",
+    "/v3/finance/transaction/totals",
+    "/v2/posting/fbs/package-label",  # sync label; create/get replacements stay active
+)
+
+
+def is_retired_api_endpoint(endpoint: str) -> bool:
+    path = (endpoint or "").split("?", 1)[0].rstrip("/")
+    if not path:
+        return False
+    for suffix in RETIRED_API_ENDPOINT_SUFFIXES:
+        if not path.endswith(suffix):
+            continue
+        # Keep async label create/get; only the bare sync package-label is retired.
+        if suffix == "/v2/posting/fbs/package-label" and (
+            path.endswith("/package-label/create") or path.endswith("/package-label/get")
+        ):
+            continue
+        return True
+    return False
 
 
 OZON_ACTIONS = {

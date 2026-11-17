@@ -1,0 +1,162 @@
+{
+  "version": 2,
+  "skills": {
+    "account-brief": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/account-brief/SKILL.md",
+      "computedHash": "1785d3b38659b74436ab877db3d1835a1886aa63638fae2ea5a0083940723cba"
+    },
+    "account-discovery": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/account-discovery/SKILL.md",
+      "computedHash": "f11d10934d5a8dbf2369bb72f0c9023f08f8ba8a5b636167ea333884a9ee6df5"
+    },
+    "account-enrichment": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/account-enrichment/SKILL.md",
+      "computedHash": "75bab65dfa186bf57264182a31de74a1ebc5621cba2431c893cdefd795e4d3ec"
+    },
+    "account-signals": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/account-signals/SKILL.md",
+      "computedHash": "4415b4b1bcd77496d88358843f5150dafe3763fe364c906ddf3c8dc8e63e18eb"
+    },
+    "brand-mention-monitor": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/brand-mention-monitor/SKILL.md",
+      "computedHash": "b447a90b583c5a06b9be41407cca509528da0fe0981bfe677ffa487852a67a44"
+    },
+    "company-deep-dive": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/company-deep-dive/SKILL.md",
+      "computedHash": "d8f09c3d4b5b4da21588f293f9f295702d645de9a3b57ee940629927df8a5ecf"
+    },
+    "competitor-intel": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/competitor-intel/SKILL.md",
+      "computedHash": "56649bf4b77a2d9aedb4679f2ad3f6ed299d45e935e7b8d2e90f7462c6366799"
+    },
+    "competitor-positioning": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/competitor-positioning/SKILL.md",
+      "computedHash": "e10d77899d9fa325f2b82ccf2c4c9054dd9c6916dedfb850db805b16e1fcdacf"
+    },
+    "credit-risk": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/credit-risk/SKILL.md",
+      "computedHash": "a02504acf0a38e092b713e9817c012411c66611160d537fb2767b311c73046a1"
+    },
+    "deal-sourcing": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/deal-sourcing/SKILL.md",
+      "computedHash": "35a04b6892e769daa57937fee377db1994e1e496bec21488199107672e78a594"
+    },
+    "decision-maker-identification": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/decision-maker-identification/SKILL.md",
+      "computedHash": "5edf5e2e446120ad09aee1dd1b3e334463ab8348d5fce88a0cef20f27035783b"
+    },
+    "due-diligence": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/due-diligence/SKILL.md",
+      "computedHash": "c652ccc22bd840aae3743bc9e5a57168a1b67e6ecc5c69e65f42a64de1d89a64"
+    },
+    "healthcare-providers-enrich": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/healthcare-providers-enrich/SKILL.md",
+      "computedHash": "8f9e2675b29333f53d22349ccad0fc0803c727e5427d9d89a3e9b3974bab66a7"
+    },
+    "healthcare-providers-extract": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/healthcare-providers-extract/SKILL.md",
+      "computedHash": "e3b76cb3df71fbd58f4578be64b7100da3191cceaaf97990206a2db0ce3f6d20"
+    },
+    "healthcare-providers-verify": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/healthcare-providers-verify/SKILL.md",
+      "computedHash": "6ea5ba7b15be920a76033edbd19df240ef01e2992bc4dc322317ce26cec6c586"
+    },
+    "kyc-screening": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/kyc-screening/SKILL.md",
+      "computedHash": "d9663c9884aaadaf3e3eed20d6cd89124ac6db5ba8f2f4db8c4ae890e55d89db"
+    },
+    "launch-monitor": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/launch-monitor/SKILL.md",
+      "computedHash": "44f0f7266efa65308080f57f6fa5ea0f9f8aefc55708f93d7f20ce92c9178a81"
+    },
+    "local-places": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/local-places/SKILL.md",
+      "computedHash": "d60beaefd361a766ba51aaf86dec002a131bc2d0f26150245d673d132b016948"
+    },
+    "market-finder": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/market-finder/SKILL.md",
+      "computedHash": "cac94f3b48008f533972f502bd17165885c0c4994b4c1cbee277e33b680e3b97"
+    },
+    "meeting-prep": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/meeting-prep/SKILL.md",
+      "computedHash": "f9fffe95fe431bfc6e3d29ea34306c6458acccac6f52b4d872701f7ddaeb1e83"
+    },
+    "nimble-databricks-data-products": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/nimble-databricks-data-products/SKILL.md",
+      "computedHash": "f049d08bb2551f7602493a3c6fe0e4dd38b9f087555ceea05a4fbe56dbb70cbf"
+    },
+    "nimble-web-expert": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/nimble-web-expert/SKILL.md",
+      "computedHash": "8d2e3250a70614ae8491c58067d825e48b8cd80cd303534ee2ca9c528a62c1c8"
+    },
+    "portfolio-monitoring": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/portfolio-monitoring/SKILL.md",
+      "computedHash": "2690682bafa15106a9228cf5aee066907084bdb774319abc6a169d283a5f8add"
+    },
+    "seo-intel": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/seo-intel/SKILL.md",
+      "computedHash": "f63b1910047e2f4bad55a45c0c9f694e2ee7c494fd0d6d416e0314171d12a498"
+    },
+    "talent-sourcing": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/talent-sourcing/SKILL.md",
+      "computedHash": "e858ba3b08bbf04c684d21c2e6e17efe91181dc1d286bcefd301895e79d6df19"
+    },
+    "unslop": {
+      "source": "cursor/plugins",
+      "commit": "e1cc03121a0e71129a4fb730d7c5528a0a3e43c8",
+      "sourceType": "github",
+      "skillPath": "harness/pstack/claude-code/skills/unslop/SKILL.md",
+      "computedHash": "4bbcb6719a8f0f6f7fb46752e1c360791d7758a837708e300a06fc7d6907938c"
+    }
+  }
+}

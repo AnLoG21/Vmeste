@@ -249,6 +249,25 @@ class MarketplaceApiTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["counts"]["log_errors"], 0)
 
+    def test_alerts_ignore_retired_ozon_endpoints(self):
+        MarketplaceApiLog.objects.create(
+            provider=self.provider,
+            marketplace="ozon",
+            endpoint="https://api-seller.ozon.ru/v3/posting/fbs/list",
+            method="POST",
+            status_code=404,
+            error_message="404 page not found",
+        )
+        MarketplaceApiLog.objects.create(
+            provider=self.provider,
+            marketplace="ozon",
+            endpoint="https://api-seller.ozon.ru/v4/posting/fbs/list",
+            method="POST",
+            status_code=200,
+            error_message="",
+        )
+        self.assertEqual(_active_api_log_errors(self.provider, marketplace="ozon"), [])
+
 
 class LocalEanTests(SimpleTestCase):
     def test_ean13_checksum_length(self):

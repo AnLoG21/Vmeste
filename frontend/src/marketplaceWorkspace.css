@@ -535,6 +535,20 @@
   border: 1px solid #e4ebf3;
 }
 
+.mp-inbox-item > .mp-btn,
+.mp-alerts-fold-item > .mp-btn {
+  flex: 0 0 7.5rem;
+  width: 7.5rem;
+  min-height: 2.25rem;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+  padding: 8px 10px;
+}
+
 .mp-inbox-item p,
 .mp-alerts-fold-item p {
   margin: 4px 0 0;

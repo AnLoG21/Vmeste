@@ -218,7 +218,7 @@ function buildVisibilityChecklist(product, mp, attributeFields) {
     {
       id: "name",
       label: "Название товара",
-      hint: "Понятное название повышает поиск",
+      hint: "Укажите название, по которому ищут товар",
       done: Boolean(String(product.name || "").trim()),
       weight: 15,
     },
@@ -235,7 +235,7 @@ function buildVisibilityChecklist(product, mp, attributeFields) {
     {
       id: "photos",
       label: images.length >= 5 ? "Фото (5+)" : images.length >= 3 ? "Фото (3+)" : "Фото (минимум 1)",
-      hint: "3–5+ фото заметно поднимают CTR",
+      hint: "Добавьте 3 или больше фото",
       done: images.length >= 1,
       partial: images.length >= 3,
       weight: 20,
@@ -243,7 +243,7 @@ function buildVisibilityChecklist(product, mp, attributeFields) {
     {
       id: "description",
       label: descLen >= 200 ? "Описание (подробное)" : "Описание (от 80 символов)",
-      hint: "Текст с пользой и характеристиками",
+      hint: "Опишите товар и его характеристики",
       done: descLen >= 80,
       partial: descLen >= 200,
       weight: 15,
@@ -251,7 +251,7 @@ function buildVisibilityChecklist(product, mp, attributeFields) {
     {
       id: "brand",
       label: "Бренд",
-      hint: "Бренд помогает в фильтрах",
+      hint: "Укажите бренд, если он есть в фильтрах площадки",
       done: Boolean(String(product.brand || "").trim()),
       weight: 5,
     },
@@ -279,7 +279,7 @@ function buildVisibilityChecklist(product, mp, attributeFields) {
     {
       id: "optional_attrs",
       label: optional.length ? `Доп. характеристики (${optFilled}/${optional.length})` : "Доп. характеристики",
-      hint: "Чем больше заполнено — тем выше видимость",
+      hint: "Заполните доступные дополнительные поля",
       done: optional.length === 0 || optFilled >= Math.ceil(optional.length * 0.5),
       partial: optional.length > 0 && optFilled > 0,
       weight: 5,
@@ -414,7 +414,7 @@ function humanizeMarketplaceError(raw, status) {
   const low = text.toLowerCase();
   const code = Number(status) || 0;
   if (low.includes("obsolete method") || low.includes("method is deprecated")) {
-    return "Метод API устарел. Обновите кабинет — используется новая версия endpoint.";
+    return "Метод API устарел. Обновите кабинет. Используется новая версия endpoint.";
   }
   if (code === 429 || low.includes("rate limit") || low.includes("max rate") || low.includes("too many requests")) {
     return "Слишком частые запросы к площадке (лимит ~2/сек). Подождите пару секунд и повторите.";
@@ -758,7 +758,7 @@ function validateProductForImport(row, marketplace, fields) {
     .map((x) => publicUrlFor(x))
     .filter(Boolean);
   if (!images.length) {
-    errors.push("Добавьте хотя бы одно фото (публичный HTTPS URL — Яндекс Диск или загрузка в кабинете).");
+    errors.push("Добавьте хотя бы одно фото с публичным HTTPS URL. Подойдёт Яндекс Диск или загрузка в кабинете.");
   } else if (!images.every(isPublicHttpsUrl)) {
     errors.push("Фото должны быть публичными HTTPS-ссылками (не localhost). Подключите Яндекс Диск или загрузите файл заново.");
   }
@@ -1233,7 +1233,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
         }
         if (status === "failed") {
           const err = (data.items || []).map((x) => x.errors).filter(Boolean).join("; ");
-          setStatus(err ? `Ozon: ошибка импорта — ${humanizeMarketplaceError(err)}` : "Ozon: ошибка импорта.");
+          setStatus(err ? `Ozon: ошибка импорта. ${humanizeMarketplaceError(err)}` : "Ozon: ошибка импорта.");
           return;
         }
       } catch {
@@ -1582,7 +1582,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
 
       let msg = `Загружено: ${added.length}.`;
       if (skipped.length) {
-        msg += ` Не загружено ${skipped.length} — лимит ${mpLabel}: ${limits.photos} фото, ${limits.videos} видео.`;
+        msg += ` Не загружено ${skipped.length}. Лимит ${mpLabel}: ${limits.photos} фото, ${limits.videos} видео.`;
       }
       if (failures.length) {
         msg += ` Ошибки: ${failures.slice(0, 2).join("; ")}`;
@@ -1751,7 +1751,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       await loadCardDesigns();
       if (data.id) setSelectedCardDesignId(String(data.id));
       setCardDesignEditorOpen(false);
-      setStatus(isEdit ? "Шаблон обновлён." : "Шаблон создан — можно генерировать слайды.");
+      setStatus(isEdit ? "Шаблон обновлён." : "Шаблон создан. Можно генерировать слайды.");
     });
   }
 
@@ -1786,7 +1786,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
         return x?.kind !== "video";
       });
       if (!photos.length) {
-        throw new Error("Загрузите хотя бы одно реальное фото товара — шаблон оформит его.");
+        throw new Error("Загрузите хотя бы одно реальное фото товара. Шаблон оформит его.");
       }
       const limits = mediaLimitsFor(mp);
       const counts = countMediaItems(product.images);
@@ -2189,7 +2189,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       stock: String(product.stock || "0"),
     });
     setTab("manage");
-    setStatus("Заполнена форма шаблона внизу «Управления» — нажмите «Сохранить шаблон».");
+    setStatus("Заполнена форма шаблона внизу «Управления». Нажмите «Сохранить шаблон».");
   }
 
   async function loadOrders() {
@@ -2297,7 +2297,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
           quantity: Number(p.quantity || 1),
         }))
         .filter((p) => p.product_id);
-      if (!products.length) throw new Error("В отправлении нет товаров с SKU — отгрузка невозможна.");
+      if (!products.length) throw new Error("В отправлении нет товаров с SKU. Отгрузка невозможна.");
       showLive(
         await mpCall("orders.ship", {
           posting_number: row.number,
@@ -2325,7 +2325,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(
-          data.detail || "Не удалось получить этикетку. Обычно нужно подождать 45–60 сек после сборки.",
+          data.detail || "Не удалось получить этикетку. Обычно нужно подождать 45-60 сек после сборки.",
         );
       }
       if (!ctype.includes("pdf")) {
@@ -2552,7 +2552,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       if (mp === "ozon") {
         const from = ozonTimestampDaysAgo(7);
         const to = ozonTimestampNow();
-        // Ozon accrual/by-day (старый transaction/list отключён) — бэкенд обходит период по дням
+        // Ozon accrual/by-day. Старый transaction/list отключён. Бэкенд обходит период по дням.
         const fin = await mpCall("finance.list", {
           filter: { date: { from, to } },
           max_days: 7,
@@ -2612,7 +2612,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       await loadSettings({ syncForm: false });
       await loadHistory();
       if (data.dedup || data.result?.dedup) {
-        setStatus("Синк уже выполняется — подождите минуту и обновите историю.");
+        setStatus("Синк уже выполняется. Подождите минуту и обновите историю.");
         return;
       }
       if (data.eager) {
@@ -2636,7 +2636,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       if (!res.ok) throw new Error(data.detail || "Не удалось создать secret.");
       setSettings(data);
       setWebhookSecretOnce(data.webhook_secret || "");
-      setStatus("Webhook secret создан — скопируйте сейчас, повторно не показывается.");
+      setStatus("Webhook secret создан. Скопируйте сейчас, повторно не показывается.");
     });
   }
 
@@ -2703,7 +2703,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
 
   async function loadSupplies() {
     await withBusy("supplies", async () => {
-      if (mp !== "wildberries") throw new Error("Поставки FBS — для Wildberries.");
+      if (mp !== "wildberries") throw new Error("Поставки FBS только для Wildberries.");
       const data = await mpCall("supplies.list", { limit: 1000 });
       if (data?.sandbox) {
         setSupplyRows([]);
@@ -2714,13 +2714,13 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       setSupplyRows(rows);
       setLive(null);
       if (!selectedSupplyId && rows[0]) setSelectedSupplyId(rows[0].id);
-      setStatus(rows.length ? `Поставок WB: ${rows.length}` : "Открытых поставок нет — создайте новую.");
+      setStatus(rows.length ? `Поставок WB: ${rows.length}` : "Открытых поставок нет. Создайте новую.");
     });
   }
 
   async function createSupply() {
     await withBusy("supply-create", async () => {
-      if (mp !== "wildberries") throw new Error("Поставки — для Wildberries.");
+      if (mp !== "wildberries") throw new Error("Поставки только для Wildberries.");
       const name = String(supplyName || "").trim() || `Поставка ${new Date().toLocaleString("ru-RU")}`;
       const data = await mpCall("supplies.create", { name });
       if (data?.sandbox) throw new Error(data.message || "Тестовый режим.");
@@ -2776,7 +2776,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
 
   async function addOrderToSupply(orderRow) {
     if (mp !== "wildberries") {
-      setStatus("Добавление в поставку — для заказов Wildberries.");
+      setStatus("Добавление в поставку только для заказов Wildberries.");
       return;
     }
     const supplyId = String(selectedSupplyId || "").trim();
@@ -2842,14 +2842,14 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
       setStatus(
         charts.sales.length || charts.stocks.length
           ? `Аналитика: SKU ${charts.sales.length}, складов ${charts.stocks.length}.`
-          : "Данных аналитики мало — проверьте боевой режим и период.",
+          : "Данных аналитики мало. Проверьте боевой режим и период.",
       );
     });
   }
 
   async function loadQuestions() {
     await withBusy("questions", async () => {
-      if (mp !== "wildberries") throw new Error("Вопросы покупателей — для Wildberries.");
+      if (mp !== "wildberries") throw new Error("Вопросы покупателей только для Wildberries.");
       const unanswered = reviewsUnansweredOnly;
       const data = await mpCall(
         "questions.list",
@@ -2896,8 +2896,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
     await loadCategoryOptions();
     setStatus(
       mp === "wildberries"
-        ? "Категории WB загружены — выберите предмет в «Создать товар»."
-        : "Категории Ozon загружены — выберите категорию в «Создать товар».",
+        ? "Категории WB загружены. Выберите предмет в «Создать товар»."
+        : "Категории Ozon загружены. Выберите категорию в «Создать товар».",
     );
   }
 
@@ -3186,7 +3186,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
               ))}
             </ul>
           ) : (
-            <p className="muted mp-inbox-empty">Нет новых сообщений. Когда появятся заказы, остатки или ошибки — они будут здесь.</p>
+            <p className="muted mp-inbox-empty">Нет новых сообщений. Заказы, остатки и ошибки появятся здесь.</p>
           )}
         </div>
       ) : null}
@@ -3195,8 +3195,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
         <div className="mp-onboard" role="region" aria-label="Онбординг">
           <div className="mp-onboard-head">
             <div>
-              <strong>Старт за 3 шага</strong>
-              <p className="muted small">Ключи → фото → первая карточка. Потом откроется дневной путь «Сегодня».</p>
+              <strong>Быстрый старт</strong>
+              <p className="muted small">Сначала ключи, затем фото, затем первая карточка. После этого откроется дневной путь «Сегодня».</p>
             </div>
             <button type="button" className="ghost-btn" onClick={finishOnboard}>
               Пропустить
@@ -3284,7 +3284,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
             <div className="cafe-form-panel mp-onboard-panel">
               <h3>2. Фото для карточки</h3>
               <p className="muted small">
-                Загрузите хотя бы одно фото. Удобнее — через Яндекс Диск (публичные ссылки в карточку).
+                Загрузите хотя бы одно фото. Через Яндекс Диск в карточку попадают публичные ссылки.
               </p>
               <div className="mp-actions">
                 {settings?.has_yandex_disk ? (
@@ -3322,7 +3322,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                     })}
                   </ul>
                 ) : (
-                  <p className="muted small">Пока нет фото — нажмите «+ Фото».</p>
+                  <p className="muted small">Пока нет фото. Нажмите «+ Фото».</p>
                 )}
               </div>
               <div className="mp-actions">
@@ -3347,8 +3347,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
             <div className="cafe-form-panel mp-onboard-panel">
               <h3>3. Первая карточка</h3>
               <p className="muted small">
-                Откройте форму: артикул, название, категория, цена, фото с HTTPS → «Выгрузить» в боевом режиме. Онбординг
-                закроется после успешного импорта (не sandbox и не pending).
+                Откройте форму: артикул, название, категория, цена, фото с HTTPS, затем «Выгрузить» в боевом режиме.
+                Онбординг закроется после успешного импорта, не sandbox и не pending.
               </p>
               <div className="mp-actions">
                 <button type="button" className="ghost-btn" onClick={() => setOnboardStep(2)}>
@@ -3373,7 +3373,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
         <div className="mp-mode-banner" role="status">
           <div>
             <strong>Тестовый режим</strong>
-            <p>Запросы на Ozon/WB не уходят. Чтобы выгружать товары и заказы — откройте Настройки и выберите «Боевой».</p>
+            <p>Запросы на Ozon/WB не уходят. Чтобы выгружать товары и заказы, откройте Настройки и выберите «Боевой».</p>
           </div>
           <button
             type="button"
@@ -3437,8 +3437,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
             <div className="cafe-form-panel">
               <h3>Яндекс Маркет</h3>
               <p className="muted">
-                Сейчас доступны ключи, проверка API, заказы и печать ярлыков. Выгрузка карточек и полный каталог — в
-                следующих итерациях; этикетки на товары из истории уже печатаются кнопкой «Этикетка».
+                Сейчас доступны ключи, проверка API, заказы и печать ярлыков. Выгрузка карточек и полный каталог появятся
+                позже. Этикетки на товары из истории уже печатаются кнопкой «Этикетка».
               </p>
             </div>
           ) : null}
@@ -3512,7 +3512,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                 )}
                 {!categoriesReady ? (
                   <p className="muted small">
-                    Нажмите «Загрузить с площадки» в боевом режиме — подтянутся категории по уровням (без зависания).
+                    Нажмите «Загрузить с площадки» в боевом режиме. Категории подтянутся по уровням без зависания.
                   </p>
                 ) : null}
                 {attributesHint ? <p className="muted small">{attributesHint}</p> : null}
@@ -3528,7 +3528,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                       <div className="mp-visibility-track" aria-hidden="true">
                         <div className="mp-visibility-fill" style={{ width: `${visibility.percent}%` }} />
                       </div>
-                      <p className="muted small">Заполните пункты ниже — как рекомендации Ozon для поиска и конверсии.</p>
+                      <p className="muted small">Заполните пункты ниже. Так рекомендует Ozon для поиска и конверсии.</p>
                       <ul className="mp-visibility-list">
                         {visibility.items.map((item) => (
                           <li key={item.id} className={item.done ? "is-done" : item.partial ? "is-partial" : ""}>
@@ -3577,7 +3577,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                     ) : null}
                     {optionalAttrs.length ? (
                       <>
-                        <h4 className="mp-attrs-title">Необязательные — повышают видимость</h4>
+                        <h4 className="mp-attrs-title">Необязательные характеристики</h4>
                         <div className="mp-attrs-grid">
                           {optionalAttrs.map((field) => {
                             const value = product.characteristics?.[field.id] || "";
@@ -3653,7 +3653,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                   {mediaLimits.videos ? ` · Видео: ${mediaCounts.videos} / ${mediaLimits.videos}` : ""}
                   {mp === "ozon"
                     ? " · На Ozon видео уходит в карточку отдельным блоком."
-                    : " · На WB видео в API карточки не отправляется — только превью здесь."}
+                    : " · На WB видео в API карточки не отправляется. Здесь только превью."}
                 </p>
                 {(product.images || []).length ? (
                   <ul className="mp-media-list">
@@ -3734,7 +3734,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                       className="ghost-btn"
                       disabled={busy === "card-design"}
                       onClick={seedCardDesigns}
-                      title="Три готовых макета — можно сразу править"
+                      title="Готовые макеты. Их можно сразу править"
                     >
                       {busy === "card-design" ? `Стартовые…${dots}` : "Стартовые шаблоны"}
                     </button>
@@ -3877,7 +3877,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                 <PlusIcon />
               </button>
             </div>
-            <p className="muted small">Несколько артикулов сразу — без полного заполнения карточки.</p>
+            <p className="muted small">Несколько артикулов сразу, без полного заполнения карточки.</p>
             {batch.map((row, i) => (
               <div key={i} className="mp-batch-row">
                 <input placeholder="Артикул" value={row.offer_id} onChange={(e) => setBatch((rows) => rows.map((r, idx) => (idx === i ? { ...r, offer_id: e.target.value } : r)))} />
@@ -3915,7 +3915,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
               <h4>Шаблоны</h4>
               <p className="muted small">
                 Шаблон подставляет бренд, цену, остаток и описание в форму слева. Артикул, категорию и фото
-                добавьте сами. Новые шаблоны — в «Управление» или кнопкой «В шаблон» у формы создания.
+                добавьте сами. Новые шаблоны создаются в «Управление» или кнопкой «В шаблон» у формы создания.
               </p>
               {templates.length ? (
                 <div className="mp-templates">
@@ -3932,7 +3932,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
           </div>
           ) : (
             <p className="muted small mp-beginner-hint">
-              Пакетная выгрузка, CSV и шаблоны — в режиме «Все функции».
+              Пакетная выгрузка, CSV и шаблоны доступны в режиме «Все функции».
             </p>
           )}
         </div>
@@ -4158,7 +4158,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
             <h3>Что нужно для функций</h3>
             <ul className="mp-need-list">
               <li>
-                <strong>Ozon / WB / Яндекс Маркет:</strong> ключи ниже. Реальные запросы — только в режиме «Боевой».
+                <strong>Ozon / WB / Яндекс Маркет:</strong> ключи ниже. Реальные запросы только в режиме «Боевой».
               </li>
               <li>
                 <strong>ИИ-описание:</strong> {settings?.ai_enabled ? `включено (${settings.ai_model || "OpenRouter"}).` : "выключено. На сервере задайте OPENROUTER_API_KEY."}
@@ -4166,26 +4166,26 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
               <li>
                 <strong>Яндекс Диск:</strong>{" "}
                 {settings?.has_yandex_disk
-                  ? "подключён — в карточку уходят публичные URL с Диска."
+                  ? "подключён. В карточку уходят публичные URL с Диска."
                   : settings?.yandex_disk_oauth
                     ? "нажмите «Подключить Яндекс Диск»."
                     : "на сервере не заданы YANDEX_OAUTH_CLIENT_ID/SECRET."}
               </li>
               <li>
-                <strong>Видео карточки:</strong> собирается в браузере из фото. На Ozon уходит в карточку; на WB — только превью в кабинете (API cards/upload видео не принимает).
+                <strong>Видео карточки:</strong> собирается в браузере из фото. На Ozon уходит в карточку. На WB только превью в кабинете, API cards/upload видео не принимает.
               </li>
             </ul>
           </div>
           {canViewKeys ? (
           <form className="cafe-form-panel" onSubmit={saveKeys}>
             <h3>Ключи площадок</h3>
-            <p className="muted small">Не хранятся в платформенном .env — только у этой организации.</p>
+            <p className="muted small">Не хранятся в платформенном .env. Только у этой организации.</p>
             <div className="cafe-form-grid">
               <label>
                 Режим работы
                 <select value={keysForm.environment} onChange={(e) => updateKeysForm({ environment: e.target.value })}>
-                  <option value="sandbox">Тестовый — запросы на площадку не уходят</option>
-                  <option value="prod">Боевой — реальные выгрузки, заказы, цены</option>
+                  <option value="sandbox">Тестовый. Запросы на площадку не уходят</option>
+                  <option value="prod">Боевой. Реальные выгрузки, заказы, цены</option>
                 </select>
               </label>
               <label>
@@ -4239,7 +4239,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
           </form>
           ) : (
             <div className="cafe-form-panel">
-              <p className="muted">Ключи площадок скрыты — нет права «видеть/менять ключи». Настраивает руководитель в «Сотрудники».</p>
+              <p className="muted">Ключи площадок скрыты. Нет права «видеть/менять ключи». Настраивает руководитель в «Сотрудники».</p>
             </div>
           )}
 
@@ -4374,8 +4374,8 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                 Telegram: тот же чат организации, что в разделе «Организация → Уведомления и мессенджеры»
                 {settings?.telegram_ready
                   ? " (подключён)."
-                  : " (пока не подключён — откройте Организацию, включите Telegram и привяжите чат)."}{" "}
-                Push — на устройства с приложением.
+                  : " Пока не подключён. Откройте Организацию, включите Telegram и привяжите чат."}{" "}
+                Push уходит на устройства с приложением.
               </p>
               <div className="mp-price-control">
                 <label className="mp-switch-row">
@@ -4460,7 +4460,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                 <strong>Что делает «Синхронизировать»</strong>
                 <p>
                   После выгрузки на Ozon карточка сначала в статусе «ожидает». Кнопка (и автозадача каждые 15 мин)
-                  спрашивает у Ozon: уже готово или ошибка — и обновляет список в «Товарах».
+                  спрашивает у Ozon, уже готово или ошибка, и обновляет список в «Товарах».
                 </p>
               </div>
               <div className="mp-help-card">
@@ -4665,7 +4665,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
             <div className="mp-templates-block">
               <h4>Шаблоны карточек</h4>
               <p className="muted small">
-                Шаблон — заготовка бренда, цены, остатка и текста описания. Примените его в «Создать товар», затем
+                Шаблон это заготовка бренда, цены, остатка и текста описания. Примените его в «Создать товар», затем
                 допишите артикул, категорию и фото. Можно сохранить текущую карточку как шаблон кнопкой ниже формы
                 создания.
               </p>
@@ -4717,7 +4717,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
           ) : (
             <div className="cafe-form-panel">
               <p className="muted small">
-                Цены, остатки, вебхуки, шаблоны ответов и пакетные операции — в режиме «Все функции».
+                Цены, остатки, вебхуки, шаблоны ответов и пакетные операции доступны в режиме «Все функции».
               </p>
               <button type="button" className="mp-btn" onClick={() => switchUiMode("advanced")}>
                 Показать все функции
@@ -4736,25 +4736,25 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                 {mp === "ozon" ? (
                   <>
                     <li>
-                      <strong>Заказы</strong> — загрузите FBS-отправления
+                      <strong>Заказы.</strong> Загрузите FBS-отправления
                     </li>
                     <li>
-                      <strong>Сборка</strong> — «Собрать», затем через ~1 мин
+                      <strong>Сборка.</strong> Нажмите «Собрать», затем через около 1 мин
                     </li>
                     <li>
-                      <strong>Этикетки</strong> — печать PDF на отправление
+                      <strong>Этикетки.</strong> Печать PDF на отправление
                     </li>
                   </>
                 ) : (
                   <>
                     <li>
-                      <strong>Поставка</strong> — создайте или выберите ниже
+                      <strong>Поставка.</strong> Создайте или выберите ниже
                     </li>
                     <li>
-                      <strong>Заказы</strong> — «В поставку» по сборочным заданиям
+                      <strong>Заказы.</strong> «В поставку» по сборочным заданиям
                     </li>
                     <li>
-                      <strong>Отгрузка</strong> — «В доставку» у поставки
+                      <strong>Отгрузка.</strong> «В доставку» у поставки
                     </li>
                   </>
                 )}
@@ -4801,7 +4801,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                     ))}
                 </ul>
               ) : (
-                <p className="muted small">Открытых поставок нет — создайте первую.</p>
+                <p className="muted small">Открытых поставок нет. Создайте первую.</p>
               )}
             </div>
           ) : null}
@@ -4878,7 +4878,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
               ? "FBS: «Собрать» → через ~1 мин «Этикетка». Склад фильтрует список отправлений."
               : mp === "yandex"
                 ? "Яндекс Маркет: загрузите заказы и печатайте ярлыки. Нужны Api-Key и Campaign ID в Управлении."
-                : "WB FBS: «Этикетка» для сборочных заданий (confirm/complete). Поставки — во вкладке «Поставки»."}
+                : "WB FBS: «Этикетка» для сборочных заданий confirm/complete. Поставки во вкладке «Поставки»."}
           </p>
           <div className="mp-table-wrap">
             <table className="mp-table">
@@ -4962,7 +4962,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                 ))}
               </tbody>
             </table>
-            {!orderRows.length ? <p className="muted">Заказов пока нет — нажмите «Загрузить заказы».</p> : null}
+            {!orderRows.length ? <p className="muted">Заказов пока нет. Нажмите «Загрузить заказы».</p> : null}
           </div>
         </div>
       )}
@@ -4971,7 +4971,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
         <div className="cafe-form-panel mp-panel">
           {mp !== "wildberries" ? (
             <p className="muted">
-              Поставки FBS (создание / закрытие) — для Wildberries. На Ozon используйте сборку и этикетки во вкладке «Заказы».
+              Поставки FBS, создание и закрытие, только для Wildberries. На Ozon используйте сборку и этикетки во вкладке «Заказы».
               Склады Ozon нужны для обновления остатков в «Управлении».
             </p>
           ) : (
@@ -5040,7 +5040,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                     ))}
                   </tbody>
                 </table>
-                {!supplyRows.length ? <p className="muted">Поставок нет — создайте первую или нажмите «Обновить список».</p> : null}
+                {!supplyRows.length ? <p className="muted">Поставок нет. Создайте первую или нажмите «Обновить список».</p> : null}
               </div>
               {selectedSupplyId ? <p className="muted small">Выбрана для заказов: {selectedSupplyId}</p> : null}
             </>
@@ -5113,7 +5113,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                       <td>{row.title || row.name || "—"}</td>
                       <td>
                         {mp === "ozon"
-                          ? `${row.date_start || row.action_start || "—"} — ${row.date_end || row.action_end || "—"}`
+                          ? `${row.date_start || row.action_start || "—"} до ${row.date_end || row.action_end || "—"}`
                           : row.name || "—"}
                       </td>
                     </tr>
@@ -5164,7 +5164,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                 ))}
               </tbody>
             </table>
-            {!logRows.length ? <p className="muted">Логов пока нет — выполните запрос к площадке.</p> : null}
+            {!logRows.length ? <p className="muted">Логов пока нет. Выполните запрос к площадке.</p> : null}
           </div>
         </div>
       )}
@@ -5260,7 +5260,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                   ))}
                 </tbody>
               </table>
-              {!reviewRows.length ? <p className="muted">Отзывов пока нет — нажмите «Отзывы».</p> : null}
+              {!reviewRows.length ? <p className="muted">Отзывов пока нет. Нажмите «Отзывы».</p> : null}
             </div>
           </div>
 
@@ -5296,16 +5296,16 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                     ))}
                   </tbody>
                 </table>
-                {!questionRows.length ? <p className="muted">Вопросов нет — нажмите «Вопросы WB».</p> : null}
+                {!questionRows.length ? <p className="muted">Вопросов нет. Нажмите «Вопросы WB».</p> : null}
               </div>
             </div>
           ) : (
-            <p className="muted small">Вопросы покупателей через API доступны для Wildberries. На Ozon — ответы на отзывы выше.</p>
+            <p className="muted small">Вопросы покупателей через API доступны для Wildberries. На Ozon ответы на отзывы выше.</p>
           )}
 
           <div className="cafe-form-panel mp-panel">
             <h3>Шаблоны ответов</h3>
-            <p className="muted small">Готовые тексты для отзывов и вопросов — подставляются в форму ответа.</p>
+            <p className="muted small">Готовые тексты для отзывов и вопросов подставляются в форму ответа.</p>
             <form onSubmit={saveReplyTemplate}>
               <div className="cafe-form-grid">
                 <label>
@@ -5340,7 +5340,7 @@ export default function MarketplaceWorkspace({ authFetch, API_URL, accessPerms, 
                     onClick={() => {
                       setReplyDraft((d) => ({ ...d, open: d.open || false, text: t.body, kind: t.kind }));
                       setSelectedReplyTemplateId(String(t.id));
-                      setStatus(`Шаблон «${t.name}» готов — откройте отзыв/вопрос и нажмите «Ответить».`);
+                      setStatus(`Шаблон «${t.name}» готов. Откройте отзыв или вопрос и нажмите «Ответить».`);
                     }}
                   >
                     Использовать

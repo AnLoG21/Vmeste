@@ -25,6 +25,7 @@ from .clients import (
     fetch_yandex_order_label_pdf,
     generate_local_ean13,
     humanize_api_error,
+    is_retired_api_endpoint,
     normalize_marketplace_images,
     normalize_ozon_orders_list_payload,
     normalize_product_identifiers,
@@ -161,6 +162,8 @@ def _active_api_log_errors(provider, *, marketplace: str = "", limit: int = 20) 
     """Ошибки логов, которые ещё актуальны: последний вызов этого endpoint ещё с ошибкой.
 
     Исторические сбои после успешного повтора не показываются в алертах.
+    Ошибки по отключённым URL Ozon/WB (например /v3/posting/fbs/list) тоже скрываем:
+    новый код их больше не вызывает, поэтому «успешный повтор» никогда не очистит алерт.
     """
     from django.db.models import Max
 
@@ -181,20 +184,26 @@ def _active_api_log_errors(provider, *, marketplace: str = "", limit: int = 20) 
     logs = (
         MarketplaceApiLog.objects.filter(id__in=latest_ids)
         .exclude(error_message="")
-        .order_by("-id")[:limit]
+        .order_by("-id")
     )
-    return [
-        {
-            "id": log.id,
-            "endpoint": log.endpoint,
-            "status_code": log.status_code,
-            "error": (log.error_message or "")[:300],
-            "hint": _log_error_hint(log.error_message or "", log.status_code),
-            "created_at": log.created_at.isoformat() if log.created_at else None,
-            "marketplace": log.marketplace,
-        }
-        for log in logs
-    ]
+    out = []
+    for log in logs:
+        if is_retired_api_endpoint(log.endpoint or ""):
+            continue
+        out.append(
+            {
+                "id": log.id,
+                "endpoint": log.endpoint,
+                "status_code": log.status_code,
+                "error": (log.error_message or "")[:300],
+                "hint": _log_error_hint(log.error_message or "", log.status_code),
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+                "marketplace": log.marketplace,
+            }
+        )
+        if len(out) >= limit:
+            break
+    return out
 
 
 def _upload_to_yandex_disk(token: str, filename: str, upload) -> str | None:

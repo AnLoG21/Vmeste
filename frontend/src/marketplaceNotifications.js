@@ -1,5 +1,5 @@
 /**
- * Human-readable marketplace notifications for the seller UI.
+ * Marketplace notifications for the seller UI.
  * Groups map to menu tabs so badges and the inbox stay aligned.
  */
 
@@ -23,9 +23,9 @@ export function buildMarketplaceNotifications({
       title: stock <= 0 ? "Товар закончился" : "Мало на складе",
       body:
         stock <= 0
-          ? `«${name}» (арт. ${row.offer_id}) — 0 шт. Покупатели не смогут заказать, пока не пополните остаток.`
-          : `«${name}» (арт. ${row.offer_id}) — осталось ${stock} шт. Порог в настройках: ${alerts?.low_stock_threshold ?? "—"}.`,
-      cta: "Открыть товары",
+          ? `«${name}», арт. ${row.offer_id}. Остаток 0 шт. Покупатели не смогут заказать, пока не пополните остаток.`
+          : `«${name}», арт. ${row.offer_id}. Осталось ${stock} шт. Порог в настройках: ${alerts?.low_stock_threshold ?? "—"}.`,
+      cta: "К товарам",
     });
   }
 
@@ -40,8 +40,8 @@ export function buildMarketplaceNotifications({
       title: "Карточка не выгрузилась",
       body: err
         ? `«${name}» не принята площадкой: ${err}`
-        : `«${name}» (арт. ${row.offer_id}) — выгрузка на ${mpLabel} завершилась с ошибкой. Откройте товар и повторите.`,
-      cta: "Исправить в товарах",
+        : `«${name}», арт. ${row.offer_id}. Выгрузка на ${mpLabel} завершилась с ошибкой. Откройте товар и повторите.`,
+      cta: "К товарам",
     });
   }
 
@@ -54,7 +54,7 @@ export function buildMarketplaceNotifications({
       severity: "warn",
       title: "Сбой запроса к площадке",
       body: hint.length > 220 ? `${hint.slice(0, 220)}…` : hint,
-      cta: "Смотреть логи",
+      cta: "К логам",
     });
   }
 
@@ -106,7 +106,6 @@ export function buildMarketplaceNotifications({
     if (r?.answer || r?.textAnswer || r?.reply) return false;
     return Boolean(r?.id || r?.review_id || r?.uuid);
   });
-  // Only count when reviews were loaded (array present and length checked via flag)
   if (Array.isArray(reviewRows) && reviewRows.length && unansweredReviews.length) {
     items.push({
       id: "reviews-unanswered",
@@ -117,7 +116,7 @@ export function buildMarketplaceNotifications({
         unansweredReviews.length === 1
           ? "Есть отзыв без ответа"
           : `Отзывы без ответа: ${unansweredReviews.length}`,
-      body: "Ответьте покупателям — это повышает рейтинг магазина и доверие.",
+      body: "Ответьте на отзывы без ответа.",
       cta: "К отзывам",
     });
   }
@@ -136,8 +135,8 @@ export function countNotificationsByTab(items) {
 
 export function notificationSummary(items) {
   const n = (items || []).length;
-  if (!n) return "Сейчас всё спокойно";
+  if (!n) return "Нет новых сообщений";
   const critical = items.filter((x) => x.severity === "critical").length;
   if (critical) return `${n} сообщ. · ${critical} срочных`;
-  return `${n} сообщений — нажмите, чтобы раскрыть`;
+  return `${n} сообщений. Нажмите, чтобы раскрыть`;
 }
