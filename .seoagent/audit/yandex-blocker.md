@@ -8,7 +8,7 @@ resolved: 2026-11-24
 # Яндекс Webmaster — блокер recrawl
 
 ## Статус
-Токен был рабочий; на 2026-11-24 вечер: `INVALID_OAUTH_TOKEN` (истёк/отозван) — нужен свежий OAuth. До этого recrawl POST давал **HTTP 504** — retry после нового токена или ручной переобход в кабинете.
+Токен обновлён 2026-11-24 (user_id `666427228`, host `https:vsevmeste.space:443` verified). Recrawl POST API всё ещё **HTTP 504**; UI/очередь: money URLs `/salon` `/avtoservis` `/kafe` + blog — **DONE**. `quota_remainder≈1`.
 
 ## Что сделано
 - В OAuth-приложение «Вместе» добавлен Redirect URI `https://oauth.yandex.ru/verification_code` (prod callback’и не трогали).

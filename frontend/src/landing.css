@@ -835,6 +835,32 @@ html[data-landing-section="faq"] .landing-header-nav a[data-nav="faq"]::after {
   border-top: 1px solid rgba(255, 208, 168, 0.55);
 }
 
+.landing-footer-badges {
+  margin: 16px 0 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+.landing-footer-badge {
+  display: inline-flex;
+  line-height: 0;
+  opacity: 0.92;
+  transition: opacity 0.15s ease;
+}
+
+.landing-footer-badge:hover {
+  opacity: 1;
+}
+
+.landing-footer-badge img {
+  display: block;
+  width: 194px;
+  height: auto;
+  max-width: 100%;
+}
+
 .auth-modal-overlay {
   position: fixed;
   inset: 0;

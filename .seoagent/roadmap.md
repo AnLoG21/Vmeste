@@ -53,4 +53,4 @@ Cluster order: salon-booking (ICP) → autoservice → cafe-qr → compare-crm
 - [x] docs/FAST-DEPLOY.md — шаги для CI workflow scope
 - [x] Fill `.seoagent/okf/` for AEO (published `frontend/public/.well-known/okf/`)
 - [x] Deepen `/avtoservis` pillar (FAQ + объём + SoftwareApplication) — ship 2026-11-24
-- [ ] Внешние размещения — `strategy/outreach-placements.md` (Product Radar **submitted**; IT-Podium **live** id 19; Startpack/SaaSHub/AT = owner; VC drafts = owner publish)
+- [ ] Внешние размещения — `strategy/outreach-placements.md` (Product Radar **submitted**; IT-Podium/Zapustilis **live**; VC 4a+4b **live**; badge Zapustilis in code — deploy; VC 4c draft; Startpack/SaaSHub/AT/RuTut/mregs = owner)

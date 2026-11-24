@@ -1,12 +1,14 @@
 ---
 slug: vc-cheklist-sto-online-zapis
 title: "Чек-лист: онлайн-запись в автосервисе без хаоса в чатах"
-status: draft_outreach
-target: vc.ru / отраслевой блог СТО
+status: published
+target: vc.ru
+published_url: https://vc.ru/id6086968/3275869-chek-list-onlain-zapis-v-avtoservise-bez-haosa-v-chatah
+published_at: 2026-11-24
 canonical_link: https://vsevmeste.space/blog/online-zapis-v-avtoservise
 money_links:
   - https://vsevmeste.space/avtoservis
-notes: Не публиковать без ревью владельца. Факты только из context.md.
+notes: Live vc.ru id 3275869. Факты только из context.md.
 ---
 
 # Чек-лист: онлайн-запись в автосервисе без хаоса в чатах

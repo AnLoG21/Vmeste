@@ -1,8 +1,8 @@
 ---
 generated: true
-generated_at: 2026-11-24T07:30:57.495Z
+generated_at: 2026-11-24T12:31:03.164Z
 domain: vsevmeste.space
-row_count: 21
+row_count: 19
 ---
 
 # Pages
@@ -17,7 +17,6 @@ https://seoagent.com/skill/pages.
 | URL | Type | Clicks | Impressions | CTR | Avg Pos | Top Query |
 |---|---|---|---|---|---|---|
 | https://vsevmeste.space/ | Home | — | — | — | — | — |
-| https://vsevmeste.space/404 | Landing | — | — | — | — | — |
 | https://vsevmeste.space/android | Landing | — | — | — | — | — |
 | https://vsevmeste.space/apps | Landing | — | — | — | — | — |
 | https://vsevmeste.space/avtoservis | Landing | — | — | — | — | — |
@@ -36,4 +35,3 @@ https://seoagent.com/skill/pages.
 | https://vsevmeste.space/kafe | Landing | — | — | — | — | — |
 | https://vsevmeste.space/offer | Landing | — | — | — | — | — |
 | https://vsevmeste.space/salon | Landing | — | — | — | — | — |
-| https://vsevmeste.space/yandex_84ec889f078f5b2d | Landing | — | — | — | — | — |

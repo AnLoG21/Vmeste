@@ -518,6 +518,19 @@ a.btn-primary-link:hover {
   color: var(--ink-soft);
 }
 
+.legal-footer-badges {
+  margin: 1rem 0 0;
+  display: flex;
+  justify-content: center;
+}
+
+.legal-footer-badges img {
+  display: block;
+  width: 194px;
+  height: auto;
+  max-width: 100%;
+}
+
 /* ——— Article visuals: figures, charts, flows ——— */
 .article-figure,
 .article-chart,

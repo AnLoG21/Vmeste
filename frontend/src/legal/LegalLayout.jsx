@@ -96,6 +96,22 @@ export default function LegalLayout({ title, path, description, children }) {
           <a href="/offer">Публичная оферта</a>
           <a href="/privacy">Политика конфиденциальности</a>
         </nav>
+        <p className="landing-footer-badges">
+          <a
+            href="https://zapustilis.ru/p/vmeste"
+            className="landing-footer-badge"
+            rel="noopener noreferrer"
+          >
+            <img
+              src="https://zapustilis.ru/badge.svg"
+              alt="Мы в «Запустились»"
+              width="194"
+              height="64"
+              loading="lazy"
+              decoding="async"
+            />
+          </a>
+        </p>
       </footer>
     </div>
   );

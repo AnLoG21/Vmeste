@@ -1,5 +1,8 @@
 # Changelog
 
+- 2026-11-24: VC 4b live (СТО чек-лист); Zapustilis badge in landing/money footers (needs deploy); SaaSdom skip (WB/Ozon niche); IndexNow money ping 200.
+- 2026-11-24: Zapustilis live https://zapustilis.ru/p/vmeste (dofollow); IndexNow 200×3; GSC 12/30 indexed — `/salon`+`/avtoservis` still Crawled-not-indexed.
+- 2026-11-24: Yandex OAuth OK (user 666427228); money recrawl queue DONE; VC 4a published https://vc.ru/id6086968/3275832-kak-uiti-ot-zapisi-cherez-whatsapp-chek-list-dlya-salona-i-sto
 - 2026-11-24: Shipped `/avtoservis` deepen `f74529a` + IndexNow 200; IT-Podium live id 19; GSC money still Crawled-not-indexed; Yandex OAuth expired.
 - 2026-11-24: IT-Podium live («Вместе» id 19, бизнес+продажи); deepen `/avtoservis` pillar; IndexLift domain audit archived.
 - 2026-11-24: Яндекс переобход money URLs DONE (очередь); РСЯ из виджета Вебмастера — skip (монетизация ≠ SEO); VC draft #3 QR-меню.
