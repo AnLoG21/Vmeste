@@ -28,6 +28,7 @@ www.{$DOMAIN} {
 	# Динамический sitemap (организации + города) — для Яндекс.Вебмастера / Google.
 	# rewrite должен быть снаружи reverse_proxy (иначе Caddy падает / отдаёт 5xx).
 	# Короткие таймауты: при деплое/нагрузке бэкенда боты не должны висеть минутами.
+	# При 5xx/недоступности Django — fallback на статику frontend/public/sitemap.xml.
 	handle /sitemap.xml {
 		rewrite * /api/users/sitemap.xml
 		reverse_proxy web:8000 {
@@ -37,6 +38,15 @@ www.{$DOMAIN} {
 			transport http {
 				dial_timeout 5s
 				response_header_timeout 15s
+			}
+			@sitemap_fail status 500 502 503 504
+			handle_response @sitemap_fail {
+				rewrite * /sitemap.xml
+				reverse_proxy frontend:80 {
+					header_up Host {host}
+					header_up X-Forwarded-Proto {scheme}
+					header_up X-Forwarded-Host {host}
+				}
 			}
 		}
 	}

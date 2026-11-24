@@ -119,20 +119,58 @@ else
   echo "[deploy] skip frontend image rebuild (no frontend changes)"
 fi
 
-# Recreate only what we rebuilt; always bounce frontend/web lightly if either built.
-UP_SERVICES=(caddy celery_worker celery_beat)
-if [[ "$BUILD_WEB" == "true" ]]; then UP_SERVICES+=(web); fi
-if [[ "$BUILD_FRONTEND" == "true" ]]; then UP_SERVICES+=(frontend); fi
-# If nothing to build (tools-only), still refresh frontend so HTML picks up nothing — skip force.
-if [[ "$BUILD_WEB" == "true" || "$BUILD_FRONTEND" == "true" ]]; then
-  docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans "${UP_SERVICES[@]}"
-else
-  # Still bounce Caddy so bind-mounted Caddyfile / compose changes take effect.
-  echo "[deploy] no app image changes — recreate caddy (+ workers)"
-  docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans caddy celery_worker celery_beat
+# Recreate only what we rebuilt. Do NOT force-recreate caddy on every deploy —
+# that drops the edge briefly and Google treats it as a site-wide outage
+# (URL Inspection → «недоступна из-за проблемы со всем сайтом»).
+# Recreate caddy only when Caddyfile/compose edge config changed, or CADDY_RECREATE=1.
+RECREATE_CADDY=false
+case "${CADDY_RECREATE:-0}" in 1|true|yes|YES) RECREATE_CADDY=true ;; esac
+if git diff --name-only HEAD@{1} HEAD 2>/dev/null | grep -Eq '(^|/)(Caddyfile|Caddyfile\.http-only|docker-compose\.prod\.yml)$'; then
+  RECREATE_CADDY=true
 fi
-# Keep tunnel up if the profile/service exists (HTTPS via Cloudflare).
-docker compose -f "$COMPOSE_FILE" up -d cloudflared 2>/dev/null || true
+# After hard reset to origin/main, HEAD@{1} may be wrong — also check working tree vs last deploy marker.
+if [[ -f .deploy-caddy-hash ]]; then
+  CUR_HASH="$(cat Caddyfile docker-compose.prod.yml 2>/dev/null | sha256sum | awk '{print $1}')"
+  OLD_HASH="$(cat .deploy-caddy-hash 2>/dev/null || true)"
+  if [[ -n "$CUR_HASH" && "$CUR_HASH" != "$OLD_HASH" ]]; then
+    RECREATE_CADDY=true
+  fi
+else
+  RECREATE_CADDY=true
+fi
+
+APP_SERVICES=()
+if [[ "$BUILD_WEB" == "true" ]]; then APP_SERVICES+=(web); fi
+if [[ "$BUILD_FRONTEND" == "true" ]]; then APP_SERVICES+=(frontend); fi
+
+if ((${#APP_SERVICES[@]})); then
+  echo "[deploy] recreate app services: ${APP_SERVICES[*]}"
+  docker compose -f "$COMPOSE_FILE" up -d --force-recreate --no-deps --remove-orphans "${APP_SERVICES[@]}"
+else
+  echo "[deploy] no app image changes"
+fi
+
+# Workers can bounce independently; they are not on the public edge.
+docker compose -f "$COMPOSE_FILE" up -d --force-recreate --no-deps celery_worker celery_beat || true
+
+if [[ "$RECREATE_CADDY" == "true" ]]; then
+  echo "[deploy] Caddyfile/compose changed — recreate caddy (brief edge blip)"
+  docker compose -f "$COMPOSE_FILE" up -d --force-recreate --no-deps caddy
+else
+  echo "[deploy] keep caddy running (reload config if bind-mounted)"
+  docker compose -f "$COMPOSE_FILE" exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null \
+    || docker compose -f "$COMPOSE_FILE" up -d --no-deps caddy
+fi
+cat Caddyfile docker-compose.prod.yml 2>/dev/null | sha256sum | awk '{print $1}' > .deploy-caddy-hash || true
+
+# Keep tunnel up if the profile/service exists (HTTPS via Cloudflare). Never force-recreate
+# unless missing — tunnel reconnect churn looks like site-wide downtime to Googlebot.
+if ! docker compose -f "$COMPOSE_FILE" ps --status running cloudflared 2>/dev/null | grep -q cloudflared; then
+  echo "[deploy] cloudflared not running — starting"
+  docker compose -f "$COMPOSE_FILE" up -d cloudflared 2>/dev/null || true
+else
+  echo "[deploy] cloudflared already up — leave it"
+fi
 
 if [ -f .env ] && grep -qE '^ASTERISK_INTERNAL_SECRET=.+' .env; then
   if [[ "$BUILD_WEB" == "true" ]]; then

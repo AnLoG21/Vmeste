@@ -53,6 +53,9 @@ Thumbs.db
 
 # Docker (локальные артефакты)
 *.log
+.deploy-caddy-hash
+
+
 
 frontend/android/app/google-services.json
 frontend/ios/App/App/GoogleService-Info.plist

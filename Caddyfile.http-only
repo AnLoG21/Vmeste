@@ -12,7 +12,17 @@ http://{$DOMAIN}, http://www.{$DOMAIN} {
 	}
 	handle /sitemap.xml {
 		rewrite * /api/users/sitemap.xml
-		reverse_proxy web:8000
+		reverse_proxy web:8000 {
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 15s
+			}
+			@sitemap_fail status 500 502 503 504
+			handle_response @sitemap_fail {
+				rewrite * /sitemap.xml
+				reverse_proxy frontend:80
+			}
+		}
 	}
 
 	@city_slash {

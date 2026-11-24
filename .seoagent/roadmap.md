@@ -1,5 +1,7 @@
 # Content / SEO roadmap — vsevmeste.space
 
+**Глобальный план:** `.seoagent/strategy/global-plan.md`
+
 Cluster order: salon-booking (ICP) → autoservice → cafe-qr → compare-crm
 
 ## Cluster: salon-booking
@@ -35,9 +37,14 @@ Cluster order: salon-booking (ICP) → autoservice → cafe-qr → compare-crm
 - [x] sinhronizaciya-s-google-i-yandex-kalendarem
 - [x] telegram-napominaniya-organizacii
 
-## Next increment
+## Next increment (фаза 0–1 global plan)
 
-- [ ] Deepen katalog-uslug-i-ceny + vidzhet-online-zapisi (supporting spokes)
+- [x] GSC sitemap resubmit + Inspection 36 URL (см. audit/phase0.md)
+- [ ] Deploy hardenings (Caddy fallback + no edge recreate) → push
+- [ ] GSC Request indexing `/salon` `/avtoservis` после стабильного аптайма
+- [ ] Яндекс.Вебмастер: токен → sitemap + recrawl money URLs
+- [ ] Deepen katalog-uslug-i-ceny + vidzhet-online-zapisi + kak-perejti-s-drugoj-crm
+- [ ] City pages → ссылки на /salon /avtoservis /kafe
+- [ ] Wordstat map → keywords.md
 - [ ] Fill `.seoagent/okf/` for AEO
-- [ ] After deploy: GSC request indexing for refreshed URLs; `seoagent indexing --max 40`
-- [ ] Expand city pages / internal links from indexed cities to /salon
+- [ ] 4 внешних размещения (каталоги / гостевые)
