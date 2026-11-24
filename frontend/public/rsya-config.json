@@ -1,0 +1,7 @@
+{
+  "enabled": false,
+  "comment": "Включите после регистрации в РСЯ: partner.yandex.ru → блок → page-id / block-id. Не размещать на / /salon /avtoservis /kafe.",
+  "pageNumber": "",
+  "blockId": "",
+  "renderTo": "yandex_rtb_blog"
+}
