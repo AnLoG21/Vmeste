@@ -232,6 +232,10 @@ export default function PublicOrgPage({ slug }) {
           </a>
         </div>
         <p className="muted" style={{ marginTop: 16 }}>
+          Качество карточки для поиска: фото, адрес, каталог услуг и понятное описание.{" "}
+          <a href="/blog/publichnaya-stranica-organizacii">Как оформить публичную страницу</a>.
+        </p>
+        <p className="muted" style={{ marginTop: 8 }}>
           <a href="/city/moscow">Москва</a> · <a href="/city/spb">СПб</a> ·{" "}
           <a href="/city/ekaterinburg">Екатеринбург</a> · <a href="/city/kazan">Казань</a> ·{" "}
           <a href="/blog">Блог</a> ·{" "}

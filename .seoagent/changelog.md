@@ -1,5 +1,18 @@
 # Changelog
 
+- 2026-11-24: Deploy batch — sitemap all 59 blog URLs; homepage SSR ~300 words + money anchors; deepen `/kafe`+`/businesses`; ship city `localNote`, OKF/llms, twelve.tools footers; IndexNow + GSC re-request money after live.
+- 2026-11-24: Full SEO audit → `audit/latest.md` + crawl evidence; GSC: `/kafe` Indexed, `/salon`+`/avtoservis`+`/businesses`+compare still Crawled-not-indexed; sitemap gap 3 blog URLs; homepage 86 words.
+- 2026-11-24: Phase 4–5 — unique `localNote` на 10 city pages (SPA+API+SSR); business CTA /salon|/avtoservis|/kafe; OKF +2 FAQ + WhatsApp article; llms.txt city titles + truth anchors; AEO prompt checklist; IndexNow cities.
+- 2026-11-24: SaaS Radius + FreeSaaSList **submitted**; CTA money-links on free-plan + reminders posts; IndexNow 200.
+- 2026-11-24: Viesearch Free Basic **submitted** (review queue, token `2b8hy`); SaaSLineup free **submitted** (21d nofollow; Featured $19 declined); CTA money-links on WA/SMS/TG/solo posts; GSC `/salon`+`/avtoservis`+`/businesses` still Crawled-not-indexed, `/kafe` Indexed; IndexNow 200.
+- 2026-11-24: SEODataPulse **submitted** (editorial review); WhatsApp-пост CTA → `/avtoservis`+`/businesses`; IndexNow 200.
+- 2026-11-24: Ignlab Launch **submitted** (queue + edit link); deepen `/kafe` + twelve.tools footer backlink (local); IndexNow 200.
+- 2026-11-24: Deepen `/businesses` (client path + WhatsApp FAQ); ToolDirs/FoundrList/Uneed owner-gated (logo/signup); IndexNow priority 200; GSC `/businesses`+compare still Crawled-not-indexed.
+- 2026-11-24: Deepen compare YCLIENTS-пост (WhatsApp boundary + FAQ); AppRater free submit received; Startup Fame submit 404; IndexNow money+compare 200.
+- 2026-11-24: Deepen `/avtoservis` (client path + WhatsApp FAQ); ListMySaaS draft (owner sign-in); GSC recheck `/salon`+`/avtoservis` still not indexed, `/kafe` Indexed; IndexNow money 200.
+- 2026-11-24: Deepen `/salon` (client path + solo/salon FAQ WhatsApp); yourhack.ai draft + OTP; IndexNow `/salon`; GSC money still Crawled-not-indexed except `/kafe`.
+- 2026-11-24: IT-Podium like; PeerPush listing saved + OTP to support email; SoftFinder/s44s owner-gated; IndexNow money ping; GSC `/salon`+`/avtoservis` still Crawled-not-indexed; facts --mark.
+- 2026-11-24: Deploy fixed (DOCKER_BUILDKIT=0 + FE image); Zapustilis badge live on /salon; VC 4c live; IndexNow money ping.
 - 2026-11-24: VC 4c live (QR-меню); badge+trackers pushed `2f8d6b5`; first VPS deploy failed (exit 255 after frontend build) — rerun failed jobs.
 - 2026-11-24: VC 4b live (СТО чек-лист); Zapustilis badge in landing/money footers (needs deploy); SaaSdom skip (WB/Ozon niche); IndexNow money ping 200.
 - 2026-11-24: Zapustilis live https://zapustilis.ru/p/vmeste (dofollow); IndexNow 200×3; GSC 12/30 indexed — `/salon`+`/avtoservis` still Crawled-not-indexed.

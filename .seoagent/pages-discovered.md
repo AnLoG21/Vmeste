@@ -1,6 +1,6 @@
 ---
 generated: false
-discovered_at: 2026-11-24T07:42:48.125Z
+discovered_at: 2026-11-24T14:29:11.485Z
 row_count: 82
 ---
 
@@ -15,38 +15,38 @@ filled by `seoagent refresh --crawl` (a live fetch of each page).
 
 | URL | In sitemap | In nav | Status | Rendered | Word count | Notes |
 |---|---|---|---|---|---|---|
-| https://vsevmeste.space/ | yes | — | — | — | — | static html, sitemap.xml |
+| https://vsevmeste.space/ | yes | — | 200 | yes | 86 | static html, sitemap.xml |
 | https://vsevmeste.space/404 | no | — | — | — | — | static html |
-| https://vsevmeste.space/android | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/apps | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/avtoservis | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/abonementy-i-loyalnost-v-salone | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/analitika-dlya-vladelca-salona | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/besplatnyj-tarif-vmeste-chto-vhodit | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/chaty-i-soobshcheniya-o-zapisi | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/chem-vmeste-otlichaetsya-ot-aggregatorov | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/chem-vmeste-otlichaetsya-ot-yclients-i-dikidi | yes | — | — | — | — | static html, sitemap.xml |
+| https://vsevmeste.space/android | yes | — | 200 | yes | 112 | static html, sitemap.xml |
+| https://vsevmeste.space/apps | yes | — | 200 | yes | 176 | static html, sitemap.xml |
+| https://vsevmeste.space/avtoservis | yes | — | 200 | yes | 607 | static html, sitemap.xml |
+| https://vsevmeste.space/blog | yes | — | 200 | yes | 344 | static html, sitemap.xml |
+| https://vsevmeste.space/blog/abonementy-i-loyalnost-v-salone | yes | — | 200 | yes | 270 | static html, sitemap.xml |
+| https://vsevmeste.space/blog/analitika-dlya-vladelca-salona | yes | — | 200 | yes | 208 | static html, sitemap.xml |
+| https://vsevmeste.space/blog/besplatnyj-tarif-vmeste-chto-vhodit | yes | — | 200 | yes | 177 | static html, sitemap.xml |
+| https://vsevmeste.space/blog/chaty-i-soobshcheniya-o-zapisi | yes | — | 200 | yes | 217 | static html, sitemap.xml |
+| https://vsevmeste.space/blog/chem-vmeste-otlichaetsya-ot-aggregatorov | yes | — | 200 | yes | 329 | static html, sitemap.xml |
+| https://vsevmeste.space/blog/chem-vmeste-otlichaetsya-ot-yclients-i-dikidi | yes | — | 200 | yes | 615 | static html, sitemap.xml |
 | https://vsevmeste.space/blog/ekran-kuhni-dlya-kafe | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/galereya-i-grafik-organizacii | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/golosovye-napominaniya-o-zapisi | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/individualnaya-avtomatizaciya | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/kabinet-klienta-istoria-vizitov | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/kabinet-sellera-ozon-wildberries | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/kak-dobavit-sotrudnika-i-prava | yes | — | — | — | — | static html, sitemap.xml |
+| https://vsevmeste.space/blog/kak-dobavit-sotrudnika-i-prava | yes | — | 200 | yes | 160 | static html, sitemap.xml |
 | https://vsevmeste.space/blog/kak-nastroit-intervaly-raboty | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/kak-nastroit-online-zapis-v-salone | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/kak-nastroit-zapis-neskolkih-masterov | yes | — | — | — | — | static html, sitemap.xml |
+| https://vsevmeste.space/blog/kak-nastroit-online-zapis-v-salone | yes | — | 200 | yes | 542 | static html, sitemap.xml |
+| https://vsevmeste.space/blog/kak-nastroit-zapis-neskolkih-masterov | yes | — | 200 | yes | 337 | static html, sitemap.xml |
 | https://vsevmeste.space/blog/kak-otkryt-demo-kabinet | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/kak-perejti-s-drugoj-crm | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/kak-podelitsya-ssylkoj-zapisi-klientam | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/kak-privlech-klientov-cherez-kartu | yes | — | — | — | — | static html, sitemap.xml |
+| https://vsevmeste.space/blog/kak-podelitsya-ssylkoj-zapisi-klientam | yes | — | 200 | yes | 230 | static html, sitemap.xml |
+| https://vsevmeste.space/blog/kak-privlech-klientov-cherez-kartu | yes | — | 200 | yes | 234 | static html, sitemap.xml |
 | https://vsevmeste.space/blog/kak-snizit-neprihody-predoplata | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/kak-zapisat-klienta-iz-kabineta | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/kak-zapustit-biznes-na-vmeste-za-15-minut | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/kak-zapustit-vitrinu-magazina | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/kalendar-zapisey-v-kabinete | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/katalog-uslug-i-ceny | yes | — | — | — | — | static html, sitemap.xml |
+| https://vsevmeste.space/blog/kak-zapustit-biznes-na-vmeste-za-15-minut | yes | — | 200 | yes | 360 | static html, sitemap.xml |
+| https://vsevmeste.space/blog/kak-zapustit-vitrinu-magazina | yes | — | 200 | yes | 196 | static html, sitemap.xml |
+| https://vsevmeste.space/blog/kalendar-zapisey-v-kabinete | yes | — | 200 | yes | 199 | static html, sitemap.xml |
+| https://vsevmeste.space/blog/katalog-uslug-i-ceny | yes | — | 200 | yes | 346 | static html, sitemap.xml |
 | https://vsevmeste.space/blog/menyu-s-foto-i-kbzhu-v-kafe | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/napominaniya-o-zapisi-klientam | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/neskolko-filialov-v-odnom-kabinete | yes | — | — | — | — | static html, sitemap.xml |
@@ -58,10 +58,10 @@ filled by `seoagent refresh --crawl` (a live fetch of each page).
 | https://vsevmeste.space/blog/podtverzhdenie-i-otmena-zapisi | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/priemka-v-avtoservise-foto-defektov | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/prilozhenie-android-dlya-salona | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/programma-dlya-avtoservisa-chto-vybrat | yes | — | — | — | — | static html, sitemap.xml |
+| https://vsevmeste.space/blog/programma-dlya-avtoservisa-chto-vybrat | yes | — | 200 | yes | 396 | static html, sitemap.xml |
 | https://vsevmeste.space/blog/promokod-na-tarif-biznes | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/publichnaya-stranica-organizacii | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/qr-menyu-dlya-kafe-kak-zapustit | yes | — | — | — | — | static html, sitemap.xml |
+| https://vsevmeste.space/blog/qr-menyu-dlya-kafe-kak-zapustit | yes | — | 200 | yes | 392 | static html, sitemap.xml |
 | https://vsevmeste.space/blog/registraciya-i-podtverzhdenie-email | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/samovyvoz-iz-magazina | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/sinhronizaciya-s-google-i-yandex-kalendarem | yes | — | — | — | — | static html, sitemap.xml |
@@ -69,7 +69,7 @@ filled by `seoagent refresh --crawl` (a live fetch of each page).
 | https://vsevmeste.space/blog/telegram-napominaniya-organizacii | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/udalenie-akkaunta-i-152-fz | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/uvedomleniya-v-max | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/blog/vidzhet-online-zapisi-na-sajt | yes | — | — | — | — | static html, sitemap.xml |
+| https://vsevmeste.space/blog/vidzhet-online-zapisi-na-sajt | yes | — | 200 | yes | 479 | static html, sitemap.xml |
 | https://vsevmeste.space/blog/vin-i-statusy-remonta | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/vkvartire-arenda-i-pokupka | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/vmagazine-poisk-magazinov | yes | — | — | — | — | static html, sitemap.xml |
@@ -80,20 +80,20 @@ filled by `seoagent refresh --crawl` (a live fetch of each page).
 | https://vsevmeste.space/blog/zapis-dlya-solo-mastera | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/zapis-vmesto-whatsapp | yes | — | — | — | — | static html, sitemap.xml |
 | https://vsevmeste.space/blog/zony-dostavki-na-karte | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/businesses | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/city/chelyabinsk | yes | — | — | — | — | sitemap.xml |
-| https://vsevmeste.space/city/ekaterinburg | yes | — | — | — | — | sitemap.xml |
-| https://vsevmeste.space/city/kazan | yes | — | — | — | — | sitemap.xml |
-| https://vsevmeste.space/city/krasnodar | yes | — | — | — | — | sitemap.xml |
-| https://vsevmeste.space/city/moscow | yes | — | — | — | — | sitemap.xml |
-| https://vsevmeste.space/city/nizhny | yes | — | — | — | — | sitemap.xml |
-| https://vsevmeste.space/city/novosibirsk | yes | — | — | — | — | sitemap.xml |
-| https://vsevmeste.space/city/rostov | yes | — | — | — | — | sitemap.xml |
-| https://vsevmeste.space/city/samara | yes | — | — | — | — | sitemap.xml |
-| https://vsevmeste.space/city/spb | yes | — | — | — | — | sitemap.xml |
-| https://vsevmeste.space/contacts | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/kafe | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/offer | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/privacy | yes | — | — | — | — | static html, sitemap.xml |
-| https://vsevmeste.space/salon | yes | — | — | — | — | static html, sitemap.xml |
+| https://vsevmeste.space/businesses | yes | — | 200 | yes | 424 | static html, sitemap.xml |
+| https://vsevmeste.space/city/chelyabinsk | yes | — | 200 | yes | 176 | sitemap.xml |
+| https://vsevmeste.space/city/ekaterinburg | yes | — | 200 | yes | 180 | sitemap.xml |
+| https://vsevmeste.space/city/kazan | yes | — | 200 | yes | 188 | sitemap.xml |
+| https://vsevmeste.space/city/krasnodar | yes | — | 200 | yes | 171 | sitemap.xml |
+| https://vsevmeste.space/city/moscow | yes | — | 200 | yes | 189 | sitemap.xml |
+| https://vsevmeste.space/city/nizhny | yes | — | 200 | yes | 189 | sitemap.xml |
+| https://vsevmeste.space/city/novosibirsk | yes | — | 200 | yes | 192 | sitemap.xml |
+| https://vsevmeste.space/city/rostov | yes | — | 200 | yes | 188 | sitemap.xml |
+| https://vsevmeste.space/city/samara | yes | — | 200 | yes | 180 | sitemap.xml |
+| https://vsevmeste.space/city/spb | yes | — | 200 | yes | 198 | sitemap.xml |
+| https://vsevmeste.space/contacts | yes | — | 200 | yes | 122 | static html, sitemap.xml |
+| https://vsevmeste.space/kafe | yes | — | 200 | yes | 375 | static html, sitemap.xml |
+| https://vsevmeste.space/offer | yes | — | 200 | yes | 262 | static html, sitemap.xml |
+| https://vsevmeste.space/privacy | yes | — | 200 | yes | 206 | static html, sitemap.xml |
+| https://vsevmeste.space/salon | yes | — | 200 | yes | 542 | static html, sitemap.xml |
 | https://vsevmeste.space/yandex_84ec889f078f5b2d | no | — | — | — | — | static html |

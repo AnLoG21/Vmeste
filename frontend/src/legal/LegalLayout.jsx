@@ -111,6 +111,9 @@ export default function LegalLayout({ title, path, description, children }) {
               decoding="async"
             />
           </a>
+          <a href="https://twelve.tools" rel="noopener noreferrer">
+            Featured on twelve.tools
+          </a>
         </p>
       </footer>
     </div>

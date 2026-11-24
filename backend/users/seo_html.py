@@ -598,6 +598,7 @@ class SeoCityHtmlView(View):
                 city_key=city_key,
                 city_title=city_title,
                 city_intro=city_seo.get("intro") or "",
+                city_local_note=city_seo.get("local_note") or "",
                 city_bullets=city_seo.get("bullets") or [],
                 city_faqs=city_faqs,
                 orgs=orgs,

@@ -14,6 +14,9 @@
   {% else %}
   <p class="muted">Организации с адресом в этом городе.</p>
   {% endif %}
+  {% if city_local_note %}
+  <p>{{ city_local_note }}</p>
+  {% endif %}
   <p><a href="/map?city={{ city_key }}">Открыть на карте</a></p>
 </header>
 <article>

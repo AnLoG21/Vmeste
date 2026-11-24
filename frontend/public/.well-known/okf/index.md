@@ -32,8 +32,11 @@ resource: https://vsevmeste.space/
 - [Сколько стоит онлайн-запись?](faqs/pricing-free-vs-business.md)
 - [Чем Вместе отличается от YCLIENTS и Dikidi?](faqs/vs-yclients-dikidi.md)
 - [Есть ли входящий WhatsApp/Telegram-чат?](faqs/outgoing-alerts-only.md)
+- [Как запустить запись за 15 минут?](faqs/start-in-15-minutes.md)
+- [Можно ли заменить запись через WhatsApp?](faqs/whatsapp-vs-booking.md)
 
 ## Published articles
 
 - [Telegram-напоминания организации](articles/telegram-napominaniya-organizacii.md)
 - [Синхронизация с Google и Яндекс Календарём](articles/sinhronizaciya-s-google-i-yandex-kalendarem.md)
+- [Запись вместо WhatsApp](articles/zapis-vmesto-whatsapp.md)

@@ -45,12 +45,16 @@ Cluster order: salon-booking (ICP) → autoservice → cafe-qr → compare-crm
 - [x] Яндекс: токен OK; ручной переобход money URLs **DONE** 2026-11-24 (`/`, `/salon`, `/avtoservis`, `/kafe`, compare)
 - [x] РСЯ: слот только в блоге (`rsya-blog.js` + `rsya-config.json`, enabled:false) — `audit/yandex-rsya.md`; money pages запрещены
 - [x] IndexNow key file `frontend/public/485582172a16a2d5afa94ef65a74603e.txt` (inbox 7199; shipped `309d0e3`)
-- [ ] Weekly `seoagent indexing` until `/salon`+`/avtoservis` Indexed (2026-11-24 12:30Z sample 10: salon/avtoservis still **Crawled not indexed**; `/kafe` Indexed; IndexNow re-ping after deepen)
+- [ ] Weekly `seoagent indexing` until `/salon`+`/avtoservis`+`/businesses` Indexed (2026-11-24: `/businesses`+compare **Crawled-not-indexed**; deepen local — needs deploy)
 - [x] Deepen katalog-uslug-i-ceny + vidzhet-online-zapisi + kak-perejti-s-drugoj-crm
 - [x] Fast deploy: path heuristics + CI-dist path (CI workflow enabled on main `d35e08f`)
 - [x] City pages → блок бизнеса со ссылками на /salon /avtoservis /kafe
 - [x] Keyword→URL map (`.seoagent/strategy/keyword-url-map.md`); Wordstat API — когда будет ключ
 - [x] docs/FAST-DEPLOY.md — шаги для CI workflow scope
 - [x] Fill `.seoagent/okf/` for AEO (published `frontend/public/.well-known/okf/`)
-- [x] Deepen `/avtoservis` pillar (FAQ + объём + SoftwareApplication) — ship 2026-11-24
-- [ ] Внешние размещения — `strategy/outreach-placements.md` (Product Radar **submitted**; IT-Podium/Zapustilis **live**; VC 4a+4b+4c **live**; Zapustilis badge pushed `2f8d6b5` — confirm after VPS deploy; Startpack/SaaSHub/AT/RuTut/mregs = owner)
+- [x] Deepen `/avtoservis` pillar (FAQ + объём + SoftwareApplication) — ship 2026-11-24; + client-path/WhatsApp FAQ 2026-11-24 local
+- [x] Deepen `/businesses` (client path + WhatsApp FAQ) — local 2026-11-24; needs deploy
+- [ ] Внешние размещения — `strategy/outreach-placements.md` (VC×3 + Zapustilis + IT-Podium **live**; Product Radar + AppRater + Ignlab + SEODataPulse + Viesearch + SaaSLineup + SaaS Radius + FreeSaaSList **submitted**; Twelve.tools + TheSaaSDir pending deploy-backlink; PeerPush/yourhack/ListMySaaS/ToolDirs/Uneed/FoundrList/FiveTaco/AZN8/SaaS Browser OTP|sign-in|logo owner; SoftFinder/s44s/Startpack/AT/SaaSHub/RuTut/mregs = owner)
+- [x] Deploy deepen `/salon`+`/avtoservis`+`/businesses`+`/kafe`+compare + twelve.tools footer + sitemap all blogs + homepage SSR (2026-11-24)
+- [x] Phase 4 start: city `localNote` + business spokes links (not doorway); `/o/…` quality tip → publichnaya-stranica
+- [x] Phase 5 expand: OKF FAQs/article + llms.txt city/AEO anchors + `audit/aeo-prompt-checklist.md` (needs deploy for live OKF/llms)

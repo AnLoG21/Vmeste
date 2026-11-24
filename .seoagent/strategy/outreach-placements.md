@@ -23,12 +23,38 @@ target_urls:
 | 4b | VC.ru | guest/expert | https://vc.ru/id6086968/3275869-chek-list-onlain-zapis-v-avtoservise-bez-haosa-v-chatah | `/avtoservis` | live | 2026-11-24 | Чек-лист СТО опубликован; ссылки avtoservis + blog |
 | 4c | VC.ru | guest/expert | https://vc.ru/id6086968/3275884-qr-menyu-dlya-kafe-bez-prilozheniya-chek-list-zapuska-za-vecher | `/kafe` | live | 2026-11-24 | QR-меню чек-лист опубликован; ссылки kafe + blog |
 | 5 | Product Radar | RU стартап-каталог | https://productradar.ru/submit/ | `/` | submitted | 2026-11-24 | Отправлено на модерацию (база проектов). Категории: Рестораны/Услуги/CRM; freemium; logo+3 slides. Модерация 7–14 дней |
-| 6 | АйтиПодиум | RU IT/SaaS каталог | https://it-podium.ru/?sort=new | `/` | live | 2026-11-24 | Карточка «Вместе» (id 19) в «Новые»; категории: Бизнес/финансы/право + Продажи/лидогенерация. Ссылка на карточке → https://vsevmeste.space/ |
+| 6 | АйтиПодиум | RU IT/SaaS каталог | https://it-podium.ru/?sort=new | `/` | live | 2026-11-24 | Карточка «Вместе» (id 19) в «Новые»; лайк поставлен (кнопка «Убрать лайк»). Категории: Бизнес/финансы/право + Продажи/лидогенерация → https://vsevmeste.space/ |
 | 7 | RuTut | RU SaaS каталог | https://rutut.ru/submit | `/` | owner | 2026-11-24 | Нужен вход вендора (email) — форма /submit |
 | 8 | mregs.ru | RU SaaS каталог | https://mregs.ru/opublikovat-saas/ | `/` | owner | 2026-11-24 | Регистрация + тарифы; без аккаунта нельзя |
 | 9 | apps-market.ru | стартап-радар | https://apps-market.ru/startups | `/` | skip | 2026-11-24 | Нет публичной формы — только Telegram-канал редакции |
-| 10 | Запустились | RU каталог | https://zapustilis.ru/p/vmeste | `/` | live | 2026-11-24 | Карточка «Вместе»; dofollow; бейдж в footer (push 2f8d6b5; VPS deploy rerun) |
+| 10 | Запустились | RU каталог | https://zapustilis.ru/p/vmeste | `/` | live | 2026-11-24 | Карточка «Вместе»; dofollow; бейдж live в footer (/salon verified) |
 | 11 | SaaSdom | RU SaaS | https://saasdom.ru/submit | `/` | skip | 2026-11-24 | Каталог под WB/Ozon (аналитика/FBS) — не fit для онлайн-записи |
+| 12 | s44s.ru | RU marketplace | https://s44s.ru/submit | `/` | owner | 2026-11-24 | `/submit` → login magic-code на почту |
+| 13 | SoftFinder | RU каталог | https://softfinder.ru/add-service | `/` | blocked | 2026-11-24 | Tip-форма заполнена; reCAPTCHA — submit вручную |
+| 14 | PeerPush | EN directory | https://peerpush.com/submit | `/` | owner | 2026-11-24 | Карточка «Вместе» сохранена (AI draft); OTP 6-digit → `vmesteofficialsupport@gmail.com` чтобы claim + free launch |
+| 15 | Launching Next | EN launchpad | https://www.launchingnext.com/submit/ | `/` | attempted | 2026-11-24 | Форма free+math; POST 200 без thank-you — не подтверждено |
+| 16 | yourhack.ai | EN directory | https://yourhack.ai/submit | `/` | owner | 2026-11-24 | Draft «Вместе» (Marketing & Sales, free queue); OTP → `vmesteofficialsupport@gmail.com`. После review — badge на сайт для dofollow |
+| 17 | ListMySaaS | EN directory | https://listmysaas.xyz/submit | `/` | owner | 2026-11-24 | Draft заполнен (Vmeste, Marketing, freemium 990/mo, free queue). Нужен sign-in + badge + DR≥10; free queue без логина не уходит |
+| 18 | Tiny Startups | EN launchpad | https://www.tinystartups.com/ | `/` | skip | 2026-11-24 | Submit/List tool — £69; free curated hand-pick, не публичная бесплатная форма |
+| 19 | Startup Fame | EN directory | https://startupfa.me/submit | `/` | blocked | 2026-11-24 | `/submit` = 404; footer Submit тоже 404 |
+| 20 | AppRater | EN app archive | https://apprater.net/ | `/` | submitted | 2026-11-24 | Free listing «Vmeste» (Web+Android) → «SUBMISSION RECEIVED / in the review queue»; email support |
+| 21 | ToolDirs | EN tools directory | https://tooldirs.com/submit | `/` | owner | 2026-11-24 | Draft filled (URL/name/tagline/desc 1232 chars); free=48h review; **Logo upload + Sign In** required — CDP file upload blocked |
+| 22 | FoundrList | EN launch board | https://foundrlist.com/submit | `/` | owner | 2026-11-24 | `/submit` → signup wall (`/signup?returnUrl=/agent`) |
+| 23 | Uneed | EN launchpad | https://www.uneed.best/submit-a-tool | `/` | owner | 2026-11-24 | Preview OK (auto-desc + logo); save/launch needs Google/email signup |
+| 24 | Ignlab Launch | EN directory | https://launch.ignlab.net/submit.html | `/` | submitted | 2026-11-24 | Free no-signup; «Thanks! in the queue»; edit: `https://launch.ignlab.net/thanks.html?edit=9683599dfd7cb26f3c2102438670169019a79bf39534c76fe66ea14e4eba08cb` |
+| 25 | Twelve.tools | EN directory | https://www.twelve.tools/submit-your-tool | `/` | pending | 2026-11-24 | Free dofollow needs footer backlink; link added local (landing+money) — submit after deploy |
+| 26 | SEODataPulse | EN directory | https://seodatapulse.com/submit/ | `/` | submitted | 2026-11-24 | Free, no email verify; Business & Finance; «Thank you… editorial review» |
+| 27 | Viesearch | EN directory | https://viesearch.com/submit | `/` | submitted | 2026-11-24 | Free Basic → waiting list confirmed; `/api/plan` success «in the review queue»; draft token `2b8hy` |
+| 28 | SaaSLineup | EN directory | https://saaslineup.com/submit/?tier=free | `/` | submitted | 2026-11-24 | Free no-account; Marketing/Ops/Productivity; 21-day nofollow queue (badge→dofollow skip until deploy); Stripe Featured $19 upsell declined |
+| 29 | FiveTaco | EN directory | https://fivetaco.com/submit | `/` | owner | 2026-11-24 | URL form → Sign up wall |
+| 30 | PromoteProject | EN launchpad | https://www.promoteproject.com/ | `/` | owner | 2026-11-24 | «Submit startup» = `#` + login modal |
+| 31 | AZN8 | EN directory | https://azn8.com/submit | `/` | owner | 2026-11-24 | `/submit` → sign-up |
+| 32 | kis.tools | EN tools | https://kis.tools/submit | `/` | skip | 2026-11-24 | Criteria = no-reg free tools; poor fit for SaaS booking |
+| 33 | TheSaaSDir | EN directory | https://thesaasdir.com/submit/?tier=free | `/` | pending | 2026-11-24 | Free = badge required (removed after 21d without); submit after deploy badge like Twelve.tools |
+| 34 | The Hack Stack | EN launchpad | https://thehackstack.com/add-product | `/` | owner | 2026-11-24 | `/add-product` → login |
+| 35 | SaaS Radius | EN directory | https://www.saasradius.com/add-listing | `/` | submitted | 2026-11-24 | Free no-account; Appointments→Online Bookings; redirect home after submit (= success) |
+| 36 | FreeSaaSList / SaaSList | EN directory | https://freesaaslist.com/en/submit | `/` | submitted | 2026-11-24 | Free no-badge; Marketing & Sales; «Thanks — your project was submitted»; logo optional skipped |
+| 37 | SaaS Browser | EN directory | https://saasbrowser.com/en/add-your-saas | `/` | owner | 2026-11-24 | `/add-your-saas` → sign_up |
 
 ## Product Radar — kit (шаг 1+)
 
@@ -57,7 +83,7 @@ target_urls:
 
 ## Next actions
 
-1. Owner: AlternativeTo (YCLIENTS/Dikidi alt), Startpack (captcha), SaaSHub (no-AI policy).
-2. Owner: Startpack/SaaSHub/AT/RuTut/mregs.
-3. Agent: confirm Zapustilis badge live after deploy; IndexNow after badge; VkSaaS если будет аккаунт.
-4. Лайк/апдейт карточки на it-podium.ru при смене тарифа/оффера.
+1. Owner ASAP: OTP в `vmesteofficialsupport@gmail.com` — PeerPush claim + yourhack free submit.
+2. Owner: SoftFinder captcha; s44s; Startpack/SaaSHub/AT/RuTut/mregs; ListMySaaS sign-in; ToolDirs logo+Sign In; Uneed/FoundrList/FiveTaco/AZN8/PromoteProject signup.
+3. Deploy deepen `/salon`+`/avtoservis`+`/businesses`+`/kafe`+compare + twelve.tools footer → then finish Twelve.tools Continuе (+ optional SaaSLineup badge for dofollow).
+4. Weekly GSC money until Indexed; AppRater + Ignlab + SEODataPulse + Viesearch + SaaSLineup + SaaS Radius + FreeSaaSList moderation.

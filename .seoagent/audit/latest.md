@@ -1,47 +1,80 @@
 ---
-domain: vsevmeste.space
-audited_at: "2026-11-24T07:25:10.947Z"
-crawl_origin: https://vsevmeste.space
-pages_captured: 25
-capture_complete: true
-gsc_property: sc-domain:vsevmeste.space
+title: SEO audit — vsevmeste.space
+date: 2026-11-24
+origin: https://vsevmeste.space
+evidence: audit/evidence.md
+indexing: GSC URL Inspection (priority matches 2026-11-24)
 ---
 
-# Technical SEO audit — vsevmeste.space
+# SEO audit — vsevmeste.space (2026-11-24)
 
-Grounded on `.seoagent/audit/evidence.md` (crawl 2026-11-24T07:25:10Z, `--max 25`) and `.seoagent/audit/indexing.md` / findings.md. Earlier incomplete crawl (timeouts during Deploy SSH) is superseded.
+## Technical findings (from live crawl — carry all)
 
-## 🚨 Biggest Issue
+1. **[Medium] sitemap_coverage_gap** — Confirmed · Evidence: findings.md / evidence.md § sitemap.xml  
+   Live pages not in sitemap (36 listed vs 39 discovered in crawl sample):  
+   - `/blog/abonementy-i-loyalnost-v-salone`  
+   - `/blog/analitika-dlya-vladelca-salona`  
+   - `/blog/besplatnyj-tarif-vmeste-chto-vhodit`  
+   Crawl capped at 40 of 82 discovered → coverage gap may be larger (lower bound).
 
-**Only 16/36 sitemap URLs indexed (44%) — money pages not in Google (Confirmed)** — `/salon`, `/avtoservis`, YCLIENTS comparison, widget guide, salon setup posts are «Discovered - currently not indexed»; `/businesses` and several posts are «Crawled - currently not indexed». Without `/salon` in the index, commercial queries cannot convert.
+2. **[High] Homepage thin server HTML** — Confirmed · Evidence: evidence.md § `/` — **86 body words**  
+   Money pages have meta/canonical/OG/JSON-LD OK; homepage remains shell-thin for crawlers (plan § фаза 1 п.2).
 
-Evidence: indexing.md § Not indexed (20) — e.g. https://vsevmeste.space/salon, https://vsevmeste.space/avtoservis; § Indexed (16) includes `/`, `/kafe`, `/blog`.
+## Indexing (GSC — Confirmed)
 
-👉 Deepen those URLs (thin body compounds soft-404 risk), add HTML internal links from indexed hubs (`/`, `/blog`, `/kafe`), request indexing in GSC after deploy, re-run `seoagent indexing`.
+| URL | Coverage | Last crawl | Notes |
+|---|---|---|---|
+| `/kafe` | Submitted and indexed | 2026-11-19 | Only money pillar Indexed |
+| `/salon` | Crawled — currently not indexed | 2026-11-24T09:28 | canBeIndexed false |
+| `/avtoservis` | Crawled — currently not indexed | 2026-11-24T09:30 | canBeIndexed false |
+| `/businesses` | Crawled — currently not indexed | 2026-10-30 | Stale crawl vs others |
+| compare YCLIENTS post | Crawled — currently not indexed | 2026-11-24T11:04 | Same NEUTRAL pattern |
 
-## ⚠️ Also Worth Fixing
+Phase 0 metric (`/salon`+`/avtoservis` Indexed) **not met**.
 
-1. **Thin commercial/blog bodies (Confirmed)** — homepage ~86 words, `/salon` ~278 pre-expand, many posts ~146–360 words (evidence.md body words). Expand toward competitor density.
-2. **Origin timeouts during Deploy SSH (Confirmed in session)** — first crawl lost homepage/robots/sitemap; Caddy sitemap proxy now has short timeouts to fail fast.
+## Live content volume (crawl body words)
 
-## ✅ What's Working
+| URL | Words | Target (plan) |
+|---|---|---|
+| `/` | 86 | server-visible anchors + text |
+| `/salon` | 542 | 1200+ |
+| `/avtoservis` | 607 | 1200+ |
+| `/kafe` | 375 | 1200+ |
+| `/businesses` | 424 | — |
+| compare YCLIENTS post | 615 | — |
 
-- robots.txt HTTP 200 with absolute `Sitemap:` and sensible Disallow for cabinet/`/w/` (evidence.md § robots.txt).
-- Captured pages: title, meta description, canonical, OG/Twitter, JSON-LD present — rollup shows no missing canonical/meta/H1/schema/alt gaps (evidence.md § Site-wide rollup).
-- Homepage **Submitted and indexed** in GSC (`indexing.md`; last crawl 2026-11-22).
-- SEOAgent login + GSC property `sc-domain:vsevmeste.space` connected (owner).
+Local deepen/FAQ/client-path still **not fully reflected as 1200+** on live (and city `localNote` / updated `llms.txt` city titles **not live** — WebFetch 2026-11-24).
 
-## Findings carried from findings.md
+## Already present live (do NOT recommend adding)
 
-Re-crawl with healthy origin: **no confirmed mechanical findings** in regenerated findings.md (empty / none). Prior incomplete-crawl findings (robots/sitemap unreachable, 21 uncaptured URLs) were environment/timeout artifacts, not missing files in repo.
+Per findings.md: title, meta, canonical, OG/Twitter, JSON-LD on money pages, blog hubs, cities, legal — all Confirmed present.
 
-## Indexing coverage
+## Outreach / authority (фаза 3)
 
-- Homepage indexed (Confirmed · indexing.md).
-- Full sitemap URL Inspection still running / pending deeper pass — do not claim blog/landings indexed until rows exist in indexing.md.
+Live: VC×3, Zapustilis, IT-Podium.  
+Submitted (moderation): Product Radar, AppRater, Ignlab, SEODataPulse, Viesearch, SaaSLineup, SaaS Radius, FreeSaaSList.  
+Blocked on owner: PeerPush/yourhack OTP, SoftFinder captcha, sign-in catalogs, Twelve.tools/TheSaaSDir (need deploy badge).
 
-## Repo fixes started this session
+Referring domains ≪ 15 (phase metric).
 
-- Drafted `.seoagent/context.md` (ONLINE-only SaaS, RU).
-- Expanded `/salon` HTML + WhatsApp blog section + avtoservis “what to choose” block (deploy pending).
-- Caddy sitemap proxy timeouts; nginx static `/sitemap.xml` fallback for non-Caddy paths.
+## Global plan gap (what remains)
+
+| Phase | Status | Still open |
+|---|---|---|
+| 0 Foundation | Partial | Money Indexed metric; weekly indexing; request indexing after deploy |
+| 1 Convert pages | Partial | Homepage SSR text; deepen pillars to 1200+ **deployed**; sitemap completeness |
+| 2 Yandex + Wordstat | Partial | Wordstat key → keywords.md; Metrika registration + organic UTM; Yandex «не индексируется» dig |
+| 3 Authority | In progress | Owner OTP/captcha; deploy→Twelve.tools; Habr/отраслевой guest; Maps/2GIS client /w/…; brand queries |
+| 4 Programmatic | Started local | Deploy city `localNote`; seed real `/o/…` orgs with photos/services; **no** marketplace cluster yet |
+| 5 AEO | Started local | Deploy OKF/llms updates; monthly AEO prompt checklist run |
+
+## Priority next (ordered)
+
+1. **Deploy** undeployed SEO batch (money deepen, twelve.tools footer, city localNote, OKF/llms).  
+2. GSC Request indexing `/salon` `/avtoservis` `/businesses` after deploy + IndexNow.  
+3. Fix sitemap to include all public blog URLs.  
+4. Owner: OTP PeerPush + yourhack; SoftFinder captcha.  
+5. Homepage: more server-visible copy + anchors to money URLs.  
+6. Wordstat when API key → align titles/H1.  
+7. One Habr/отраслевой guest OR Maps growth loop.  
+8. Run AEO checklist once; log AI answer errors.

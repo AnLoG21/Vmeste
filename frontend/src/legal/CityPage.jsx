@@ -15,6 +15,7 @@ function normalizeCitySeo(raw, fallbackKey) {
     metaTitle: raw.metaTitle || raw.meta_title || "",
     metaDescription: raw.metaDescription || raw.meta_description || "",
     intro: raw.intro || "",
+    localNote: raw.localNote || raw.local_note || "",
     bullets: raw.bullets || [],
     faqs: raw.faqs || [],
     key: raw.key || fallbackKey,
@@ -152,11 +153,34 @@ export default function CityPage({ cityKey }) {
         </p>
       </header>
       <article className="legal-page-body">
+        {seo.localNote ? <p>{seo.localNote}</p> : null}
+
         <h2>Что доступно в городе</h2>
         <ul>
           {(seo.bullets || []).map((b) => (
             <li key={b}>{b}</li>
           ))}
+        </ul>
+
+        <h2>Для бизнеса в городе {seo.title}</h2>
+        <p>
+          Онлайн-запись бесплатна без срока; тариф «Бизнес» — 990&nbsp;₽/мес. Исходящие
+          напоминания (Telegram, SMS, WhatsApp Green-API) — не входящий мессенджер-inbox.
+        </p>
+        <ul>
+          <li>
+            <a href="/salon">Онлайн-запись для салона красоты</a>
+          </li>
+          <li>
+            <a href="/avtoservis">Программа для автосервиса</a>
+          </li>
+          <li>
+            <a href="/kafe">QR-меню для кафе</a>
+          </li>
+          <li>
+            <a href="/businesses">Все сценарии для бизнеса</a> ·{" "}
+            <a href="/?register=1&amp;from=city">Создать организацию</a>
+          </li>
         </ul>
 
         <h2>Организации</h2>

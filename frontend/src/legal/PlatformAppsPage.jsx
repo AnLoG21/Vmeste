@@ -327,6 +327,9 @@ export default function PlatformAppsPage() {
               decoding="async"
             />
           </a>
+          <a href="https://twelve.tools" rel="noopener noreferrer">
+            Featured on twelve.tools
+          </a>
         </p>
       </footer>
     </div>
