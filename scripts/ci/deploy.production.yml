@@ -1,0 +1,208 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend_app: ${{ steps.filter.outputs.frontend_app }}
+      frontend_static: ${{ steps.filter.outputs.frontend_static }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      caddy: ${{ steps.filter.outputs.caddy }}
+      deploy_needed: ${{ steps.flags.outputs.deploy_needed }}
+      build_web: ${{ steps.flags.outputs.build_web }}
+      build_frontend: ${{ steps.flags.outputs.build_frontend }}
+      sync_static: ${{ steps.flags.outputs.sync_static }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'docker-compose.prod.yml'
+            frontend_app:
+              - 'frontend/src/**'
+              - 'frontend/package.json'
+              - 'frontend/package-lock.json'
+              - 'frontend/vite.config.js'
+              - 'frontend/index.html'
+              - 'frontend/Dockerfile'
+              - 'frontend/Dockerfile.runtime'
+              - 'frontend/nginx.conf'
+            frontend_static:
+              - 'frontend/public/**'
+            frontend:
+              - 'frontend/**'
+            caddy:
+              - 'Caddyfile'
+              - 'Caddyfile.http-only'
+            deploy_scripts:
+              - 'scripts/deploy-prod.sh'
+              - '.github/workflows/deploy.yml'
+      - name: Derive deploy flags
+        id: flags
+        run: |
+          BACKEND="${{ steps.filter.outputs.backend }}"
+          APP="${{ steps.filter.outputs.frontend_app }}"
+          STATIC="${{ steps.filter.outputs.frontend_static }}"
+          CADDY="${{ steps.filter.outputs.caddy }}"
+          SCRIPTS="${{ steps.filter.outputs.deploy_scripts }}"
+          DISPATCH="${{ github.event_name == 'workflow_dispatch' }}"
+
+          BUILD_WEB=false
+          BUILD_FE=false
+          SYNC_STATIC=false
+          NEED=false
+
+          if [ "$DISPATCH" = "true" ] || [ "$BACKEND" = "true" ]; then BUILD_WEB=true; NEED=true; fi
+          if [ "$DISPATCH" = "true" ] || [ "$APP" = "true" ]; then BUILD_FE=true; NEED=true; fi
+          # Static HTML/SEO only → copy into running nginx, no Vite rebuild
+          if [ "$BUILD_FE" != "true" ] && [ "$STATIC" = "true" ]; then SYNC_STATIC=true; NEED=true; fi
+          if [ "$CADDY" = "true" ] || [ "$SCRIPTS" = "true" ]; then NEED=true; fi
+
+          echo "build_web=$BUILD_WEB" >> "$GITHUB_OUTPUT"
+          echo "build_frontend=$BUILD_FE" >> "$GITHUB_OUTPUT"
+          echo "sync_static=$SYNC_STATIC" >> "$GITHUB_OUTPUT"
+          echo "deploy_needed=$NEED" >> "$GITHUB_OUTPUT"
+          echo "flags: web=$BUILD_WEB fe=$BUILD_FE static=$SYNC_STATIC need=$NEED"
+
+  # Full CI only when backend changes
+  ci:
+    name: Gate — CI (backend)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    uses: ./.github/workflows/ci.yml
+
+  # Build Vite on GitHub (fast machine), never on the 1GB VPS
+  frontend-build:
+    name: Build frontend dist
+    needs: changes
+    if: needs.changes.outputs.build_frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install + build
+        env:
+          VITE_API_URL: https://vsevmeste.space/api
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Pack dist
+        working-directory: frontend
+        run: tar -czf "$GITHUB_WORKSPACE/frontend-dist.tgz" dist nginx.conf Dockerfile.runtime
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend-dist.tgz
+          retention-days: 2
+
+  deploy:
+    name: Deploy to VPS
+    needs: [changes, ci, frontend-build]
+    if: |
+      always() &&
+      needs.changes.result == 'success' &&
+      needs.changes.outputs.deploy_needed == 'true' &&
+      (needs.ci.result == 'success' || needs.ci.result == 'skipped') &&
+      (needs.frontend-build.result == 'success' || needs.frontend-build.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DEPLOY_BUILD_WEB: ${{ needs.changes.outputs.build_web }}
+      DEPLOY_BUILD_FRONTEND: ${{ needs.changes.outputs.build_frontend }}
+      DEPLOY_SYNC_STATIC: ${{ needs.changes.outputs.sync_static }}
+    steps:
+      - name: Preflight secrets
+        run: |
+          if [ -z "${{ secrets.VPS_HOST }}" ] || [ -z "${{ secrets.VPS_USER }}" ] || [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
+            echo "::error::Missing VPS_HOST / VPS_USER / VPS_SSH_KEY secrets"
+            exit 1
+          fi
+          echo "web=${DEPLOY_BUILD_WEB} fe=${DEPLOY_BUILD_FRONTEND} static=${DEPLOY_SYNC_STATIC}"
+
+      - name: Download frontend dist
+        if: needs.changes.outputs.build_frontend == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: .
+
+      - name: Upload dist to VPS
+        if: needs.changes.outputs.build_frontend == 'true'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          source: "frontend-dist.tgz"
+          target: "/tmp/"
+
+      - name: Deploy over SSH
+        id: deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          protocol: tcp
+          timeout: 45s
+          script_stop: true
+          command_timeout: 15m
+          envs: DEPLOY_BUILD_WEB,DEPLOY_BUILD_FRONTEND,DEPLOY_SYNC_STATIC
+          script: |
+            set -euo pipefail
+            echo "[deploy] connected as $(whoami)@$(hostname)"
+            cd /opt/vmeste
+            git fetch --prune origin
+            git checkout main
+            git reset --hard origin/main
+            chmod +x scripts/deploy-prod.sh
+            export DEPLOY_BUILD_WEB="${DEPLOY_BUILD_WEB:-false}"
+            export DEPLOY_BUILD_FRONTEND="${DEPLOY_BUILD_FRONTEND:-false}"
+            export DEPLOY_SYNC_STATIC="${DEPLOY_SYNC_STATIC:-false}"
+            export DEPLOY_FRONTEND_TGZ="/tmp/frontend-dist.tgz"
+            ./scripts/deploy-prod.sh
+
+  notify-failure:
+    name: Ops alert on failure
+    needs: [changes, ci, frontend-build, deploy]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST ops webhook
+        env:
+          WEBHOOK: ${{ secrets.OPS_ALERT_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "OPS_ALERT_WEBHOOK_URL not set — skip"
+            exit 0
+          fi
+          curl -sS -X POST "$WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{\"source\":\"vmeste\",\"event\":\"deploy_or_ci_failed\",\"detail\":\"$RUN_URL\",\"extra\":{\"ref\":\"${{ github.ref }}\",\"sha\":\"${{ github.sha }}\"}}" \
+            || true

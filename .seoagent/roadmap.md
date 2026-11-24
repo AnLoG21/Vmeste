@@ -44,8 +44,9 @@ Cluster order: salon-booking (ICP) → autoservice → cafe-qr → compare-crm
 - [x] GSC Request indexing `/salon` `/avtoservis` (ожидаем Indexed)
 - [ ] Яндекс: когда снимут read-only sitemap / или токен → recrawl money URLs
 - [ ] Weekly `seoagent indexing` until `/salon`+`/avtoservis` Indexed
-- [ ] Deepen katalog-uslug-i-ceny + vidzhet-online-zapisi + kak-perejti-s-drugoj-crm
+- [x] Deepen katalog-uslug-i-ceny + vidzhet-online-zapisi + kak-perejti-s-drugoj-crm
+- [x] Fast deploy: path heuristics + CI-dist path (workflow YAML ждёт `gh auth` scope workflow)
 - [ ] City pages → ссылки на /salon /avtoservis /kafe
-- [ ] Wordstat map → keywords.md
+- [ ] Wordstat map → keywords.md (фаза 2)
 - [ ] Fill `.seoagent/okf/` for AEO
 - [ ] 4 внешних размещения (каталоги / гостевые)
