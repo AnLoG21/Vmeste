@@ -7,8 +7,6 @@ on:
     paths:
       - "agents-team/**"
       - "scripts/write-agents-team-env.sh"
-      - "scripts/deploy-prod.sh"
-      - "docker-compose.prod.yml"
       - ".github/workflows/deploy-agents-team.yml"
 
 concurrency:
