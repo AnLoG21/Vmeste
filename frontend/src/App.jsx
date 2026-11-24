@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
 import "./design-kit.css";
 import "./mobile.css";
@@ -19,15 +19,15 @@ import VmenuApp, { ServicesHub } from "./vmenu/VmenuApp.jsx";
 import VmagazineApp from "./vmagazine/VmagazineApp.jsx";
 import VkvartireApp from "./vkvartire/VkvartireApp.jsx";
 import VefireApp from "./vefire/VefireApp.jsx";
-import VsayteApp from "./vsayte/VsayteApp.jsx";
 import VmagnitolApp from "./vmagnitol/VmagnitolApp.jsx";
 import { canAccessVefire } from "./vefire/vefireAccess.js";
 import { canAccessVmagnitol } from "./vmagnitol/vmagnitolAccess.js";
 import "./vmagazine/vmagazine.css";
 import "./vkvartire/vkvartire.css";
 import "./vefire/vefire.css";
-import "./vsayte/vsayte.css";
 import "./vmagnitol/vmagnitol.css";
+
+const VsayteApp = lazy(() => import("./vsayte/VsayteApp.jsx"));
 import { CabinetErrorBoundary } from "./CabinetErrorBoundary.jsx";
 import CabinetChrome from "./CabinetChrome.jsx";
 import InspectionWorkspace from "./InspectionWorkspace.jsx";
@@ -904,9 +904,9 @@ export default function App() {
   useEffect(() => {
     if (!accessToken) {
       setPageMeta({
-        title: "Вместе — онлайн-запись клиентов и автоматизация бизнеса",
+        title: "Вместе (vsevmeste) — онлайн-запись клиентов и автоматизация бизнеса",
         description:
-          "Вместе — платформа для онлайн-записи клиентов, каталога услуг и чатов. Записи бесплатно, Бизнес — 990 ₽/мес.",
+          "Вместе (vsevmeste.space) — онлайн-запись, каталог услуг и чаты. Запись бесплатно без срока, Бизнес — 990 ₽/мес. Салоны, автосервисы, кафе.",
         path: "/",
       });
       return;
@@ -1227,18 +1227,27 @@ export default function App() {
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
+    // Don't overwrite the marketing SEO title on the guest landing.
+    if (!accessToken || me?.role !== "client") return undefined;
+    if (currentView !== "client_map" && currentView !== "client_book") return undefined;
     const sphere = clientDiscoverFilters?.sphere;
     const label = sphereOptions.find((s) => s.key === sphere)?.value;
     const service = String(clientDiscoverFilters?.service || "").trim();
+    if (!label && !service) return undefined;
     let title = "Вместе";
     if (label && service) title = `${service} · ${label} рядом — Вместе`;
     else if (label) title = `${label} рядом — Вместе`;
     else if (service) title = `${service} рядом — Вместе`;
     document.title = title;
-    return () => {
-      document.title = "Вместе";
-    };
-  }, [clientDiscoverFilters?.sphere, clientDiscoverFilters?.service, sphereOptions]);
+    return undefined;
+  }, [
+    accessToken,
+    me?.role,
+    currentView,
+    clientDiscoverFilters?.sphere,
+    clientDiscoverFilters?.service,
+    sphereOptions,
+  ]);
 
   useEffect(() => {
     if (!accessToken || me?.role !== "client") return;
@@ -3176,12 +3185,14 @@ export default function App() {
           />
         )}
         {accessToken && currentView === "vsayte" && (
-          <VsayteApp
-            me={me}
-            authFetch={authFetch}
-            API_URL={API_URL}
-            onExit={() => setCurrentView("service_apps")}
-          />
+          <Suspense fallback={<p className="muted">Загрузка Всайте…</p>}>
+            <VsayteApp
+              me={me}
+              authFetch={authFetch}
+              API_URL={API_URL}
+              onExit={() => setCurrentView("service_apps")}
+            />
+          </Suspense>
         )}
         {accessToken && currentView === "vmagnitol" && canAccessVmagnitol(me) && (
           <VmagnitolApp

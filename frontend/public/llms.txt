@@ -1,0 +1,36 @@
+# Вместе (vsevmeste.space)
+
+> Вместе — платформа для онлайн-записи клиентов и автоматизации малого бизнеса в России: салоны, автосервисы, кафе, магазины и маркетплейсы.
+
+Сайт: https://vsevmeste.space
+Контакты: vmesteofficialsupport@gmail.com · +7 967 074-46-76
+Исполнитель: Логинов Андрей Александрович, самозанятый, ИНН 971500759750, Москва.
+
+## Для людей и ИИ
+
+- Публичная витрина и карта организаций
+- Кабинет исполнителя: каталог, календарь, сотрудники, чаты, отзывы
+- Тарифы: бесплатная запись без срока; Бизнес — 990 ₽/мес
+- Сервисы внутри платформы: Всайте (конструктор сайтов), Вменю, Вмагазине, маркетплейсы, голос
+
+## Важные URL
+
+- https://vsevmeste.space/
+- https://vsevmeste.space/businesses
+- https://vsevmeste.space/apps
+- https://vsevmeste.space/blog
+- https://vsevmeste.space/salon
+- https://vsevmeste.space/avtoservis
+- https://vsevmeste.space/kafe
+- https://vsevmeste.space/offer
+- https://vsevmeste.space/privacy
+- https://vsevmeste.space/contacts
+- https://vsevmeste.space/sitemap.xml
+
+## Не индексировать как продукт
+
+Личный кабинет и API (`/cabinet`, `/settings`, `/api/` и др.) закрыты в robots.txt.
+
+## Язык
+
+Русский.
