@@ -6,55 +6,36 @@
 
 | Шаг | Статус | Деталь |
 |---|---|---|
-| Live sitemap/robots/money pages | OK (когда origin up) | `/sitemap.xml` 200 gunicorn, 36 URL; `/salon` `/avtoservis` `/kafe` 200 nginx static |
-| GSC property | OK | `sc-domain:vsevmeste.space`, owner `analog803@gmail.com` |
-| GSC sitemap submit | OK | повторно отправлен `https://vsevmeste.space/sitemap.xml` 2026-11-24 |
-| GSC URL Inspection batch | OK | `seoagent indexing --max 40` → **16/36 indexed (44%)** → `.seoagent/audit/indexing.md` |
-| Static sitemap fallback sync | OK | `frontend/public/sitemap.xml` синхронизирован с live (36 URL) |
-| Caddy sitemap 5xx → frontend | Code ready | `Caddyfile` + `Caddyfile.http-only`: `handle_response` @500–504 → `frontend:80` |
-| Deploy без force-recreate caddy | Code ready | `scripts/deploy-prod.sh`: не роняет edge на каждый push; cloudflared не churn |
-| Request indexing `/salon` `/avtoservis` | BLOCKED (GSC) | После аптайма 200 Live/Request всё ещё: site-wide unavailable (хост-статус после ~20 мин downtime деплоя 45352190238). Повторить через несколько часов. |
-| GSC not-indexed reasons (отчёт 16.11) | OK read | 17 Discovered; 3 Crawled; 4 redirect; 1 canonical; 1×404. Indexed всего 43. |
-| Яндекс.Вебмастер API | BLOCKED | нет `YANDEX_WEBMASTER_TOKEN` в `~/.agents/skills/yandex-webmaster/config/.env` |
+| Live sitemap/robots/money pages | OK | `/sitemap.xml` 200 (gunicorn, 36 URL); money pages 200 |
+| GSC property | OK | `sc-domain:vsevmeste.space` |
+| GSC sitemap submit | OK | повторно `https://vsevmeste.space/sitemap.xml` |
+| GSC URL Inspection batch | OK | `seoagent indexing --max 40` → **16/36 indexed (44%)** |
+| Request indexing `/salon` | OK | Live: «можно проиндексировать» → **запрос отправлен** |
+| Request indexing `/avtoservis` | OK | **запрос отправлен** (было Discovered — not indexed) |
+| Caddy sitemap 5xx → frontend | Deployed | `5145097` |
+| Deploy edge resilience | Deployed | `4043cf2` — reload Caddy, 2G swap, oom_score, stop agents; успешный деплой с salon=200 ~8 мин подряд |
+| Яндекс sitemap | Partial | сайт в Вебмастере; sitemap из robots.txt status **ок** (08.10, 9 URL — устаревший снимок); инструмент «Файлы Sitemap» сейчас **read-only** у Яндекса |
+| Яндекс API token | Missing | нет `YANDEX_WEBMASTER_TOKEN` для recrawl CLI |
 
-## GSC coverage (money)
+## GSC coverage (Inspection snapshot)
 
 | URL | State |
 |---|---|
-| `/` | Indexed |
-| `/kafe` | Indexed |
-| `/blog` | Indexed |
-| `/salon` | Discovered — not indexed |
-| `/avtoservis` | Discovered — not indexed |
+| `/` `/kafe` `/blog` | Indexed |
+| `/salon` | Request indexing отправлен (ранее Discovered / unknown) |
+| `/avtoservis` | Request indexing отправлен (Discovered — not indexed) |
 | `/businesses` | Crawled — not indexed |
 
-## Корневая причина отказа Request indexing
+GSC Pages report: **43 indexed / 26 not** (update 16.11): 17 Discovered, 3 Crawled, 4 redirect, 1 canonical, 1×404.
 
-Во время деплоя `45352190238` origin отдавал `000` (таймаут 15–20с) снаружи. Google Live Inspection зафиксировал **site-wide availability**. Пока деплой force-recreate'ил caddy (+ tunnel churn) — запрос индексирования отклонялся.
+## Commits
 
-## Что задеплоить (локальные правки)
+- `5145097` — Caddy sitemap fallback + no edge recreate (v1) + phase0 audit
+- `4043cf2` — OOM/edge protect: reload-only Caddy, swap 2G, oom_score_adj, stop agents
 
-1. `Caddyfile` / `Caddyfile.http-only` — fallback sitemap
-2. `scripts/deploy-prod.sh` — не force-recreate caddy/cloudflared без нужды
-3. `frontend/public/sitemap.xml` — актуальный fallback
+## Осталось до закрытия метрики фазы
 
-## Яндекс — путь (когда будет токен)
-
-```bash
-cp ~/.agents/skills/yandex-webmaster/config/.env.example ~/.agents/skills/yandex-webmaster/config/.env
-# YANDEX_WEBMASTER_TOKEN=...
-bash ~/.agents/skills/yandex-webmaster/scripts/hosts.sh --search vsevmeste
-bash ~/.agents/skills/yandex-webmaster/scripts/sitemaps.sh --host vsevmeste.space --action add --url https://vsevmeste.space/sitemap.xml
-bash ~/.agents/skills/yandex-webmaster/scripts/recrawl.sh --host vsevmeste.space --url https://vsevmeste.space/salon
-bash ~/.agents/skills/yandex-webmaster/scripts/recrawl.sh --host vsevmeste.space --url https://vsevmeste.space/avtoservis
-```
-
-Верификация файла уже на сайте: `/yandex_84ec889f078f5b2d.html`.
-
-## Следующий проход фазы 0 (после аптайма)
-
-1. Дождаться зелёного деплоя / origin 200 стабильно 5+ минут.
-2. Закоммитить/задеплоить Caddy+deploy hardenings.
-3. GSC: Request indexing для `/salon` `/avtoservis` `/businesses` + топ коммерческих постов.
-4. Выдать `YANDEX_WEBMASTER_TOKEN` → sitemap + recrawl.
-5. Еженедельно `seoagent indexing --max 40` пока money-page Indexed ≥ 70% (`/salon`+`/avtoservis` обязательны).
+1. Дождаться Indexed у `/salon` и `/avtoservis` (обычно дни; еженедельно `seoagent indexing --match "/salon\|/avtoservis"`).
+2. Когда Яндекс снимет read-only — переотправить sitemap + recrawl money URLs (или положить `YANDEX_WEBMASTER_TOKEN`).
+3. Request indexing для `/businesses` + топ коммерческих постов при стабильном аптайме.
+4. Не копить деплои на 1G VPS — каждый долгий build рискует host-level timeout.

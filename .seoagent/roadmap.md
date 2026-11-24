@@ -40,9 +40,10 @@ Cluster order: salon-booking (ICP) → autoservice → cafe-qr → compare-crm
 ## Next increment (фаза 0–1 global plan)
 
 - [x] GSC sitemap resubmit + Inspection 36 URL (см. audit/phase0.md)
-- [ ] Deploy hardenings (Caddy fallback + no edge recreate) → push
-- [ ] GSC Request indexing `/salon` `/avtoservis` после стабильного аптайма
-- [ ] Яндекс.Вебмастер: токен → sitemap + recrawl money URLs
+- [x] Deploy hardenings (Caddy fallback + edge OOM protect) `5145097` `4043cf2`
+- [x] GSC Request indexing `/salon` `/avtoservis` (ожидаем Indexed)
+- [ ] Яндекс: когда снимут read-only sitemap / или токен → recrawl money URLs
+- [ ] Weekly `seoagent indexing` until `/salon`+`/avtoservis` Indexed
 - [ ] Deepen katalog-uslug-i-ceny + vidzhet-online-zapisi + kak-perejti-s-drugoj-crm
 - [ ] City pages → ссылки на /salon /avtoservis /kafe
 - [ ] Wordstat map → keywords.md
