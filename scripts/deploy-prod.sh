@@ -144,9 +144,12 @@ if [[ "$BUILD_FRONTEND" == "true" ]]; then
       ls -la "$STAGE"
       exit 1
     fi
-    FE_IMAGE="$(docker compose -f "$COMPOSE_FILE" config --images frontend | head -1)"
+    # Prefer compose image for frontend only (config --images can list deps first).
+    FE_IMAGE="$(docker compose -f "$COMPOSE_FILE" config --images frontend 2>/dev/null | grep -E 'frontend|vmeste-frontend' | head -1 || true)"
+    FE_IMAGE="${FE_IMAGE:-vmeste-frontend:latest}"
     echo "[deploy] docker build runtime from CI dist → ${FE_IMAGE}"
-    docker build -t "$FE_IMAGE" -f "$STAGE/Dockerfile.runtime" "$STAGE"
+    # VPS may lack buildx; classic builder is enough for nginx runtime image.
+    DOCKER_BUILDKIT=0 docker build -t "$FE_IMAGE" -f "$STAGE/Dockerfile.runtime" "$STAGE"
     docker compose -f "$COMPOSE_FILE" up -d --force-recreate --no-deps --no-build frontend
     rm -rf "$STAGE" "$TGZ"
     echo "[deploy] frontend runtime up"
