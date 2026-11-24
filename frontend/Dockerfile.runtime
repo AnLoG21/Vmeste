@@ -1,0 +1,6 @@
+# Runtime-only image: dist is built in CI (or locally), not on the VPS.
+# Keeps prod deploys off the Vite OOM / 20–40m VPS rebuild path.
+FROM nginx:1.27-alpine
+COPY dist/ /usr/share/nginx/html/
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
