@@ -45,9 +45,9 @@ Cluster order: salon-booking (ICP) → autoservice → cafe-qr → compare-crm
 - [ ] Яндекс: когда снимут read-only sitemap / или токен → recrawl money URLs
 - [ ] Weekly `seoagent indexing` until `/salon`+`/avtoservis` Indexed
 - [x] Deepen katalog-uslug-i-ceny + vidzhet-online-zapisi + kak-perejti-s-drugoj-crm
-- [x] Fast deploy: path heuristics + CI-dist path (workflow YAML ждёт `gh auth` scope workflow)
+- [x] Fast deploy: path heuristics + CI-dist path (CI workflow enabled on main `d35e08f`)
 - [x] City pages → блок бизнеса со ссылками на /salon /avtoservis /kafe
 - [x] Keyword→URL map (`.seoagent/strategy/keyword-url-map.md`); Wordstat API — когда будет ключ
 - [x] docs/FAST-DEPLOY.md — шаги для CI workflow scope
-- [ ] Fill `.seoagent/okf/` for AEO
+- [x] Fill `.seoagent/okf/` for AEO (published `frontend/public/.well-known/okf/`)
 - [ ] 4 внешних размещения (каталоги / гостевые)
