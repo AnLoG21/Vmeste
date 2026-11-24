@@ -861,6 +861,8 @@ html[data-landing-section="faq"] .landing-header-nav a[data-nav="faq"]::after {
   max-width: 100%;
 }
 
+/* Zapustilis badge: keep natural aspect from SVG */
+
 .auth-modal-overlay {
   position: fixed;
   inset: 0;

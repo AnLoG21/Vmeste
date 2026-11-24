@@ -1,5 +1,6 @@
 # Changelog
 
+- 2026-11-24: VC 4c live (QR-меню); badge+trackers pushed `2f8d6b5`; first VPS deploy failed (exit 255 after frontend build) — rerun failed jobs.
 - 2026-11-24: VC 4b live (СТО чек-лист); Zapustilis badge in landing/money footers (needs deploy); SaaSdom skip (WB/Ozon niche); IndexNow money ping 200.
 - 2026-11-24: Zapustilis live https://zapustilis.ru/p/vmeste (dofollow); IndexNow 200×3; GSC 12/30 indexed — `/salon`+`/avtoservis` still Crawled-not-indexed.
 - 2026-11-24: Yandex OAuth OK (user 666427228); money recrawl queue DONE; VC 4a published https://vc.ru/id6086968/3275832-kak-uiti-ot-zapisi-cherez-whatsapp-chek-list-dlya-salona-i-sto

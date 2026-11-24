@@ -1,12 +1,14 @@
 ---
 slug: vc-qr-menyu-bez-prilozheniya
 title: "QR-меню для кафе без приложения: чек-лист запуска за вечер"
-status: draft_outreach
-target: vc.ru / отраслевой блог HoReCa
+status: published
+target: vc.ru
+published_url: https://vc.ru/id6086968/3275884-qr-menyu-dlya-kafe-bez-prilozheniya-chek-list-zapuska-za-vecher
+published_at: 2026-11-24
 canonical_link: https://vsevmeste.space/blog/qr-menyu-dlya-kafe-kak-zapustit
 money_links:
   - https://vsevmeste.space/kafe
-notes: Не публиковать без ревью владельца. Факты только из context.md.
+notes: Live vc.ru id 3275884. Факты только из context.md.
 ---
 
 # QR-меню для кафе без приложения: чек-лист запуска за вечер

@@ -21,13 +21,13 @@ target_urls:
 | 3 | SaaSHub | SaaS directory | https://www.saashub.com/services/submit | `/` | owner | 2026-11-24 | Явно: no AI submit; EN-only policy — URL подготовлен, Continue вручную |
 | 4a | VC.ru | guest/expert | https://vc.ru/id6086968/3275832-kak-uiti-ot-zapisi-cherez-whatsapp-chek-list-dlya-salona-i-sto | `/salon`+`/avtoservis` | live | 2026-11-24 | Опубликовано от Андрей Логинов; ссылки salon/avtoservis/blog WhatsApp |
 | 4b | VC.ru | guest/expert | https://vc.ru/id6086968/3275869-chek-list-onlain-zapis-v-avtoservise-bez-haosa-v-chatah | `/avtoservis` | live | 2026-11-24 | Чек-лист СТО опубликован; ссылки avtoservis + blog |
-| 4c | VC.ru draft | guest/expert | `.seoagent/content/drafts/vc-qr-menyu-bez-prilozheniya.md` | `/kafe` | draft | 2026-11-24 | QR-меню без приложения — публикация владельцем |
+| 4c | VC.ru | guest/expert | https://vc.ru/id6086968/3275884-qr-menyu-dlya-kafe-bez-prilozheniya-chek-list-zapuska-za-vecher | `/kafe` | live | 2026-11-24 | QR-меню чек-лист опубликован; ссылки kafe + blog |
 | 5 | Product Radar | RU стартап-каталог | https://productradar.ru/submit/ | `/` | submitted | 2026-11-24 | Отправлено на модерацию (база проектов). Категории: Рестораны/Услуги/CRM; freemium; logo+3 slides. Модерация 7–14 дней |
 | 6 | АйтиПодиум | RU IT/SaaS каталог | https://it-podium.ru/?sort=new | `/` | live | 2026-11-24 | Карточка «Вместе» (id 19) в «Новые»; категории: Бизнес/финансы/право + Продажи/лидогенерация. Ссылка на карточке → https://vsevmeste.space/ |
 | 7 | RuTut | RU SaaS каталог | https://rutut.ru/submit | `/` | owner | 2026-11-24 | Нужен вход вендора (email) — форма /submit |
 | 8 | mregs.ru | RU SaaS каталог | https://mregs.ru/opublikovat-saas/ | `/` | owner | 2026-11-24 | Регистрация + тарифы; без аккаунта нельзя |
 | 9 | apps-market.ru | стартап-радар | https://apps-market.ru/startups | `/` | skip | 2026-11-24 | Нет публичной формы — только Telegram-канал редакции |
-| 10 | Запустились | RU каталог | https://zapustilis.ru/p/vmeste | `/` | live | 2026-11-24 | Карточка «Вместе»; dofollow; бейдж добавлен в footer (landing/money HTML) — ждёт deploy |
+| 10 | Запустились | RU каталог | https://zapustilis.ru/p/vmeste | `/` | live | 2026-11-24 | Карточка «Вместе»; dofollow; бейдж в footer (push 2f8d6b5; VPS deploy rerun) |
 | 11 | SaaSdom | RU SaaS | https://saasdom.ru/submit | `/` | skip | 2026-11-24 | Каталог под WB/Ozon (аналитика/FBS) — не fit для онлайн-записи |
 
 ## Product Radar — kit (шаг 1+)
@@ -58,6 +58,6 @@ target_urls:
 ## Next actions
 
 1. Owner: AlternativeTo (YCLIENTS/Dikidi alt), Startpack (captcha), SaaSHub (no-AI policy).
-2. Owner: publish VC draft 4c (QR-меню); Startpack/SaaSHub/AT/RuTut/mregs.
-3. Agent: deploy Zapustilis badge; VC 4c next; VkSaaS если будет аккаунт.
+2. Owner: Startpack/SaaSHub/AT/RuTut/mregs.
+3. Agent: confirm Zapustilis badge live after deploy; IndexNow after badge; VkSaaS если будет аккаунт.
 4. Лайк/апдейт карточки на it-podium.ru при смене тарифа/оффера.
