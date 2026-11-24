@@ -46,26 +46,49 @@ ensure_disk_space() {
 # Free space before swap/build — fallocate of a 1G swapfile makes a full disk worse.
 ensure_disk_space
 
-# 1 GB VPS OOMs during parallel docker builds without swap.
-if [[ ! -f /swapfile ]]; then
-  free_mb=$(( $(free_kb) / 1024 ))
-  if (( free_mb < 1200 )); then
-    echo "[deploy] skip creating swapfile (only ${free_mb} MiB free)"
-  else
-    echo "[deploy] creating 1G swapfile..."
-    if fallocate -l 1G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=1024; then
-      chmod 600 /swapfile
-      mkswap /swapfile
-      swapon /swapfile
-      grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
-    else
-      echo "[deploy] warn: could not create swapfile"
-      rm -f /swapfile
-    fi
+# Small VPS OOMs during docker builds without swap — prefer 2G.
+ensure_swap() {
+  local want_mb=2048
+  if swapon --show | grep -q '/swapfile'; then
+    return 0
   fi
-elif ! swapon --show | grep -q '/swapfile'; then
-  swapon /swapfile || true
-fi
+  if [[ -f /swapfile ]]; then
+    swapon /swapfile || true
+    return 0
+  fi
+  free_mb=$(( $(free_kb) / 1024 ))
+  if (( free_mb < want_mb + 400 )); then
+    echo "[deploy] skip creating ${want_mb}M swapfile (only ${free_mb} MiB free)"
+    return 0
+  fi
+  echo "[deploy] creating ${want_mb}M swapfile..."
+  if fallocate -l "${want_mb}M" /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count="$want_mb"; then
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  else
+    echo "[deploy] warn: could not create swapfile"
+    rm -f /swapfile
+  fi
+}
+ensure_swap
+
+# Prefer OOM-killing build/workers over the public edge (caddy/frontend).
+protect_edge_from_oom() {
+  local cid
+  for svc in caddy frontend; do
+    cid="$(docker compose -f "$COMPOSE_FILE" ps -q "$svc" 2>/dev/null || true)"
+    if [[ -n "$cid" ]]; then
+      docker inspect -f '{{.State.Pid}}' "$cid" 2>/dev/null | while read -r pid; do
+        if [[ -n "$pid" && "$pid" != "0" && -r "/proc/$pid/oom_score_adj" ]]; then
+          echo -800 > "/proc/$pid/oom_score_adj" 2>/dev/null || true
+        fi
+      done
+    fi
+  done
+}
+protect_edge_from_oom
 
 git fetch --prune origin
 git checkout main
@@ -98,6 +121,9 @@ ensure_base_image python:3.12-slim-bookworm
 ensure_base_image node:20-alpine
 ensure_base_image nginx:1.27-alpine
 docker compose -f "$COMPOSE_FILE" stop celery_worker celery_beat || true
+# Free RAM before image builds (agents-team is heavy on small VPS).
+docker compose -f "$COMPOSE_FILE" --profile agents stop agents_team 2>/dev/null || true
+protect_edge_from_oom
 ensure_disk_space
 
 if [[ "$BUILD_WEB" == "true" ]]; then
@@ -119,29 +145,14 @@ else
   echo "[deploy] skip frontend image rebuild (no frontend changes)"
 fi
 
-# Recreate only what we rebuilt. Do NOT force-recreate caddy on every deploy —
-# that drops the edge briefly and Google treats it as a site-wide outage
-# (URL Inspection → «недоступна из-за проблемы со всем сайтом»).
-# Recreate caddy only when Caddyfile/compose edge config changed, or CADDY_RECREATE=1.
-RECREATE_CADDY=false
-case "${CADDY_RECREATE:-0}" in 1|true|yes|YES) RECREATE_CADDY=true ;; esac
-if git diff --name-only HEAD@{1} HEAD 2>/dev/null | grep -Eq '(^|/)(Caddyfile|Caddyfile\.http-only|docker-compose\.prod\.yml)$'; then
-  RECREATE_CADDY=true
-fi
-# After hard reset to origin/main, HEAD@{1} may be wrong — also check working tree vs last deploy marker.
-if [[ -f .deploy-caddy-hash ]]; then
-  CUR_HASH="$(cat Caddyfile docker-compose.prod.yml 2>/dev/null | sha256sum | awk '{print $1}')"
-  OLD_HASH="$(cat .deploy-caddy-hash 2>/dev/null || true)"
-  if [[ -n "$CUR_HASH" && "$CUR_HASH" != "$OLD_HASH" ]]; then
-    RECREATE_CADDY=true
-  fi
-else
-  RECREATE_CADDY=true
-fi
-
+# Recreate only app images we rebuilt. Caddyfile is bind-mounted — reload, do not
+# force-recreate (edge blip + Google «проблема со всем сайтом»). Set CADDY_RECREATE=1
+# only when the caddy *container* definition itself must change.
 APP_SERVICES=()
 if [[ "$BUILD_WEB" == "true" ]]; then APP_SERVICES+=(web); fi
 if [[ "$BUILD_FRONTEND" == "true" ]]; then APP_SERVICES+=(frontend); fi
+
+protect_edge_from_oom
 
 if ((${#APP_SERVICES[@]})); then
   echo "[deploy] recreate app services: ${APP_SERVICES[*]}"
@@ -153,15 +164,24 @@ fi
 # Workers can bounce independently; they are not on the public edge.
 docker compose -f "$COMPOSE_FILE" up -d --force-recreate --no-deps celery_worker celery_beat || true
 
-if [[ "$RECREATE_CADDY" == "true" ]]; then
-  echo "[deploy] Caddyfile/compose changed — recreate caddy (brief edge blip)"
-  docker compose -f "$COMPOSE_FILE" up -d --force-recreate --no-deps caddy
-else
-  echo "[deploy] keep caddy running (reload config if bind-mounted)"
-  docker compose -f "$COMPOSE_FILE" exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null \
-    || docker compose -f "$COMPOSE_FILE" up -d --no-deps caddy
-fi
+case "${CADDY_RECREATE:-0}" in
+  1|true|yes|YES)
+    echo "[deploy] CADDY_RECREATE=1 — force-recreate caddy"
+    docker compose -f "$COMPOSE_FILE" up -d --force-recreate --no-deps caddy
+    ;;
+  *)
+    if docker compose -f "$COMPOSE_FILE" ps --status running caddy 2>/dev/null | grep -q caddy; then
+      echo "[deploy] reload bind-mounted Caddyfile (edge stays up)"
+      docker compose -f "$COMPOSE_FILE" exec -T caddy caddy reload --config /etc/caddy/Caddyfile \
+        || docker compose -f "$COMPOSE_FILE" up -d --no-deps caddy
+    else
+      echo "[deploy] caddy not running — start"
+      docker compose -f "$COMPOSE_FILE" up -d --no-deps caddy
+    fi
+    ;;
+esac
 cat Caddyfile docker-compose.prod.yml 2>/dev/null | sha256sum | awk '{print $1}' > .deploy-caddy-hash || true
+protect_edge_from_oom
 
 # Keep tunnel up if the profile/service exists (HTTPS via Cloudflare). Never force-recreate
 # unless missing — tunnel reconnect churn looks like site-wide downtime to Googlebot.
