@@ -46,7 +46,8 @@ Cluster order: salon-booking (ICP) → autoservice → cafe-qr → compare-crm
 - [ ] Weekly `seoagent indexing` until `/salon`+`/avtoservis` Indexed
 - [x] Deepen katalog-uslug-i-ceny + vidzhet-online-zapisi + kak-perejti-s-drugoj-crm
 - [x] Fast deploy: path heuristics + CI-dist path (workflow YAML ждёт `gh auth` scope workflow)
-- [ ] City pages → ссылки на /salon /avtoservis /kafe
-- [ ] Wordstat map → keywords.md (фаза 2)
+- [x] City pages → блок бизнеса со ссылками на /salon /avtoservis /kafe
+- [x] Keyword→URL map (`.seoagent/strategy/keyword-url-map.md`); Wordstat API — когда будет ключ
+- [x] docs/FAST-DEPLOY.md — шаги для CI workflow scope
 - [ ] Fill `.seoagent/okf/` for AEO
 - [ ] 4 внешних размещения (каталоги / гостевые)
