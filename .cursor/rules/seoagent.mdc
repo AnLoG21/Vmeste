@@ -1,0 +1,11 @@
+---
+description: SEOAgent — persistent AI SEO agent for audits, keywords, content, and technical SEO; state in .seoagent/
+alwaysApply: true
+---
+
+# SEOAgent
+
+This repo uses SEOAgent. Its state lives in `.seoagent/`.
+
+- At the start of each session, run `seoagent sync`. If it lists pending inbox actions, work them unless the user asked for something else first: read `.seoagent/inbox/README.md`, do each one, then `seoagent ack <id>`.
+- For that work and any SEO, content, or search-ranking task, first read `.agents/skills/seoagent/SKILL.md` — it is the working contract.

@@ -1,0 +1,88 @@
+# Вместе (Vmeste / vsevmeste)
+
+> Вместе — облачная платформа для онлайн-записи клиентов и автоматизации бизнеса: каталог услуг, кабинет, чаты, уведомления, интеграции календарей и эквайринга; бесплатная запись без срока, тариф «Бизнес» 990 ₽/мес. Один аккаунт — несколько сервисов платформы (запись, маркетплейсы, Vsayte и др.).
+
+## Pages
+
+- [Вместе (vsevmeste) — онлайн-запись клиентов и автоматизация бизнеса](https://vsevmeste.space/): Вместе (vsevmeste.space) — онлайн-запись, каталог услуг и чаты. Запись бесплатно без срока, Бизнес — 990 ₽/мес. Салоны, автосервисы, кафе.
+- [404](https://vsevmeste.space/404)
+- [Скачать Android-приложение Вместе — RuStore и APK](https://vsevmeste.space/android): Приложение Вместе в RuStore: системные push и виджет записей. Ярлык «На экран Домой» из Chrome — это сайт, не приложение. Есть запасной APK.
+- [Сервисы платформы — Вменю, Вмагазине, Вквартире | Вместе](https://vsevmeste.space/apps): Микросервисы Вместе: Вменю (рецепты), Вмагазине (витрины), Вквартире (жильё) и голосовой ассистент. Один аккаунт, без отдельных регистраций.
+- [Программа для автосервиса: запись и приёмка — Вместе](https://vsevmeste.space/avtoservis): Онлайн-запись в автосервис, VIN и госномер, интерактивная приёмка, статусы ремонта и чат с клиентом. Бесплатный тариф без срока, Бизнес — 990 ₽/мес.
+- [Блог Вместе — для владельцев салонов, СТО и кафе](https://vsevmeste.space/blog): Гайды для бизнеса: запись вместо WhatsApp, предоплата и неприходы, напоминания, абонементы, YCLIENTS и Dikidi, виджет, QR-меню. Без воды — к регистрации.
+- [Abonementy I Loyalnost V Salone](https://vsevmeste.space/blog/abonementy-i-loyalnost-v-salone)
+- [Analitika Dlya Vladelca Salona](https://vsevmeste.space/blog/analitika-dlya-vladelca-salona)
+- [Besplatnyj Tarif Vmeste Chto Vhodit](https://vsevmeste.space/blog/besplatnyj-tarif-vmeste-chto-vhodit)
+- [Чаты и сообщения о записи во Вместе — гайд со скринами](https://vsevmeste.space/blog/chaty-i-soobshcheniya-o-zapisi): Где чаты с клиентами и шаблоны подтверждения/отмены записи. Скрины кабинета Вместе: Чаты и Организация → сообщения.
+- [Чем Вместе отличается от агрегаторов записи — блог Вместе](https://vsevmeste.space/blog/chem-vmeste-otlichaetsya-ot-aggregatorov): Агрегатор продаёт витрину чужих объявлений. Вместе — ваш кабинет: запись, чаты, меню, сотрудники и публичная страница. Сравнение без воды.
+- [Вместе vs YCLIENTS и Dikidi: сравнение для салона и сервиса](https://vsevmeste.space/blog/chem-vmeste-otlichaetsya-ot-yclients-i-dikidi): Чем Вместе отличается от YCLIENTS и Dikidi: свой кабинет без комиссии с записи, сценарии для салона, автосервиса и QR-меню кафе, бесплатный тариф без срока. Честное сравнение для выбора.
+- [Ekran Kuhni Dlya Kafe](https://vsevmeste.space/blog/ekran-kuhni-dlya-kafe)
+- [Galereya I Grafik Organizacii](https://vsevmeste.space/blog/galereya-i-grafik-organizacii)
+- [Golosovye Napominaniya O Zapisi](https://vsevmeste.space/blog/golosovye-napominaniya-o-zapisi)
+- [Individualnaya Avtomatizaciya](https://vsevmeste.space/blog/individualnaya-avtomatizaciya)
+- [Kabinet Klienta Istoria Vizitov](https://vsevmeste.space/blog/kabinet-klienta-istoria-vizitov)
+- [Kabinet Sellera Ozon Wildberries](https://vsevmeste.space/blog/kabinet-sellera-ozon-wildberries)
+- [Как добавить сотрудника и настроить права — Вместе](https://vsevmeste.space/blog/kak-dobavit-sotrudnika-i-prava): Скрины кабинета: приглашение мастера или администратора, роли и права. Тариф «Бизнес» 990 ₽/мес. Пошагово для салона и сервиса.
+- [Kak Nastroit Intervaly Raboty](https://vsevmeste.space/blog/kak-nastroit-intervaly-raboty)
+- [Как настроить онлайн-запись в салоне красоты — Вместе](https://vsevmeste.space/blog/kak-nastroit-online-zapis-v-salone): Пошагово: каталог услуг, график мастеров, ссылка для клиентов и карта. Онлайн-запись в салоне без мессенджер-хаоса — на платформе Вместе.
+- [Как настроить запись к нескольким мастерам — Вместе](https://vsevmeste.space/blog/kak-nastroit-zapis-neskolkih-masterov): Онлайн-запись для салона с несколькими мастерами: роли сотрудников, график, услуги и публичная ссылка. Без отдельного администратора на телефоне.
+- [Kak Otkryt Demo Kabinet](https://vsevmeste.space/blog/kak-otkryt-demo-kabinet)
+- [Kak Perejti S Drugoj Crm](https://vsevmeste.space/blog/kak-perejti-s-drugoj-crm)
+- [Как поделиться ссылкой записи с клиентами — Вместе](https://vsevmeste.space/blog/kak-podelitsya-ssylkoj-zapisi-klientam): Где взять ссылку /w/… и iframe виджета в кабинете Вместе: скрины настроек организации и публичной записи. Отправьте клиентам или вставьте на сайт.
+- [Как привлечь клиентов через карту организаций — Вместе](https://vsevmeste.space/blog/kak-privlech-klientov-cherez-kartu): Как попасть на карту Вместе и получать клиентов рядом: адрес, сфера, фото, запись с карточки. Советы для салонов, СТО и кафе в Москве и СПб.
+- [Kak Snizit Neprihody Predoplata](https://vsevmeste.space/blog/kak-snizit-neprihody-predoplata)
+- [Kak Zapisat Klienta Iz Kabineta](https://vsevmeste.space/blog/kak-zapisat-klienta-iz-kabineta)
+- [Как запустить бизнес на Вместе за 15 минут — чек-лист](https://vsevmeste.space/blog/kak-zapustit-biznes-na-vmeste-za-15-minut): Пошаговый чек-лист: регистрация организации, каталог услуг или меню, ссылка клиентам. Онлайн-запись бесплатно без срока. Для салона, автосервиса и кафе.
+- [Как запустить интернет-витрину магазина онлайн — Вместе](https://vsevmeste.space/blog/kak-zapustit-vitrinu-magazina): Как открыть публичную витрину магазина на Вместе: каталог, самовывоз и доставка, ссылка /s/… без отдельного сайта. Для салонов, СТО и магазинов.
+- [Календарь записей в кабинете Вместе — где смотреть и бронировать](https://vsevmeste.space/blog/kalendar-zapisey-v-kabinete): Гайд со скринами: вкладка «Записи», календарь интервалов, ручная бронь клиента. Как вести день салона или сервиса во Вместе.
+- [Каталог услуг и цены во Вместе — как настроить](https://vsevmeste.space/blog/katalog-uslug-i-ceny): Скрины: Меню → Услуги и категории. Загрузка шаблона сферы, цены, длительность, лояльность и абонементы. Для салона и сервиса.
+- [Menyu S Foto I Kbzhu V Kafe](https://vsevmeste.space/blog/menyu-s-foto-i-kbzhu-v-kafe)
+- [Napominaniya O Zapisi Klientam](https://vsevmeste.space/blog/napominaniya-o-zapisi-klientam)
+- [Neskolko Filialov V Odnom Kabinete](https://vsevmeste.space/blog/neskolko-filialov-v-odnom-kabinete)
+- [Ochered Ozhidaniya Esli Net Slotov](https://vsevmeste.space/blog/ochered-ozhidaniya-esli-net-slotov)
+- [Online Zapis V Avtoservise](https://vsevmeste.space/blog/online-zapis-v-avtoservise)
+- [Oplata Zakazov V Kafe](https://vsevmeste.space/blog/oplata-zakazov-v-kafe)
+- [Otzyvy I Rejting Organizacii](https://vsevmeste.space/blog/otzyvy-i-rejting-organizacii)
+- [Plan Zala I Qr Stolov V Kafe](https://vsevmeste.space/blog/plan-zala-i-qr-stolov-v-kafe)
+- [Podtverzhdenie I Otmena Zapisi](https://vsevmeste.space/blog/podtverzhdenie-i-otmena-zapisi)
+- [Priemka V Avtoservise Foto Defektov](https://vsevmeste.space/blog/priemka-v-avtoservise-foto-defektov)
+- [Prilozhenie Android Dlya Salona](https://vsevmeste.space/blog/prilozhenie-android-dlya-salona)
+- [Программа для автосервиса: на что смотреть при выборе — Вместе](https://vsevmeste.space/blog/programma-dlya-avtoservisa-chto-vybrat): Чек-лист выбора программы для СТО: запись, VIN, приёмка, статусы ремонта, чат с клиентом. Как Вместе закрывает цепочку от слота до «готово».
+- [Promokod Na Tarif Biznes](https://vsevmeste.space/blog/promokod-na-tarif-biznes)
+- [Publichnaya Stranica Organizacii](https://vsevmeste.space/blog/publichnaya-stranica-organizacii)
+- [QR-меню для кафе: как запустить без приложения для гостя — Вместе](https://vsevmeste.space/blog/qr-menyu-dlya-kafe-kak-zapustit): Как сделать QR-меню в кафе: план зала, PIN стола, карточки блюд, заказ за столом / навынос / доставка. Без установки приложения гостем — на Вместе.
+- [Registraciya I Podtverzhdenie Email](https://vsevmeste.space/blog/registraciya-i-podtverzhdenie-email)
+- [Samovyvoz Iz Magazina](https://vsevmeste.space/blog/samovyvoz-iz-magazina)
+- [Sinhronizaciya S Google I Yandex Kalendarem](https://vsevmeste.space/blog/sinhronizaciya-s-google-i-yandex-kalendarem)
+- [Sms Napominaniya O Zapisi](https://vsevmeste.space/blog/sms-napominaniya-o-zapisi)
+- [Telegram Napominaniya Organizacii](https://vsevmeste.space/blog/telegram-napominaniya-organizacii)
+- [Udalenie Akkaunta I 152 Fz](https://vsevmeste.space/blog/udalenie-akkaunta-i-152-fz)
+- [Uvedomleniya V Max](https://vsevmeste.space/blog/uvedomleniya-v-max)
+- [Виджет онлайн-записи на сайт салона или сервиса — Вместе](https://vsevmeste.space/blog/vidzhet-online-zapisi-na-sajt): Как встроить виджет онлайн-записи Вместе на свой сайт: ссылка /w/…, для кого подходит, чем отличается от переписки в мессенджере. Без разработчика за вечер.
+- [Vin I Statusy Remonta](https://vsevmeste.space/blog/vin-i-statusy-remonta)
+- [Vkvartire Arenda I Pokupka](https://vsevmeste.space/blog/vkvartire-arenda-i-pokupka)
+- [Vmagazine Poisk Magazinov](https://vsevmeste.space/blog/vmagazine-poisk-magazinov)
+- [Vmenyu Recepty I Lenta](https://vsevmeste.space/blog/vmenyu-recepty-i-lenta)
+- [Vmeste V Moskve](https://vsevmeste.space/blog/vmeste-v-moskve)
+- [Vmeste V Sankt Peterburge](https://vsevmeste.space/blog/vmeste-v-sankt-peterburge)
+- [Whatsapp Ishodyashchie Napominaniya](https://vsevmeste.space/blog/whatsapp-ishodyashchie-napominaniya)
+- [Zapis Dlya Solo Mastera](https://vsevmeste.space/blog/zapis-dlya-solo-mastera)
+- [Zapis Vmesto Whatsapp](https://vsevmeste.space/blog/zapis-vmesto-whatsapp)
+- [Zony Dostavki Na Karte](https://vsevmeste.space/blog/zony-dostavki-na-karte)
+- [Для бизнеса — онлайн-запись, QR-меню и кабинет | Вместе](https://vsevmeste.space/businesses): Вместе для салонов, автосервисов и кафе: онлайн-запись без комиссии с визита, QR-меню, чаты, сотрудники. Бесплатный тариф без срока, Бизнес — 990 ₽/мес. Запуск за вечер.
+- [Chelyabinsk](https://vsevmeste.space/city/chelyabinsk)
+- [Ekaterinburg](https://vsevmeste.space/city/ekaterinburg)
+- [Kazan](https://vsevmeste.space/city/kazan)
+- [Krasnodar](https://vsevmeste.space/city/krasnodar)
+- [Moscow](https://vsevmeste.space/city/moscow)
+- [Nizhny](https://vsevmeste.space/city/nizhny)
+- [Novosibirsk](https://vsevmeste.space/city/novosibirsk)
+- [Rostov](https://vsevmeste.space/city/rostov)
+- [Samara](https://vsevmeste.space/city/samara)
+- [Spb](https://vsevmeste.space/city/spb)
+- [Контакты и реквизиты — Вместе](https://vsevmeste.space/contacts): Контакты и реквизиты сервиса Вместе: самозанятый Логинов А.А., ИНН 971500759750, Москва.
+- [QR-меню и заказы для кафе и ресторанов — Вместе](https://vsevmeste.space/kafe): План зала, QR и PIN на столы, меню с фото и ккал, заказ за столом / навынос / доставка и оплата онлайн. Бесплатный старт, Бизнес — 990 ₽/мес.
+- [Публичная оферта — Вместе](https://vsevmeste.space/offer): Публичная оферта сервиса Вместе: условия подписки, тарифы, порядок оказания услуг.
+- [Privacy](https://vsevmeste.space/privacy)
+- [Онлайн-запись для салона красоты — Вместе](https://vsevmeste.space/salon): Программа онлайн-записи для салона красоты: каталог услуг, календарь мастеров, чат с клиентом, отзывы и карта. Запись бесплатно, Бизнес — 990 ₽/мес.
+- [Yandex 84ec889f078f5b2d](https://vsevmeste.space/yandex_84ec889f078f5b2d)

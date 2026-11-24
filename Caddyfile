@@ -27,12 +27,17 @@ www.{$DOMAIN} {
 
 	# Динамический sitemap (организации + города) — для Яндекс.Вебмастера / Google.
 	# rewrite должен быть снаружи reverse_proxy (иначе Caddy падает / отдаёт 5xx).
+	# Короткие таймауты: при деплое/нагрузке бэкенда боты не должны висеть минутами.
 	handle /sitemap.xml {
 		rewrite * /api/users/sitemap.xml
 		reverse_proxy web:8000 {
 			header_up Host {host}
 			header_up X-Forwarded-Proto {scheme}
 			header_up X-Forwarded-Host {host}
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 15s
+			}
 		}
 	}
 

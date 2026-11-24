@@ -1,0 +1,8 @@
+# SEOAgent local files
+.legacy/
+content/images/*
+!content/images/.gitkeep
+.pull-receipt.json
+.ack-queue.json
+.sync.lock
+.sync-cursor
