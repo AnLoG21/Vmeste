@@ -11,6 +11,8 @@ skill_hash: ed928dfdf3f2ed13f0ba4320b08e56f88209b2fe7e9c1b7ff69d32f635447115
 live_url: "https://vsevmeste.space"
 content_dir: frontend/public/blog
 schedule: "none — no Cursor weekday agent scheduler in this harness; cadence = owner opens Agent and says continue SEO / process inbox; optional host cron: 0 9 * * 1-5 seoagent sync --silent"
+facts_checked_commit: 0e03b10a7c074b822b7e981d4f388aa09f0e2ead
+facts_checked_at: "2026-11-24T11:03:23.969Z"
 ---
 # SEOAgent Project — vsevmeste.space
 

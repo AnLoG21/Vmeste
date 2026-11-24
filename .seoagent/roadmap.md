@@ -44,12 +44,13 @@ Cluster order: salon-booking (ICP) → autoservice → cafe-qr → compare-crm
 - [x] GSC Request indexing `/salon` `/avtoservis` (ожидаем Indexed)
 - [x] Яндекс: токен OK; ручной переобход money URLs **DONE** 2026-11-24 (`/`, `/salon`, `/avtoservis`, `/kafe`, compare)
 - [x] РСЯ: слот только в блоге (`rsya-blog.js` + `rsya-config.json`, enabled:false) — `audit/yandex-rsya.md`; money pages запрещены
-- [x] IndexNow key file `frontend/public/485582172a16a2d5afa94ef65a74603e.txt` (inbox 7199, awaiting deploy)
-- [ ] Weekly `seoagent indexing` until `/salon`+`/avtoservis` Indexed (snapshot 2026-11-24: **12/30**, salon/avtoservis = Crawled not indexed)
+- [x] IndexNow key file `frontend/public/485582172a16a2d5afa94ef65a74603e.txt` (inbox 7199; shipped `309d0e3`)
+- [ ] Weekly `seoagent indexing` until `/salon`+`/avtoservis` Indexed (snapshot 2026-11-24 15:13Z: **15/36**, salon/avtoservis = Crawled not indexed; cross-links + IndexNow shipped)
 - [x] Deepen katalog-uslug-i-ceny + vidzhet-online-zapisi + kak-perejti-s-drugoj-crm
 - [x] Fast deploy: path heuristics + CI-dist path (CI workflow enabled on main `d35e08f`)
 - [x] City pages → блок бизнеса со ссылками на /salon /avtoservis /kafe
 - [x] Keyword→URL map (`.seoagent/strategy/keyword-url-map.md`); Wordstat API — когда будет ключ
 - [x] docs/FAST-DEPLOY.md — шаги для CI workflow scope
 - [x] Fill `.seoagent/okf/` for AEO (published `frontend/public/.well-known/okf/`)
-- [ ] Внешние размещения — `strategy/outreach-placements.md` (Product Radar **submitted** 2026-11-24; Startpack/SaaSHub/AT = owner; VC drafts готовы, publish = owner)
+- [x] Deepen `/avtoservis` pillar (FAQ + объём + SoftwareApplication) — ship 2026-11-24
+- [ ] Внешние размещения — `strategy/outreach-placements.md` (Product Radar **submitted**; IT-Podium **live** id 19; Startpack/SaaSHub/AT = owner; VC drafts = owner publish)

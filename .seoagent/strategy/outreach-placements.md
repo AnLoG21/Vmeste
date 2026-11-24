@@ -23,6 +23,7 @@ target_urls:
 | 4b | VC.ru draft | guest/expert | `.seoagent/content/drafts/vc-cheklist-sto-online-zapis.md` | `/avtoservis` | draft | 2026-11-24 | Чек-лист СТО — публикация владельцем |
 | 4c | VC.ru draft | guest/expert | `.seoagent/content/drafts/vc-qr-menyu-bez-prilozheniya.md` | `/kafe` | draft | 2026-11-24 | QR-меню без приложения — публикация владельцем |
 | 5 | Product Radar | RU стартап-каталог | https://productradar.ru/submit/ | `/` | submitted | 2026-11-24 | Отправлено на модерацию (база проектов). Категории: Рестораны/Услуги/CRM; freemium; logo+3 slides. Модерация 7–14 дней |
+| 6 | АйтиПодиум | RU IT/SaaS каталог | https://it-podium.ru/?sort=new | `/` | live | 2026-11-24 | Карточка «Вместе» (id 19) в «Новые»; категории: Бизнес/финансы/право + Продажи/лидогенерация. Ссылка на карточке → https://vsevmeste.space/ |
 
 ## Product Radar — kit (шаг 1+)
 
@@ -51,7 +52,7 @@ target_urls:
 
 ## Next actions
 
-1. Submit AlternativeTo as YCLIENTS/Dikidi alternative.
-2. Submit Startpack listing.
-3. Submit SaaSHub listing.
-4. Finish VC draft → owner publish from own account.
+1. Owner: AlternativeTo (YCLIENTS/Dikidi alt), Startpack (captcha), SaaSHub (no-AI policy).
+2. Owner: publish VC drafts 4a–4c from own account.
+3. Agent: ещё 1–2 бесплатных RU-каталога без captcha/login (после IT-Podium).
+4. Лайк/апдейт карточки на it-podium.ru при смене тарифа/оффера.

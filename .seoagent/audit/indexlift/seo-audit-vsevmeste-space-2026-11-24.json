@@ -1,0 +1,2090 @@
+{
+  "schema_version": "2.0.0",
+  "metadata": {
+    "url": "https://vsevmeste.space/salon",
+    "mode": "single-page",
+    "tier": "standard",
+    "engines": [
+      "google",
+      "yandex"
+    ],
+    "generatedAt": "2026-11-24T12:23:06.896Z"
+  },
+  "summary": {
+    "score": 100,
+    "grade": "A",
+    "confidence": "high",
+    "confidence_reason": "The score is backed by a broad set of applicable page-level checks.",
+    "applicable_checks": 59,
+    "pages_crawled": 1,
+    "failures": 0,
+    "warnings": 2,
+    "passes": 69,
+    "context_only": 6
+  },
+  "measured": [
+    "raw HTML fetch",
+    "page-level title, description, headings, links, images, and assets",
+    "robots.txt and sitemap as supporting site context",
+    "Google and Yandex page-level metadata and markup heuristics",
+    "lightweight HTML/resource performance heuristics",
+    "schema type detection from JSON-LD"
+  ],
+  "not_measured": [
+    "real browser-rendered DOM after JavaScript execution",
+    "Core Web Vitals field data and lab metrics",
+    "paid backlink, SERP, or competitor datasets",
+    "off-page authority signals"
+  ],
+  "crawl": {
+    "mode": "single-page",
+    "startUrl": "https://vsevmeste.space/salon",
+    "origin": "https://vsevmeste.space",
+    "pagesCrawled": 1,
+    "pagesDiscovered": 36,
+    "errors": [],
+    "robots": {
+      "url": "https://vsevmeste.space/robots.txt",
+      "status": 200,
+      "exists": true,
+      "sitemaps": [
+        "https://vsevmeste.space/sitemap.xml"
+      ]
+    },
+    "sitemaps": [
+      {
+        "url": "https://vsevmeste.space/sitemap.xml",
+        "status": 200,
+        "ok": true,
+        "finalUrl": "https://vsevmeste.space/sitemap.xml",
+        "urls": [
+          "https://vsevmeste.space/",
+          "https://vsevmeste.space/businesses",
+          "https://vsevmeste.space/salon",
+          "https://vsevmeste.space/avtoservis",
+          "https://vsevmeste.space/kafe",
+          "https://vsevmeste.space/blog",
+          "https://vsevmeste.space/blog/kak-zapustit-biznes-na-vmeste-za-15-minut",
+          "https://vsevmeste.space/blog/chem-vmeste-otlichaetsya-ot-yclients-i-dikidi",
+          "https://vsevmeste.space/blog/vidzhet-online-zapisi-na-sajt",
+          "https://vsevmeste.space/blog/kak-nastroit-online-zapis-v-salone",
+          "https://vsevmeste.space/blog/programma-dlya-avtoservisa-chto-vybrat",
+          "https://vsevmeste.space/blog/qr-menyu-dlya-kafe-kak-zapustit",
+          "https://vsevmeste.space/blog/chem-vmeste-otlichaetsya-ot-aggregatorov",
+          "https://vsevmeste.space/blog/kak-privlech-klientov-cherez-kartu",
+          "https://vsevmeste.space/blog/kak-zapustit-vitrinu-magazina",
+          "https://vsevmeste.space/blog/kak-nastroit-zapis-neskolkih-masterov",
+          "https://vsevmeste.space/blog/kak-podelitsya-ssylkoj-zapisi-klientam",
+          "https://vsevmeste.space/blog/kalendar-zapisey-v-kabinete",
+          "https://vsevmeste.space/blog/katalog-uslug-i-ceny",
+          "https://vsevmeste.space/blog/kak-dobavit-sotrudnika-i-prava",
+          "https://vsevmeste.space/blog/chaty-i-soobshcheniya-o-zapisi",
+          "https://vsevmeste.space/apps",
+          "https://vsevmeste.space/android",
+          "https://vsevmeste.space/contacts",
+          "https://vsevmeste.space/offer",
+          "https://vsevmeste.space/privacy",
+          "https://vsevmeste.space/city/moscow",
+          "https://vsevmeste.space/city/spb",
+          "https://vsevmeste.space/city/ekaterinburg",
+          "https://vsevmeste.space/city/kazan",
+          "https://vsevmeste.space/city/novosibirsk",
+          "https://vsevmeste.space/city/nizhny",
+          "https://vsevmeste.space/city/rostov",
+          "https://vsevmeste.space/city/krasnodar",
+          "https://vsevmeste.space/city/samara",
+          "https://vsevmeste.space/city/chelyabinsk"
+        ],
+        "childSitemaps": []
+      }
+    ]
+  },
+  "page_snapshot": {
+    "mode": "single-page",
+    "url": "https://vsevmeste.space/salon",
+    "final_url": "https://vsevmeste.space/salon",
+    "status": 200,
+    "content_type": "text/html",
+    "response_time_ms": 14,
+    "html_bytes": 11217,
+    "html_weight_human": "11.0 KB",
+    "redirect_hops": 0,
+    "redirect_chain": [
+      {
+        "url": "https://vsevmeste.space/salon",
+        "status": 200,
+        "location": null
+      }
+    ],
+    "crawlable_by_robots": true,
+    "site_context": {
+      "robots_exists": true,
+      "robots_url": "https://vsevmeste.space/robots.txt",
+      "sitemap_available": true,
+      "sitemap_count": 1,
+      "sitemap_urls_discovered": 36
+    },
+    "title": {
+      "value": "Онлайн-запись для салона красоты — Вместе",
+      "length": 41
+    },
+    "description": {
+      "value": "Онлайн-запись для салона красоты: каталог, мастера, чат, карта. Без комиссии с записи. Бесплатно без срока, Бизнес — 990 ₽/мес. Альтернатива YCLIENTS и WhatsApp.",
+      "length": 161
+    },
+    "semantics": {
+      "first_paragraph": "Онлайн-запись для салона красоты во Вместе — это публичная ссылка и кабинет: клиент сам выбирает услугу, мастера и свободный слот, а вы видите заявку в календаре. Каталог, чат, отзывы и карта организаций входят в один аккаунт. Комиссии с каждой записи нет. Запись бесплатна без срока; тариф «Бизнес» — 990 ₽/мес для сотрудников и приоритетной поддержки. Сервис работает онлайн по всей России (поддержка и юр. адрес указаны для Москвы).",
+      "paragraph_count": 15,
+      "title_h1_overlap": 1,
+      "title_description_overlap": 0.83,
+      "main_content_ratio": 0.98,
+      "main_word_count": 533,
+      "body_word_count": 546,
+      "short_paragraphs": 0,
+      "long_paragraphs": 0,
+      "repeated_headings": 0,
+      "repeated_heading_samples": []
+    },
+    "canonical": "https://vsevmeste.space/salon",
+    "lang": "ru",
+    "charset": "UTF-8",
+    "viewport": "width=device-width, initial-scale=1.0",
+    "meta_robots": "",
+    "x_robots_tag": "",
+    "favicon": "https://vsevmeste.space/favicon.svg",
+    "word_count": 533,
+    "headings": {
+      "counts": {
+        "h1": 1,
+        "h2": 9,
+        "h3": 3,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0
+      },
+      "values": {
+        "h1": [
+          "Онлайн-запись для салона красоты"
+        ],
+        "h2": [
+          "Что входит в программу для салона",
+          "Как запустить онлайн-запись за вечер",
+          "Чем отличается от таблиц и мессенджеров",
+          "Вместе или YCLIENTS / Dikidi",
+          "Кому подходит",
+          "Тарифы",
+          "Частые вопросы",
+          "Встроить запись на сайт",
+          "Другие сценарии Вместе"
+        ],
+        "h3": [
+          "Как клиент записывается в салон?",
+          "Можно ли вести нескольких мастеров?",
+          "Как снизить неприходы?"
+        ],
+        "h4": [],
+        "h5": [],
+        "h6": []
+      }
+    },
+    "links": {
+      "total": 32,
+      "internal": 32,
+      "external": 0,
+      "empty_anchor_text": 0,
+      "weak_internal_anchor_text": 0,
+      "generic_anchor_text": 0,
+      "generic_anchor_samples": [],
+      "samples": [
+        {
+          "href": "https://vsevmeste.space/",
+          "text": "В Вместе",
+          "rel": ""
+        },
+        {
+          "href": "https://vsevmeste.space/blog",
+          "text": "Блог",
+          "rel": ""
+        },
+        {
+          "href": "https://vsevmeste.space/businesses",
+          "text": "Для бизнеса",
+          "rel": ""
+        },
+        {
+          "href": "https://vsevmeste.space/salon",
+          "text": "Салон",
+          "rel": ""
+        },
+        {
+          "href": "https://vsevmeste.space/avtoservis",
+          "text": "Автосервис",
+          "rel": ""
+        },
+        {
+          "href": "https://vsevmeste.space/kafe",
+          "text": "Кафе",
+          "rel": ""
+        },
+        {
+          "href": "https://vsevmeste.space/?from=landing&register=1",
+          "text": "Создать организацию",
+          "rel": ""
+        },
+        {
+          "href": "https://vsevmeste.space/?from=salon&register=1",
+          "text": "Создать салон бесплатно",
+          "rel": ""
+        },
+        {
+          "href": "https://vsevmeste.space/w/demo-salon",
+          "text": "Демо-запись",
+          "rel": ""
+        },
+        {
+          "href": "https://vsevmeste.space/blog/kak-zapustit-biznes-na-vmeste-za-15-minut",
+          "text": "Запуск за 15 минут",
+          "rel": ""
+        },
+        {
+          "href": "https://vsevmeste.space/blog/chem-vmeste-otlichaetsya-ot-yclients-i-dikidi",
+          "text": "vs YCLIENTS / Dikidi",
+          "rel": ""
+        },
+        {
+          "href": "https://vsevmeste.space/blog/kak-nastroit-online-zapis-v-salone",
+          "text": "настройка записи в салоне",
+          "rel": ""
+        }
+      ]
+    },
+    "images": {
+      "total": 0,
+      "missing_alt": 0,
+      "lazy_loaded": 0,
+      "without_lazy": 0,
+      "missing_dimensions": 0,
+      "modern_formats": 0,
+      "samples_missing_alt": []
+    },
+    "resources": {
+      "scripts": 1,
+      "inline_scripts": 1,
+      "inline_script_bytes": 2332,
+      "stylesheets": 2,
+      "inline_style_bytes": 0,
+      "images": 0,
+      "total": 3
+    },
+    "business_signals": {
+      "commercial_or_local_intent": false,
+      "phone_count": 0,
+      "email_count": 0,
+      "address_mentions": 0,
+      "tel_links": 0,
+      "mailto_links": 0,
+      "messenger_links": 1,
+      "messenger_samples": [
+        "https://vsevmeste.space/blog/zapis-vmesto-whatsapp"
+      ],
+      "cta_count": 0,
+      "cta_samples": [],
+      "button_count": 0,
+      "button_samples": [],
+      "form_count": 0,
+      "trust_marker_count": 4,
+      "trust_marker_samples": [
+        "Каталог, чат, отзывы и карта организаций входят в один аккаунт.",
+        "Создать салон бесплатно · Демо-запись · Запуск за 15 минут · vs YCLIENTS / Dikidi Что входит в программу для салона Г...",
+        "Вместе или YCLIENTS / Dikidi Крупные CRM тянут склад, зарплаты и кассу — полезно сети, избыточно соло-мастеру и салон...",
+        "Честное сравнение: Вместе vs YCLIENTS и Dikidi и отличие от агрегаторов."
+      ]
+    },
+    "structured_data": {
+      "json_ld_blocks": 1,
+      "json_ld_valid_blocks": 1,
+      "json_ld_invalid_blocks": 0,
+      "has_open_graph": true,
+      "has_twitter_card": true,
+      "has_local_business": false,
+      "has_organization": false,
+      "has_breadcrumbs": true,
+      "has_faq_page": true,
+      "has_howto": false,
+      "has_person": false,
+      "has_service": false,
+      "has_webpage": true,
+      "has_website": false,
+      "schema_types": [
+        "BreadcrumbList",
+        "FAQPage",
+        "SoftwareApplication",
+        "WebPage"
+      ],
+      "schema_type_counts": {
+        "WebPage": 1,
+        "BreadcrumbList": 1,
+        "SoftwareApplication": 1,
+        "FAQPage": 1
+      },
+      "schema_completeness_issues": [],
+      "open_graph_fields_present": 4,
+      "twitter_fields_present": 4,
+      "hreflang_count": 2,
+      "hreflangs": [
+        {
+          "hreflang": "ru",
+          "href": "https://vsevmeste.space/salon"
+        },
+        {
+          "hreflang": "x-default",
+          "href": "https://vsevmeste.space/salon"
+        }
+      ]
+    },
+    "geo_signals": {
+      "answer_first_paragraph_present": true,
+      "definition_like_intro": false,
+      "question_headings": 3,
+      "faq_schema_present": true,
+      "faq_schema_count": 1,
+      "howto_schema_present": false,
+      "howto_schema_count": 0,
+      "person_schema_count": 0,
+      "service_schema_count": 0,
+      "webpage_schema_count": 1,
+      "website_schema_count": 0,
+      "author_present": false,
+      "author_name": "",
+      "author_profile_link_present": false,
+      "author_profile_link": "https://vsevmeste.space/salon",
+      "date_published_present": false,
+      "date_modified_present": false,
+      "date_published": "",
+      "date_modified": "",
+      "reference_links": 0,
+      "reference_link_samples": [],
+      "about_page_link_present": false,
+      "about_page_link": "",
+      "contact_page_link_present": true,
+      "contact_page_link": "https://vsevmeste.space/contacts",
+      "list_blocks": 2,
+      "table_blocks": 0,
+      "chunkable_sections": 14
+    },
+    "legal_signals": {
+      "total": 0,
+      "offer_count": 0,
+      "privacy_count": 0,
+      "cookies_count": 0,
+      "payment_count": 0,
+      "delivery_count": 0,
+      "guarantee_count": 0,
+      "requisites_count": 0,
+      "offer_samples": [],
+      "privacy_samples": [],
+      "cookies_samples": [],
+      "payment_samples": [],
+      "delivery_samples": [],
+      "guarantee_samples": [],
+      "requisites_samples": []
+    },
+    "region_signals": {
+      "region_mentions": 0,
+      "region_samples": []
+    },
+    "microdata": {
+      "itemtypeCount": 0,
+      "itempropCount": 0
+    },
+    "mixed_content_urls": []
+  },
+  "yandex_summary": {
+    "score": 95,
+    "grade": "A",
+    "blockers": [
+      {
+        "id": "yandex-regional-signals",
+        "title": "The audited page exposes clear regional signals for Yandex",
+        "status": "WARN",
+        "recommendation": "Strengthen regional targeting with a clearer city, region, address, or locality signal in visible content and business data."
+      }
+    ]
+  },
+  "geo_summary": {
+    "findings": 10,
+    "passes": 6,
+    "warnings": 1,
+    "failures": 0,
+    "strengths": [
+      "The audited page includes question-led sections that map to conversational intent",
+      "The audited page supports answer extraction with FAQ or HowTo structures",
+      "The audited page clearly identifies the entity behind the content",
+      "The audited page is structured into reusable chunks for AI summarization",
+      "The audited page exposes schema types that help AI systems understand entities and answers"
+    ],
+    "missing": [
+      {
+        "title": "The audited page opens with an answer-friendly introduction for AI systems",
+        "status": "WARN",
+        "recommendation": "Add a 50-150 word opening answer block near the top that clearly defines the topic, promise, or service in plain language."
+      }
+    ]
+  },
+  "geo_signals": {
+    "answer_first_paragraph_present": true,
+    "definition_like_intro": false,
+    "question_headings": 3,
+    "faq_schema_present": true,
+    "faq_schema_count": 1,
+    "howto_schema_present": false,
+    "howto_schema_count": 0,
+    "person_schema_count": 0,
+    "service_schema_count": 0,
+    "webpage_schema_count": 1,
+    "website_schema_count": 0,
+    "author_present": false,
+    "author_name": "",
+    "author_profile_link_present": false,
+    "author_profile_link": "https://vsevmeste.space/salon",
+    "date_published_present": false,
+    "date_modified_present": false,
+    "date_published": "",
+    "date_modified": "",
+    "reference_links": 0,
+    "reference_link_samples": [],
+    "about_page_link_present": false,
+    "about_page_link": "",
+    "contact_page_link_present": true,
+    "contact_page_link": "https://vsevmeste.space/contacts",
+    "list_blocks": 2,
+    "table_blocks": 0,
+    "chunkable_sections": 14
+  },
+  "evidence_samples": {
+    "generic_anchors": [],
+    "missing_alt_images": [],
+    "schema_completeness_issues": [],
+    "cta_samples": [],
+    "geo_reference_links": []
+  },
+  "geo_priorities": [
+    {
+      "key": "answer_intro",
+      "title": "Add a stronger answer-first intro",
+      "why": "AI answer systems prefer pages that explain the topic clearly in the first visible block.",
+      "fix_now": "Add a short opening summary that defines the topic or service in 50-150 words.",
+      "evidence": "Онлайн-запись для салона красоты во Вместе — это публичная ссылка и кабинет: клиент сам выбирает услугу, мастера и свободный слот, а вы видите заявку в календаре. Каталог, чат, отзывы и карта организаций входят в один аккаунт. Комиссии с каждой записи нет. Запись бесплатна без срока; тариф «Бизнес» — 990 ₽/мес для сотрудников и приоритетной поддержки. Сервис работает онлайн по всей России (поддержка и юр. адрес указаны для Москвы)."
+    }
+  ],
+  "lead_trust_priorities": [],
+  "pages": [
+    {
+      "url": "https://vsevmeste.space/salon",
+      "final_url": "https://vsevmeste.space/salon",
+      "depth": 0,
+      "source": "start",
+      "status": 200,
+      "content_type": "text/html",
+      "timing_ms": 14,
+      "html_bytes": 11217,
+      "crawlable_by_robots": true,
+      "redirect_chain": [
+        {
+          "url": "https://vsevmeste.space/salon",
+          "status": 200,
+          "location": null
+        }
+      ],
+      "parsed": {
+        "title": "Онлайн-запись для салона красоты — Вместе",
+        "description": "Онлайн-запись для салона красоты: каталог, мастера, чат, карта. Без комиссии с записи. Бесплатно без срока, Бизнес — 990 ₽/мес. Альтернатива YCLIENTS и WhatsApp.",
+        "canonical": "https://vsevmeste.space/salon",
+        "meta_robots": "",
+        "x_robots_tag": "",
+        "word_count": 533,
+        "headings": {
+          "h1": [
+            "Онлайн-запись для салона красоты"
+          ],
+          "h2": [
+            "Что входит в программу для салона",
+            "Как запустить онлайн-запись за вечер",
+            "Чем отличается от таблиц и мессенджеров",
+            "Вместе или YCLIENTS / Dikidi",
+            "Кому подходит",
+            "Тарифы",
+            "Частые вопросы",
+            "Встроить запись на сайт",
+            "Другие сценарии Вместе"
+          ],
+          "h3": [
+            "Как клиент записывается в салон?",
+            "Можно ли вести нескольких мастеров?",
+            "Как снизить неприходы?"
+          ],
+          "h4": [],
+          "h5": [],
+          "h6": []
+        },
+        "image_count": 0,
+        "missing_alt_count": 0,
+        "link_count": 32,
+        "hreflangs": [
+          {
+            "hreflang": "ru",
+            "href": "https://vsevmeste.space/salon"
+          },
+          {
+            "hreflang": "x-default",
+            "href": "https://vsevmeste.space/salon"
+          }
+        ],
+        "json_ld_blocks": 1,
+        "json_ld_invalid_blocks": 0,
+        "open_graph": {
+          "title": "Онлайн-запись для салона красоты — Вместе",
+          "description": "Каталог beauty-услуг, слоты мастеров, чаты и отзывы в одном кабинете.",
+          "image": "https://vsevmeste.space/og-cover.png",
+          "type": "website"
+        },
+        "twitter": {
+          "card": "summary_large_image",
+          "title": "Онлайн-запись для салона красоты — Вместе",
+          "description": "Запись клиентов, мастера, чаты. Бесплатный тариф без срока.",
+          "image": "https://vsevmeste.space/og-cover.png"
+        },
+        "viewport": "width=device-width, initial-scale=1.0",
+        "mixed_content_urls": [],
+        "geo_signals": {
+          "questionHeadingCount": 3,
+          "faqSchemaCount": 1,
+          "howToSchemaCount": 0,
+          "personSchemaCount": 0,
+          "serviceSchemaCount": 0,
+          "webPageSchemaCount": 1,
+          "webSiteSchemaCount": 0,
+          "authorBylinePresent": false,
+          "authorName": "",
+          "authorLinkPresent": false,
+          "authorLink": "https://vsevmeste.space/salon",
+          "datePublishedPresent": false,
+          "dateModifiedPresent": false,
+          "datePublished": "",
+          "dateModified": "",
+          "referenceLinkCount": 0,
+          "referenceLinkSamples": [],
+          "aboutLinkPresent": false,
+          "aboutLink": "",
+          "contactLinkPresent": true,
+          "contactLink": "https://vsevmeste.space/contacts",
+          "listBlockCount": 2,
+          "tableCount": 0,
+          "definitionLikeIntro": false,
+          "chunkableSectionCount": 14
+        },
+        "legal_signals": {
+          "categories": {
+            "offer": {
+              "count": 0,
+              "samples": []
+            },
+            "privacy": {
+              "count": 0,
+              "samples": []
+            },
+            "cookies": {
+              "count": 0,
+              "samples": []
+            },
+            "payment": {
+              "count": 0,
+              "samples": []
+            },
+            "delivery": {
+              "count": 0,
+              "samples": []
+            },
+            "guarantee": {
+              "count": 0,
+              "samples": []
+            },
+            "requisites": {
+              "count": 0,
+              "samples": []
+            }
+          },
+          "total": 0
+        },
+        "region_signals": {
+          "regionMentionCount": 0,
+          "regionMentionSamples": []
+        }
+      }
+    }
+  ],
+  "duplicates": {
+    "title": [],
+    "description": []
+  },
+  "prioritized_actions": [
+    {
+      "id": "direct-answer-intro",
+      "title": "The audited page opens with an answer-friendly introduction for AI systems",
+      "category": "geo",
+      "severity": "medium",
+      "status": "WARN",
+      "scope": "page",
+      "engines": [],
+      "details": "The page has an opening paragraph, but it does not strongly resemble a direct definition or concise answer block.",
+      "recommendation": "Add a 50-150 word opening answer block near the top that clearly defines the topic, promise, or service in plain language.",
+      "evidence": [
+        "Онлайн-запись для салона красоты во Вместе — это публичная ссылка и кабинет: клиент сам выбирает услугу, мастера и свободный слот, а вы видите заявку в календаре. Каталог, чат, отзывы и карта организаций входят в один аккаунт. Комиссии с каждой записи нет. Запись бесплатна без срока; тариф «Бизнес» — 990 ₽/мес для сотрудников и приоритетной поддержки. Сервис работает онлайн по всей России (поддержка и юр. адрес указаны для Москвы)."
+      ]
+    },
+    {
+      "id": "yandex-regional-signals",
+      "title": "The audited page exposes clear regional signals for Yandex",
+      "category": "engine",
+      "severity": "medium",
+      "status": "WARN",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "details": "The page appears Russian-targeted but exposes weak regional signals in visible content and business data.",
+      "recommendation": "Strengthen regional targeting with a clearer city, region, address, or locality signal in visible content and business data.",
+      "evidence": []
+    }
+  ],
+  "issues": [
+    {
+      "id": "direct-answer-intro",
+      "title": "The audited page opens with an answer-friendly introduction for AI systems",
+      "category": "geo",
+      "severity": "medium",
+      "status": "WARN",
+      "scope": "page",
+      "engines": [],
+      "details": "The page has an opening paragraph, but it does not strongly resemble a direct definition or concise answer block.",
+      "recommendation": "Add a 50-150 word opening answer block near the top that clearly defines the topic, promise, or service in plain language.",
+      "evidence": [
+        "Онлайн-запись для салона красоты во Вместе — это публичная ссылка и кабинет: клиент сам выбирает услугу, мастера и свободный слот, а вы видите заявку в календаре. Каталог, чат, отзывы и карта организаций входят в один аккаунт. Комиссии с каждой записи нет. Запись бесплатна без срока; тариф «Бизнес» — 990 ₽/мес для сотрудников и приоритетной поддержки. Сервис работает онлайн по всей России (поддержка и юр. адрес указаны для Москвы)."
+      ]
+    },
+    {
+      "id": "yandex-regional-signals",
+      "title": "The audited page exposes clear regional signals for Yandex",
+      "category": "engine",
+      "severity": "medium",
+      "status": "WARN",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "details": "The page appears Russian-targeted but exposes weak regional signals in visible content and business data.",
+      "recommendation": "Strengthen regional targeting with a clearer city, region, address, or locality signal in visible content and business data.",
+      "evidence": []
+    }
+  ],
+  "geo_findings": [
+    {
+      "id": "direct-answer-intro",
+      "title": "The audited page opens with an answer-friendly introduction for AI systems",
+      "category": "geo",
+      "status": "WARN",
+      "scope": "page",
+      "engines": [],
+      "severity": "medium",
+      "url": null,
+      "value": "Opening paragraph present but not definition-like",
+      "details": "The page has an opening paragraph, but it does not strongly resemble a direct definition or concise answer block.",
+      "recommendation": "Add a 50-150 word opening answer block near the top that clearly defines the topic, promise, or service in plain language.",
+      "evidence": [
+        "Онлайн-запись для салона красоты во Вместе — это публичная ссылка и кабинет: клиент сам выбирает услугу, мастера и свободный слот, а вы видите заявку в календаре. Каталог, чат, отзывы и карта организаций входят в один аккаунт. Комиссии с каждой записи нет. Запись бесплатна без срока; тариф «Бизнес» — 990 ₽/мес для сотрудников и приоритетной поддержки. Сервис работает онлайн по всей России (поддержка и юр. адрес указаны для Москвы)."
+      ]
+    },
+    {
+      "id": "question-led-structure",
+      "title": "The audited page includes question-led sections that map to conversational intent",
+      "category": "geo",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "3 question-like headings",
+      "details": "The page structure already includes multiple question-led headings that can align well with conversational AI queries.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "faq-howto-structured-support",
+      "title": "The audited page supports answer extraction with FAQ or HowTo structures",
+      "category": "geo",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "1 FAQPage, 0 HowTo",
+      "details": "The page exposes structured FAQ or HowTo signals that can help machines understand reusable answer blocks.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "source-citation-support",
+      "title": "The audited page gives AI systems source-like references to cite or validate",
+      "category": "geo",
+      "status": "N/A",
+      "scope": "page",
+      "engines": [],
+      "severity": "info",
+      "url": null,
+      "value": "0 reference-like links",
+      "details": "The page is not content-heavy enough to strongly expect reference-style citations.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "author-attribution-visibility",
+      "title": "The audited page exposes visible authorship or expert attribution",
+      "category": "geo",
+      "status": "N/A",
+      "scope": "page",
+      "engines": [],
+      "severity": "info",
+      "url": null,
+      "value": "No author signal detected",
+      "details": "The page is not strongly article-like, so missing author attribution is less conclusive.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "freshness-signals",
+      "title": "The audited page exposes freshness signals that help AI systems judge recency",
+      "category": "geo",
+      "status": "N/A",
+      "scope": "page",
+      "engines": [],
+      "severity": "info",
+      "url": null,
+      "value": "No date signals detected",
+      "details": "Date visibility is less critical here because the page does not look strongly article-like.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "entity-home-clarity",
+      "title": "The audited page clearly identifies the entity behind the content",
+      "category": "geo",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "Entity schema detected",
+      "details": "The page gives at least some machine-readable or visible clues about who owns the content or business behind it.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "chunkable-content-structure",
+      "title": "The audited page is structured into reusable chunks for AI summarization",
+      "category": "geo",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "14 chunkable sections, 2 lists, 0 tables",
+      "details": "The page exposes enough sectioning, lists, or tables to support extraction into short answer blocks.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "geo-schema-coverage",
+      "title": "The audited page exposes schema types that help AI systems understand entities and answers",
+      "category": "geo",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "BreadcrumbList, FAQPage, SoftwareApplication, WebPage",
+      "details": "The page exposes GEO-relevant schema beyond the minimum organization or business layer.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "answerability-summary-clarity",
+      "title": "The audited page is easy to summarize into a clear AI answer",
+      "category": "geo",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "4/5 answerability signals",
+      "details": "The page combines strong top-of-page clarity, focused structure, and sufficient main content for concise AI summarization.",
+      "recommendation": "",
+      "evidence": []
+    }
+  ],
+  "findings": [
+    {
+      "id": "https-enabled",
+      "title": "The audited page uses HTTPS",
+      "category": "technical",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "https://vsevmeste.space/salon",
+      "details": "The requested page URL resolves over HTTPS.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "robots-availability",
+      "title": "robots.txt is available as crawl context",
+      "category": "technical",
+      "status": "PASS",
+      "scope": "context",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "https://vsevmeste.space/robots.txt",
+      "details": "robots.txt fetched successfully with status 200.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "sitemap-availability",
+      "title": "XML sitemap is discoverable as site context",
+      "category": "technical",
+      "status": "PASS",
+      "scope": "context",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "36 URLs from 1 sitemap fetches",
+      "details": "At least one sitemap file was fetched and parsed.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "page-response-status",
+      "title": "The audited page returns a successful status code",
+      "category": "technical",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": 200,
+      "details": "The audited page responded with status 200.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "redirect-hops",
+      "title": "The audited page resolves without a long redirect chain",
+      "category": "technical",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "0 redirect hops",
+      "details": "The audited URL resolves directly or with a single clean redirect.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "canonical-presence",
+      "title": "The audited page exposes a canonical tag",
+      "category": "technical",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "https://vsevmeste.space/salon",
+      "details": "A canonical link element is present on the audited page.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "canonical-conflicts",
+      "title": "The audited page canonical matches the final URL",
+      "category": "technical",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "https://vsevmeste.space/salon",
+      "details": "The canonical signal does not conflict with the final fetched URL.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "robot-directives",
+      "title": "The audited page has coherent indexability directives",
+      "category": "technical",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "index,follow",
+      "details": "The audited page does not expose a noindex directive.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "mixed-content",
+      "title": "The audited page avoids mixed-content resources",
+      "category": "technical",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "0 mixed-content resources",
+      "details": "No HTTP resources were referenced from the audited page.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "robots-blocking",
+      "title": "The audited page is not blocked by robots.txt rules",
+      "category": "technical",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "Allowed",
+      "details": "The audited URL does not appear to be blocked by parsed robots rules.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "html-lang",
+      "title": "The audited page exposes an HTML lang attribute",
+      "category": "technical",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "ru",
+      "details": "The audited page exposes an HTML lang attribute.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "charset-declaration",
+      "title": "The audited page exposes a charset declaration",
+      "category": "technical",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "UTF-8",
+      "details": "The audited page exposes a charset declaration.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "response-time",
+      "title": "The audited page responds within a practical time budget",
+      "category": "technical",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "14 ms",
+      "details": "The audited page HTML responded in 14 ms.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "html-weight",
+      "title": "The audited page HTML stays reasonably lean",
+      "category": "technical",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "11.0 KB",
+      "details": "The audited page HTML payload is 11.0 KB.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "title-presence",
+      "title": "The audited page exposes a title tag",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "Онлайн-запись для салона красоты — Вместе",
+      "details": "The audited page includes a title tag.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "title-length",
+      "title": "The audited page title length stays in a practical snippet range",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "41 chars",
+      "details": "The title length is in a practical range for snippet control.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "title-h1-alignment",
+      "title": "The audited page title and primary H1 describe the same topic",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "100% overlap",
+      "details": "The title and primary H1 appear semantically aligned.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "description-presence",
+      "title": "The audited page exposes a meta description",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "Онлайн-запись для салона красоты: каталог, мастера, чат, карта. Без комиссии с записи. Бесплатно без срока, Бизнес — 990 ₽/мес. Альтернатива YCLIENTS и WhatsApp.",
+      "details": "The audited page includes a meta description.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "description-length",
+      "title": "The audited page description length is useful for snippets",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "161 chars",
+      "details": "The description length is in a practical range for search snippets.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "title-description-alignment",
+      "title": "The audited page title and meta description support the same intent",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "83% overlap",
+      "details": "The title and description appear aligned around the same page topic.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "h1-usage",
+      "title": "The audited page has a single clear H1",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "1 H1 tags",
+      "details": "The audited page contains exactly one H1.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "heading-hierarchy",
+      "title": "The audited page heading hierarchy is logically nested",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "{\"h1\":1,\"h2\":9,\"h3\":3,\"h4\":0,\"h5\":0,\"h6\":0}",
+      "details": "No significant heading-level skips were detected on the audited page.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "thin-content",
+      "title": "The audited page contains enough visible copy to express topical depth",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "533 words",
+      "details": "The audited page has enough visible copy for basic topical clarity.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "first-paragraph-clarity",
+      "title": "The audited page opens with clear above-the-fold copy",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "Онлайн-запись для салона красоты во Вместе — это публичная ссылка и кабинет: клиент сам выбирает услугу, мастера и свободный слот, а вы видите заявку в календаре. Каталог, чат, отзывы и карта организаций входят в один аккаунт. Комиссии с каждой записи нет. Запись бесплатна без срока; тариф «Бизнес» — 990 ₽/мес для сотрудников и приоритетной поддержки. Сервис работает онлайн по всей России (поддержка и юр. адрес указаны для Москвы).",
+      "details": "The first visible paragraph provides enough copy to clarify the page offer or topic early.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "main-content-ratio",
+      "title": "The audited page has a healthy main-content-to-template ratio",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "98% main content ratio",
+      "details": "A substantial share of visible page text appears to belong to the main content area.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "paragraph-quality",
+      "title": "The audited page paragraphs are balanced for readability",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "0 short, 0 long paragraphs",
+      "details": "The page copy looks reasonably balanced between scannability and depth.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "heading-repetition",
+      "title": "The audited page headings avoid repetitive section labels",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "0 repeated headings",
+      "details": "No repeated heading text was detected across the parsed heading structure.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "image-alt",
+      "title": "The audited page images use descriptive alt text",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "0/0 images missing alt text",
+      "details": "The audited page does not contain images.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "image-lazy-loading",
+      "title": "The audited page uses lazy loading for non-critical images",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "0/0 images lazy-loaded",
+      "details": "The page is not image-heavy enough for lazy loading to be critical.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "internal-anchor-text",
+      "title": "The audited page internal links use descriptive anchor text",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "0/32 weak internal anchors",
+      "details": "No obvious weak internal anchor text was found.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "generic-anchor-text",
+      "title": "The audited page avoids generic anchor text",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "0 generic anchors",
+      "details": "No generic anchors like \"read more\" or \"подробнее\" were detected in the parsed link sample.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "image-dimensions",
+      "title": "The audited page images declare width and height where possible",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "0/0 images missing dimensions",
+      "details": "The audited page does not contain images.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "contact-signals",
+      "title": "Commercial or local pages expose clear contact signals",
+      "category": "on_page",
+      "status": "N/A",
+      "scope": "page",
+      "engines": [],
+      "severity": "info",
+      "url": null,
+      "value": "Visible contact signals found",
+      "details": "The audited page does not strongly indicate a commercial or local intent, so contact expectations are reduced.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "conversion-path-visibility",
+      "title": "Commercial or local pages expose a visible conversion path",
+      "category": "on_page",
+      "status": "N/A",
+      "scope": "page",
+      "engines": [],
+      "severity": "info",
+      "url": null,
+      "value": "0 forms, 0 buttons, reachable contact present",
+      "details": "The page does not strongly indicate a commercial or local offer, so conversion-path expectations are lower.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "trust-markers",
+      "title": "Commercial or local pages expose trust-building proof",
+      "category": "on_page",
+      "status": "N/A",
+      "scope": "page",
+      "engines": [],
+      "severity": "info",
+      "url": null,
+      "value": "4 trust markers",
+      "details": "The page does not clearly behave like a commercial or local landing page, so trust-proof expectations are lower.",
+      "recommendation": "",
+      "evidence": [
+        "Каталог, чат, отзывы и карта организаций входят в один аккаунт.",
+        "Создать салон бесплатно · Демо-запись · Запуск за 15 минут · vs YCLIENTS / Dikidi Что входит в программу для салона Г...",
+        "Вместе или YCLIENTS / Dikidi Крупные CRM тянут склад, зарплаты и кассу — полезно сети, избыточно соло-мастеру и салон...",
+        "Честное сравнение: Вместе vs YCLIENTS и Dikidi и отличие от агрегаторов."
+      ]
+    },
+    {
+      "id": "open-graph-meta",
+      "title": "The audited page exposes Open Graph metadata",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "Present",
+      "details": "Open Graph metadata is available for social previews.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "twitter-card-meta",
+      "title": "The audited page exposes Twitter Card metadata",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "Present",
+      "details": "Twitter Card metadata is available for the audited page.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "favicon",
+      "title": "The audited page exposes a favicon",
+      "category": "on_page",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "https://vsevmeste.space/favicon.svg",
+      "details": "The audited page exposes a favicon reference.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "page-load-time",
+      "title": "The audited page HTML response time stays below 3 seconds",
+      "category": "performance",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "14 ms",
+      "details": "The audited page HTML fetch time is 14 ms.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "page-html-weight",
+      "title": "The audited page HTML payload remains under 300 KB",
+      "category": "performance",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "11.0 KB",
+      "details": "The audited page HTML size is 11.0 KB.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "resource-request-count",
+      "title": "The audited page keeps initial asset references reasonable",
+      "category": "performance",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "3 asset references",
+      "details": "The audited page references 3 images, scripts, and stylesheets in the parsed HTML.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "heavy-html-page",
+      "title": "The audited page avoids extremely heavy HTML",
+      "category": "performance",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "11.0 KB",
+      "details": "The audited page does not exceed the heavy-page HTML threshold.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "js-pressure",
+      "title": "The audited page avoids excessive script pressure",
+      "category": "performance",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "1 script tags",
+      "details": "The audited page does not appear script-heavy based on parsed HTML.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "inline-script-bloat",
+      "title": "The audited page avoids excessive inline JavaScript bloat",
+      "category": "performance",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "2.3 KB",
+      "details": "Inline JavaScript size stays within a practical range.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "inline-style-bloat",
+      "title": "The audited page avoids excessive inline style bloat",
+      "category": "performance",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "0 B",
+      "details": "Inline style size stays within a practical range.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "image-pressure",
+      "title": "The audited page avoids excessive image pressure",
+      "category": "performance",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "0 images",
+      "details": "The audited page image count is within a practical range.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "image-dimension-performance",
+      "title": "The audited page images declare dimensions to reduce layout instability",
+      "category": "performance",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "0/0 images missing dimensions",
+      "details": "The audited page does not contain images.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "cwv-adapter",
+      "title": "Built-in free audit does not measure Core Web Vitals directly",
+      "category": "performance",
+      "status": "N/A",
+      "scope": "context",
+      "engines": [],
+      "severity": "info",
+      "url": null,
+      "value": "HTML and resource signals only",
+      "details": "This free local build reports built-in HTML and resource signals only.",
+      "recommendation": "Use the built-in HTML/resource findings here and treat CWV as outside the current free local scope.",
+      "evidence": []
+    },
+    {
+      "id": "direct-answer-intro",
+      "title": "The audited page opens with an answer-friendly introduction for AI systems",
+      "category": "geo",
+      "status": "WARN",
+      "scope": "page",
+      "engines": [],
+      "severity": "medium",
+      "url": null,
+      "value": "Opening paragraph present but not definition-like",
+      "details": "The page has an opening paragraph, but it does not strongly resemble a direct definition or concise answer block.",
+      "recommendation": "Add a 50-150 word opening answer block near the top that clearly defines the topic, promise, or service in plain language.",
+      "evidence": [
+        "Онлайн-запись для салона красоты во Вместе — это публичная ссылка и кабинет: клиент сам выбирает услугу, мастера и свободный слот, а вы видите заявку в календаре. Каталог, чат, отзывы и карта организаций входят в один аккаунт. Комиссии с каждой записи нет. Запись бесплатна без срока; тариф «Бизнес» — 990 ₽/мес для сотрудников и приоритетной поддержки. Сервис работает онлайн по всей России (поддержка и юр. адрес указаны для Москвы)."
+      ]
+    },
+    {
+      "id": "question-led-structure",
+      "title": "The audited page includes question-led sections that map to conversational intent",
+      "category": "geo",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "3 question-like headings",
+      "details": "The page structure already includes multiple question-led headings that can align well with conversational AI queries.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "faq-howto-structured-support",
+      "title": "The audited page supports answer extraction with FAQ or HowTo structures",
+      "category": "geo",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "1 FAQPage, 0 HowTo",
+      "details": "The page exposes structured FAQ or HowTo signals that can help machines understand reusable answer blocks.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "source-citation-support",
+      "title": "The audited page gives AI systems source-like references to cite or validate",
+      "category": "geo",
+      "status": "N/A",
+      "scope": "page",
+      "engines": [],
+      "severity": "info",
+      "url": null,
+      "value": "0 reference-like links",
+      "details": "The page is not content-heavy enough to strongly expect reference-style citations.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "author-attribution-visibility",
+      "title": "The audited page exposes visible authorship or expert attribution",
+      "category": "geo",
+      "status": "N/A",
+      "scope": "page",
+      "engines": [],
+      "severity": "info",
+      "url": null,
+      "value": "No author signal detected",
+      "details": "The page is not strongly article-like, so missing author attribution is less conclusive.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "freshness-signals",
+      "title": "The audited page exposes freshness signals that help AI systems judge recency",
+      "category": "geo",
+      "status": "N/A",
+      "scope": "page",
+      "engines": [],
+      "severity": "info",
+      "url": null,
+      "value": "No date signals detected",
+      "details": "Date visibility is less critical here because the page does not look strongly article-like.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "entity-home-clarity",
+      "title": "The audited page clearly identifies the entity behind the content",
+      "category": "geo",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "Entity schema detected",
+      "details": "The page gives at least some machine-readable or visible clues about who owns the content or business behind it.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "chunkable-content-structure",
+      "title": "The audited page is structured into reusable chunks for AI summarization",
+      "category": "geo",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "14 chunkable sections, 2 lists, 0 tables",
+      "details": "The page exposes enough sectioning, lists, or tables to support extraction into short answer blocks.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "geo-schema-coverage",
+      "title": "The audited page exposes schema types that help AI systems understand entities and answers",
+      "category": "geo",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "BreadcrumbList, FAQPage, SoftwareApplication, WebPage",
+      "details": "The page exposes GEO-relevant schema beyond the minimum organization or business layer.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "answerability-summary-clarity",
+      "title": "The audited page is easy to summarize into a clear AI answer",
+      "category": "geo",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [],
+      "severity": "low",
+      "url": null,
+      "value": "4/5 answerability signals",
+      "details": "The page combines strong top-of-page clarity, focused structure, and sufficient main content for concise AI summarization.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "google-canonical-alignment",
+      "title": "Google canonical signals are aligned for the audited page",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "google"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "https://vsevmeste.space/salon",
+      "details": "The canonical signal does not conflict with the fetched page URL.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "google-hreflang-coverage",
+      "title": "The audited page declares hreflang only when localized alternates exist",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "context",
+      "engines": [
+        "google"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "2 hreflang annotations",
+      "details": "The audited page exposes hreflang annotations.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "google-structured-data-validity",
+      "title": "Structured data is syntactically valid for Google processing",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "google"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "0 invalid JSON-LD blocks",
+      "details": "No invalid JSON-LD blocks were detected on the audited page.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "google-structured-data-coverage",
+      "title": "The audited page exposes useful structured metadata for Google",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "google"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "BreadcrumbList, FAQPage, SoftwareApplication, WebPage",
+      "details": "The audited page exposes structured data types that Google can parse beyond social preview tags.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "google-schema-completeness",
+      "title": "The audited page structured data is complete enough to be useful",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "google"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "0 completeness issues",
+      "details": "No obvious schema completeness gaps were detected in the built-in checks.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "google-breadcrumb-coverage",
+      "title": "The audited page exposes breadcrumb markup when navigational depth suggests it",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "google"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "BreadcrumbList detected",
+      "details": "Breadcrumb schema is present on a page with meaningful navigational context.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "google-mobile-viewport",
+      "title": "The audited page exposes a mobile viewport declaration",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "google"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "width=device-width, initial-scale=1.0",
+      "details": "The audited page exposes a viewport meta tag.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "yandex-crawl-guidance",
+      "title": "The audited page has strong crawl guidance for Yandex",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "robots.txt and sitemap available",
+      "details": "The site hosting the audited page exposes both robots.txt and a discoverable sitemap for Yandex.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "yandex-robots",
+      "title": "Yandex crawl directives are explicitly published",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "context",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "https://vsevmeste.space/robots.txt",
+      "details": "robots.txt is available and can provide crawl and sitemap hints to Yandex.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "yandex-sitemap",
+      "title": "Yandex can discover XML sitemap coverage",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "context",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "36 URLs discovered in sitemaps",
+      "details": "A sitemap is available and should help Yandex understand site structure and update priorities.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "yandex-canonical-consistency",
+      "title": "Canonical recommendations are consistent for Yandex on the audited page",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "https://vsevmeste.space/salon",
+      "details": "The audited page canonical signal does not conflict with the fetched URL.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "yandex-micro-markup",
+      "title": "The audited page exposes markup Yandex can interpret",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "Structured markup present",
+      "details": "The audited page exposes structured markup that can support deeper Yandex interpretation.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "yandex-markup-completeness",
+      "title": "The audited page markup is complete enough for Yandex interpretation",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "0 markup completeness issues",
+      "details": "No obvious completeness gaps were detected in the built-in markup checks.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "yandex-markup-validity",
+      "title": "Structured data blocks are syntactically valid for Yandex validation",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "0 invalid JSON-LD blocks",
+      "details": "No malformed JSON-LD blocks were detected on the audited page.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "yandex-snippet-readiness",
+      "title": "The audited page has snippet signals that are usable for Yandex results",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "41 title chars, 161 description chars",
+      "details": "The page has both title and description in practical ranges for Yandex result snippets.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "yandex-language-targeting",
+      "title": "The audited page clearly signals its Russian-language targeting for Yandex",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "ru",
+      "details": "The page exposes a Russian language hint through the HTML lang attribute.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "yandex-regional-signals",
+      "title": "The audited page exposes clear regional signals for Yandex",
+      "category": "engine",
+      "status": "WARN",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "medium",
+      "url": null,
+      "value": "0 regional mentions",
+      "details": "The page appears Russian-targeted but exposes weak regional signals in visible content and business data.",
+      "recommendation": "Strengthen regional targeting with a clearer city, region, address, or locality signal in visible content and business data.",
+      "evidence": []
+    },
+    {
+      "id": "yandex-mobile-readiness",
+      "title": "The audited page exposes a mobile viewport for Yandex mobile search",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "width=device-width, initial-scale=1.0",
+      "details": "The audited page exposes a viewport declaration for mobile rendering.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "yandex-local-signals",
+      "title": "Commercial or local pages expose clear business signals for Yandex",
+      "category": "engine",
+      "status": "N/A",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "info",
+      "url": null,
+      "value": "Partial business signals found",
+      "details": "The page does not strongly suggest a commercial or local intent in the built-in heuristic.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "yandex-legal-transparency",
+      "title": "Commercial pages expose legal and transparency signals Yandex can trust",
+      "category": "engine",
+      "status": "N/A",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "info",
+      "url": null,
+      "value": "0 legal/transparency page types detected",
+      "details": "The page does not strongly indicate a commercial intent, so legal/transparency expectations are lower.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "yandex-commercial-completeness",
+      "title": "Commercial pages look commercially complete for Yandex",
+      "category": "engine",
+      "status": "N/A",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "info",
+      "url": null,
+      "value": "2/5 commercial completeness signals",
+      "details": "The page does not strongly indicate a commercial intent in this built-in heuristic.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "yandex-behavioral-proxies",
+      "title": "The audited page has strong behavioral-quality proxies for Yandex",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "7/7 behavioral-quality proxies",
+      "details": "The page looks technically and structurally comfortable enough to support good post-click experience signals.",
+      "recommendation": "",
+      "evidence": []
+    },
+    {
+      "id": "yandex-document-size",
+      "title": "The audited page stays below Yandex indexing size constraints",
+      "category": "engine",
+      "status": "PASS",
+      "scope": "page",
+      "engines": [
+        "yandex"
+      ],
+      "severity": "low",
+      "url": null,
+      "value": "11 KB",
+      "details": "The audited HTML document stays below Yandex size constraints.",
+      "recommendation": "",
+      "evidence": []
+    }
+  ],
+  "scores": {
+    "overall": {
+      "score": 100,
+      "grade": "A",
+      "confidence": "high",
+      "confidence_reason": "The score is backed by a broad set of applicable page-level checks.",
+      "applicable_checks": 59
+    },
+    "categories": {
+      "technical": {
+        "score": 100,
+        "grade": "A",
+        "applicable": 12,
+        "passed": 12,
+        "warned": 0,
+        "failed": 0,
+        "not_applicable": 0
+      },
+      "on_page": {
+        "score": 100,
+        "grade": "A",
+        "applicable": 21,
+        "passed": 21,
+        "warned": 0,
+        "failed": 0,
+        "not_applicable": 3
+      },
+      "engine": {
+        "score": 97,
+        "grade": "A",
+        "applicable": 17,
+        "passed": 16,
+        "warned": 1,
+        "failed": 0,
+        "not_applicable": 3
+      },
+      "performance": {
+        "score": 100,
+        "grade": "A",
+        "applicable": 9,
+        "passed": 9,
+        "warned": 0,
+        "failed": 0,
+        "not_applicable": 1
+      }
+    },
+    "engines": {
+      "google": {
+        "score": 100,
+        "grade": "A",
+        "applicable": 6,
+        "passed": 6,
+        "warned": 0,
+        "failed": 0,
+        "not_applicable": 3
+      },
+      "yandex": {
+        "score": 95,
+        "grade": "A",
+        "applicable": 11,
+        "passed": 10,
+        "warned": 1,
+        "failed": 0,
+        "not_applicable": 3
+      }
+    }
+  }
+}
