@@ -4,9 +4,9 @@ Cluster order: salon-booking (ICP) → autoservice → cafe-qr → compare-crm
 
 ## Cluster: salon-booking
 
-- [x] PILLAR  salon — "онлайн запись для салона красоты" (expand `/salon` — in progress this session)
-- [ ] SUB     kak-nastroit-online-zapis-v-salone — "как настроить онлайн запись в салоне"
-- [ ] SUB     zapis-vmesto-whatsapp — "запись вместо whatsapp" (partial expand done)
+- [x] PILLAR  salon — "онлайн запись для салона красоты" (expanded 2026-11-24)
+- [x] SUB     kak-nastroit-online-zapis-v-salone — expanded + FAQ + internal links
+- [x] SUB     zapis-vmesto-whatsapp — expanded + FAQ + pricing
 - [ ] SUB     zapis-dlya-solo-mastera — "онлайн запись для мастера"
 - [ ] LONG_TAIL napominaniya-o-zapisi-klientam — "напоминания о записи"
 - [ ] LONG_TAIL kak-snizit-neprihody-predoplata — "предоплата запись салон"
@@ -14,25 +14,31 @@ Cluster order: salon-booking (ICP) → autoservice → cafe-qr → compare-crm
 
 ## Cluster: autoservice
 
-- [ ] PILLAR  avtoservis — "программа для автосервиса" (partial expand done)
-- [ ] SUB     online-zapis-v-avtoservise — "онлайн запись в автосервисе"
-- [ ] SUB     programma-dlya-avtoservisa-chto-vybrat — "программа для автосервиса что выбрать"
-- [ ] LONG_TAIL priemka-v-avtoservise-foto-defektov — "приёмка автосервис фото"
+- [x] PILLAR  avtoservis — partial expand ("что выбрать")
+- [ ] SUB     online-zapis-v-avtoservise
+- [ ] SUB     programma-dlya-avtoservisa-chto-vybrat — deepen further
+- [ ] LONG_TAIL priemka-v-avtoservise-foto-defektov
 
 ## Cluster: cafe-qr
 
-- [ ] PILLAR  kafe — "qr меню для кафе"
-- [ ] SUB     qr-menyu-dlya-kafe-kak-zapustit — "qr меню кафе как запустить"
-- [ ] LONG_TAIL ekran-kuhni-dlya-kafe — "экран кухни кафе"
+- [x] PILLAR  kafe — expanded FAQ + payment + kitchen links
+- [ ] SUB     qr-menyu-dlya-kafe-kak-zapustit
+- [ ] LONG_TAIL ekran-kuhni-dlya-kafe
 
 ## Cluster: compare-crm
 
-- [ ] PILLAR  chem-vmeste-otlichaetsya-ot-yclients-i-dikidi — "yclients альтернатива"
-- [ ] SUB     chem-vmeste-otlichaetsya-ot-aggregatorov — "агрегатор записи vs свой кабинет"
+- [x] PILLAR  chem-vmeste-otlichaetsya-ot-yclients-i-dikidi — FAQ + pricing honesty
+- [ ] SUB     chem-vmeste-otlichaetsya-ot-aggregatorov
+
+## Long-tails from cloud briefs
+
+- [x] sinhronizaciya-s-google-i-yandex-kalendarem (supersedes brief `google`)
+- [x] telegram-napominaniya-organizacii (supersedes brief `telegram-sms`)
 
 ## Ops / technical
 
-- [ ] Finish/recover stuck Deploy SSH so new static HTML + Caddy timeouts go live
-- [ ] Submit/resubmit sitemap in GSC after deploy; re-run `seoagent indexing --max 40`
-- [ ] Re-run `seoagent keywords --seed` when GSC has impressions
-- [ ] Fill `.seoagent/okf/` + sync for AEO/llms publish
+- [x] Deploy prior SEO commit; sitemap Caddy timeouts
+- [ ] After this deploy: GSC URL Inspection / request indexing for /salon /avtoservis /businesses + money posts
+- [ ] Re-run `seoagent indexing --max 40`
+- [ ] Fill `.seoagent/okf/` + sync for AEO
+- [ ] IndexLift /salon: 99/100 — fix remaining WARN (sitemap discovery fluke under load, regional signals)

@@ -1,38 +1,62 @@
-# Keywords — vsevmeste.space
+---
+generated: true
+generated_at: 2026-11-24T07:46:26.826Z
+domain: vsevmeste.space
+row_count: 19
+---
 
-Seeded 2026-11-24. GSC `--seed` returned empty (no impressions yet). DataForSEO `--peek` returned volume only for navigational `yclients` (260, KD 16); RU long-tails often `dataforseo-no-result` — treat as first_mover / SERP-validated via WebSearch.
+# Keywords
 
-## Primary (commercial)
+Generated from SEOAgent Cloud: the site's topic map. Read-only — edits here
+are overwritten and never synced back. The cloud owns the clusters and their
+names; to add keywords run `seoagent keywords --seed` / `--discover` /
+`--competitors`. The "Keyword Opportunities" table is regenerated from
+enrichment (volume / difficulty / your position).
 
-онлайн запись для салона красоты
-онлайн запись клиентов
-программа для салона красоты
-программа для автосервиса
-онлайн запись в автосервисе
-qr меню для кафе
-виджет онлайн записи на сайт
+## Unclustered (To Triage)
+- "автоматизация записи клиентов"
+- "автоматизация малого бизнеса с чатами"
+- "запись клиентов через интернет"
+- "интеграция календаря с онлайн-записью"
+- "как настроить запись к мастерам салона"
+- "как организовать бронирование столиков через интернет"
+- "личный кабинет клиента для бизнеса"
+- "онлайн-запись для бизнеса"
+- "онлайн-запись для салона красоты"
+- "онлайн-запись на диагностику автомобиля"
+- "подключение Google и Яндекс Календаря к записи"
+- "программа записи для автосервиса"
+- "расписание мастеров салона онлайн"
+- "система бронирования столиков для кафе"
+- "система онлайн-записи для малого бизнеса"
+- "уведомления клиентам через Telegram и SMS"
+- "уведомления о записи клиентов"
+- "учет статусов ремонта в автосервисе"
+- "электронное меню для кафе с заказом"
 
-## Comparison / capture
+## Keyword Opportunities
 
-yclients
-yclients альтернатива
-dikidi альтернатива
-вместе vs yclients
-запись вместо whatsapp
+Real metrics from SEOAgent Cloud — volume + difficulty (DataForSEO), your
+position (GSC) — labeled by opportunity. Read-only; regenerated on enrich.
 
-## Informational (cluster support)
-
-как настроить онлайн запись в салоне
-как снизить неприходы предоплата
-напоминания о записи клиентам
-как запустить бизнес онлайн запись
-
-## Brand
-
-вместе vsevmeste
-vsevmeste.space
-
-## Notes
-
-- Priority cluster: salon booking (ICP, clearest SERP) → autoservice → cafe QR.
-- Do not steer strategy on empty GSC; re-run `seoagent keywords --seed` after 2–4 weeks of impressions.
+| Keyword | Opportunity | Volume | Difficulty | Your position | Intent |
+|---|---|---|---|---|---|
+| автоматизация записи клиентов | low priority | — | — | — | — |
+| автоматизация малого бизнеса с чатами | low priority | — | — | — | — |
+| запись клиентов через интернет | low priority | — | — | — | — |
+| интеграция календаря с онлайн-записью | low priority | — | — | — | — |
+| как настроить запись к мастерам салона | low priority | — | — | — | — |
+| как организовать бронирование столиков через интернет | low priority | — | — | — | — |
+| личный кабинет клиента для бизнеса | low priority | — | — | — | — |
+| онлайн-запись для бизнеса | low priority | — | — | — | — |
+| онлайн-запись для салона красоты | low priority | — | — | — | — |
+| онлайн-запись на диагностику автомобиля | low priority | — | — | — | — |
+| подключение Google и Яндекс Календаря к записи | low priority | — | — | — | — |
+| программа записи для автосервиса | low priority | — | — | — | — |
+| расписание мастеров салона онлайн | low priority | — | — | — | — |
+| система бронирования столиков для кафе | low priority | — | — | — | — |
+| система онлайн-записи для малого бизнеса | low priority | — | — | — | — |
+| уведомления клиентам через Telegram и SMS | low priority | — | — | — | — |
+| уведомления о записи клиентов | low priority | — | — | — | — |
+| учет статусов ремонта в автосервисе | low priority | — | — | — | — |
+| электронное меню для кафе с заказом | low priority | — | — | — | — |

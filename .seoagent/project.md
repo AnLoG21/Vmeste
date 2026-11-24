@@ -9,6 +9,7 @@ install_id: f9acc80b-9806-419f-b0f4-c899f6dab07a
 public_dir: frontend/public
 skill_hash: ed928dfdf3f2ed13f0ba4320b08e56f88209b2fe7e9c1b7ff69d32f635447115
 live_url: "https://vsevmeste.space"
+content_dir: frontend/public/blog
 ---
 # SEOAgent Project — vsevmeste.space
 

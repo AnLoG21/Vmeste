@@ -53,9 +53,7 @@
 - [QR-меню для кафе: как запустить без приложения для гостя — Вместе](https://vsevmeste.space/blog/qr-menyu-dlya-kafe-kak-zapustit): Как сделать QR-меню в кафе: план зала, PIN стола, карточки блюд, заказ за столом / навынос / доставка. Без установки приложения гостем — на Вместе.
 - [Registraciya I Podtverzhdenie Email](https://vsevmeste.space/blog/registraciya-i-podtverzhdenie-email)
 - [Samovyvoz Iz Magazina](https://vsevmeste.space/blog/samovyvoz-iz-magazina)
-- [Sinhronizaciya S Google I Yandex Kalendarem](https://vsevmeste.space/blog/sinhronizaciya-s-google-i-yandex-kalendarem)
 - [Sms Napominaniya O Zapisi](https://vsevmeste.space/blog/sms-napominaniya-o-zapisi)
-- [Telegram Napominaniya Organizacii](https://vsevmeste.space/blog/telegram-napominaniya-organizacii)
 - [Udalenie Akkaunta I 152 Fz](https://vsevmeste.space/blog/udalenie-akkaunta-i-152-fz)
 - [Uvedomleniya V Max](https://vsevmeste.space/blog/uvedomleniya-v-max)
 - [Виджет онлайн-записи на сайт салона или сервиса — Вместе](https://vsevmeste.space/blog/vidzhet-online-zapisi-na-sajt): Как встроить виджет онлайн-записи Вместе на свой сайт: ссылка /w/…, для кого подходит, чем отличается от переписки в мессенджере. Без разработчика за вечер.
@@ -86,3 +84,8 @@
 - [Privacy](https://vsevmeste.space/privacy)
 - [Онлайн-запись для салона красоты — Вместе](https://vsevmeste.space/salon): Программа онлайн-записи для салона красоты: каталог услуг, календарь мастеров, чат с клиентом, отзывы и карта. Запись бесплатно, Бизнес — 990 ₽/мес.
 - [Yandex 84ec889f078f5b2d](https://vsevmeste.space/yandex_84ec889f078f5b2d)
+
+## Articles
+
+- [Синхронизация с Google и Яндекс Календарём](https://vsevmeste.space/blog/sinhronizaciya-s-google-i-yandex-kalendarem)
+- [Telegram-напоминания организации](https://vsevmeste.space/blog/telegram-napominaniya-organizacii)
