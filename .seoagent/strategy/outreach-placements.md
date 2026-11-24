@@ -24,6 +24,9 @@ target_urls:
 | 4c | VC.ru draft | guest/expert | `.seoagent/content/drafts/vc-qr-menyu-bez-prilozheniya.md` | `/kafe` | draft | 2026-11-24 | QR-меню без приложения — публикация владельцем |
 | 5 | Product Radar | RU стартап-каталог | https://productradar.ru/submit/ | `/` | submitted | 2026-11-24 | Отправлено на модерацию (база проектов). Категории: Рестораны/Услуги/CRM; freemium; logo+3 slides. Модерация 7–14 дней |
 | 6 | АйтиПодиум | RU IT/SaaS каталог | https://it-podium.ru/?sort=new | `/` | live | 2026-11-24 | Карточка «Вместе» (id 19) в «Новые»; категории: Бизнес/финансы/право + Продажи/лидогенерация. Ссылка на карточке → https://vsevmeste.space/ |
+| 7 | RuTut | RU SaaS каталог | https://rutut.ru/submit | `/` | owner | 2026-11-24 | Нужен вход вендора (email) — форма /submit |
+| 8 | mregs.ru | RU SaaS каталог | https://mregs.ru/opublikovat-saas/ | `/` | owner | 2026-11-24 | Регистрация + тарифы; без аккаунта нельзя |
+| 9 | apps-market.ru | стартап-радар | https://apps-market.ru/startups | `/` | skip | 2026-11-24 | Нет публичной формы — только Telegram-канал редакции |
 
 ## Product Radar — kit (шаг 1+)
 

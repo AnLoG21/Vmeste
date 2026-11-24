@@ -1,5 +1,6 @@
 # Changelog
 
+- 2026-11-24: Shipped `/avtoservis` deepen `f74529a` + IndexNow 200; IT-Podium live id 19; GSC money still Crawled-not-indexed; Yandex OAuth expired.
 - 2026-11-24: IT-Podium live («Вместе» id 19, бизнес+продажи); deepen `/avtoservis` pillar; IndexLift domain audit archived.
 - 2026-11-24: Яндекс переобход money URLs DONE (очередь); РСЯ из виджета Вебмастера — skip (монетизация ≠ SEO); VC draft #3 QR-меню.
 - 2026-11-24: Yandex OAuth token получен (Redirect URI verification_code на app «Вместе»); API hosts OK; recrawl POST пока 504 от Яндекса — retry.
