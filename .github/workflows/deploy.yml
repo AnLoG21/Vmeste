@@ -15,8 +15,14 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
+      frontend_app: ${{ steps.filter.outputs.frontend_app }}
+      frontend_static: ${{ steps.filter.outputs.frontend_static }}
       frontend: ${{ steps.filter.outputs.frontend }}
-      deploy_scripts: ${{ steps.filter.outputs.deploy_scripts }}
+      caddy: ${{ steps.filter.outputs.caddy }}
+      deploy_needed: ${{ steps.flags.outputs.deploy_needed }}
+      build_web: ${{ steps.flags.outputs.build_web }}
+      build_frontend: ${{ steps.flags.outputs.build_frontend }}
+      sync_static: ${{ steps.flags.outputs.sync_static }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -26,25 +32,64 @@ jobs:
             backend:
               - 'backend/**'
               - 'docker-compose.prod.yml'
-              - 'agents-team/**'
+            frontend_app:
+              - 'frontend/src/**'
+              - 'frontend/package.json'
+              - 'frontend/package-lock.json'
+              - 'frontend/vite.config.js'
+              - 'frontend/index.html'
+              - 'frontend/Dockerfile'
+              - 'frontend/Dockerfile.runtime'
+              - 'frontend/nginx.conf'
+            frontend_static:
+              - 'frontend/public/**'
             frontend:
               - 'frontend/**'
+            caddy:
+              - 'Caddyfile'
+              - 'Caddyfile.http-only'
             deploy_scripts:
               - 'scripts/deploy-prod.sh'
-              - 'scripts/write-agents-team-env.sh'
               - '.github/workflows/deploy.yml'
+      - name: Derive deploy flags
+        id: flags
+        run: |
+          BACKEND="${{ steps.filter.outputs.backend }}"
+          APP="${{ steps.filter.outputs.frontend_app }}"
+          STATIC="${{ steps.filter.outputs.frontend_static }}"
+          CADDY="${{ steps.filter.outputs.caddy }}"
+          SCRIPTS="${{ steps.filter.outputs.deploy_scripts }}"
+          DISPATCH="${{ github.event_name == 'workflow_dispatch' }}"
 
-  # Full CI only when backend/infra changes — frontend-only pushes skip ~10–15 min of tests.
+          BUILD_WEB=false
+          BUILD_FE=false
+          SYNC_STATIC=false
+          NEED=false
+
+          if [ "$DISPATCH" = "true" ] || [ "$BACKEND" = "true" ]; then BUILD_WEB=true; NEED=true; fi
+          if [ "$DISPATCH" = "true" ] || [ "$APP" = "true" ]; then BUILD_FE=true; NEED=true; fi
+          # Static HTML/SEO only → copy into running nginx, no Vite rebuild
+          if [ "$BUILD_FE" != "true" ] && [ "$STATIC" = "true" ]; then SYNC_STATIC=true; NEED=true; fi
+          if [ "$CADDY" = "true" ] || [ "$SCRIPTS" = "true" ]; then NEED=true; fi
+
+          echo "build_web=$BUILD_WEB" >> "$GITHUB_OUTPUT"
+          echo "build_frontend=$BUILD_FE" >> "$GITHUB_OUTPUT"
+          echo "sync_static=$SYNC_STATIC" >> "$GITHUB_OUTPUT"
+          echo "deploy_needed=$NEED" >> "$GITHUB_OUTPUT"
+          echo "flags: web=$BUILD_WEB fe=$BUILD_FE static=$SYNC_STATIC need=$NEED"
+
+  # Full CI only when backend changes
   ci:
     name: Gate — CI (backend)
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     uses: ./.github/workflows/ci.yml
 
-  frontend-gate:
-    name: Gate — frontend build
+  # Build Vite on GitHub (fast machine), never on the 1GB VPS
+  frontend-build:
+    name: Build frontend dist
     needs: changes
-    if: needs.changes.outputs.frontend == 'true' && needs.changes.outputs.backend != 'true'
+    if: needs.changes.outputs.build_frontend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     defaults:
@@ -58,28 +103,36 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install + build
+        env:
+          VITE_API_URL: https://vsevmeste.space/api
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
         run: |
           npm ci --no-audit --no-fund
           npm run build
+      - name: Pack dist
+        working-directory: frontend
+        run: tar -czf "$GITHUB_WORKSPACE/frontend-dist.tgz" dist nginx.conf Dockerfile.runtime
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend-dist.tgz
+          retention-days: 2
 
   deploy:
     name: Deploy to VPS
-    needs: [changes, ci, frontend-gate]
+    needs: [changes, ci, frontend-build]
     if: |
       always() &&
       needs.changes.result == 'success' &&
+      needs.changes.outputs.deploy_needed == 'true' &&
       (needs.ci.result == 'success' || needs.ci.result == 'skipped') &&
-      (needs.frontend-gate.result == 'success' || needs.frontend-gate.result == 'skipped')
+      (needs.frontend-build.result == 'success' || needs.frontend-build.result == 'skipped')
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     env:
-      TELEGRAM_TEAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TEAM_BOT_TOKEN }}
-      TELEGRAM_ALLOWED_USER_IDS: ${{ secrets.TELEGRAM_ALLOWED_USER_IDS }}
-      TELEGRAM_HTTP_PROXY: ${{ secrets.TELEGRAM_HTTP_PROXY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-      DEPLOY_BUILD_WEB: ${{ needs.changes.outputs.backend == 'true' || needs.changes.outputs.deploy_scripts == 'true' || github.event_name == 'workflow_dispatch' }}
-      DEPLOY_BUILD_FRONTEND: ${{ needs.changes.outputs.frontend == 'true' || needs.changes.outputs.deploy_scripts == 'true' || needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch' }}
+      DEPLOY_BUILD_WEB: ${{ needs.changes.outputs.build_web }}
+      DEPLOY_BUILD_FRONTEND: ${{ needs.changes.outputs.build_frontend }}
+      DEPLOY_SYNC_STATIC: ${{ needs.changes.outputs.sync_static }}
     steps:
       - name: Preflight secrets
         run: |
@@ -87,25 +140,39 @@ jobs:
             echo "::error::Missing VPS_HOST / VPS_USER / VPS_SSH_KEY secrets"
             exit 1
           fi
-          echo "build_web=${DEPLOY_BUILD_WEB} build_frontend=${DEPLOY_BUILD_FRONTEND}"
-        env:
-          DEPLOY_BUILD_WEB: ${{ env.DEPLOY_BUILD_WEB }}
-          DEPLOY_BUILD_FRONTEND: ${{ env.DEPLOY_BUILD_FRONTEND }}
+          echo "web=${DEPLOY_BUILD_WEB} fe=${DEPLOY_BUILD_FRONTEND} static=${DEPLOY_SYNC_STATIC}"
+
+      - name: Download frontend dist
+        if: needs.changes.outputs.build_frontend == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: .
+
+      - name: Upload dist to VPS
+        if: needs.changes.outputs.build_frontend == 'true'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          source: "frontend-dist.tgz"
+          target: "/tmp/"
 
       - name: Deploy over SSH
         id: deploy
         uses: appleboy/ssh-action@v1.2.0
-        continue-on-error: true
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
           protocol: tcp
-          timeout: 60s
+          timeout: 45s
           script_stop: true
-          command_timeout: 40m
-          envs: TELEGRAM_TEAM_BOT_TOKEN,TELEGRAM_ALLOWED_USER_IDS,TELEGRAM_HTTP_PROXY,GEMINI_API_KEY,CURSOR_API_KEY,DEPLOY_BUILD_WEB,DEPLOY_BUILD_FRONTEND
+          command_timeout: 15m
+          envs: DEPLOY_BUILD_WEB,DEPLOY_BUILD_FRONTEND,DEPLOY_SYNC_STATIC
           script: |
             set -euo pipefail
             echo "[deploy] connected as $(whoami)@$(hostname)"
@@ -113,69 +180,16 @@ jobs:
             git fetch --prune origin
             git checkout main
             git reset --hard origin/main
-            chmod +x scripts/deploy-prod.sh scripts/write-agents-team-env.sh
-            ./scripts/write-agents-team-env.sh
-            export DEPLOY_BUILD_WEB="${DEPLOY_BUILD_WEB:-true}"
-            export DEPLOY_BUILD_FRONTEND="${DEPLOY_BUILD_FRONTEND:-true}"
-            ./scripts/deploy-prod.sh
-
-      - name: Deploy over SSH (retry 1)
-        id: deploy_retry1
-        if: steps.deploy.outcome == 'failure'
-        uses: appleboy/ssh-action@v1.2.0
-        continue-on-error: true
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT || 22 }}
-          protocol: tcp
-          timeout: 60s
-          script_stop: true
-          command_timeout: 40m
-          envs: TELEGRAM_TEAM_BOT_TOKEN,TELEGRAM_ALLOWED_USER_IDS,TELEGRAM_HTTP_PROXY,GEMINI_API_KEY,CURSOR_API_KEY,DEPLOY_BUILD_WEB,DEPLOY_BUILD_FRONTEND
-          script: |
-            set -euo pipefail
-            echo "[deploy] retry 1 connected as $(whoami)@$(hostname)"
-            cd /opt/vmeste
-            git fetch --prune origin
-            git checkout main
-            git reset --hard origin/main
-            chmod +x scripts/deploy-prod.sh scripts/write-agents-team-env.sh
-            ./scripts/write-agents-team-env.sh
-            export DEPLOY_BUILD_WEB="${DEPLOY_BUILD_WEB:-true}"
-            export DEPLOY_BUILD_FRONTEND="${DEPLOY_BUILD_FRONTEND:-true}"
-            ./scripts/deploy-prod.sh
-
-      - name: Deploy over SSH (retry 2)
-        if: steps.deploy.outcome == 'failure' && steps.deploy_retry1.outcome == 'failure'
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT || 22 }}
-          protocol: tcp
-          timeout: 60s
-          script_stop: true
-          command_timeout: 40m
-          envs: TELEGRAM_TEAM_BOT_TOKEN,TELEGRAM_ALLOWED_USER_IDS,TELEGRAM_HTTP_PROXY,GEMINI_API_KEY,CURSOR_API_KEY,DEPLOY_BUILD_WEB,DEPLOY_BUILD_FRONTEND
-          script: |
-            set -euo pipefail
-            echo "[deploy] retry 2 connected as $(whoami)@$(hostname)"
-            cd /opt/vmeste
-            git fetch --prune origin
-            git checkout main
-            git reset --hard origin/main
-            chmod +x scripts/deploy-prod.sh scripts/write-agents-team-env.sh
-            ./scripts/write-agents-team-env.sh
-            export DEPLOY_BUILD_WEB=true
-            export DEPLOY_BUILD_FRONTEND=true
+            chmod +x scripts/deploy-prod.sh
+            export DEPLOY_BUILD_WEB="${DEPLOY_BUILD_WEB:-false}"
+            export DEPLOY_BUILD_FRONTEND="${DEPLOY_BUILD_FRONTEND:-false}"
+            export DEPLOY_SYNC_STATIC="${DEPLOY_SYNC_STATIC:-false}"
+            export DEPLOY_FRONTEND_TGZ="/tmp/frontend-dist.tgz"
             ./scripts/deploy-prod.sh
 
   notify-failure:
     name: Ops alert on failure
-    needs: [changes, ci, frontend-gate, deploy]
+    needs: [changes, ci, frontend-build, deploy]
     if: failure()
     runs-on: ubuntu-latest
     steps:
