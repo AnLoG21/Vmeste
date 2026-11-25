@@ -58,7 +58,7 @@ target_urls:
 | 38 | CurlShip | EN directory | https://curlship.com/l/11765 | `/` | live | 2026-11-25 | Free listing id 11765; badge in footers (dofollow after deploy+verify); API POST 201 |
 | 39 | directree | EN directory | https://www.directree.io/submit | `/` | owner | 2026-11-25 | Free but Sign in / Create free account required |
 | 40 | IndexOf.AI | EN AI directory | https://indexof.ai/ | `/` | skip | 2026-11-25 | AI-tools niche — poor fit for booking SaaS |
-| 41 | Startup Stash | EN directory | https://startupstash.com/get-listed/ | `/` | attempted | 2026-11-25 | Free apply path present; paid plans primary |
+| 41 | Startup Stash | EN directory | https://startupstash.com/get-listed/ | `/` | owner | 2026-11-25 | Free apply sent → confirm link to `support@vsevmeste.space` (domain inbox required) |
 
 ## Product Radar — kit (шаг 1+)
 
