@@ -1,6 +1,6 @@
 ---
 title: External placements tracker — vsevmeste.space
-updated: 2026-11-24
+updated: 2026-11-25
 phase: 3
 target_urls:
   - https://vsevmeste.space/salon
@@ -50,7 +50,7 @@ target_urls:
 | 30 | PromoteProject | EN launchpad | https://www.promoteproject.com/ | `/` | owner | 2026-11-24 | «Submit startup» = `#` + login modal |
 | 31 | AZN8 | EN directory | https://azn8.com/submit | `/` | owner | 2026-11-24 | `/submit` → sign-up |
 | 32 | kis.tools | EN tools | https://kis.tools/submit | `/` | skip | 2026-11-24 | Criteria = no-reg free tools; poor fit for SaaS booking |
-| 33 | TheSaaSDir | EN directory | https://thesaasdir.com/submit/?tier=free | `/` | pending | 2026-11-24 | Free = badge required (removed after 21d without); submit after deploy badge like Twelve.tools |
+| 33 | TheSaaSDir | EN directory | https://thesaasdir.com/submit/?tier=free | `/` | blocked | 2026-11-25 | Free tier needs **TheSaaSDir** embed badge on site (21d rule); footer «Featured on twelve.tools» ≠ their badge — owner: add their snippet or skip |
 | 34 | The Hack Stack | EN launchpad | https://thehackstack.com/add-product | `/` | owner | 2026-11-24 | `/add-product` → login |
 | 35 | SaaS Radius | EN directory | https://www.saasradius.com/add-listing | `/` | submitted | 2026-11-24 | Free no-account; Appointments→Online Bookings; redirect home after submit (= success) |
 | 36 | FreeSaaSList / SaaSList | EN directory | https://freesaaslist.com/en/submit | `/` | submitted | 2026-11-24 | Free no-badge; Marketing & Sales; «Thanks — your project was submitted»; logo optional skipped |
@@ -84,6 +84,8 @@ target_urls:
 ## Next actions
 
 1. Owner ASAP: OTP в `vmesteofficialsupport@gmail.com` — PeerPush claim + yourhack free submit.
-2. Owner: SoftFinder captcha; s44s; Startpack/SaaSHub/AT/RuTut/mregs; ListMySaaS sign-in; ToolDirs logo+Sign In; Uneed/FoundrList/FiveTaco/AZN8/PromoteProject signup; TheSaaSDir badge if wanted.
+2. Owner: Product Radar moderated listing URL (`https://` double — fix in dashboard); SoftFinder captcha; s44s; Startpack/SaaSHub/AT/RuTut/mregs; ListMySaaS sign-in; ToolDirs logo+Sign In; Uneed/FoundrList/FiveTaco/AZN8/PromoteProject signup; **TheSaaSDir** = add their badge or skip free tier.
+3. Deploy money deepen v2 (2026-11-25) → GSC Request indexing money URLs again.
+4. Habr guest outline ready: `.seoagent/content/drafts/habr-online-zapis-vmesto-whatsapp.md` (owner publish).
 3. Weekly GSC until `/salon`+`/avtoservis`+`/businesses` Indexed (re-request done 2026-11-24 after deploy).
 4. Moderation queues: Twelve.tools + AppRater + Ignlab + SEODataPulse + Viesearch + SaaSLineup + SaaS Radius + FreeSaaSList.

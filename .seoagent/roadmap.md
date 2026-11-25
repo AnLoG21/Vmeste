@@ -54,6 +54,7 @@ Cluster order: salon-booking (ICP) → autoservice → cafe-qr → compare-crm
 - [x] Fill `.seoagent/okf/` for AEO (published `frontend/public/.well-known/okf/`)
 - [x] Deepen `/avtoservis` pillar (FAQ + объём + SoftwareApplication) — ship 2026-11-24; + client-path/WhatsApp FAQ 2026-11-24 local
 - [x] Deepen `/businesses` (client path + WhatsApp FAQ) — local 2026-11-24; needs deploy
+- [ ] **Deploy** money deepen v2 (2026-11-25): all four money HTML ≥1200 body words; then GSC Request indexing + weekly `seoagent indexing`
 - [ ] Внешние размещения — `strategy/outreach-placements.md` (VC×3 + Zapustilis + IT-Podium **live**; Product Radar + AppRater + Ignlab + SEODataPulse + Viesearch + SaaSLineup + SaaS Radius + FreeSaaSList **submitted**; Twelve.tools + TheSaaSDir pending deploy-backlink; PeerPush/yourhack/ListMySaaS/ToolDirs/Uneed/FoundrList/FiveTaco/AZN8/SaaS Browser OTP|sign-in|logo owner; SoftFinder/s44s/Startpack/AT/SaaSHub/RuTut/mregs = owner)
 - [x] Deploy deepen `/salon`+`/avtoservis`+`/businesses`+`/kafe`+compare + twelve.tools footer + sitemap all blogs + homepage SSR (2026-11-24)
 - [x] Phase 4 start: city `localNote` + business spokes links (not doorway); `/o/…` quality tip → publichnaya-stranica
