@@ -7,12 +7,12 @@ seoagent_version: 1.142.1
 skill_version: 1.142.1
 install_id: f9acc80b-9806-419f-b0f4-c899f6dab07a
 public_dir: frontend/public
-skill_hash: ed928dfdf3f2ed13f0ba4320b08e56f88209b2fe7e9c1b7ff69d32f635447115
+skill_hash: 0e8cb3db3fa33816e7136ab61a7fe60381121233db939b7eacc7bae572083df3
 live_url: "https://vsevmeste.space"
 content_dir: frontend/public/blog
 schedule: "none — no Cursor weekday agent scheduler in this harness; cadence = owner opens Agent and says continue SEO / process inbox; optional host cron: 0 9 * * 1-5 seoagent sync --silent"
-facts_checked_commit: ca107dc24d5815f36737767a01419d054ef3701d
-facts_checked_at: "2026-11-24T13:29:04.186Z"
+facts_checked_commit: 8b97de183c10d696b1cc3afa60e85eefbccf1ed2
+facts_checked_at: "2026-11-25T07:16:49.805Z"
 ---
 # SEOAgent Project — vsevmeste.space
 

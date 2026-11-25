@@ -917,7 +917,7 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               decoding="async"
             />
           </a>
-          <a href="https://curlship.com/l/11765" rel="noopener noreferrer">
+          <a href="https://curlship.com/l/11765">
             <img
               src="https://curlship.com/badge.svg"
               alt="Listed on CurlShip"

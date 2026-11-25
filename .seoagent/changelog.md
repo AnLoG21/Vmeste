@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-11-25: CurlShip verify API: `has_badge:false` — «page could not be fetched»; early CurlShip badge added beside Cubes; retry later. IndexNow home+money OK.
+- 2026-11-25: SaaS Cubes **submitted** — «Link verified — in review» (3–5d); early SSR Cubes badge fixed scanner; ToolFame/Turbo0/Findly/Smol Launch = owner login; SaaSdom/kis.tools/StartupDirectory/Dofollow.Tools skipped.
 - 2026-11-25: SaaS Cubes scanner ≤27 links incl. noscript — early Cubes badge after homepage lead + noscript; resubmit after deploy. Smol Launch = owner Sign in.
 - 2026-11-25: SaaS Cubes scanner only reads first ~27 homepage links — badge moved to first footer slot (was #28); resubmit after deploy. Smol Launch = owner Sign in.
 - 2026-11-25: SaaS Cubes free badge (dark) in footers; submit after deploy verify. Tulimoa submissions paused.
