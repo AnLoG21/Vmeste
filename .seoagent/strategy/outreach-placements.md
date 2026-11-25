@@ -42,7 +42,7 @@ target_urls:
 | 22 | FoundrList | EN launch board | https://foundrlist.com/submit | `/` | owner | 2026-11-24 | `/submit` → signup wall (`/signup?returnUrl=/agent`) |
 | 23 | Uneed | EN launchpad | https://www.uneed.best/submit-a-tool | `/` | owner | 2026-11-24 | Preview OK (auto-desc + logo); save/launch needs Google/email signup |
 | 24 | Ignlab Launch | EN directory | https://launch.ignlab.net/submit.html | `/` | submitted | 2026-11-24 | Free no-signup; «Thanks! in the queue»; edit: `https://launch.ignlab.net/thanks.html?edit=9683599dfd7cb26f3c2102438670169019a79bf39534c76fe66ea14e4eba08cb` |
-| 25 | Twelve.tools | EN directory | https://www.twelve.tools/submit-your-tool | `/` | pending | 2026-11-24 | Free dofollow needs footer backlink; link added local (landing+money) — submit after deploy |
+| 25 | Twelve.tools | EN directory | https://www.twelve.tools/submit-your-tool | `/` | submitted | 2026-11-24 | Footer backlink live; submit passed backlink check → review form; re-submit says «already exists in our database» (pending curation / not public search yet) |
 | 26 | SEODataPulse | EN directory | https://seodatapulse.com/submit/ | `/` | submitted | 2026-11-24 | Free, no email verify; Business & Finance; «Thank you… editorial review» |
 | 27 | Viesearch | EN directory | https://viesearch.com/submit | `/` | submitted | 2026-11-24 | Free Basic → waiting list confirmed; `/api/plan` success «in the review queue»; draft token `2b8hy` |
 | 28 | SaaSLineup | EN directory | https://saaslineup.com/submit/?tier=free | `/` | submitted | 2026-11-24 | Free no-account; Marketing/Ops/Productivity; 21-day nofollow queue (badge→dofollow skip until deploy); Stripe Featured $19 upsell declined |
@@ -84,6 +84,6 @@ target_urls:
 ## Next actions
 
 1. Owner ASAP: OTP в `vmesteofficialsupport@gmail.com` — PeerPush claim + yourhack free submit.
-2. Owner: SoftFinder captcha; s44s; Startpack/SaaSHub/AT/RuTut/mregs; ListMySaaS sign-in; ToolDirs logo+Sign In; Uneed/FoundrList/FiveTaco/AZN8/PromoteProject signup.
-3. Deploy deepen `/salon`+`/avtoservis`+`/businesses`+`/kafe`+compare + twelve.tools footer → then finish Twelve.tools Continuе (+ optional SaaSLineup badge for dofollow).
-4. Weekly GSC money until Indexed; AppRater + Ignlab + SEODataPulse + Viesearch + SaaSLineup + SaaS Radius + FreeSaaSList moderation.
+2. Owner: SoftFinder captcha; s44s; Startpack/SaaSHub/AT/RuTut/mregs; ListMySaaS sign-in; ToolDirs logo+Sign In; Uneed/FoundrList/FiveTaco/AZN8/PromoteProject signup; TheSaaSDir badge if wanted.
+3. Weekly GSC until `/salon`+`/avtoservis`+`/businesses` Indexed (re-request done 2026-11-24 after deploy).
+4. Moderation queues: Twelve.tools + AppRater + Ignlab + SEODataPulse + Viesearch + SaaSLineup + SaaS Radius + FreeSaaSList.

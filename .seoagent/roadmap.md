@@ -45,7 +45,7 @@ Cluster order: salon-booking (ICP) → autoservice → cafe-qr → compare-crm
 - [x] Яндекс: токен OK; ручной переобход money URLs **DONE** 2026-11-24 (`/`, `/salon`, `/avtoservis`, `/kafe`, compare)
 - [x] РСЯ: слот только в блоге (`rsya-blog.js` + `rsya-config.json`, enabled:false) — `audit/yandex-rsya.md`; money pages запрещены
 - [x] IndexNow key file `frontend/public/485582172a16a2d5afa94ef65a74603e.txt` (inbox 7199; shipped `309d0e3`)
-- [ ] Weekly `seoagent indexing` until `/salon`+`/avtoservis`+`/businesses` Indexed (2026-11-24: `/businesses`+compare **Crawled-not-indexed**; deepen local — needs deploy)
+- [ ] Weekly `seoagent indexing` until `/salon`+`/avtoservis`+`/businesses` Indexed (post-deploy 2026-11-24: still Crawled-not-indexed; GSC Request indexing re-sent ×3)
 - [x] Deepen katalog-uslug-i-ceny + vidzhet-online-zapisi + kak-perejti-s-drugoj-crm
 - [x] Fast deploy: path heuristics + CI-dist path (CI workflow enabled on main `d35e08f`)
 - [x] City pages → блок бизнеса со ссылками на /salon /avtoservis /kafe

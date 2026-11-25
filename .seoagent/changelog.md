@@ -1,5 +1,6 @@
 # Changelog
 
+- 2026-11-24: Live `f354950` — sitemap 59 blogs; homepage SSR ~299 words; money deepen + city/OKF/llms/twelve.tools; IndexNow 200×3; GSC Request indexing `/salon`+`/avtoservis`+`/businesses` sent; Twelve.tools in DB (pending public).
 - 2026-11-24: Deploy batch — sitemap all 59 blog URLs; homepage SSR ~300 words + money anchors; deepen `/kafe`+`/businesses`; ship city `localNote`, OKF/llms, twelve.tools footers; IndexNow + GSC re-request money after live.
 - 2026-11-24: Full SEO audit → `audit/latest.md` + crawl evidence; GSC: `/kafe` Indexed, `/salon`+`/avtoservis`+`/businesses`+compare still Crawled-not-indexed; sitemap gap 3 blog URLs; homepage 86 words.
 - 2026-11-24: Phase 4–5 — unique `localNote` на 10 city pages (SPA+API+SSR); business CTA /salon|/avtoservis|/kafe; OKF +2 FAQ + WhatsApp article; llms.txt city titles + truth anchors; AEO prompt checklist; IndexNow cities.
