@@ -55,10 +55,15 @@ target_urls:
 | 35 | SaaS Radius | EN directory | https://www.saasradius.com/add-listing | `/` | submitted | 2026-11-24 | Free no-account; Appointments→Online Bookings; redirect home after submit (= success) |
 | 36 | FreeSaaSList / SaaSList | EN directory | https://freesaaslist.com/en/submit | `/` | submitted | 2026-11-24 | Free no-badge; Marketing & Sales; «Thanks — your project was submitted»; logo optional skipped |
 | 37 | SaaS Browser | EN directory | https://saasbrowser.com/en/add-your-saas | `/` | owner | 2026-11-24 | `/add-your-saas` → sign_up |
-| 38 | CurlShip | EN directory | https://curlship.com/l/11765 | `/` | live | 2026-11-25 | Free listing id 11765; badge in footers (dofollow after deploy+verify); API POST 201 |
+| 38 | CurlShip | EN directory | https://curlship.com/l/11765 | `/` | live | 2026-11-25 | Listing live; badge on `/`+money footers (deployed `a256a10`); verify-badge API timed out fetching our host — expect hourly cron dofollow; edit→`/salon` confirm link sent to support gmail |
 | 39 | directree | EN directory | https://www.directree.io/submit | `/` | owner | 2026-11-25 | Free but Sign in / Create free account required |
 | 40 | IndexOf.AI | EN AI directory | https://indexof.ai/ | `/` | skip | 2026-11-25 | AI-tools niche — poor fit for booking SaaS |
 | 41 | Startup Stash | EN directory | https://startupstash.com/get-listed/ | `/` | owner | 2026-11-25 | Free apply sent → confirm link to `support@vsevmeste.space` (domain inbox required) |
+| 42 | PublishYourSaaS | EN directory | https://publishyoursaas.com/submit | `/` | submitted | 2026-11-25 | Free badge verified + screenshot; «SUBMISSION RECEIVED» → manual review ≤72h; email `vmesteofficialsupport@gmail.com`; dofollow while badge stays |
+| 43 | ShowMeYourSaaS / Maybe Labs | EN directory | https://showmeyoursaas.com/submit/ | `/` | skip | 2026-11-25 | Free = nofollow; policy: AI agents must pay package — owner-only free submit |
+| 44 | Paggu | EN blog/reviews | https://www.paggu.com/submit-your-startup/ | `/` | skip | 2026-11-25 | «Startup Submissions Are Temporarily Closed» |
+| 45 | once.tools | EN tools directory | https://once.tools/submit | `/` | submitted | 2026-11-25 | Free form; «Thank you for submitting Vmeste» → review if fits criteria |
+| 46 | MarketingDB | EN launch directory | https://marketingdb.live/submit | `/` | owner | 2026-11-25 | Free=$0 + badge (added to footers) + **Sign in** to launch; review 3–6w; dofollow while badge stays. Paid $19 declined |
 
 ## Product Radar — kit (шаг 1+)
 
@@ -87,9 +92,9 @@ target_urls:
 
 ## Next actions
 
-1. Owner ASAP: OTP в `vmesteofficialsupport@gmail.com` — PeerPush claim + yourhack free submit; directree free account.
+1. Owner ASAP: OTP в `vmesteofficialsupport@gmail.com` — PeerPush claim + yourhack free submit; directree free account; MarketingDB Sign in after badge live + Verify badge.
 2. Owner: SoftFinder captcha; s44s; Startpack/SaaSHub/AT/RuTut/mregs; ListMySaaS sign-in; ToolDirs logo+Sign In; Uneed/FoundrList/FiveTaco/AZN8/PromoteProject signup.
 3. Tomorrow: GSC Request indexing `/salon` `/avtoservis` `/businesses` (daily quota exceeded 2026-11-25); weekly `seoagent indexing`.
 4. Habr guest outline ready: `.seoagent/content/drafts/habr-online-zapis-vmesto-whatsapp.md` (owner publish).
-5. Moderation queues: Product Radar + Twelve.tools + AppRater + Ignlab + SEODataPulse + Viesearch + SaaSLineup + SaaS Radius + FreeSaaSList; CurlShip badge verify after deploy.
+5. Moderation queues: Product Radar + Twelve.tools + AppRater + Ignlab + SEODataPulse + Viesearch + SaaSLineup + SaaS Radius + FreeSaaSList + PublishYourSaaS; CurlShip badge verify cron.
 6. After CurlShip badge live: re-check listing flips to dofollow.

@@ -352,6 +352,16 @@ export default function BusinessesPage() {
               decoding="async"
             />
           </a>
+          <a href="https://marketingdb.live" target="_blank" rel="noopener">
+            <img
+              src="https://marketingdb.live/badge.svg"
+              alt="Launched on MarketingDB"
+              width="190"
+              height="44"
+              loading="lazy"
+              decoding="async"
+            />
+          </a>
         </p>
       </footer>
     </div>
