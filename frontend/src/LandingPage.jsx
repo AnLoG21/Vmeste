@@ -942,6 +942,16 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               decoding="async"
             />
           </a>
+          <a href="https://saascubes.com" rel="noopener" title="Listed on SaaS Cubes">
+            <img
+              src="https://saascubes.com/images/badges/badge-dark.png"
+              alt="Listed on SaaS Cubes"
+              width="175"
+              height="54"
+              loading="lazy"
+              decoding="async"
+            />
+          </a>
         </p>
       </footer>
     </div>

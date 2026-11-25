@@ -63,7 +63,9 @@ target_urls:
 | 43 | ShowMeYourSaaS / Maybe Labs | EN directory | https://showmeyoursaas.com/submit/ | `/` | skip | 2026-11-25 | Free = nofollow; policy: AI agents must pay package — owner-only free submit |
 | 44 | Paggu | EN blog/reviews | https://www.paggu.com/submit-your-startup/ | `/` | skip | 2026-11-25 | «Startup Submissions Are Temporarily Closed» |
 | 45 | once.tools | EN tools directory | https://once.tools/submit | `/` | submitted | 2026-11-25 | Free form; «Thank you for submitting Vmeste» → review if fits criteria |
-| 46 | MarketingDB | EN launch directory | https://marketingdb.live/submit | `/` | owner | 2026-11-25 | Free=$0 + badge (added to footers) + **Sign in** to launch; review 3–6w; dofollow while badge stays. Paid $19 declined |
+| 46 | MarketingDB | EN launch directory | https://marketingdb.live/submit | `/` | owner | 2026-11-25 | Badge live+verified («Badge found»); free launch needs **Sign in**; review 3–6w; dofollow while badge stays. Draft listing filled (Vmeste / Marketing / Freemium) |
+| 47 | SaaS Cubes | EN directory | https://saascubes.com/submit | `/` | pending | 2026-11-25 | Free needs dofollow badge on homepage; badge added (dark); submit after deploy verify |
+| 48 | Tulimoa | EN AI/MCP dir | https://tulimoa.com/submit | `/` | skip | 2026-11-25 | Submissions paused (rebuild) |
 
 ## Product Radar — kit (шаг 1+)
 
