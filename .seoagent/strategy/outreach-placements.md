@@ -22,7 +22,7 @@ target_urls:
 | 4a | VC.ru | guest/expert | https://vc.ru/id6086968/3275832-kak-uiti-ot-zapisi-cherez-whatsapp-chek-list-dlya-salona-i-sto | `/salon`+`/avtoservis` | live | 2026-11-24 | Опубликовано от Андрей Логинов; ссылки salon/avtoservis/blog WhatsApp |
 | 4b | VC.ru | guest/expert | https://vc.ru/id6086968/3275869-chek-list-onlain-zapis-v-avtoservise-bez-haosa-v-chatah | `/avtoservis` | live | 2026-11-24 | Чек-лист СТО опубликован; ссылки avtoservis + blog |
 | 4c | VC.ru | guest/expert | https://vc.ru/id6086968/3275884-qr-menyu-dlya-kafe-bez-prilozheniya-chek-list-zapuska-za-vecher | `/kafe` | live | 2026-11-24 | QR-меню чек-лист опубликован; ссылки kafe + blog |
-| 5 | Product Radar | RU стартап-каталог | https://productradar.ru/?post_type=product&p=20824 | `/` | submitted | 2026-11-25 | На модерации (скрыт). Модератор: ссылка не открывалась из‑за `https://https//…`; исправлено на `vsevmeste.space` → `https://vsevmeste.space/`; ответ Татьяне отправлен |
+| 5 | Product Radar | RU стартап-каталог | https://productradar.ru/?post_type=product&p=20824 | `/` | submitted | 2026-11-25 | На модерации (скрыт). Ссылка OK. Квадратный logo 500×500 + фото основателя в профиле; ответ Татьяне — можно ставить в очередь публикации |
 | 6 | АйтиПодиум | RU IT/SaaS каталог | https://it-podium.ru/?sort=new | `/` | live | 2026-11-24 | Карточка «Вместе» (id 19) в «Новые»; лайк поставлен (кнопка «Убрать лайк»). Категории: Бизнес/финансы/право + Продажи/лидогенерация → https://vsevmeste.space/ |
 | 7 | RuTut | RU SaaS каталог | https://rutut.ru/submit | `/` | owner | 2026-11-24 | Нужен вход вендора (email) — форма /submit |
 | 8 | mregs.ru | RU SaaS каталог | https://mregs.ru/opublikovat-saas/ | `/` | owner | 2026-11-24 | Регистрация + тарифы; без аккаунта нельзя |

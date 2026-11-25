@@ -38,3 +38,5 @@
 - 2026-11-24: IndexNow key file frontend/public/485582172a16a2d5afa94ef65a74603e.txt (inbox 7199, awaiting deploy).
 - 2026-11-24: Product Radar submitted (модераци€); IndexNow key file; –—я blog-only scaffold.
 - 2026-11-24: Deployed IndexNow key live; IndexNow ping 10 URLs (api/yandex/bing 202); money-page cross-links /salon-/avtoservis-/kafe.
+
+- 2026-11-25: Product Radar Ч квадратный logo2 500x500 + фото основател€; ответ “ать€не (очередь публикации). Force redeploy money deepen v2 (salon/kafe/avtoservis/businesses).
