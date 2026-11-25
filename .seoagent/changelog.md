@@ -1,5 +1,6 @@
 # Changelog
 
+- 2026-11-25: SaaS Cubes scanner only reads first ~27 homepage links — badge moved to first footer slot (was #28); resubmit after deploy. Smol Launch = owner Sign in.
 - 2026-11-25: SaaS Cubes free badge (dark) in footers; submit after deploy verify. Tulimoa submissions paused.
 - 2026-11-25: MarketingDB free path — badge in footers (SPA+money+SSR); launch still needs owner Sign in; CurlShip still nofollow.
 - 2026-11-25: PublishYourSaaS free **submitted** (badge verified + screenshot; review ≤72h; dofollow while badge stays); once.tools **submitted**; IndexNow 200; CurlShip still nofollow (cron); Launching Next re-POST unclear; ShowMeYourSaaS/Paggu skipped.
