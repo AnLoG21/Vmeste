@@ -917,6 +917,21 @@ export default function LandingPage({ onLogin, onRegister, onStartDemo }) {
               decoding="async"
             />
           </a>
+          <a
+            href="https://publishyoursaas.com"
+            target="_blank"
+            rel="noopener"
+            data-publishyoursaas-badge="manual-submission"
+          >
+            <img
+              src="https://publishyoursaas.com/publishyoursaas-badge.svg"
+              alt="Listed on PublishYourSaaS"
+              width="240"
+              height="60"
+              loading="lazy"
+              decoding="async"
+            />
+          </a>
         </p>
       </footer>
     </div>
