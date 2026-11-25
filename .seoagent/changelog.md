@@ -1,5 +1,6 @@
 # Changelog
 
+- 2026-11-25: CurlShip **live** https://curlship.com/l/11765 + footer badge (SPA+money HTML); IndexNow 200×3; GSC `/kafe` Indexed, `/businesses` still Crawled-not-indexed; Request indexing quota exceeded; `seoagent indexing` 15/30 Indexed; Twelve.tools still not public; directree owner-gated.
 - 2026-11-25: Money pages deepen v2 (local, needs deploy) — `/salon` ~1242w, `/avtoservis` ~1224w, `/kafe` ~1211w, `/businesses` ~1211w; FAQ + WhatsApp boundary; JSON-LD FAQ extended; Habr outline `.seoagent/content/drafts/habr-online-zapis-vmesto-whatsapp.md`; IndexNow 200×3 money+compare; TheSaaSDir skipped (their badge required, not Twelve.tools); `seoagent facts` OK (no stale list).
 - 2026-11-25: Product Radar — модератор (Татьяна): битая ссылка `https://https//…`; fixed to `vsevmeste.space`; reply sent; card still on moderation. Money pillars deepen ≥1200w shipped `c680de9`.
 - 2026-11-24: Live `f354950` — sitemap 59 blogs; homepage SSR ~299 words; money deepen + city/OKF/llms/twelve.tools; IndexNow 200×3; GSC Request indexing `/salon`+`/avtoservis`+`/businesses` sent; Twelve.tools in DB (pending public).
@@ -44,3 +45,5 @@
 - 2026-11-25: Money deepen live (salon/kafe/avtoservis/businesses); IndexNow+Bing 200; GSC /salon still Crawled-not-indexed, re-request sent.
 
 - 2026-11-25: TheSaaSDir dofollow badge in landing/legal/money footers; facts --mark @ 8b97de1.
+
+- 2026-11-25: TheSaaSDir listing LIVE https://thesaasdir.com/product/vmeste/ (badge verified on /salon).

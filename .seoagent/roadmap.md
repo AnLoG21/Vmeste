@@ -55,7 +55,7 @@ Cluster order: salon-booking (ICP) → autoservice → cafe-qr → compare-crm
 - [x] Deepen `/avtoservis` pillar (FAQ + объём + SoftwareApplication) — ship 2026-11-24; + client-path/WhatsApp FAQ 2026-11-24 local
 - [x] Deepen `/businesses` (client path + WhatsApp FAQ) — local 2026-11-24; needs deploy
 - [x] **Deploy** money deepen v2 (2026-11-25): live after `8b97de1` (≥1600 token-words; IndexNow 200); then GSC Request indexing + weekly `seoagent indexing`
-- [ ] Внешние размещения — `strategy/outreach-placements.md` (VC×3 + Zapustilis + IT-Podium **live**; Product Radar + AppRater + Ignlab + SEODataPulse + Viesearch + SaaSLineup + SaaS Radius + FreeSaaSList **submitted**; Twelve.tools + TheSaaSDir pending deploy-backlink; PeerPush/yourhack/ListMySaaS/ToolDirs/Uneed/FoundrList/FiveTaco/AZN8/SaaS Browser OTP|sign-in|logo owner; SoftFinder/s44s/Startpack/AT/SaaSHub/RuTut/mregs = owner)
+- [ ] Внешние размещения — `strategy/outreach-placements.md` (VC×3 + Zapustilis + IT-Podium + TheSaaSDir + CurlShip **live**; Product Radar + AppRater + Ignlab + SEODataPulse + Viesearch + SaaSLineup + SaaS Radius + FreeSaaSList **submitted**; Twelve.tools pending curation; PeerPush/yourhack/ListMySaaS/ToolDirs/Uneed/FoundrList/FiveTaco/AZN8/SaaS Browser/directree OTP|sign-in|logo owner; SoftFinder/s44s/Startpack/AT/SaaSHub/RuTut/mregs = owner)
 - [x] Deploy deepen `/salon`+`/avtoservis`+`/businesses`+`/kafe`+compare + twelve.tools footer + sitemap all blogs + homepage SSR (2026-11-24)
 - [x] Phase 4 start: city `localNote` + business spokes links (not doorway); `/o/…` quality tip → publichnaya-stranica
 - [x] Phase 5 expand: OKF FAQs/article + llms.txt city/AEO anchors + `audit/aeo-prompt-checklist.md` (needs deploy for live OKF/llms)
