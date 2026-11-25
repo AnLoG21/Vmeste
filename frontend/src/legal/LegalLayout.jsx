@@ -114,6 +114,16 @@ export default function LegalLayout({ title, path, description, children }) {
           <a href="https://twelve.tools" rel="noopener noreferrer">
             Featured on twelve.tools
           </a>
+          <a href="https://thesaasdir.com/product/vmeste?ref=badge" rel="dofollow">
+            <img
+              src="https://thesaasdir.com/badge/vmeste.svg"
+              alt="Featured on TheSaaSDir"
+              width="160"
+              height="44"
+              loading="lazy"
+              decoding="async"
+            />
+          </a>
         </p>
       </footer>
     </div>

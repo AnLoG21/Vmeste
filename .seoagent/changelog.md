@@ -40,3 +40,7 @@
 - 2026-11-24: Deployed IndexNow key live; IndexNow ping 10 URLs (api/yandex/bing 202); money-page cross-links /salon-/avtoservis-/kafe.
 
 - 2026-11-25: Product Radar — квадратный logo2 500x500 + фото основателя; ответ Татьяне (очередь публикации). Force redeploy money deepen v2 (salon/kafe/avtoservis/businesses).
+
+- 2026-11-25: Money deepen live (salon/kafe/avtoservis/businesses); IndexNow+Bing 200; GSC /salon still Crawled-not-indexed, re-request sent.
+
+- 2026-11-25: TheSaaSDir dofollow badge in landing/legal/money footers; facts --mark @ 8b97de1.

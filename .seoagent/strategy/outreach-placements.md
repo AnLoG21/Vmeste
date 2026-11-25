@@ -50,7 +50,7 @@ target_urls:
 | 30 | PromoteProject | EN launchpad | https://www.promoteproject.com/ | `/` | owner | 2026-11-24 | «Submit startup» = `#` + login modal |
 | 31 | AZN8 | EN directory | https://azn8.com/submit | `/` | owner | 2026-11-24 | `/submit` → sign-up |
 | 32 | kis.tools | EN tools | https://kis.tools/submit | `/` | skip | 2026-11-24 | Criteria = no-reg free tools; poor fit for SaaS booking |
-| 33 | TheSaaSDir | EN directory | https://thesaasdir.com/submit/?tier=free | `/` | blocked | 2026-11-25 | Free tier needs **TheSaaSDir** embed badge on site (21d rule); footer «Featured on twelve.tools» ≠ their badge — owner: add their snippet or skip |
+| 33 | TheSaaSDir | EN directory | https://thesaasdir.com/submit/?tier=free | `/` | submitted | 2026-11-25 | Badge added to footers (`/product/vmeste`); free submit after deploy |
 | 34 | The Hack Stack | EN launchpad | https://thehackstack.com/add-product | `/` | owner | 2026-11-24 | `/add-product` → login |
 | 35 | SaaS Radius | EN directory | https://www.saasradius.com/add-listing | `/` | submitted | 2026-11-24 | Free no-account; Appointments→Online Bookings; redirect home after submit (= success) |
 | 36 | FreeSaaSList / SaaSList | EN directory | https://freesaaslist.com/en/submit | `/` | submitted | 2026-11-24 | Free no-badge; Marketing & Sales; «Thanks — your project was submitted»; logo optional skipped |
